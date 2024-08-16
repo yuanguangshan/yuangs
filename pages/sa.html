@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>纯碱 -- 企业产能数据</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.2.1/dist/echarts.min.js"></script>
+      <!-- 引入中国地图数据 -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts/map/js/china.js"></script>
+</head>
+
+
+<body>
+    <div id="map" style="width: 100%; height: 600px;"></div>
+    <script type="text/javascript">
+        // 基于准备好的dom，初始化echarts实例
+        var myChart = echarts.init(document.getElementById('map'));
+
+        // 数据
+        var data = [
+            { name: '金山化工', value: 330, method: '联碱法', province: '河南' },
+            { name: '海化集团', value: 300, method: '氨碱法', province: '山东' },
+            { name: '唐山三友', value: 230, method: '氨碱法', province: '河北' },
+            { name: '山东海天', value: 150, method: '氨碱法', province: '山东' },
+            { name: '昆仑碱业', value: 150, method: '氨碱法', province: '新疆' },
+            { name: '连云港碱', value: 130, method: '氨碱法', province: '江苏' },
+            { name: '安棚碱矿', value: 130, method: '天然碱', province: '河南' },
+            { name: '实联化工', value: 120, method: '联碱法', province: '江苏' },
+            { name: '和邦生物', value: 120, method: '联碱法', province: '四川' },
+            { name: '盐湖镁业', value: 120, method: '氨碱法', province: '青海' },
+            { name: '青海发投', value: 120, method: '氨碱法', province: '青海' },
+            { name: '双环科技', value: 110, method: '氨碱法', province: '湖北' },
+            { name: '五彩碱矿', value: 110, method: '氨碱法', province: '青海' }
+        ];
+
+        // 获取最大产能值
+        var maxCapacity = Math.max.apply(Math, data.map(function(o) { return o.value; }));
+
+        // 处理数据，将同一省份的多家公司拆分为单独的数据项
+        var processedData = [];
+        data.forEach(function(item) {
+            var existingData = processedData.find(function(dataItem) {
+                return dataItem.province === item.province;
+            });
+
+            if (existingData) {
+                existingData.value.push(item.value);
+                existingData.name.push(item.name);
+                existingData.method.push(item.method);
+            } else {
+                processedData.push({
+                    province: item.province,
+                    value: [item.value],
+                    name: [item.name],
+                    method: [item.method]
+                });
+            }
+        });
+
+        // 地图配置
+        var option = {
+            title: {
+                text: '中国地图 - 企业产能数据',
+                subtext: '单位：万吨/年',
+                left: 'center'
+            },
+            tooltip: {
+                formatter: function(params) {
+                    var dataIndex = params.dataIndex;
+                    var enterpriseNames = processedData[dataIndex].name;
+                    var enterpriseMethods = processedData[dataIndex].method;
+                    var tooltipContent = '';
+
+                    for (var i = 0; i < enterpriseNames.length; i++) {
+                        tooltipContent += enterpriseNames[i] + '<br>产能：' + processedData[dataIndex].value[i] + ' 万吨/年<br>工艺路线：' + enterpriseMethods[i] + '<br><br>';
+                    }
+
+                    return tooltipContent;
+                }
+            },
+            visualMap: {
+                min: 0,
+                max: maxCapacity,
+                left: 'left',
+                top: 'bottom',
+                text: ['高', '低'],
+                calculable: true,
+                inRange: {
+                    color: ['#e0ffff', '#006edd']
+                }
+            },
+            series: [
+                {
+                    name: '企业产能',
+                    type: 'map',
+                    mapType: 'china',
+                    roam: false,
+                    label: {
+                        show: true,
+                        fontSize: 10
+                    },
+                    data: processedData.map(function(item) {
+                        return { name: item.province, value: item.value.reduce(function(a, b) { return a + b; }), method: item.method[0] };
+                    })
+                }
+            ]
+        };
+
+        // 使用刚指定的配置项和数据显示图表
+        myChart.setOption(option);
+    </script>
+</body>
+</html>
