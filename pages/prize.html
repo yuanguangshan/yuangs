@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="viewport" content="width=device-width, initial-scale=1.0">
     <title>抽奖转盘</title>
     <style>
         body {
@@ -50,14 +49,18 @@
         const ctx = canvas.getContext('2d');
         const prizes = ["100积分", "感谢参与", "可乐一瓶", "金币一枚", "手机一部", "企鹅", "北极熊", "西瓜", "巧克力"];
         const colors = ["#f44336", "#e91e63", "#9c27b0", "#3f51b5", "#2196f3", "#ffeb3b", "#4caf50", "#ff9800", "#795548"];
+        const numSegments = prizes.length;
+        const arc = 2 * Math.PI / numSegments;
         let startAngle = 0;
+        let spinAngle = 0;
         let spinTimeout = null;
+        let spinTime = 0;
+        const spinTimeTotal = 3000;
 
         function drawWheel() {
-            const arc = Math.PI / (prizes.length / 2);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            for (let i = 0; i < prizes.length; i++) {
-                const angle = i * arc;
+            for (let i = 0; i < numSegments; i++) {
+                const angle = startAngle + i * arc;
                 ctx.fillStyle = colors[i];
                 ctx.beginPath();
                 ctx.arc(150, 150, 150, angle, angle + arc, false);
@@ -67,22 +70,21 @@
                 // Draw text
                 ctx.save();
                 ctx.fillStyle = "white";
-                ctx.translate(150 + Math.cos(angle + arc / 2) * 120, 150 + Math.sin(angle + arc / 2) * 120);
+                ctx.translate(150 + Math.cos(angle + arc / 2) * 100, 150 + Math.sin(angle + arc / 2) * 100);
                 ctx.rotate(angle + arc / 2 + Math.PI / 2);
                 ctx.fillText(prizes[i], -ctx.measureText(prizes[i]).width / 2, 0);
                 ctx.restore();
             }
         }
 
-        function drawPointer(angle) {
+        function drawPointer() {
             ctx.save();
             ctx.translate(150, 150);
-            ctx.rotate(angle);
 
             // Draw pointer line
             ctx.beginPath();
             ctx.moveTo(0, 0);
-            ctx.lineTo(0, -130);
+            ctx.lineTo(0, -140);
             ctx.lineWidth = 4;
             ctx.strokeStyle = "black";
             ctx.stroke();
@@ -96,31 +98,43 @@
             ctx.restore();
         }
 
-        function rotatePointer() {
-            startAngle += 0.1;
+        function rotateWheel() {
+            spinTime += 30;
+            if (spinTime >= spinTimeTotal) {
+                stopRotateWheel();
+                return;
+            }
+            const spinAngleIncrement = easeOut(spinTime, 0, 0.1, spinTimeTotal);
+            startAngle += spinAngleIncrement;
             drawWheel();
-            drawPointer(startAngle);
-            spinTimeout = requestAnimationFrame(rotatePointer);
+            drawPointer();
+            spinTimeout = requestAnimationFrame(rotateWheel);
         }
 
-        function stopRotatePointer() {
+        function stopRotateWheel() {
             cancelAnimationFrame(spinTimeout);
             const degrees = startAngle * 180 / Math.PI + 90;
-            const arcd = 360 / prizes.length;
+            const arcd = 360 / numSegments;
             const index = Math.floor((360 - degrees % 360) / arcd);
             document.getElementById("result").textContent = `恭喜你获得：${prizes[index]}！`;
         }
 
+        function easeOut(t, b, c, d) {
+            const ts = (t /= d) * t;
+            const tc = ts * t;
+            return b + c * (tc + -3 * ts + 3 * t);
+        }
+
         function spinWheel() {
+            spinTime = 0;
             if (spinTimeout) {
                 cancelAnimationFrame(spinTimeout);
             }
-            rotatePointer();
-            setTimeout(stopRotatePointer, 3000); // Spin for 3 seconds
+            rotateWheel();
         }
 
         drawWheel();
-        drawPointer(startAngle);
+        drawPointer();
     </script>
 
 </body>
