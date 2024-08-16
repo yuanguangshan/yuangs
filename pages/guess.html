@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>猜数字游戏</title>
+    <style>
+        body { font-family: Arial, sans-serif; overflow: hidden; }
+        p {
+            font-size: 20px; /* 将所有 p 标签的字体大小设置为 18px */
+            color: blue;
+        }
+        .result { margin-top: 20px; }
+        .history { margin-top: 10px; }
+        #guessInput {
+            width: 300px;
+            height: 25px; /* 指定输入框的高度为 40px */
+            padding: 10px;
+            font-size: 16px;
+        }
+        .chart { margin-top: 20px; position: relative; height: 30px; background: #ddd6d6; }
+        .bar { position: absolute; height: 30px; background: rgb(19, 9, 202); }
+        button { padding: 10px; font-size: 16px; }
+        .celebration {
+            display: none;
+            font-size: 24px;
+            color: green;
+            position: absolute;
+            white-space: nowrap;
+        }
+        /* 花瓣样式 */
+        .petal {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: pink;
+            border-radius: 50%;
+            opacity: 0.8;
+            animation: fall linear infinite;
+        }
+
+        /* 花瓣飘落动画 */
+        @keyframes fall {
+            0% {
+                transform: translateY(-100vh) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(100vh) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        /* 放大显示样式 */
+        .input-container {
+            position: relative;
+            display: inline-block;
+            margin-top: 20px;
+        }
+        
+        .magnified-display {
+            position: absolute;
+            top: -40px;
+            left: 10px;
+            font-size: 30px;
+            color: blue;
+            background-color: #f0f0f0;
+            padding: 5px 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            z-index: 100;
+            display: none; /* Initially hidden */
+        }
+    </style>
+</head>
+<body>
+    <h1>猜数字游戏</h1>
+    <p>我们选择了一个 1 到 <span id="maxValueDisplay">1000</span> 之间的数字。你有 <span id="maxAttemptsDisplay">40</span> 次机会来猜出这个数字。</p>
+    <div class="input-container">
+        <input type="number" id="guessInput" min="1" placeholder="输入你的猜测">
+        <div id="magnifiedDisplay" class="magnified-display"></div>
+    </div>
+
+    <div class="result" id="result"></div>
+    <div class="history" id="history"></div>
+    <div class="chart" id="chart"></div>
+    <div class="celebration" id="celebration">请开始游戏！！！</div>
+    <br>
+    <br>
+    <button onclick="resetGame()">重置</button>
+    <button onclick="makeGuess()">我猜测的对吗？</button>
+
+    <script>
+        let maxValue = 1000;
+        let maxAttempts = Math.ceil(Math.log2(maxValue))-1;
+        let randomNumber = generateRandomNumber();
+        let attempts = 0;
+        const history = [];
+        console.log(randomNumber);
+        document.getElementById('maxValueDisplay').textContent = maxValue;
+        document.getElementById('maxAttemptsDisplay').textContent = maxAttempts;
+        document.getElementById('guessInput').max = maxValue;
+
+        function generateRandomNumber() {
+            return Math.floor(Math.random() * maxValue) + 1;
+        }
+
+        function makeGuess() {
+            const guessInput = document.getElementById('guessInput');
+            const guess = Number(guessInput.value);
+            const result = document.getElementById('result');
+            const historyDiv = document.getElementById('history');
+            const chart = document.getElementById('chart');
+            const celebration = document.getElementById('celebration');
+            let remains = maxAttempts-attempts;
+            if (!guess || guess < 1 || guess > maxValue) {
+                result.textContent = `请输入 1 到 ${maxValue} 之间的数字。`;
+                return;
+            }
+
+            attempts++;
+            remains--;
+            history.push(guess);
+            historyDiv.textContent = '你之前的猜测: ' + history.join(', ');
+
+            const bar = document.createElement('div');
+            bar.className = 'bar';
+            bar.style.width = '5px';
+            bar.style.left = (guess / maxValue) * 100 + '%';
+            chart.appendChild(bar);
+            
+            if (guess === randomNumber) {
+                result.textContent = '🎉 恭喜！你猜对了！ 🎉数字是 ' + randomNumber + '。';
+                result.style.color = 'green'; // 正确时，文本显示为绿色
+                celebration.textContent = '🎉 恭喜！你猜对了！ 🎉';
+                celebration.style.display = 'block';
+                createPetals(100); // 生成撒花效果
+                disableInput();
+            } else if (attempts >= maxAttempts) {
+                result.textContent = '很遗憾，你用完了所有机会。数字是 ' + randomNumber + '。';
+                result.style.color = 'red'; // 用完机会，文本显示为红色
+                disableInput();
+            } else if (guess < randomNumber) {
+                result.textContent = `太低了！再试一次吧！ 还剩${remains}次机会！`;
+                result.style.color = 'red'; // 猜测太低，文本显示为红色
+            } else {
+                result.textContent = `太高了！再试一次吧！ 还剩${remains}次机会！`;
+                result.style.color = 'red'; // 猜测太高，文本显示为红色
+            }
+
+            guessInput.value = '';
+            guessInput.focus();
+        }
+
+        function disableInput() {
+            document.getElementById('guessInput').disabled = true;
+        }
+
+        function resetGame() {
+            randomNumber = generateRandomNumber();
+            console.log(randomNumber);
+            attempts = 0;
+            history.length = 0;
+            document.getElementById('result').textContent = '';
+            document.getElementById('history').textContent = '';
+            document.getElementById('chart').innerHTML = '';
+            document.getElementById('celebration').style.display = 'none';
+            document.getElementById('guessInput').disabled = false;
+            document.getElementById('guessInput').value = '';
+
+            // 清除所有花瓣
+            const petals = document.querySelectorAll('.petal');
+            petals.forEach(petal => petal.remove());
+
+            // 清除放大显示
+            document.getElementById('magnifiedDisplay').style.display = 'none';
+        }
+
+        function createPetals(count) {
+            for (let i = 0; i < count; i++) {
+                const petal = document.createElement('div');
+                petal.className = 'petal';
+                petal.style.left = Math.random() * 100 + 'vw';
+                petal.style.animationDuration = 2 + Math.random() * 3 + 's'; // 2 to 5 seconds
+                document.body.appendChild(petal);
+
+                // 清除花瓣
+                petal.addEventListener('animationend', () => {
+                    petal.remove();
+                });
+            }
+        }
+
+        // 放大显示用户输入
+        const guessInput = document.getElementById('guessInput');
+        const magnifiedDisplay = document.getElementById('magnifiedDisplay');
+
+        guessInput.addEventListener('input', function() {
+            const inputValue = guessInput.value;
+            if (inputValue) {
+                magnifiedDisplay.textContent = inputValue;
+                magnifiedDisplay.style.display = 'block'; // Show the magnified display
+            } else {
+                magnifiedDisplay.style.display = 'none'; // Hide the display if input is empty
+            }
+        });
+    </script>
+</body>
+</html>
