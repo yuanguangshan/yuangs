@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>6×6数独生成器</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            margin: 20px auto;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        td {
+            width: 50px;
+            height: 50px;
+            text-align: center;
+            border: 1px solid #000;
+            font-size: 24px;
+            position: relative;
+        }
+        input {
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            border: none;
+            font-size: 24px;
+            outline: none;
+            padding: 0;
+            background: transparent;
+        }
+        .bold-border-right {
+            border-right: 2px solid #000;
+        }
+        .bold-border-bottom {
+            border-bottom: 2px solid #000;
+        }
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .answer {
+            color: blue;
+        }
+        .original {
+            color: black;
+        }
+    </style>
+</head>
+<body>
+
+<h1 style="text-align:center;">6×6 数独生成器</h1>
+<div style="text-align:center;">
+    <button onclick="generateAndDisplaySudoku()">生成数独</button>
+    <button onclick="toggleAnswers()">查看/隐藏答案</button>
+</div>
+<table id="sudokuGrid"></table>
+
+<script>
+let answerGrid = [];
+let originalGrid = [];
+let answersVisible = false;
+
+function generateSudoku() {
+    const size = 6;
+    const grid = Array.from({ length: size }, () => Array(size).fill(0));
+
+    function isValid(num, row, col) {
+        for (let i = 0; i < size; i++) {
+            if (grid[row][i] === num || grid[i][col] === num) return false;
+        }
+
+        const startRow = Math.floor(row / 2) * 2;
+        const startCol = Math.floor(col / 3) * 3;
+
+        for (let i = 0; i < 2; i++) {
+            for (let j = 0; j < 3; j++) {
+                if (grid[startRow + i][startCol + j] === num) return false;
+            }
+        }
+
+        return true;
+    }
+
+    function fillGrid() {
+        for (let i = 0; i < size; i++) {
+            for (let j = 0; j < size; j++) {
+                if (grid[i][j] === 0) {
+                    let numbers = [1, 2, 3, 4, 5, 6].sort(() => Math.random() - 0.5);
+                    for (let num of numbers) {
+                        if (isValid(num, i, j)) {
+                            grid[i][j] = num;
+                            if (fillGrid()) return true;
+                            grid[i][j] = 0;
+                        }
+                    }
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    fillGrid();
+    answerGrid = JSON.parse(JSON.stringify(grid));
+
+    removeNumbers(grid, 20); // Adjust the number of blanks as needed
+
+    originalGrid = JSON.parse(JSON.stringify(grid));
+    return grid;
+}
+
+function removeNumbers(grid, blanks) {
+    const size = 6;
+    let removed = 0;
+
+    while (removed < blanks) {
+        const row = Math.floor(Math.random() * size);
+        const col = Math.floor(Math.random() * size);
+        if (grid[row][col] !== 0) {
+            grid[row][col] = 0;
+            removed++;
+        }
+    }
+}
+
+function generateAndDisplaySudoku() {
+    const grid = generateSudoku();
+    const table = document.getElementById('sudokuGrid');
+    table.innerHTML = '';
+
+    for (let i = 0; i < 6; i++) {
+        const row = document.createElement('tr');
+        for (let j = 0; j < 6; j++) {
+            const cell = document.createElement('td');
+            if (grid[i][j] !== 0) {
+                cell.textContent = grid[i][j];
+                cell.classList.add('original');
+            } else {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.maxLength = 1;
+                cell.appendChild(input);
+            }
+            if (j === 2) cell.classList.add('bold-border-right');
+            if (i === 1 || i === 3) cell.classList.add('bold-border-bottom');
+            row.appendChild(cell);
+        }
+        table.appendChild(row);
+    }
+    answersVisible = false;
+}
+
+function toggleAnswers() {
+    const table = document.getElementById('sudokuGrid');
+    const cells = table.getElementsByTagName('td');
+
+    for (let i = 0; i < 6; i++) {
+        for (let j = 0; j < 6; j++) {
+            const cell = cells[i * 6 + j];
+            if (originalGrid[i][j] === 0) {
+                if (answersVisible) {
+                    cell.innerHTML = '<input type="text" maxLength="1">';
+                    cell.classList.remove('answer');
+                } else {
+                    cell.textContent = answerGrid[i][j];
+                    cell.classList.add('answer');
+                }
+            }
+        }
+    }
+    answersVisible = !answersVisible;
+}
+
+generateAndDisplaySudoku();
+</script>
+
+</body>
+</html>
