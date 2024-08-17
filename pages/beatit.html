@@ -3,48 +3,64 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🐭打地鼠🐭</title>
+    <title>打地鼠游戏</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             text-align: center;
             margin-top: 50px;
+            position: relative;
         }
         table {
             margin: 0 auto;
             border-collapse: collapse;
         }
         td {
-            width: 55px;
-            height: 55px;
+            width: 50px;
+            height: 50px;
             border: 1px solid #ccc;
             font-size: 24px;
             cursor: pointer;
+            transition: background-color 0.3s;
         }
-        #prize-frame {
-            display: none;
-            width: 90%;
-            height: 400px;
-            border: none;
+        .active {
+            background-color: #f0f0f0;
+        }
+        .score-popup {
+            position: absolute;
+            font-size: 24px;
+            color: red;
+            animation: pop 1s forwards;
+            pointer-events: none;
+        }
+        @keyframes pop {
+            0% { opacity: 1; transform: scale(1); }
+            50% { transform: scale(1.5); }
+            100% { opacity: 0; transform: scale(1); }
+        }
+        #restart-btn {
             margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
-    <h1>🐭打地鼠🐭</h1>
-    
-    <h3>手下留情，轻打，thanks!🐭</h3>
-    
+    <h1>打地鼠游戏</h1>
     <table id="game-table"></table>
     <p>分数: <span id="score">0</span></p>
-    <iframe id="prize-frame"></iframe>
+    <p>时间: <span id="timer">90</span> 秒</p>
+    <button id="restart-btn" onclick="startGame()">重新开始</button>
 
     <script>
         const rows = 5;
         const cols = 5;
         let score = 0;
-        let activeCell;
+        let activeCells = [];
         let gameInterval;
+        let timerInterval;
+        let timeLeft = 90;
 
         function generateTable() {
             const table = document.getElementById('game-table');
@@ -53,59 +69,83 @@
                 const row = document.createElement('tr');
                 for (let j = 0; j < cols; j++) {
                     const cell = document.createElement('td');
-                    cell.addEventListener('click', () => hitMole(cell));
+                    cell.addEventListener('click', () => hitMole(cell, i, j));
                     row.appendChild(cell);
                 }
                 table.appendChild(row);
             }
         }
 
-        function randomMole() {
-            if (activeCell) {
-                activeCell.textContent = '';
-            }
-            const row = Math.floor(Math.random() * rows);
-            const col = Math.floor(Math.random() * cols);
+        function randomMoles() {
             const table = document.getElementById('game-table');
-            activeCell = table.rows[row].cells[col];
-            activeCell.textContent = '🐭';
+
+            activeCells.forEach(cell => {
+                cell.textContent = '';
+                cell.classList.remove('active');
+            });
+
+            activeCells = [];
+            for (let n = 0; n < 2; n++) {
+                const row = Math.floor(Math.random() * rows);
+                const col = Math.floor(Math.random() * cols);
+                const cell = table.rows[row].cells[col];
+                cell.textContent = '🐭';
+                cell.classList.add('active');
+                activeCells.push(cell);
+            }
+
+            setTimeout(randomMoles, Math.random() * 800 + 400);
         }
 
-        function hitMole(cell) {
-            if (cell === activeCell && cell.textContent === '🐭') {
-                score++;
-                document.getElementById('score').textContent = score;
-                cell.textContent = '';
-                activeCell = null;
-                if (score % 520 === 0) {
-                    showPrize();
-                } else {
-                    randomMole();
+        function hitMole(cell, row, col) {
+            if (cell.textContent === '🐭') {
+                let earnedScore = 1;
+                if (row === 2 && col === 2) {
+                    earnedScore = score === 0 ? 5 : score * 5;
                 }
+                score += earnedScore;
+                document.getElementById('score').textContent = score;
+
+                showScorePopup(cell, earnedScore);
+
+                cell.textContent = '';
+                cell.classList.remove('active');
             }
         }
 
-        function showPrize() {
-            clearInterval(gameInterval);
-            const iframe = document.getElementById('prize-frame');
-            iframe.src = 'http://blog.want.biz/pages/prize.html';
-            iframe.style.display = 'block';
-            iframe.onload = function() {
-                setTimeout(closePrize, 5000); // 这里设定抽奖页面显示5秒
-            };
-        }
+        function showScorePopup(cell, earnedScore) {
+            const popup = document.createElement('div');
+            popup.className = 'score-popup';
+            popup.textContent = `+${earnedScore} 💥`;
+            const rect = cell.getBoundingClientRect();
+            popup.style.left = `${rect.left + rect.width / 2}px`;
+            popup.style.top = `${rect.top - 20}px`;
+            document.body.appendChild(popup);
 
-        function closePrize() {
-            const iframe = document.getElementById('prize-frame');
-            iframe.style.display = 'none';
-            startGame();
+            setTimeout(() => {
+                document.body.removeChild(popup);
+            }, 1000);
         }
 
         function startGame() {
-            gameInterval = setInterval(randomMole, 1000);
+            clearInterval(gameInterval);
+            clearInterval(timerInterval);
+            score = 0;
+            timeLeft = 90;
+            document.getElementById('score').textContent = score;
+            document.getElementById('timer').textContent = timeLeft;
+            generateTable();
+            randomMoles();
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer').textContent = timeLeft;
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    alert('游戏结束！');
+                }
+            }, 1000);
         }
 
-        generateTable();
         startGame();
     </script>
 </body>
