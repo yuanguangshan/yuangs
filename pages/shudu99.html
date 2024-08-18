@@ -18,16 +18,19 @@
             font-size: 20px;
             position: relative;
         }
-        input {
+        .cell {
             width: 100%;
             height: 100%;
-            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             border: none;
             font-size: 20px;
             outline: none;
             padding: 0;
             background: transparent;
             color: blue;
+            cursor: pointer;
         }
         .bold-border-right {
             border-right: 2px solid #000;
@@ -56,23 +59,48 @@
             margin-top: 10px;
             font-weight: bold;
         }
+        #numberPad {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .numberButton {
+            width: 40px;
+            height: 40px;
+            margin: 0 5px;
+            font-size: 20px;
+            cursor: pointer;
+            border-radius: 50%;
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 0;
+        }
+        .selected {
+            background-color: #6495ED;
+        }
     </style>
 </head>
 <body>
 
 <h1 style="text-align:center;">趣味数独</h1>
 <div style="text-align:center;">
-       <button onclick="generateAndDisplaySudoku()">🐬重做</button>
+    <button onclick="generateAndDisplaySudoku()">🐬重做</button>
     <button onclick="checkSolution()">🦉检查</button>
     <button onclick="toggleAnswers()">🙈答案</button>
 </div>
 <table id="sudokuGrid"></table>
+<br>
+<div id="numberPad"></div>
+<br>
 <div id="message"></div>
 
 <script>
 let answerGrid = [];
 let originalGrid = [];
 let answersVisible = false;
+let selectedCell = null;
 
 function generateSudoku() {
     const size = 9;
@@ -117,7 +145,7 @@ function generateSudoku() {
     fillGrid();
     answerGrid = JSON.parse(JSON.stringify(grid));
 
-    removeNumbers(grid, 40); // Adjust the number of blanks as needed
+    removeNumbers(grid, 45);
 
     originalGrid = JSON.parse(JSON.stringify(grid));
     return grid;
@@ -150,10 +178,10 @@ function generateAndDisplaySudoku() {
                 cell.textContent = grid[i][j];
                 cell.classList.add('original');
             } else {
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.maxLength = 1;
-                cell.appendChild(input);
+                const div = document.createElement('div');
+                div.classList.add('cell');
+                div.addEventListener('click', () => selectCell(div));
+                cell.appendChild(div);
             }
             if (j === 2 || j === 5) cell.classList.add('bold-border-right');
             if (i === 2 || i === 5) cell.classList.add('bold-border-bottom');
@@ -163,6 +191,38 @@ function generateAndDisplaySudoku() {
     }
     answersVisible = false;
     document.getElementById('message').textContent = '';
+    createNumberPad();
+}
+
+function createNumberPad() {
+    const numberPad = document.getElementById('numberPad');
+    numberPad.innerHTML = '';
+    for (let i = 1; i <= 9; i++) {
+        const button = document.createElement('button');
+        button.textContent = i;
+        button.classList.add('numberButton');
+        button.addEventListener('click', () => inputNumber(i));
+        numberPad.appendChild(button);
+    }
+    const clearButton = document.createElement('button');
+    clearButton.textContent = 'C';
+    clearButton.classList.add('numberButton');
+    clearButton.addEventListener('click', () => inputNumber(''));
+    numberPad.appendChild(clearButton);
+}
+
+function selectCell(cell) {
+    if (selectedCell) {
+        selectedCell.classList.remove('selected');
+    }
+    selectedCell = cell;
+    cell.classList.add('selected');
+}
+
+function inputNumber(num) {
+    if (selectedCell && !selectedCell.parentElement.classList.contains('original')) {
+        selectedCell.textContent = num;
+    }
 }
 
 function checkSolution() {
@@ -176,8 +236,7 @@ function checkSolution() {
             const cell = cells[i * 9 + j];
             cell.classList.remove('incorrect');
             if (originalGrid[i][j] === 0) {
-                const input = cell.querySelector('input');
-                const userAnswer = parseInt(input.value);
+                const userAnswer = parseInt(cell.textContent) || 0;
                 if (userAnswer !== answerGrid[i][j]) {
                     isCorrect = false;
                     incorrectCells.push([i, j]);
@@ -205,7 +264,8 @@ function toggleAnswers() {
             const cell = cells[i * 9 + j];
             if (originalGrid[i][j] === 0) {
                 if (answersVisible) {
-                    cell.innerHTML = '<input type="text" maxLength="1">';
+                    cell.innerHTML = '<div class="cell"></div>';
+                    cell.querySelector('.cell').addEventListener('click', () => selectCell(cell.querySelector('.cell')));
                     cell.classList.remove('answer');
                 } else {
                     cell.textContent = answerGrid[i][j];
