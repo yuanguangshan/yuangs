@@ -3,81 +3,186 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>打地鼠游戏</title>
+    <title>🐭动物大逃亡🐭</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Arial Rounded MT Bold', 'Arial', sans-serif;
             text-align: center;
-            margin-top: 50px;
+            margin-top: 25px;
+            position: relative;
+            background-color: #f0f8ff;
+            color: #333;
         }
         table {
             margin: 0 auto;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 10px;
+            background-color: #e6f2ff;
+            padding: 10px;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
         }
         td {
             width: 50px;
             height: 50px;
-            border: 1px solid #ccc;
-            font-size: 24px;
+            border: 2px solid #9ecaed;
+            font-size: 36px;
             cursor: pointer;
+            transition: all 0.3s;
+            border-radius: 10px;
+            background-color: #ffffff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        td:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+        .active {
+            background-color: #ffe6e6;
+        }
+        .score-popup {
+            position: absolute;
+            font-size: 24px;
+            color: #ff4500;
+            animation: pop 1s forwards;
+            pointer-events: none;
+            font-weight: bold;
+        }
+        @keyframes pop {
+            0% { opacity: 1; transform: scale(1) translateY(0); }
+            50% { transform: scale(1.5) translateY(-20px); }
+            100% { opacity: 0; transform: scale(1) translateY(-40px); }
+        }
+        #restart-btn {
+            margin-top: 10px;
+            padding: 8px 30px;
+            font-size: 20px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            transition: all 0.3s;
+        }
+        #restart-btn:hover {
+            background-color: #45a049;
+            transform: scale(1.05);
+        }
+        h1 {
+            color: #2c3e50;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        h3 {
+            color: #34495e;
+        }
+        p {
+            font-size: 26px;
+            font-weight: bold;
+            color: #2980b9;
         }
     </style>
 </head>
 <body>
-    <h1>打地鼠游戏</h1>
-    <table id="game-table">
-        <!-- 游戏表格将在这里生成 -->
-    </table>
+    <h2>动物大逃亡</h2>
+    <h4>🐶轻轻点击，别伤到它们……🐧</h4>
     <p>分数: <span id="score">0</span></p>
+    <table id="game-table"></table>
+    <p>时间: <span id="timer">60</span> 秒</p>
+    <button id="restart-btn" onclick="startGame()">重新开始</button>
 
     <script>
         const rows = 5;
         const cols = 5;
         let score = 0;
-        let activeCell;
+        let activeCells = [];
+        let gameInterval;
+        let timerInterval;
+        let timeLeft = 60;
+        const animals = ['🐭', '🐬', '🐒', '🐳', '🐹', '🐰', '🐶', '🐱', '🐯', '🦁', '🐨', '🐻‍❄️', '🐧', '🦆', '🐔', '🐥', '🦋', '🦄', '🐞', '🪼', '🐙', '🐠', '🦞', '🦀', '🐊', '🦧', '🦥', '🐿️', '🐇'];
 
         function generateTable() {
             const table = document.getElementById('game-table');
+            table.innerHTML = '';
             for (let i = 0; i < rows; i++) {
                 const row = document.createElement('tr');
                 for (let j = 0; j < cols; j++) {
                     const cell = document.createElement('td');
-                    cell.addEventListener('click', () => hitMole(cell));
+                    cell.addEventListener('click', () => hitAnimal(cell, i, j));
                     row.appendChild(cell);
                 }
                 table.appendChild(row);
             }
         }
 
-        function randomMole() {
-            if (activeCell) {
-                activeCell.textContent = '';
-            }
-            const row = Math.floor(Math.random() * rows);
-            const col = Math.floor(Math.random() * cols);
+        function randomAnimals() {
             const table = document.getElementById('game-table');
-            activeCell = table.rows[row].cells[col];
-            activeCell.textContent = '🐭';
+
+            activeCells.forEach(cell => {
+                cell.textContent = '';
+                cell.classList.remove('active');
+            });
+
+            activeCells = [];
+            for (let n = 0; n < 2; n++) {
+                const row = Math.floor(Math.random() * rows);
+                const col = Math.floor(Math.random() * cols);
+                const cell = table.rows[row].cells[col];
+                cell.textContent = animals[Math.floor(Math.random() * animals.length)];
+                cell.classList.add('active');
+                activeCells.push(cell);
+            }
         }
 
-        function hitMole(cell) {
-            if (cell === activeCell && cell.textContent === '🐭') {
-                score++;
-                document.getElementById('score').textContent = score;
-                cell.textContent = '';
-                activeCell = null;
-                if (score % 20 === 0) {
-                    window.open('http://blog.want.biz/pages/prize.html', '_blank');
+        function hitAnimal(cell, row, col) {
+            if (cell.classList.contains('active')) {
+                let earnedScore = 1;
+                if (row === 2 && col === 2) {
+                    earnedScore = score === 0 ? 5 : score * 2;
                 }
-                randomMole();
+                score += earnedScore;
+                document.getElementById('score').textContent = score;
+
+                showScorePopup(cell, earnedScore);
+
+                cell.textContent = '';
+                cell.classList.remove('active');
             }
+        }
+
+        function showScorePopup(cell, earnedScore) {
+            const popup = document.createElement('div');
+            popup.className = 'score-popup';
+            popup.textContent = `+${earnedScore} 💥`;
+            const rect = cell.getBoundingClientRect();
+            popup.style.left = `${rect.left + rect.width / 2}px`;
+            popup.style.top = `${rect.top - 20}px`;
+            document.body.appendChild(popup);
+
+            setTimeout(() => {
+                document.body.removeChild(popup);
+            }, 1000);
         }
 
         function startGame() {
-            setInterval(randomMole, 1000);
+            clearInterval(gameInterval);
+            clearInterval(timerInterval);
+            score = 0;
+            timeLeft = 60;
+            document.getElementById('score').textContent = score;
+            document.getElementById('timer').textContent = timeLeft;
+            generateTable();
+            gameInterval = setInterval(randomAnimals, Math.random() * 1000 + 500);
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer').textContent = timeLeft;
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    clearInterval(gameInterval);
+                    alert('游戏结束！');
+                }
+            }, 1000);
         }
 
-        generateTable();
         startGame();
     </script>
 </body>
