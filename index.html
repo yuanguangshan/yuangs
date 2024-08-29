@@ -114,25 +114,40 @@
     </div>
 
     <script>
+        let unlockCode;
+
+        // 初始化时，获取解锁码
+        async function fetchUnlockCode() {
+            try {
+                const response = await fetch('https://unlock.want.biz/', { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    unlockCode = data.code.toString();
+                } else {
+                    console.error('获取解锁码失败:', data.message);
+                }
+            } catch (error) {
+                console.error('获取解锁码时发生错误:', error);
+            }
+        }
+
+        // 页面加载时获取解锁码
+        window.onload = fetchUnlockCode;
+
         // 解锁按钮点击事件
         document.getElementById('unlockButton').addEventListener('click', async () => {
             const userInput = document.getElementById('unlockInput').value;
 
-            // 从服务端获取解锁码
-            const response = await fetch('https://unlock.want.biz/', { method: 'POST' });
-            const data = await response.json();
-
-            if (data.success && userInput === data.code.toString()) {
+            if (userInput === unlockCode) {
                 document.getElementById('unlockPrompt').style.display = 'none';
                 document.getElementById('content').style.display = 'flex';
                 startClock();
             } else {
                 alert('输入的数字不正确，请重试！');
+                // 如果用户输入错误，再次请求获取新的解锁码
+                await fetchUnlockCode();
             }
         });
-
-        // 初始化时，隐藏主要内容，直到正确解锁
-        document.getElementById('content').style.display = 'none';
 
         // 开始时钟动画
         function startClock() {
