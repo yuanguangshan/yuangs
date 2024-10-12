@@ -4,6 +4,7 @@ let correctCount = 0;
 let pendingPrizes = 0;
 let totalScore = 0;
 let answered = false;  // 标识当前问题是否已经回答
+let wrongAttempt = 0;  // 连续错误次数
 
 // 异步加载题目数据
 async function loadQuestions() {
@@ -42,6 +43,7 @@ function displayQuestion() {
     document.getElementById('submit-btn').innerText = '提交';  // 重置按钮文本
     document.getElementById('prize').style.display = 'none';  // 隐藏抽奖按钮
     answered = false;  // 重置为未回答状态
+    wrongAttempt = 0;  // 重置错误次数
 }
 
 // 检查用户答案
@@ -73,6 +75,7 @@ function checkAnswer() {
         // 完成一轮后，调整按钮文本
         document.getElementById('submit-btn').innerText = '下一个问题';
         answered = true;  // 标记问题已回答
+        wrongAttempt = 0;  // 重置错误次数
 
         // 每答对5题后，显示抽奖机会
         if (correctCount % 5 === 0) {
@@ -80,7 +83,22 @@ function checkAnswer() {
             document.getElementById('prize').style.display = 'block';  // 显示抽奖按钮
         }
     } else {
-        document.getElementById('result').innerText = '回答错误，请再试一次！';
+        // 用户回答错误
+        wrongAttempt++;
+        if (wrongAttempt < 3) {
+            document.getElementById('result').innerText = `回答错误，您还有 ${3 - wrongAttempt} 次机会！`;
+        } else {
+            // 连续三次错误，提示正确答案
+            document.getElementById('result').innerText = '您已连续三次回答错误，正确答案是：';
+            if (currentQuestion.type === 'word') {
+                document.getElementById('link').innerHTML = `单词 "${currentQuestion.word}" 的意思是：${currentQuestion.meaning}。<br>更多解释：<a href="https://dict.cn/search?q=${currentQuestion.word}" target="_blank">https://dict.cn/search?q=${currentQuestion.word}</a>`;
+            } else if (currentQuestion.type === 'phrase') {
+                document.getElementById('link').innerHTML = `短语 "${currentQuestion.phrase}" 的意思是：${currentQuestion.meaning}。`;
+            }
+            document.getElementById('answer').disabled = true;  // 禁用输入框
+            document.getElementById('submit-btn').innerText = '下一个问题';
+            answered = true;  // 标记问题已回答
+        }
     }
     document.getElementById('score').innerText = `当前分数：${totalScore}`;
 }
