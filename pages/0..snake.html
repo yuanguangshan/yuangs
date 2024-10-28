@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>贪吃蛇游戏</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;  /* 将内容靠下对齐 */
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+            height: 100vh;
+        }
+        canvas {
+            border: 2px solid #333;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // 画布大小设置为屏幕的一半
+    function resizeCanvas() {
+        canvas.width = window.innerWidth / 2;
+        canvas.height = window.innerHeight / 2;
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    const gridSize = 20; // 网格大小
+    let snakeSpeed = 100; // 蛇的移动速度，越小越快（以毫秒为单位）
+
+    let snake = [{ x: gridSize * 5, y: gridSize * 5 }]; // 蛇的初始位置
+    let foodItems = [];  // 食物数组
+    let direction = { x: 0, y: 0 }; // 初始方向为停止
+    let newDirection = { x: 0, y: 0 }; // 防止快速连续按键
+    let score = 0; // 得分
+
+    // 监听键盘事件
+    window.addEventListener("keydown", changeDirection);
+
+    function changeDirection(event) {
+        const key = event.key;
+        if (key === "ArrowUp" && direction.y === 0) {
+            newDirection = { x: 0, y: -gridSize };
+        } else if (key === "ArrowDown" && direction.y === 0) {
+            newDirection = { x: 0, y: gridSize };
+        } else if (key === "ArrowLeft" && direction.x === 0) {
+            newDirection = { x: -gridSize, y: 0 };
+        } else if (key === "ArrowRight" && direction.x === 0) {
+            newDirection = { x: gridSize, y: 0 };
+        }
+    }
+
+    function update() {
+        // 更新蛇的方向
+        direction = newDirection;
+
+        // 计算蛇的下一个位置
+        let head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
+
+        // 检查是否撞墙，按原路反弹
+        if (head.x < 0 || head.x >= canvas.width || head.y < 0 || head.y >= canvas.height) {
+            if (head.x < 0 || head.x >= canvas.width) {
+                direction.x = -direction.x; // 反弹 x 方向
+            }
+            if (head.y < 0 || head.y >= canvas.height) {
+                direction.y = -direction.y; // 反弹 y 方向
+            }
+            head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
+        }
+
+        // 添加新位置到蛇头
+        snake.unshift(head);
+
+        // 检查是否吃到任何一个食物
+        let ateFood = false;
+        for (let i = 0; i < foodItems.length; i++) {
+            if (head.x === foodItems[i].x && head.y === foodItems[i].y) {
+                score++;
+                foodItems.splice(i, 1); // 移除被吃掉的食物
+                generateFood(); // 生成一个新食物
+                ateFood = true; // 标记吃到了食物
+                break;
+            }
+        }
+
+        // 如果没有吃到食物，移除蛇尾
+        if (!ateFood) {
+            snake.pop();
+        }
+
+        if (foodItems.length === 0) {
+            // 如果食物被全部吃掉，重新生成五个食物
+            generateMultipleFood(5);
+        }
+
+        // 清空画布
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 绘制食物
+        ctx.fillStyle = "red";
+        foodItems.forEach(food => {
+            ctx.fillRect(food.x, food.y, gridSize, gridSize);
+        });
+
+        // 绘制蛇
+        ctx.fillStyle = "green";
+        snake.forEach(segment => {
+            ctx.fillRect(segment.x, segment.y, gridSize, gridSize);
+        });
+
+        // 显示得分
+        ctx.fillStyle = "black";
+        ctx.font = "20px Arial";
+        ctx.fillText("得分: " + score, 10, 20);
+    }
+
+    function generateMultipleFood(count) {
+        // 生成多个食物
+        for (let i = 0; i < count; i++) {
+            generateFood();
+        }
+    }
+
+    function generateFood() {
+        // 随机生成食物坐标
+        let food = {
+            x: Math.floor(Math.random() * (canvas.width / gridSize)) * gridSize,
+            y: Math.floor(Math.random() * (canvas.height / gridSize)) * gridSize
+        };
+
+        // 确保食物不生成在蛇的身体上
+        if (snake.some(segment => segment.x === food.x && segment.y === food.y) || foodItems.some(f => f.x === food.x && f.y === food.y)) {
+            generateFood();
+        } else {
+            foodItems.push(food);
+        }
+    }
+
+    function resetGame() {
+        // 重置游戏参数
+        snake = [{ x: gridSize * 5, y: gridSize * 5 }];
+        direction = { x: 0, y: 0 };
+        newDirection = { x: 0, y: 0 };
+        score = 0;
+        foodItems = [];
+        generateMultipleFood(5); // 生成 5 个食物
+    }
+
+    // 初始化游戏
+    resetGame();
+
+    // 游戏主循环
+    setInterval(update, snakeSpeed);
+
+</script>
+
+</body>
+</html>
