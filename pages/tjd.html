@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>期货品种投机度与涨幅对比</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        #main {
+            width: 100%;
+            height: 400px;
+        }
+        #download-btn {
+            margin: 20px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #download-btn:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+
+<!-- 图表容器 -->
+<div id="main"></div>
+
+<!-- 下载按钮 -->
+<button id="download-btn">下载图片</button>
+
+<script>
+    const apiUrl = 'https://q.want.biz';
+
+    // 声明图表实例，在全局作用域中
+    const chart = echarts.init(document.getElementById('main'));
+
+    // 获取数据并调用绘图函数
+    async function fetchData() {
+        try {
+            const response = await fetch(apiUrl);
+            const apiData = await response.json(); // 假设返回的数据结构与之前的相似
+
+            // 过滤数据，只保留沉淀资金 cdzj 大于 20 亿的品种
+            const filteredData = apiData.list.filter(item => item.cdzj > 2000000000);
+
+            // 调用绘图函数
+            renderChart(filteredData);
+        } catch (error) {
+            console.error('数据获取失败:', error);
+        }
+    }
+
+    // 绘制图表的函数
+    function renderChart(dataList) {
+        // 提取品种名称、投机度和涨幅
+        const categories = dataList.map(item => item.name); // 品种名称
+        const tjdData = dataList.map(item => item.tjd);     // 投机度
+        const zdfData = dataList.map(item => item.zdf);     // 涨幅
+
+        // 配置项
+        const option = {
+            title: {
+                text: '期货品种投机度与涨幅对比'
+            },
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: {
+                    type: 'cross'
+                }
+            },
+            xAxis: {
+                type: 'category',
+                data: categories,  // 横轴显示品种名称
+                axisLabel: {
+                    interval: 0,
+                    rotate: 30 // 品种名称旋转，防止重叠
+                }
+            },
+            yAxis: [
+                {
+                    type: 'value',
+                    name: '投机度 (%)',
+                    position: 'left',
+                    axisLabel: {
+                        formatter: '{value} %'
+                    }
+                },
+                {
+                    type: 'value',
+                    name: '涨幅 (%)',
+                    position: 'right',
+                    axisLabel: {
+                        formatter: '{value} %'
+                    }
+                }
+            ],
+            series: [
+                {
+                    name: '投机度',
+                    type: 'bar',
+                    data: tjdData, // 投机度数据
+                    yAxisIndex: 0, // 使用左侧 y 轴
+                    itemStyle: {
+                        color: '#4CAF50'
+                    }
+                },
+                {
+                    name: '涨幅',
+                    type: 'line',
+                    data: zdfData, // 涨幅数据
+                    yAxisIndex: 1, // 使用右侧 y 轴
+                    itemStyle: {
+                        color: '#FF5733'
+                    },
+                    lineStyle: {
+                        width: 2
+                    }
+                }
+            ]
+        };
+
+        // 使用配置项和数据显示图表
+        chart.setOption(option);
+    }
+
+    // 添加下载图片功能
+    document.getElementById('download-btn').addEventListener('click', function () {
+        // 获取图表的 Base64 图片 URL
+        const imgURL = chart.getDataURL({
+            type: 'png',      // 图片类型
+            pixelRatio: 2,    // 像素比，值越高图片越清晰
+            backgroundColor: '#fff' // 背景颜色
+        });
+
+        // 创建一个临时的 <a> 标签并触发下载
+        const link = document.createElement('a');
+        link.href = imgURL;
+        link.download = 'chart.png'; // 下载的文件名
+        link.click(); // 触发点击事件，下载图片
+    });
+
+    // 页面加载时调用 fetchData()
+    fetchData();
+
+    // 每20秒更新一次数据
+    setInterval(fetchData, 20000);
+
+</script>
+
+</body>
+</html>
