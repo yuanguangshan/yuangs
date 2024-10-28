@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>期货品种投机度与涨幅对比</title>
+    <title>期货品种对比</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
-        #main {
+        #main, #main2 {
             width: 100%;
             height: 400px;
         }
@@ -25,8 +25,11 @@
 </head>
 <body>
 
-<!-- 图表容器 -->
+<!-- 第一个图表容器：投机度 vs 涨幅 -->
 <div id="main"></div>
+
+<!-- 第二个图表容器：增仓率 vs 涨跌幅 -->
+<div id="main2"></div>
 
 <!-- 下载按钮 -->
 <button id="download-btn">下载图片</button>
@@ -34,8 +37,9 @@
 <script>
     const apiUrl = 'https://q.want.biz';
 
-    // 声明图表实例，在全局作用域中
-    const chart = echarts.init(document.getElementById('main'));
+    // 声明两个图表实例
+    const chart1 = echarts.init(document.getElementById('main'));
+    const chart2 = echarts.init(document.getElementById('main2'));
 
     // 获取数据并调用绘图函数
     async function fetchData() {
@@ -46,19 +50,22 @@
             // 过滤数据，只保留沉淀资金 cdzj 大于 20 亿的品种
             const filteredData = apiData.list.filter(item => item.cdzj > 2000000000);
 
-            // 调用绘图函数
-            renderChart(filteredData);
+            // 调用两个图表的绘制函数
+            renderChart1(filteredData);  // 投机度 vs 涨幅图表
+            renderChart2(filteredData);  // 增仓率 vs 涨跌幅图表
         } catch (error) {
             console.error('数据获取失败:', error);
         }
     }
 
-    // 绘制图表的函数
-    function renderChart(dataList) {
+    // 绘制第一个图表: 投机度 vs 涨幅
+    function renderChart1(dataList) {
         // 提取品种名称、投机度和涨幅
         const categories = dataList.map(item => item.name); // 品种名称
         const tjdData = dataList.map(item => item.tjd);     // 投机度
         const zdfData = dataList.map(item => item.zdf);     // 涨幅
+
+        const barWidth = 30;  // 设定柱子和方块的宽度
 
         // 配置项
         const option = {
@@ -69,6 +76,18 @@
                 trigger: 'axis',
                 axisPointer: {
                     type: 'cross'
+                },
+                formatter: function (params) {
+                    let result = `<b>${params[0].name}</b><br>`;
+                    params.forEach(param => {
+                        if (param.seriesName === '涨幅') {
+                            const color = param.value >= 0 ? '红色🟥' : '绿色🟩';
+                            result += `${param.seriesName}: <span style="color:${color}">${param.value.toFixed(2)}%</span><br>`;
+                        } else {
+                            result += `${param.seriesName}: ${param.value.toFixed(2)}%<br>`;
+                        }
+                    });
+                    return result;
                 }
             },
             xAxis: {
@@ -76,7 +95,7 @@
                 data: categories,  // 横轴显示品种名称
                 axisLabel: {
                     interval: 0,
-                    rotate: 270 // 品种名称旋转，防止重叠
+                    rotate: 30 // 品种名称旋转，防止重叠
                 }
             },
             yAxis: [
@@ -88,14 +107,6 @@
                         formatter: '{value} %'
                     }
                 },
-                {
-                    type: 'value',
-                    name: '涨幅 (%)',
-                    position: 'right',
-                    axisLabel: {
-                        formatter: '{value} %'
-                    }
-                }
             ],
             series: [
                 {
@@ -103,43 +114,140 @@
                     type: 'bar',
                     data: tjdData, // 投机度数据
                     yAxisIndex: 0, // 使用左侧 y 轴
+                    barWidth: barWidth, // 设置柱形图的宽度
                     itemStyle: {
                         color: '#4CAF50'
                     }
                 },
                 {
                     name: '涨幅',
-                    type: 'line',
-                    data: zdfData, // 涨幅数据
-                    yAxisIndex: 1, // 使用右侧 y 轴
-                    itemStyle: {
-                        color: '#FF5733'
-                    },
-                    lineStyle: {
-                        width: 2
-                    }
+                    type: 'scatter',
+                    symbol: 'rect', // 使用方块作为标记
+                    symbolSize: [barWidth, barWidth], // 设置方块大小与柱子宽度一致
+                    data: zdfData.map(value => ({
+                        value,
+                        itemStyle: {
+                            color: value >= 0 ? '#FF0000' : '#00FF00' // 正涨幅用红色，负涨幅用绿色
+                        }
+                    })),
+                    yAxisIndex: 0, // 涨幅仍然使用左侧 y 轴
                 }
             ]
         };
 
         // 使用配置项和数据显示图表
-        chart.setOption(option);
+        chart1.setOption(option);
+    }
+
+    // 绘制第二个图表: 增仓率 vs 涨跌幅
+    function renderChart2(dataList) {
+        // 提取品种名称、增仓率和涨跌幅
+        const categories = dataList.map(item => item.name); // 品种名称
+        const zdfData = dataList.map(item => item.zdf);     // 涨跌幅
+        const zclData = dataList.map(item => {
+            return (item.rz / (item.ccl - item.rz)) * 100;  // 增仓率，转为百分比
+        });
+
+        const barWidth = 30;  // 设定柱子和方块的宽度
+
+        // 配置项
+        const option = {
+            title: {
+                text: '期货品种增仓率与涨跌幅对比'
+            },
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: {
+                    type: 'cross'
+                },
+                formatter: function (params) {
+                    let result = `<b>${params[0].name}</b><br>`;
+                    params.forEach(param => {
+                        if (param.seriesName === '涨跌幅') {
+                            const color = param.value >= 0 ? '红色🟥' : '绿色🟩';
+                            result += `${param.seriesName}: <span style="color:${color}">${param.value.toFixed(2)}%</span><br>`;
+                        } else {
+                            result += `${param.seriesName}: ${param.value.toFixed(2)}%<br>`;
+                        }
+                    });
+                    return result;
+                }
+            },
+            xAxis: {
+                type: 'category',
+                data: categories,  // 横轴显示品种名称
+                axisLabel: {
+                    interval: 0,
+                    rotate: 30 // 品种名称旋转，防止重叠
+                }
+            },
+            yAxis: [
+                {
+                    type: 'value',
+                    name: '增仓率 (%)',
+                    position: 'left',
+                    axisLabel: {
+                        formatter: '{value} %'
+                    }
+                },
+            ],
+            series: [
+                {
+                    name: '增仓率',
+                    type: 'bar',
+                    data: zclData, // 增仓率数据
+                    yAxisIndex: 0, // 使用左侧 y 轴
+                    barWidth: barWidth, // 设置柱形图的宽度
+                    itemStyle: {
+                        color: '#3498DB'
+                    }
+                },
+                {
+                    name: '涨跌幅',
+                    type: 'scatter',
+                    symbol: 'rect', // 使用方块作为标记
+                    symbolSize: [barWidth, barWidth], // 设置方块大小与柱子宽度一致
+                    data: zdfData.map(value => ({
+                        value,
+                        itemStyle: {
+                            color: value >= 0 ? '#FF0000' : '#00FF00' // 正涨幅用红色，负涨幅用绿色
+                        }
+                    })),
+                    yAxisIndex: 0, // 涨幅仍然使用左侧 y 轴
+                }
+            ]
+        };
+
+        // 使用配置项和数据显示图表
+        chart2.setOption(option);
     }
 
     // 添加下载图片功能
     document.getElementById('download-btn').addEventListener('click', function () {
-        // 获取图表的 Base64 图片 URL
-        const imgURL = chart.getDataURL({
+        // 获取第一个图表的 Base64 图片 URL
+        const imgURL1 = chart1.getDataURL({
             type: 'png',      // 图片类型
             pixelRatio: 2,    // 像素比，值越高图片越清晰
             backgroundColor: '#fff' // 背景颜色
         });
 
+        // 获取第二个图表的 Base64 图片 URL
+        const imgURL2 = chart2.getDataURL({
+            type: 'png',
+            pixelRatio: 2,
+            backgroundColor: '#fff'
+        });
+
         // 创建一个临时的 <a> 标签并触发下载
-        const link = document.createElement('a');
-        link.href = imgURL;
-        link.download = 'chart.png'; // 下载的文件名
-        link.click(); // 触发点击事件，下载图片
+        const link1 = document.createElement('a');
+        link1.href = imgURL1;
+        link1.download = 'chart1.png'; // 下载的文件名
+        link1.click(); // 触发点击事件，下载第一个图表
+
+        const link2 = document.createElement('a');
+        link2.href = imgURL2;
+        link2.download = 'chart2.png'; // 下载的文件名
+        link2.click(); // 触发点击事件，下载第二个图表
     });
 
     // 页面加载时调用 fetchData()
