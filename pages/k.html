@@ -17,8 +17,10 @@
 <div id="main"></div>
 
 <script>
-    // 假设接口地址为 'https://api.q.want.biz/v1/futures/data'
-    const apiUrl = 'https://api.q.want.biz';
+    const apiUrl = 'https://q.want.biz';
+
+    // 声明图表实例，在全局作用域中
+    const chart = echarts.init(document.getElementById('main'));
 
     // 获取数据并调用绘图函数
     async function fetchData() {
@@ -35,20 +37,17 @@
 
     // 绘制图表的函数
     function renderChart(dataList) {
-        // 提取数据并计算涨跌幅
+        // 提取数据并计算涨跌幅，不使用 toFixed(2)，保持数值类型
         const processedData = dataList.map(item => {
-            const openChange = (item.o / item.fzjsj - 1) * 100;
-            const closeChange = (item.p / item.fzjsj - 1) * 100;
-            const lowChange = (item.l / item.fzjsj - 1) * 100;
-            const highChange = (item.h / item.fzjsj - 1) * 100;
+            const openChange = ((item.o - item.zjsj) / item.zjsj * 100);  // 开盘涨幅
+            const closeChange = ((item.p - item.zjsj) / item.zjsj * 100); // 收盘涨幅
+            const lowChange = ((item.l - item.zjsj) / item.zjsj * 100);   // 最低涨幅
+            const highChange = ((item.h - item.zjsj) / item.zjsj * 100);  // 最高涨幅
             return [openChange, closeChange, lowChange, highChange];
         });
 
         // 提取品种名称
         const categories = dataList.map(item => item.name);
-
-        // 初始化 ECharts 实例
-        const chart = echarts.init(document.getElementById('main'));
 
         // 配置项
         const option = {
@@ -59,6 +58,10 @@
                 trigger: 'axis',
                 axisPointer: {
                     type: 'cross'
+                },
+                formatter: function (params) {
+                    const item = params[0];
+                    return `<b>${item.name}</b><br>开盘: ${item.value[1].toFixed(2)}%<br>最高: ${item.value[2].toFixed(2)}%<br>最低: ${item.value[3].toFixed(2)}%`;
                 }
             },
             xAxis: {
@@ -72,7 +75,9 @@
             yAxis: {
                 type: 'value',
                 axisLabel: {
-                    formatter: '{value} %'  // 纵轴显示百分比
+                    formatter: function (value) {
+                        return value.toFixed(2) + ' %';  // 纵轴显示百分比，保留两位小数
+                    }
                 }
             },
             series: [
@@ -94,8 +99,11 @@
         chart.setOption(option);
     }
 
-    // 调用 fetch 函数获取数据并绘图
+    // 页面加载时调用 fetchData()
     fetchData();
+
+    // 每20秒更新一次数据
+    setInterval(fetchData, 20000);
 
 </script>
 
