@@ -33,15 +33,27 @@
             const response = await fetch(apiUrl);
             const apiData = await response.json();
 
-            // 过滤成交额大于 10 亿的品种
-            const filteredData = apiData.list.filter(item => item.cje > 1e9);
-            // 检查是否有未收盘的品种 (jyzt === 0)
-        const hasOpenMarkets = filteredData.some(item => item.jyzt === 0);
+            // 检查 API 数据格式
+            if (!apiData || !apiData.list || !Array.isArray(apiData.list)) {
+                console.error('API 数据格式不正确，无法继续处理');
+                return;
+            }
 
-        // 如果有未收盘的品种，则只显示未收盘的品种
-        if (hasOpenMarkets) {
-            filteredData = filteredData.filter(item => item.jyzt === 0);
-        }
+            console.log('API 数据:', apiData); // 输出 API 数据供调试
+
+            // 过滤成交额大于 10 亿的品种
+            let filteredData = apiData.list.filter(item => item.cje > 1e9);
+            console.log('过滤后成交额大于 10 亿的品种:', filteredData); // 调试输出
+
+            // 检查是否有未收盘的品种 (jyzt === 0)
+            const hasOpenMarkets = filteredData.some(item => item.jyzt === 0);
+            console.log('是否有未收盘的品种:', hasOpenMarkets); // 调试输出
+
+            // 如果有未收盘的品种，则只显示未收盘的品种
+            if (hasOpenMarkets) {
+                filteredData = filteredData.filter(item => item.jyzt === 0);
+                console.log('过滤后未收盘的品种:', filteredData); // 调试输出
+            }
 
             // 调用绘图函数，传递过滤后的数据和用户定义的指标
             renderChart(filteredData, metric1, metric2);
@@ -52,18 +64,25 @@
 
     // 绘制图表的函数
     function renderChart(dataList, metric1, metric2) {
-        // 判断指标是否存在于数据中
-        if (dataList.length === 0 || !dataList[0][metric1] || !dataList[0][metric2]) {
-            console.error('指定的指标不存在或数据为空');
+        // 判断数据是否为空
+        if (dataList.length === 0) {
+            console.error('数据为空，无法绘制图表');
             return;
         }
 
         // 提取品种名称
         const categories = dataList.map(item => item.name);
+        console.log('品种名称:', categories); // 调试输出
 
         // 提取两个指定的指标数据
         const metric1Data = dataList.map(item => item[metric1]);
         const metric2Data = dataList.map(item => item[metric2]);
+
+        // 判断指标是否存在于数据中
+        if (metric1Data.some(val => val === undefined) || metric2Data.some(val => val === undefined)) {
+            console.error(`指定的指标 ${metric1} 或 ${metric2} 在数据中不存在`);
+            return;
+        }
 
         // 配置项
         const option = {
