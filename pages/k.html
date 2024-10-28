@@ -28,7 +28,7 @@
             const response = await fetch(apiUrl);
             const apiData = await response.json(); // 假设返回的数据结构与之前的相似
 
-            // 过滤数据，只保留沉淀资金 cje 大于 20 亿的品种
+            // 过滤数据，只保留沉淀资金 cdzj 大于 20 亿的品种
             const filteredData = apiData.list.filter(item => item.cdzj > 2000000000);
 
             // 调用绘图函数
@@ -40,22 +40,30 @@
 
     // 绘制图表的函数
     function renderChart(dataList) {
-        // 提取数据并计算涨跌幅，不使用 toFixed(2)，保持数值类型
+        // 提取数据并计算涨跌幅
         const processedData = dataList.map(item => {
             const openChange = ((item.o - item.zjsj) / item.zjsj * 100);  // 开盘涨幅
             const closeChange = ((item.p - item.zjsj) / item.zjsj * 100); // 收盘涨幅
             const lowChange = ((item.l - item.zjsj) / item.zjsj * 100);   // 最低涨幅
             const highChange = ((item.h - item.zjsj) / item.zjsj * 100);  // 最高涨幅
-            return [openChange, closeChange, lowChange, highChange];
+            return {
+                name: item.name,
+                data: [openChange, closeChange, lowChange, highChange], // 保存涨跌幅数据
+                closeChange // 保存收盘涨幅用来排序
+            };
         });
 
-        // 提取品种名称
-        const categories = dataList.map(item => item.name);
+        // 按照收盘涨幅排序（降序排列，如果想升序，可以将 b - a 改为 a - b）
+        const sortedData = processedData.sort((a, b) => b.closeChange - a.closeChange);
+
+        // 提取排序后的品种名称和涨跌幅数据
+        const categories = sortedData.map(item => item.name);
+        const sortedProcessedData = sortedData.map(item => item.data);
 
         // 配置项
         const option = {
             title: {
-                text: '期货品种涨跌幅对比（K线样式）'
+                text: '期货品种涨跌幅对比（按收盘涨幅排序）'
             },
             tooltip: {
                 trigger: 'axis',
@@ -64,7 +72,7 @@
                 },
                 formatter: function (params) {
                     const item = params[0];
-                    return `<b>${item.name}</b><br>开盘: ${item.value[1].toFixed(2)}%<br>收盘: ${item.value[2].toFixed(2)}%<br>最低: ${item.value[3].toFixed(2)}%`;
+                    return `<b>${item.name}</b><br>开盘: ${item.value[0].toFixed(2)}%<br>收盘: ${item.value[1].toFixed(2)}%<br>最低: ${item.value[2].toFixed(2)}%<br>最高: ${item.value[3].toFixed(2)}%`;
                 }
             },
             xAxis: {
@@ -87,7 +95,7 @@
                 {
                     name: '涨跌幅',
                     type: 'candlestick',
-                    data: processedData, // K线数据，格式为：[开盘涨幅, 收盘涨幅, 最低涨幅, 最高涨幅]
+                    data: sortedProcessedData, // K线数据，格式为：[开盘涨幅, 收盘涨幅, 最低涨幅, 最高涨幅]
                     itemStyle: {
                         color: '#ff4d4f',  // 阳线颜色
                         color0: '#52c41a', // 阴线颜色
