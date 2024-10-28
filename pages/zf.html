@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>期货品种指标对比</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        #main {
+            width: 100%;
+            height: 400px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="main"></div>
+
+<script>
+    const apiUrl = 'https://q.want.biz';
+
+    // 声明图表实例
+    const chart = echarts.init(document.getElementById('main'));
+
+    // 获取数据并调用绘图函数
+    async function fetchData() {
+        try {
+            const response = await fetch(apiUrl);
+            const apiData = await response.json();
+
+            // 检查 API 数据格式
+            if (!apiData || !apiData.list || !Array.isArray(apiData.list)) {
+                console.error('API 数据格式不正确，无法继续处理');
+                return;
+            }
+
+            console.log('API 数据:', apiData); // 输出 API 数据供调试
+
+            // 过滤成交额大于 10 亿的品种
+            let filteredData = apiData.list.filter(item => item.cje > 1e9);
+            console.log('过滤后成交额大于 10 亿的品种:', filteredData); // 调试输出
+
+            // 检查是否有未收盘的品种 (jyzt === 0)
+            const hasOpenMarkets = filteredData.some(item => item.jyzt === 0);
+            console.log('是否有未收盘的品种:', hasOpenMarkets); // 调试输出
+
+            // 如果有未收盘的品种，则只显示未收盘的品种
+            if (hasOpenMarkets) {
+                filteredData = filteredData.filter(item => item.jyzt === 0);
+                console.log('过滤后未收盘的品种:', filteredData); // 调试输出
+            }
+
+            // 调用绘图函数，传递过滤后的数据
+            renderChart(filteredData);
+        } catch (error) {
+            console.error('数据获取失败:', error);
+        }
+    }
+
+    // 绘制图表的函数
+    function renderChart(dataList) {
+        // 判断数据是否为空
+        if (dataList.length === 0) {
+            console.error('数据为空，无法绘制图表');
+            return;
+        }
+
+        // 提取品种名称
+        const categories = dataList.map(item => item.name);
+        console.log('品种名称:', categories); // 调试输出
+
+        // 提取各个指标数据
+        const zdfData = dataList.map(item => item.zdf);
+        const zdf5Data = dataList.map(item => item.zdf5);
+        const zdf20Data = dataList.map(item => item.zdf20);
+        const zdflyData = dataList.map(item => item.zdfly);
+        const zdf0Data = dataList.map(item => item.zdf0);
+
+        // 配置项
+        const option = {
+            title: {
+                text: '期货品种各周期涨跌幅度对比'
+            },
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: {
+                    type: 'cross'
+                }
+            },
+            legend: {
+                data: ['当日涨幅', '5日涨幅', '20日涨幅', '今年以来涨幅', '近一年涨幅']
+            },
+            xAxis: {
+                type: 'category',
+                data: categories,  // 横轴显示品种名称
+                axisLabel: {
+                    interval: 0,
+                    rotate: 270 // 品种名称旋转，防止重叠
+                }
+            },
+            yAxis: {
+                type: 'value',
+                name: '涨跌幅 (%)',
+                axisLabel: {
+                    formatter: function (value) {
+                        return value.toFixed(2) + '%';  // 保留两位小数
+                    }
+                }
+            },
+            series: [
+                {
+                    name: '当日涨幅',
+                    type: 'line',
+                    data: zdfData,
+                    itemStyle: {
+                        color: '#4CAF50'
+                    },
+                    symbol: 'circle',
+                    symbolSize: 6
+                },
+                {
+                    name: '5日涨幅',
+                    type: 'line',
+                    data: zdf5Data,
+                    itemStyle: {
+                        color: '#FF5733'
+                    },
+                    symbol: 'circle',
+                    symbolSize: 6
+                },
+                {
+                    name: '20日涨幅',
+                    type: 'line',
+                    data: zdf20Data,
+                    itemStyle: {
+                        color: '#FFCA28'
+                    },
+                    symbol: 'circle',
+                    symbolSize: 6
+                },
+                {
+                    name: '今年以来涨幅',
+                    type: 'line',
+                    data: zdflyData,
+                    itemStyle: {
+                        color: '#2196F3'
+                    },
+                    symbol: 'circle',
+                    symbolSize: 6
+                },
+                {
+                    name: '近一年涨幅',
+                    type: 'line',
+                    data: zdf0Data,
+                    itemStyle: {
+                        color: '#9C27B0'
+                    },
+                    symbol: 'circle',
+                    symbolSize: 6
+                }
+            ]
+        };
+
+        // 使用配置项和数据显示图表
+        chart.setOption(option);
+    }
+
+    // 页面加载时调用 fetchData()
+    fetchData();
+
+    // 每20秒更新一次数据
+    setInterval(fetchData, 20000);
+
+</script>
+
+</body>
+</html>
