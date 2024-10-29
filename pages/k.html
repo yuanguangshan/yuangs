@@ -184,8 +184,8 @@
             const response = await fetch(apiUrl);
             const apiData = await response.json(); // 假设返回的数据结构与之前的相似
 
-            // 过滤沉淀资金大于 50 亿的品种
-            let filteredData = apiData.list.filter(item => item.cdzj > 15*1e8);
+            // 过滤沉淀资金大于 15 亿的品种
+            let filteredData = apiData.list.filter(item => item.cdzj > 15 * 1e8);
 
             // 检查是否有未收盘的品种 (jyzt === 0)
             const hasOpenMarkets = filteredData.some(item => item.jyzt === 0);
@@ -215,6 +215,7 @@
             const highChange = parseFloat(((item.h - item.zjsj) / item.zjsj * 100).toFixed(2));  // 最高涨幅
             return {
                 name: item.name,
+                dm: item.dm,
                 data: [openChange, closeChange, lowChange, highChange], // 保存涨跌幅数据
                 closeChange // 保存收盘涨幅用来排序
             };
@@ -222,7 +223,7 @@
 
         const sortedData = processedData.sort((a, b) => b.closeChange - a.closeChange);
         const categories = sortedData.map(item => item.name);
-        const sortedProcessedData = sortedData.map(item => item.data);
+        const sortedProcessedData = sortedData.map(item => item);
 
         const option = {
             title: {
@@ -239,7 +240,7 @@
                 axisPointer: {
                     type: 'shadow'
                 },
-    
+
             },
             xAxis: {
                 type: 'category',
@@ -288,7 +289,11 @@
             series: [{
                 name: '涨跌幅',
                 type: 'candlestick',
-                data: sortedProcessedData,
+                data: sortedProcessedData.map(item => ({
+                    value: item.data,
+                    dm: item.dm,
+                    name: item.name
+                })),
                 itemStyle: {
                     color: '#EF5350',    // 阳线颜色
                     color0: '#53A626FF',   // 阴线颜色
@@ -321,6 +326,78 @@
         };
 
         chart1.setOption(option);
+
+        // 添加点击事件
+        chart1.off('click'); // 先移除之前的点击事件，避免多次绑定
+        chart1.on('click', function (params) {
+            const dataItem = params.data;
+            const dm = dataItem.dm;
+            const codeWithoutNumbers = stripNumbers(dm);
+
+            const date = getCorrectDate();
+            const formattedDate = formatDate(date); // 格式化日期为 'YYYY-MM-DD'
+
+            // 构建URL
+            const baseUrl = 'https://data.want.biz/ranking/' + codeWithoutNumbers + '/all/' + formattedDate;
+            const queryString = '?variety=' + codeWithoutNumbers + '&sort_by=%E5%87%80%E6%8C%81%E4%BB%93%E6%95%B0%E5%80%BC&order=desc#profits';
+
+            const url = baseUrl + queryString;
+
+            // 在新标签页打开链接
+            window.open(url, '_blank');
+        });
+    }
+
+    // 去除字符串中的数字
+    function stripNumbers(str) {
+        return str.replace(/\d+/g, '');
+    }
+
+    // 获取正确的日期
+    function getCorrectDate() {
+        const now = new Date();
+        const hour = now.getHours();
+        let date;
+
+        if (hour >= 9 && hour < 16) {
+            // 白天，使用上一个交易日
+            date = getLastTradingDay();
+        } else if (hour >= 20 || hour < 9) {
+            // 晚上，使用当前交易日
+            date = now;
+        } else {
+            // 非交易时间，默认使用上一个交易日
+            date = getLastTradingDay();
+        }
+        return date;
+    }
+
+    // 获取上一个交易日（不包括周末）
+    function getLastTradingDay() {
+        const today = new Date();
+        let lastTradingDay = new Date(today);
+        const dayOfWeek = today.getDay(); // 0（周日） 到 6（周六）
+
+        if (dayOfWeek === 0) { // 周日
+            lastTradingDay.setDate(today.getDate() - 2); // 周五
+        } else if (dayOfWeek === 1) { // 周一
+            lastTradingDay.setDate(today.getDate() - 3); // 周五
+        } else {
+            lastTradingDay.setDate(today.getDate() - 1); // 昨天
+        }
+        return lastTradingDay;
+    }
+
+    // 格式化日期为 'YYYY-MM-DD'
+    function formatDate(date) {
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1; // 月份从0开始
+        const day = date.getDate();
+
+        const monthStr = month < 10 ? '0' + month : month;
+        const dayStr = day < 10 ? '0' + day : day;
+
+        return year + '-' + monthStr + '-' + dayStr;
     }
 
     // 绘制第二个图表: 投机度 vs 涨幅
@@ -339,7 +416,7 @@
                     color: '#333'
                 }
             },
-            backgroundColor: '#EAECEDFF', 
+            backgroundColor: '#EAECEDFF',
             tooltip: {
                 trigger: 'axis',
                 axisPointer: {
@@ -464,7 +541,7 @@
                     color: '#333'
                 }
             },
-            backgroundColor: '#EAECEDFF', 
+            backgroundColor: '#EAECEDFF',
             tooltip: {
                 trigger: 'axis',
                 axisPointer: {
@@ -594,7 +671,7 @@
                     color: '#333'
                 }
             },
-            backgroundColor: '#EAECEDFF', 
+            backgroundColor: '#EAECEDFF',
             tooltip: {
                 trigger: 'axis',
                 axisPointer: {
@@ -665,7 +742,7 @@
                     itemStyle: {
                         color: '#FF5722'
                     },
-                    lineStyle: { width: 2 },
+                    lineStyle: {width: 2},
                     smooth: true
                 },
                 {
@@ -675,7 +752,7 @@
                     itemStyle: {
                         color: '#8BC34A'
                     },
-                    lineStyle: { width: 2 },
+                    lineStyle: {width: 2},
                     smooth: true
                 },
                 {
@@ -685,7 +762,7 @@
                     itemStyle: {
                         color: '#42A5F5'
                     },
-                    lineStyle: { width: 2 },
+                    lineStyle: {width: 2},
                     smooth: true
                 },
                 {
@@ -695,7 +772,7 @@
                     itemStyle: {
                         color: '#AB47BC'
                     },
-                    lineStyle: { width: 2 },
+                    lineStyle: {width: 2},
                     smooth: true
                 },
                 {
@@ -705,7 +782,7 @@
                     itemStyle: {
                         color: '#FFA726'
                     },
-                    lineStyle: { width: 2 },
+                    lineStyle: {width: 2},
                     smooth: true
                 },
                 {
@@ -715,7 +792,7 @@
                     itemStyle: {
                         color: '#26A69A'
                     },
-                    lineStyle: { width: 2 },
+                    lineStyle: {width: 2},
                     smooth: true
                 },
                 {
@@ -725,7 +802,7 @@
                     itemStyle: {
                         color: '#EC407A'
                     },
-                    lineStyle: { width: 2 },
+                    lineStyle: {width: 2},
                     smooth: true
                 }
             ]
@@ -750,7 +827,7 @@
                     color: '#333'
                 }
             },
-            backgroundColor: '#EAECEDFF', 
+            backgroundColor: '#EAECEDFF',
             tooltip: {
                 trigger: 'axis',
                 axisPointer: {
@@ -885,7 +962,7 @@
     // 下载图表函数
     function downloadChart(chartInstance, fileName) {
         const url = chartInstance.getDataURL({
-            backgroundColor: '#EAECEDFF', 
+            backgroundColor: '#EAECEDFF',
             pixelRatio: 2
         });
         const link = document.createElement('a');
@@ -906,8 +983,8 @@
         chart5.resize();
     });
 
-// 每20秒更新一次数据
-setInterval(fetchData, 20000);
+    // 每20秒更新一次数据
+    setInterval(fetchData, 20000);
 </script>
 </body>
 </html>
