@@ -3,39 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>期货品种涨跌幅对比</title>
+    <title>期货品种对比与指标对比</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
-        #main {
+        .chart-container {
+            position: relative;
             width: 100%;
-            height: 400px;
+            height: 450px;
+            margin-bottom: 40px;
         }
-        #download-btn {
-            margin: 20px;
-            padding: 10px 20px;
+
+        .chart {
+            width: 100%;
+            height: 100%;
+        }
+
+        .download-btn {
+            position: absolute;
+            top: 0px;
+            right: 5px;
+            padding: 5px 10px;
             background-color: #4CAF50;
             color: white;
             border: none;
             cursor: pointer;
+            z-index: 10;
+            border-radius: 5px;
         }
-        #download-btn:hover {
+
+        .download-btn:hover {
             background-color: #45a049;
         }
     </style>
 </head>
 <body>
 
-<!-- 图表容器 -->
-<div id="main"></div>
+<!-- 第一个图表容器：期货品种走势对比 -->
+<div class="chart-container">
+    <div id="main1" class="chart"></div>
+    <button id="download-btn1" class="download-btn">下载</button>
+</div>
 
-<!-- 下载按钮 -->
-<button id="download-btn">下载图片</button>
+<!-- 第二个图表容器：增仓率 vs 涨跌幅 -->
+<div class="chart-container">
+    <div id="main3" class="chart"></div>
+    <button id="download-btn3" class="download-btn">下载</button>
+</div>
+
+<!-- 第三个图表容器：投机度 vs 涨幅 -->
+<div class="chart-container">
+    <div id="main2" class="chart"></div>
+    <button id="download-btn2" class="download-btn">下载</button>
+</div>
+
+
+<!-- 新增的图表容器：期货品种各周期指标对比 -->
+<div class="chart-container" style="height: 400px;">
+    <div id="main4" class="chart"></div>
+    <button id="download-btn4" class="download-btn">下载</button>
+</div>
 
 <script>
     const apiUrl = 'https://q.want.biz';
 
-    // 声明图表实例，在全局作用域中
-    const chart = echarts.init(document.getElementById('main'));
+    // 声明四个图表实例
+    const chart1 = echarts.init(document.getElementById('main1'));
+    const chart2 = echarts.init(document.getElementById('main2'));
+    const chart3 = echarts.init(document.getElementById('main3'));
+    const chart4 = echarts.init(document.getElementById('main4'));
 
     // 获取数据并调用绘图函数
     async function fetchData() {
@@ -44,18 +79,20 @@
             const apiData = await response.json(); // 假设返回的数据结构与之前的相似
 
             // 过滤数据，只保留沉淀资金 cdzj 大于 20 亿的品种
-            const filteredData = apiData.list.filter(item => item.cdzj > 3000000000);
+            const filteredData = apiData.list.filter(item => item.cdzj > 2000000000);
 
-            // 调用绘图函数
-            renderChart(filteredData);
+            // 调用四个图表的绘制函数
+            renderChart1(filteredData);  // 期货品种走势对比
+            renderChart2(filteredData);  // 投机度 vs 涨幅图表
+            renderChart3(filteredData);  // 增仓率 vs 涨跌幅图表
+            renderChart4(filteredData);  // 各周期涨跌幅对比
         } catch (error) {
             console.error('数据获取失败:', error);
         }
     }
 
-    // 绘制图表的函数
-    function renderChart(dataList) {
-        // 提取数据并计算涨跌幅
+    // 绘制第一个图表: 期货品种走势对比
+    function renderChart1(dataList) {
         const processedData = dataList.map(item => {
             const openChange = ((item.o - item.zjsj) / item.zjsj * 100);  // 开盘涨幅
             const closeChange = ((item.p - item.zjsj) / item.zjsj * 100); // 收盘涨幅
@@ -68,77 +105,341 @@
             };
         });
 
-        // 按照收盘涨幅排序（降序排列，如果想升序，可以将 b - a 改为 a - b）
         const sortedData = processedData.sort((a, b) => b.closeChange - a.closeChange);
-
-        // 提取排序后的品种名称和涨跌幅数据
         const categories = sortedData.map(item => item.name);
         const sortedProcessedData = sortedData.map(item => item.data);
 
-        // 配置项
         const option = {
             title: {
-                text: '期货品种走势对比'
+                text: '期货品种走势对比',
+                left: 'center',
             },
             tooltip: {
                 trigger: 'axis',
                 axisPointer: {
                     type: 'cross'
-                },
-                formatter: function (params) {
-                    const item = params[0];
-                    return `<b>${item.name}</b><br>开盘: ${item.value[1].toFixed(2)}%<br>收盘: ${item.value[2].toFixed(2)}%<br>最低: ${item.value[3].toFixed(2)}%`;
                 }
             },
             xAxis: {
                 type: 'category',
-                data: categories,  // 横轴显示品种名称
+                data: categories,
                 axisLabel: {
                     interval: 0,
-                    rotate: 270 // 品种名称旋转，防止重叠
+                    rotate: 270
                 }
             },
             yAxis: {
                 type: 'value',
                 axisLabel: {
-                    formatter: function (value) {
-                        return value.toFixed(2) + ' %';  // 纵轴显示百分比，保留两位小数
-                    }
+                    formatter: value => value.toFixed(2) + ' %'
                 }
             },
+            series: [{
+                name: '涨跌幅',
+                type: 'candlestick',
+                data: sortedProcessedData,
+                itemStyle: {
+                    color: '#ff4d4f',
+                    color0: '#52c41a',
+                    borderColor: '#ff4d4f',
+                    borderColor0: '#52c41a'
+                }
+            }]
+        };
+
+        chart1.setOption(option);
+    }
+
+    // 绘制第二个图表: 投机度 vs 涨幅
+    function renderChart2(dataList) {
+        dataList.sort((a, b) => b.zdf - a.zdf);
+        const categories = dataList.map(item => item.name);
+        const tjdData = dataList.map(item => item.tjd);
+        const zdfData = dataList.map(item => item.zdf);
+
+        const option = {
+            title: {
+                text: '期货品种投机度与涨幅对比',
+                left: 'center',
+            },
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: {
+                    type: 'cross'
+                }
+            },
+            xAxis: {
+                type: 'category',
+                data: categories,
+                axisLabel: {
+                    interval: 0,
+                    rotate: 270
+                }
+            },
+            yAxis: [
+                {
+                    type: 'value',
+                    name: '投机度/100',
+                    position: 'left'
+                },
+                {
+                    type: 'value',
+                    name: '涨幅 (%)',
+                    position: 'right',
+                    axisLabel: {
+                        formatter: '{value} %'
+                    }
+                }
+            ],
             series: [
                 {
-                    name: '涨跌幅',
-                    type: 'candlestick',
-                    data: sortedProcessedData, // K线数据，格式为：[开盘涨幅, 收盘涨幅, 最低涨幅, 最高涨幅]
+                    name: '投机度',
+                    type: 'bar',
+                    data: tjdData,
+                    yAxisIndex: 0,
                     itemStyle: {
-                        color: '#ff4d4f',  // 阳线颜色
-                        color0: '#52c41a', // 阴线颜色
-                        borderColor: '#ff4d4f',
-                        borderColor0: '#52c41a'
+                        color: '#4CAF50'
+                    }
+                },
+                {
+                    name: '涨幅',
+                    type: 'line',
+                    data: zdfData,
+                    yAxisIndex: 1,
+                    itemStyle: {
+                        color: '#FF5733'
+                    },
+                    lineStyle: {
+                        width: 2
                     }
                 }
             ]
         };
 
-        // 使用配置项和数据显示图表
-        chart.setOption(option);
+        chart2.setOption(option);
     }
 
-    // 添加下载图片功能
-    document.getElementById('download-btn').addEventListener('click', function () {
-        // 获取图表的 Base64 图片 URL
-        const imgURL = chart.getDataURL({
-            type: 'png',      // 图片类型
-            pixelRatio: 2,    // 像素比，值越高图片越清晰
-            backgroundColor: '#fff' // 背景颜色
-        });
+    // 绘制第三个图表: 增仓率 vs 涨跌幅
+    function renderChart3(dataList) {
+        dataList.sort((a, b) => b.zdf - a.zdf);
+        const categories = dataList.map(item => item.name);
+        const zdfData = dataList.map(item => item.zdf);
+        const zclData = dataList.map(item => ((item.rz / (item.ccl - item.rz)) * 100).toFixed(2));
 
-        // 创建一个临时的 <a> 标签并触发下载
-        const link = document.createElement('a');
-        link.href = imgURL;
-        link.download = 'chart.png'; // 下载的文件名
-        link.click(); // 触发点击事件，下载图片
+        const option = {
+            title: {
+                text: '期货品种增仓率与涨幅对比',
+                left: 'center',
+            },
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: {
+                    type: 'cross'
+                }
+            },
+            xAxis: {
+                type: 'category',
+                data: categories,
+                axisLabel: {
+                    interval: 0,
+                    rotate: 270
+                }
+            },
+            yAxis: [
+                {
+                    type: 'value',
+                    name: '增仓率 (%)',
+                    position: 'left',
+                    axisLabel: {
+                        formatter: value => value.toFixed(2) + ' %'
+                    }
+                },
+                {
+                    type: 'value',
+                    name: '涨跌幅 (%)',
+                    position: 'right',
+                    axisLabel: {
+                        formatter: '{value} %'
+                    }
+                }
+            ],
+            series: [
+                {
+                    name: '增仓率',
+                    type: 'bar',
+                    data: zclData,
+                    yAxisIndex: 0,
+                    itemStyle: {
+                        color: '#3498DB'
+                    }
+                },
+                {
+                    name: '涨跌幅',
+                    type: 'line',
+                    data: zdfData,
+                    yAxisIndex: 1,
+                    itemStyle: {
+                        color: '#E74C3C'
+                    },
+                    lineStyle: {
+                        width: 2
+                    }
+                }
+            ]
+        };
+
+        chart3.setOption(option);
+    }
+
+    // 绘制第四个图表: 各周期涨跌幅对比
+    function renderChart4(dataList) {
+        const categories = dataList.map(item => item.name);
+        const zdfData = dataList.map(item => item.zdf);
+        const zdf3Data = dataList.map(item => item.zdf3);
+        const zdf5Data = dataList.map(item => item.zdf5);
+        const zdf20Data = dataList.map(item => item.zdf20);
+        const zdflyData = dataList.map(item => item.zdfly);
+        const zdf0Data = dataList.map(item => item.zdf0);
+        const zdf250Data = dataList.map(item => item.zdf250);
+
+        const option = {
+            title: {
+                text: '期货品种各周期涨跌幅度对比',
+                left: 'center',
+            },
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: {
+                    type: 'cross'
+                }
+            },
+            legend: {
+                data: ['当日涨幅', '3日涨幅', '5日涨幅', '20日涨幅', '今年以来涨幅', '近一年涨幅', '250日涨幅'],
+                top:30
+            },
+            xAxis: {
+                type: 'category',
+                data: categories,
+                axisLabel: {
+                    interval: 0,
+                    rotate: 270
+                }
+            },
+            yAxis: {
+                type: 'value',
+                name: '涨跌幅 (%)',
+                axisLabel: {
+                    formatter: value => value.toFixed(2) + '%'
+                }
+            },
+            series: [
+                {
+                    name: '当日涨幅',
+                    type: 'line',
+                    data: zdfData,
+                    itemStyle: {
+                        color: '#4CAF50'
+                    },
+                    symbol: 'circle',
+                    symbolSize: 6
+                },
+                {
+                    name: '3日涨幅',
+                    type: 'line',
+                    data: zdf3Data,
+                    itemStyle: {
+                        color: 'blue'
+                    },
+                    symbol: 'circle',
+                    symbolSize: 6
+                },
+                {
+                    name: '5日涨幅',
+                    type: 'line',
+                    data: zdf5Data,
+                    itemStyle: {
+                        color: '#FF5733'
+                    },
+                    symbol: 'circle',
+                    symbolSize: 6
+                },
+                {
+                    name: '20日涨幅',
+                    type: 'line',
+                    data: zdf20Data,
+                    itemStyle: {
+                        color: '#FFCA28'
+                    },
+                    symbol: 'circle',
+                    symbolSize: 6
+                },
+                {
+                    name: '今年以来涨幅',
+                    type: 'line',
+                    data: zdflyData,
+                    itemStyle: {
+                        color: '#2196F3'
+                    },
+                    symbol: 'circle',
+                    symbolSize: 6
+                },
+                {
+                    name: '近一年涨幅',
+                    type: 'line',
+                    data: zdf0Data,
+                    itemStyle: {
+                        color: '#9C27B0'
+                    },
+                    symbol: 'circle',
+                    symbolSize: 6
+                },
+                {
+                    name: '250日涨幅',
+                    type: 'line',
+                    data: zdf250Data,
+                    itemStyle: {
+                        color: 'black'
+                    },
+                    symbol: 'circle',
+                    symbolSize: 6
+                }
+            ]
+        };
+
+        chart4.setOption(option);
+    }
+
+    // 添加下载图片功能（针对四个图表）
+    document.getElementById('download-btn1').addEventListener('click', function () {
+        const imgURL1 = chart1.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
+        const link1 = document.createElement('a');
+        link1.href = imgURL1;
+        link1.download = 'chart1.png';
+        link1.click();
+    });
+
+    document.getElementById('download-btn2').addEventListener('click', function () {
+        const imgURL2 = chart2.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
+        const link2 = document.createElement('a');
+        link2.href = imgURL2;
+        link2.download = 'chart2.png';
+        link2.click();
+    });
+
+    document.getElementById('download-btn3').addEventListener('click', function () {
+        const imgURL3 = chart3.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
+        const link3 = document.createElement('a');
+        link3.href = imgURL3;
+        link3.download = 'chart3.png';
+        link3.click();
+    });
+
+    document.getElementById('download-btn4').addEventListener('click', function () {
+        const imgURL4 = chart4.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
+        const link4 = document.createElement('a');
+        link4.href = imgURL4;
+        link4.download = 'chart4.png';
+        link4.click();
     });
 
     // 页面加载时调用 fetchData()
