@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
-    <title>期货市场实时数据概览</title>
+    <title>期市实时监控</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -16,7 +16,7 @@
 
         .container {
             background: white;
-            padding: 15px;
+            padding: 10px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
@@ -25,38 +25,24 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
         }
 
-        .header-left {
-            display: flex;
-            align-items: center;
+        .title {
+            font-size: 1rem;
+            font-weight: bold;
         }
 
         .last-update {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             color: #666;
-            margin-right: 20px;
-        }
-
-        .refresh-button {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .refresh-button:hover {
-            background-color: #0056b3;
         }
 
         .content-section {
             display: flex;
             flex-wrap: wrap;
-            gap: 20px;
-            margin-bottom: 20px;
+            gap: 10px;
+            margin-bottom: 10px;
         }
 
         .table-container {
@@ -67,20 +53,21 @@
         .chart-container {
             flex: 1;
             min-width: 300px;
-            height: 400px;
+            height: 250px; /* 图表高度减少 */
         }
 
         .data-table {
             width: 100%;
             border-collapse: collapse;
             background-color: white;
-            margin-bottom: 20px;
+            margin-bottom: 5px;
+            font-size: 0.85rem; /* 字体缩小 */
         }
 
         .data-table th,
         .data-table td {
             border: 1px solid #dee2e6;
-            padding: 8px;
+            padding: 6px; /* 缩小单元格内边距 */
             text-align: right;
         }
 
@@ -92,11 +79,13 @@
         .up-table th {
             background-color: #ff4d4f;
             color: white;
+            height: 30px; /* 调整表头高度 */
         }
 
         .down-table th {
             background-color: #52c41a;
             color: white;
+            height: 30px; /* 调整表头高度 */
         }
 
         /* 响应式布局：在宽屏设备上，图表和表格在同一行；在窄屏设备上，图表放在表格下方 */
@@ -107,6 +96,7 @@
 
             .chart-container {
                 width: 100%; /* 确保图表在窄屏设备上占满宽度 */
+                height: 200px; /* 在移动设备上进一步减少图表高度 */
             }
         }
     </style>
@@ -114,10 +104,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <div class="header-left">
-                <div class="last-update" id="lastUpdate">最近更新时间：--</div>
-                <button class="refresh-button" onclick="fetchData()">刷新</button>
-            </div>
+            <div class="title">期市实时监控</div>
+            <div class="last-update" id="lastUpdate">最近更新时间：--</div>
         </div>
 
         <!-- 上涨品种区域 -->
@@ -168,16 +156,26 @@
         }
     }
 
+    // 计算平均涨幅或跌幅
+    function calculateAverageChange(contractList) {
+        const sumChange = contractList.reduce((sum, contract) => sum + contract.zdf, 0);
+        return (sumChange / contractList.length).toFixed(2);
+    }
+
     // 更新页面内容
     function updatePageContent(data) {
         // 筛选上涨和下跌品种
         const risingContracts = data.filter(item => item.zdf > 0);
         const fallingContracts = data.filter(item => item.zdf < 0);
 
+        // 计算平均涨幅和跌幅
+        const risingAverage = calculateAverageChange(risingContracts.slice(0, 5));
+        const fallingAverage = calculateAverageChange(fallingContracts.slice(0, 5));
+
         // 更新上涨品种TOP5
         const risingSection = document.getElementById('risingSection');
         risingSection.innerHTML = `
-            <h2>上涨品种TOP5</h2>
+            <h2>上涨品种TOP5（平均涨幅：${risingAverage}%）</h2>
             <table class="data-table up-table">
                 <thead>
                     <tr><th>合约</th><th>最新</th><th>涨幅</th><th>资金流向</th><th>成交量</th></tr>
@@ -199,7 +197,7 @@
         // 更新下跌品种TOP5
         const fallingSection = document.getElementById('fallingSection');
         fallingSection.innerHTML = `
-            <h2>下跌品种TOP5</h2>
+            <h2>下跌品种TOP5（平均跌幅：${fallingAverage}%）</h2>
             <table class="data-table down-table">
                 <thead>
                     <tr><th>合约</th><th>最新</th><th>跌幅</th><th>资金流向</th><th>成交量</th></tr>
@@ -219,11 +217,11 @@
         `;
 
         // 更新图表
-        updateCharts(risingContracts.slice(0, 5), fallingContracts.slice(0, 5));
+        updateCharts(risingContracts.slice(0, 5), fallingContracts.slice(0, 5), risingAverage, fallingAverage);
     }
 
-    // 更新图表
-    function updateCharts(rising, falling) {
+    // 更新图表，增加虚线用于显示平均涨幅或跌幅
+    function updateCharts(rising, falling, risingAverage, fallingAverage) {
         // 上涨品种资金流向图表
         const upFlowChart = echarts.init(document.getElementById('upFlowChart'));
         const upContracts = rising.map(item => item.name);
@@ -242,7 +240,20 @@
                         return params.value >= 0 ? '#ff4d4f' : '#52c41a'; // 资金流入为红色，流出为绿色
                     }
                 }
-            }]
+            }],
+            // 添加虚线，显示平均涨幅
+            markLine: {
+                data: [
+                    {
+                        name: '平均涨幅',
+                        yAxis: risingAverage,
+                        lineStyle: {
+                            type: 'dashed',
+                            color: '#ff4d4f'
+                        }
+                    }
+                ]
+            }
         };
         upFlowChart.setOption(upFlowOption);
 
@@ -264,7 +275,20 @@
                         return params.value >= 0 ? '#ff4d4f' : '#52c41a'; // 资金流入为红色，流出为绿色
                     }
                 }
-            }]
+            }],
+            // 添加虚线，显示平均跌幅
+            markLine: {
+                data: [
+                    {
+                        name: '平均跌幅',
+                        yAxis: fallingAverage,
+                        lineStyle: {
+                            type: 'dashed',
+                            color: '#52c41a'
+                        }
+                    }
+                ]
+            }
         };
         downFlowChart.setOption(downFlowOption);
     }
