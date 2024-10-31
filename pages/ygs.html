@@ -45,6 +45,39 @@
             margin-bottom: 10px;
         }
 
+        /* 单独的期货综合指数块 */
+        .index-section {
+            background-color: white; /* 默认白色背景 */
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 10px;
+            color: white; /* 保证文字在红绿背景上清晰显示 */
+        }
+
+        .index-section.positive-bg {
+            background-color: #ff4d4f; /* 红色背景用于涨 */
+        }
+
+        .index-section.negative-bg {
+            background-color: #52c41a; /* 绿色背景用于跌 */
+        }
+
+        .index-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .index-value {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .index-detail {
+            margin-top: 5px;
+            font-size: 0.9rem;
+        }
+
         /* 表格容器和图表容器 */
         .table-container {
             flex: 1;
@@ -117,6 +150,18 @@
             <div class="title">期市实时监控</div>
             <div class="last-update" id="lastUpdate">最近更新时间：--</div>
         </div>
+        
+        <!-- 期货综合指数块 -->
+        <div class="index-section" id="indexSection">
+            <div class="index-title">期货综合指数</div>
+            <div class="index-value" id="indexValue">--</div>
+            <div class="index-detail">
+                <span id="totalCje">成交额：-- 亿</span> | 
+                <span id="totalCdzj">沉淀资金：-- 亿</span>
+            </div>
+        </div>
+
+
 
         <!-- 上涨品种区域 -->
         <div class="content-section">
@@ -174,6 +219,9 @@
             // 更新页面内容
             updatePageContent(filteredData);
             updateLastUpdateTime();  // 更新最后一次更新时间
+
+            // 更新期货综合指数块背景颜色和细节
+            updateIndexSection(filteredData);
         } catch (error) {
             console.error('Error fetching the data:', error);
         }
@@ -205,7 +253,7 @@
             <h4>上涨品种TOP5（平均涨幅：${risingAverage}%）</h4>
             <table class="data-table up-table">
                 <thead>
-                    <th>合约</th><th>最新</th><th>涨幅</th><th>流向</th><th>振幅</th><th>5日</th><th>今年</th></tr>
+                    <tr><th>合约</th><th>最新</th><th>涨幅</th><th>流向</th><th>振幅</th><th>5日</th><th>今年</th></tr>
                 </thead>
                 <tbody>
                     ${topRisingContracts.map(item => `
@@ -350,6 +398,32 @@
             }
         };
         downFlowChart.setOption(downFlowOption);
+    }
+
+    // 更新期货综合指数块背景颜色并更新成交额和沉淀资金
+    function updateIndexSection(data) {
+        const indexSection = document.getElementById('indexSection');
+        const indexValueElement = document.getElementById('indexValue');
+        const totalCjeElement = document.getElementById('totalCje');
+        const totalCdzjElement = document.getElementById('totalCdzj');
+
+        const totalChange = data.reduce((sum, item) => sum + item.zdf, 0);
+        indexValueElement.textContent = `${totalChange.toFixed(2)}%`;
+
+        const totalCje = data.reduce((sum, item) => sum + item.cje, 0);
+        const totalCdzj = data.reduce((sum, item) => sum + item.cdzj, 0);
+        totalCjeElement.textContent = `成交额：${(totalCje / 1e8).toFixed(2)} 亿`;
+        totalCdzjElement.textContent = `沉淀资金：${(totalCdzj / 1e8).toFixed(2)} 亿`;
+
+        if (totalChange > 0) {
+            indexSection.classList.add('positive-bg');
+            indexSection.classList.remove('negative-bg');
+        } else if (totalChange < 0) {
+            indexSection.classList.add('negative-bg');
+            indexSection.classList.remove('positive-bg');
+        } else {
+            indexSection.classList.remove('positive-bg', 'negative-bg'); // 删除所有背景色
+        }
     }
 
     // 检查当前时间是否在允许更新的时间段内
