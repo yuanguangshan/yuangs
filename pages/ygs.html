@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <title>期货市场实时数据概览</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 10px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+        .refresh-button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .refresh-button:hover {
+            background-color: #0056b3;
+        }
+        .data-section {
+            margin-bottom: 20px;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            margin-bottom: 20px;
+        }
+        .data-table th, .data-table td {
+            border: 1px solid #dee2e6;
+            padding: 8px;
+            text-align: right;
+        }
+        .data-table th:first-child, .data-table td:first-child {
+            text-align: left;
+        }
+        .up-table th {
+            background-color: #ff4d4f;
+            color: white;
+        }
+        .down-table th {
+            background-color: #52c41a;
+            color: white;
+        }
+        .chart-container {
+            margin-top: 20px;
+            padding: 10px;
+            background: white;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>期货市场实时数据概览</h1>
+            <button class="refresh-button" onclick="fetchData()">刷新</button>
+        </div>
+
+        <div class="data-section" id="risingSection"></div>
+        <div class="data-section" id="fallingSection"></div>
+
+        <div class="chart-container">
+            <h3>上涨品种资金流向 (亿元)</h3>
+            <div id="upFlowChart" style="height:400px;"></div>
+        </div>
+
+        <div class="chart-container">
+            <h3>下跌品种资金流向 (亿元)</h3>
+            <div id="downFlowChart" style="height:400px;"></div>
+        </div>
+    </div>
+
+<script>
+    // Fetch data from the q.want.biz API
+    async function fetchData() {
+        try {
+            const response = await fetch('https://q.want.biz');
+            if (!response.ok) {
+                throw new Error('Failed to fetch the data');
+            }
+            const data = await response.json();
+            console.log(data); // 查看数据结构以确保正确解析
+            updatePageContent(data.list);
+        } catch (error) {
+            console.error('Error fetching the data:', error);
+        }
+    }
+
+    // Update the page content dynamically
+    function updatePageContent(data) {
+        // 筛选上涨和下跌品种
+        const risingContracts = data.filter(item => item.zdf > 0);
+        const fallingContracts = data.filter(item => item.zdf < 0);
+
+        // 更新上涨品种TOP5
+        const risingSection = document.getElementById('risingSection');
+        risingSection.innerHTML = `
+            <h2>上涨品种TOP5</h2>
+            <table class="data-table up-table">
+                <thead>
+                    <tr><th>合约</th><th>最新</th><th>涨幅</th><th>资金流向</th><th>成交量</th></tr>
+                </thead>
+                <tbody>
+                    ${risingContracts.slice(0, 5).map(item => `
+                        <tr>
+                            <td>${item.name}</td>
+                            <td>${item.qrspj}</td>
+                            <td>${item.zdf}%</td>
+                            <td>${(item.zjlx / 1e8).toFixed(2)} 亿</td>
+                            <td>${item.vol}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+
+        // 更新下跌品种TOP5
+        const fallingSection = document.getElementById('fallingSection');
+        fallingSection.innerHTML = `
+            <h2>下跌品种TOP5</h2>
+            <table class="data-table down-table">
+                <thead>
+                    <tr><th>合约</th><th>最新</th><th>跌幅</th><th>资金流向</th><th>成交量</th></tr>
+                </thead>
+                <tbody>
+                    ${fallingContracts.slice(0, 5).map(item => `
+                        <tr>
+                            <td>${item.name}</td>
+                            <td>${item.qrspj}</td>
+                            <td>${item.zdf}%</td>
+                            <td>${(item.zjlx / 1e8).toFixed(2)} 亿</td>
+                            <td>${item.vol}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+
+        // 更新图表
+        updateCharts(risingContracts.slice(0, 5), fallingContracts.slice(0, 5));
+    }
+
+    // Update charts for rising and falling contracts
+    function updateCharts(rising, falling) {
+        // 上涨品种资金流向图表
+        const upFlowChart = echarts.init(document.getElementById('upFlowChart'));
+        const upContracts = rising.map(item => item.name);
+        const upFlowValues = rising.map(item => (item.zjlx / 1e8).toFixed(2));
+
+        const upFlowOption = {
+            title: { text: '上涨品种资金流向 (亿元)', left: 'center' },
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            xAxis: { type: 'category', data: upContracts },
+            yAxis: { type: 'value', name: '资金流向 (亿元)' },
+            series: [{
+                data: upFlowValues,
+                type: 'bar',
+                itemStyle: { color: '#1890ff' }
+            }]
+        };
+        upFlowChart.setOption(upFlowOption);
+
+        // 下跌品种资金流向图表
+        const downFlowChart = echarts.init(document.getElementById('downFlowChart'));
+        const downContracts = falling.map(item => item.name);
+        const downFlowValues = falling.map(item => (item.zjlx / 1e8).toFixed(2));
+
+        const downFlowOption = {
+            title: { text: '下跌品种资金流向 (亿元)', left: 'center' },
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            xAxis: { type: 'category', data: downContracts },
+            yAxis: { type: 'value', name: '资金流向 (亿元)' },
+            series: [{
+                data: downFlowValues,
+                type: 'bar',
+                itemStyle: { color: '#52c41a' }
+            }]
+        };
+        downFlowChart.setOption(downFlowOption);
+    }
+
+    // Fetch data when the page loads
+    window.addEventListener('load', fetchData);
+</script>
+</body>
+</html>
