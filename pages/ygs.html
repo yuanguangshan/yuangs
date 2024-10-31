@@ -143,13 +143,26 @@
     // Fetch data from the API
     async function fetchData() {
         try {
-            const response = await fetch('https://q.want.biz');
+            const apiUrl = 'https://q.want.biz'; // 示例 API URL
+            const response = await fetch(apiUrl);
             if (!response.ok) {
                 throw new Error('Failed to fetch the data');
             }
-            const data = await response.json();
-            console.log(data); // 查看数据结构以确保正确解析
-            updatePageContent(data.list);
+            const apiData = await response.json();
+
+            // 过滤沉淀资金大于 15 亿的品种
+            let filteredData = apiData.list.filter(item => item.cdzj > 15 * 1e8);
+
+            // 检查是否有未收盘的品种 (jyzt === 0)
+            const hasOpenMarkets = filteredData.some(item => item.jyzt === 0);
+
+            // 如果有未收盘的品种，则只显示未收盘的品种
+            if (hasOpenMarkets) {
+                filteredData = filteredData.filter(item => item.jyzt === 0);
+            }
+
+            // 更新页面内容
+            updatePageContent(filteredData);
             updateLastUpdateTime();  // 更新最后一次更新时间
         } catch (error) {
             console.error('Error fetching the data:', error);
@@ -168,26 +181,31 @@
         const risingContracts = data.filter(item => item.zdf > 0);
         const fallingContracts = data.filter(item => item.zdf < 0);
 
+        // 对上涨和下跌品种按涨跌幅绝对值排序，并取前 5 名
+        const topRisingContracts = risingContracts.sort((a, b) => Math.abs(b.zdf) - Math.abs(a.zdf)).slice(0, 5);
+        const topFallingContracts = fallingContracts.sort((a, b) => Math.abs(b.zdf) - Math.abs(a.zdf)).slice(0, 5);
+
         // 计算平均涨幅和跌幅
-        const risingAverage = calculateAverageChange(risingContracts.slice(0, 5));
-        const fallingAverage = calculateAverageChange(fallingContracts.slice(0, 5));
+        const risingAverage = calculateAverageChange(topRisingContracts);
+        const fallingAverage = calculateAverageChange(topFallingContracts);
 
         // 更新上涨品种TOP5
         const risingSection = document.getElementById('risingSection');
         risingSection.innerHTML = `
-            <h3>上涨品种TOP5（平均涨幅：${risingAverage}%）</h3>
+            <h4>上涨品种TOP5（平均涨幅：${risingAverage}%）</h4>
             <table class="data-table up-table">
                 <thead>
-                    <tr><th>合约</th><th>最新</th><th>涨幅</th><th>资金流向</th><th>振幅</th></tr>
+                    <tr><th>合约</th><th>最新</th><th>涨幅</th><th>资金流向</th><th>振幅</th><th>涨跌幅来源</th></tr>
                 </thead>
                 <tbody>
-                    ${risingContracts.slice(0, 5).map(item => `
+                    ${topRisingContracts.map(item => `
                         <tr>
                             <td>${item.name}</td>
                             <td>${item.qrspj}</td>
                             <td>${item.zdf}%</td>
                             <td>${(item.zjlx / 1e8).toFixed(2)} 亿</td>
                             <td>${item.zf}%</td>
+                            <td>${item.zdfly}</td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -197,19 +215,20 @@
         // 更新下跌品种TOP5
         const fallingSection = document.getElementById('fallingSection');
         fallingSection.innerHTML = `
-            <h3>下跌品种TOP5（平均跌幅：${fallingAverage}%）</h3>
+            <h4>下跌品种TOP5（平均跌幅：${fallingAverage}%）</h4>
             <table class="data-table down-table">
                 <thead>
-                    <tr><th>合约</th><th>最新</th><th>跌幅</th><th>资金流向</th><th>振幅</th></tr>
+                    <tr><th>合约</th><th>最新</th><th>跌幅</th><th>资金流向</th><th>振幅</th><th>今年涨跌</th></tr>
                 </thead>
                 <tbody>
-                    ${fallingContracts.slice(0, 5).map(item => `
+                    ${topFallingContracts.map(item => `
                         <tr>
                             <td>${item.name}</td>
                             <td>${item.qrspj}</td>
                             <td>${item.zdf}%</td>
                             <td>${(item.zjlx / 1e8).toFixed(2)} 亿</td>
                             <td>${item.zf}%</td>
+                            <td>${item.zdfly}%</td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -217,30 +236,44 @@
         `;
 
         // 更新图表
-        updateCharts(risingContracts.slice(0, 5), fallingContracts.slice(0, 5), risingAverage, fallingAverage);
+        updateCharts(topRisingContracts, topFallingContracts, risingAverage, fallingAverage);
     }
 
-    // 更新图表，增加虚线用于显示平均涨幅或跌幅
+    // 更新图表，增加右轴用于显示平均涨幅或跌幅
     function updateCharts(rising, falling, risingAverage, fallingAverage) {
         // 上涨品种资金流向图表
         const upFlowChart = echarts.init(document.getElementById('upFlowChart'));
         const upContracts = rising.map(item => item.name);
         const upFlowValues = rising.map(item => (item.zjlx / 1e8).toFixed(2));
+        const upZdfValues = rising.map(item => item.zdf);
 
         const upFlowOption = {
             title: { text: '上涨品种资金流向 (亿元)', left: 'center' },
             tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
             xAxis: { type: 'category', data: upContracts },
-            yAxis: { type: 'value', name: '资金流向 (亿元)' },
-            series: [{
-                data: upFlowValues,
-                type: 'bar',
-                itemStyle: {
-                    color: function(params) {
-                        return params.value >= 0 ? '#ff4d4f' : '#52c41a'; // 资金流入为红色，流出为绿色
+            yAxis: [
+                { type: 'value', name: '资金流向 (亿元)' },
+                { type: 'value', name: '涨幅 (%)', position: 'right' }
+            ],
+            series: [
+                {
+                    name: '资金流向',
+                    data: upFlowValues,
+                    type: 'bar',
+                    itemStyle: {
+                        color: function(params) {
+                            return params.value >= 0 ? '#ff4d4f' : '#52c41a'; // 资金流入为红色，流出为绿色
+                        }
                     }
+                },
+                {
+                    name: '涨幅',
+                    data: upZdfValues,
+                    type: 'line',
+                    yAxisIndex: 1,
+                    itemStyle: { color: '#1890ff' }
                 }
-            }],
+            ],
             // 添加虚线，显示平均涨幅
             markLine: {
                 data: [
@@ -261,21 +294,35 @@
         const downFlowChart = echarts.init(document.getElementById('downFlowChart'));
         const downContracts = falling.map(item => item.name);
         const downFlowValues = falling.map(item => (item.zjlx / 1e8).toFixed(2));
+        const downZdfValues = falling.map(item => item.zdf);
 
         const downFlowOption = {
             title: { text: '下跌品种资金流向 (亿元)', left: 'center' },
             tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
             xAxis: { type: 'category', data: downContracts },
-            yAxis: { type: 'value', name: '资金流向 (亿元)' },
-            series: [{
-                data: downFlowValues,
-                type: 'bar',
-                itemStyle: {
-                    color: function(params) {
-                        return params.value >= 0 ? '#ff4d4f' : '#52c41a'; // 资金流入为红色，流出为绿色
+            yAxis: [
+                { type: 'value', name: '资金流向 (亿元)' },
+                { type: 'value', name: '跌幅 (%)', position: 'right' }
+            ],
+            series: [
+                {
+                    name: '资金流向',
+                    data: downFlowValues,
+                    type: 'bar',
+                    itemStyle: {
+                        color: function(params) {
+                            return params.value >= 0 ? '#ff4d4f' : '#52c41a'; // 资金流入为红色，流出为绿色
+                        }
                     }
+                },
+                {
+                    name: '跌幅',
+                    data: downZdfValues,
+                    type: 'line',
+                    yAxisIndex: 1,
+                    itemStyle: { color: '#1890ff' }
                 }
-            }],
+            ],
             // 添加虚线，显示平均跌幅
             markLine: {
                 data: [
