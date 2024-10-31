@@ -161,8 +161,6 @@
             </div>
         </div>
 
-
-
         <!-- 上涨品种区域 -->
         <div class="content-section">
             <div class="table-container" id="risingSection"></div>
@@ -195,49 +193,52 @@
         lastUpdateElement.textContent = `最近更新时间：${getFormattedTime()}`;
     }
 
-   // 获取当前时间并判断是否为日盘时段
-function isDaySession() {
-    const now = new Date();
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-    
-    // 判断是否在日盘时段（8:30 - 15:30）
-    const startOfDaySession = 8 * 60 + 30;  // 8:30 转换为分钟
-    const endOfDaySession = 15 * 60 + 30;   // 15:30 转换为分钟
-    const currentTimeInMinutes = hours * 60 + minutes;
+    // 获取当前时间并判断是否为日盘时段
+    function isDaySession() {
+        const now = new Date();
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+        
+        // 判断是否在日盘时段（8:30 - 15:30）
+        const startOfDaySession = 8 * 60 + 30;  // 8:30 转换为分钟
+        const endOfDaySession = 15 * 60 + 30;   // 15:30 转换为分钟
+        const currentTimeInMinutes = hours * 60 + minutes;
 
-    return currentTimeInMinutes >= startOfDaySession && currentTimeInMinutes <= endOfDaySession;
-}
-
-// 获取数据并调用绘图函数
-async function fetchData() {
-    try {
-        // 检查当前时间是否为日盘时段，选择对应的 API 地址
-        const apiUrl = isDaySession() ? 'https://q.want.biz' : 'https://q.want.biz/night'; // 示例 API URL
-        const response = await fetch(apiUrl);
-        if (!response.ok) {
-            throw new Error('Failed to fetch the data');
-        }
-        const apiData = await response.json();
-
-        // 过滤沉淀资金大于 15 亿的品种
-        let filteredData = apiData.list.filter(item => item.cdzj > 15 * 1e8);
-
-        // 检查是否有未收盘的品种 (jyzt === 0)
-        const hasOpenMarkets = filteredData.some(item => item.jyzt === 0);
-
-        // 如果有未收盘的品种，则只显示未收盘的品种
-        if (hasOpenMarkets) {
-            filteredData = filteredData.filter(item => item.jyzt === 0);
-        }
-
-        // 调用绘图函数，传入过滤后的数据
-        drawChart(filteredData);
-    } catch (error) {
-        console.error('Error fetching data: ', error);
+        return currentTimeInMinutes >= startOfDaySession && currentTimeInMinutes <= endOfDaySession;
     }
-}
 
+    // 获取数据并调用绘图函数
+    async function fetchData() {
+        try {
+            // 检查当前时间是否为日盘时段，选择对应的 API 地址
+            const apiUrl = isDaySession() ? 'https://q.want.biz' : 'https://q.want.biz/night'; // 示例 API URL
+            console.log(`Fetching data from: ${apiUrl}`); // 调试输出
+            const response = await fetch(apiUrl);
+            if (!response.ok) {
+                throw new Error('Failed to fetch the data');
+            }
+            const apiData = await response.json();
+            console.log('API Data:', apiData); // 调试输出
+
+            // 过滤沉淀资金大于 15 亿的品种
+            let filteredData = apiData.list.filter(item => item.cdzj > 15 * 1e8);
+
+            // 检查是否有未收盘的品种 (jyzt === 0)
+            const hasOpenMarkets = filteredData.some(item => item.jyzt === 0);
+
+            // 如果有未收盘的品种，则只显示未收盘的品种
+            if (hasOpenMarkets) {
+                filteredData = filteredData.filter(item => item.jyzt === 0);
+            }
+
+            // 更新页面内容和图表
+            updatePageContent(filteredData);
+            updateIndexSection(filteredData);
+            updateLastUpdateTime();
+        } catch (error) {
+            console.error('Error fetching data:', error);
+        }
+    }
 
     // 计算平均涨幅或跌幅
     function calculateAverageChange(contractList) {
@@ -447,7 +448,7 @@ async function fetchData() {
     }
 
     // 页面加载时，立即获取数据
-    window.addEventListener('load', fetchData);
+    window.addEventListener('load', fetchData)
 
     // 每 20 秒检查一次，只有在市场开放时间段内才更新数据
     setInterval(() => {
