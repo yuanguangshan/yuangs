@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>融资融券数据展示</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 14px;
+            text-align: left;
+        }
+        th, td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .loading {
+            text-align: center;
+            font-size: 18px;
+            margin-top: 20px;
+        }
+        .title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+        }
+        .title h1 {
+            margin: 0;
+        }
+        .date-display {
+            font-size: 16px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="title">
+        <h1>融资融券数据展示</h1>
+        <div id="date" class="date-display">日期: 加载中...</div>
+    </div>
+
+    <div id="table-container" class="loading">正在加载数据...</div>
+
+    <script>
+        // API URL 和参数
+        const apiUrl = "https://datacenter-web.eastmoney.com/api/data/v1/get";
+        const params = {
+            reportName: "RPTA_WEB_RZRQ_GGMX",
+            columns: "ALL",
+            source: "WEB",
+            pageNumber: 1,
+            pageSize: 500,
+            sortColumns: "RZJME",
+            sortTypes: -1,
+            filter: "(DATE='2024-11-07')",
+            pageNo: 1,
+            p: 1,
+            pageNum: 1,
+            _: 1731050489012
+        };
+
+        // 构造URL参数字符串
+        function constructUrl(url, params) {
+            const queryString = Object.keys(params)
+                .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
+                .join('&');
+            return `${url}?${queryString}`;
+        }
+
+        // 获取数据并展示
+        async function fetchData() {
+            const url = constructUrl(apiUrl, params);
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                displayData(data.result.data);
+                displayDate(data.result.data[0].DATE);  // 显示日期
+            } catch (error) {
+                document.getElementById('table-container').innerHTML = '数据加载失败，请稍后重试。';
+                console.error('Error fetching data:', error);
+            }
+        }
+
+        // 在标题旁边显示日期
+        function displayDate(dateString) {
+            const date = new Date(dateString).toLocaleDateString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            });
+            document.getElementById('date').innerText = `日期: ${date}`;
+        }
+
+        // 将数字转换为以“亿”为单位
+        function formatToBillion(value) {
+            return (value / 1e8).toFixed(2) + ' 亿';
+        }
+
+        // 展示数据为表格
+        function displayData(data) {
+            // 过滤融资余额大于 10 亿的股票
+            const filteredData = data.filter(item => item.RZYE > 1e9);
+
+            if (filteredData.length === 0) {
+                document.getElementById('table-container').innerHTML = '没有满足条件的数据。';
+                return;
+            }
+
+            let tableHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>股票代码</th>
+                            <th>股票名称</th>
+                            <th>融资余额 (亿)</th>
+                            <th>融资余额变化 (亿)</th>
+                            <th>收盘价 (元)</th>
+                            <th>涨跌幅 (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            filteredData.forEach(item => {
+                const rzBalanceChange = item.RZJME;  // 融资余额变化（与前一日相比）
+
+                tableHTML += `
+                    <tr>
+                        <td>${item.SCODE}</td>
+                        <td>${item.SECNAME}</td>
+                        <td>${formatToBillion(item.RZYE)}</td>
+                        <td>${formatToBillion(rzBalanceChange)}</td>
+                        <td>${item.SPJ}</td>
+                        <td>${item.ZDF.toFixed(2)}</td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+
+            document.getElementById('table-container').innerHTML = tableHTML;
+        }
+
+        // 页面加载时调用
+        fetchData();
+    </script>
+
+</body>
+</html>
