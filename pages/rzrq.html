@@ -19,10 +19,14 @@
         th, td {
             padding: 12px;
             border-bottom: 1px solid #ddd;
+            cursor: pointer; /* 添加光标指示 */
         }
         th {
             background-color: #f5f5f5;
             color: #333;
+        }
+        th.sortable:hover {
+            background-color: #e0e0e0; /* 鼠标悬停时的效果 */
         }
         tr:nth-child(even) {
             background-color: #f9f9f9;
@@ -67,8 +71,28 @@
     <div id="table-container" class="loading">正在加载数据...</div>
 
     <script>
+        // 获取前一个工作日
+        function getPreviousWorkday() {
+            const today = new Date();
+            let day = today.getDay(); // 0 (Sun) -> 6 (Sat)
+            let offset = 1; // 默认偏移一天
+
+            // 如果今天是周日，前一个工作日是周五
+            if (day === 0) {
+                offset = 2;
+            }
+            // 如果今天是周一，前一个工作日是上周五
+            else if (day === 1) {
+                offset = 3;
+            }
+            today.setDate(today.getDate() - offset);
+
+            return today.toISOString().split('T')[0]; // 返回YYYY-MM-DD格式
+        }
+
         // API URL 和参数
         const apiUrl = "https://datacenter-web.eastmoney.com/api/data/v1/get";
+        const previousWorkday = getPreviousWorkday(); // 获取前一个工作日
         const params = {
             reportName: "RPTA_WEB_RZRQ_GGMX",
             columns: "ALL",
@@ -77,11 +101,11 @@
             pageSize: 500,
             sortColumns: "RZJME",
             sortTypes: -1,
-            filter: "(DATE='2024-11-07')",
+            filter: `(DATE='${previousWorkday}')`,
             pageNo: 1,
             p: 1,
             pageNum: 1,
-            _: 1731050489012
+            _: new Date().getTime()
         };
 
         // 构造URL参数字符串
@@ -99,7 +123,7 @@
                 const response = await fetch(url);
                 const data = await response.json();
                 displayData(data.result.data);
-                displayDate(data.result.data[0].DATE);  // 显示日期
+                displayDate(previousWorkday);  // 显示日期
             } catch (error) {
                 document.getElementById('table-container').innerHTML = '数据加载失败，请稍后重试。';
                 console.error('Error fetching data:', error);
@@ -132,15 +156,15 @@
             }
 
             let tableHTML = `
-                <table>
+                <table id="data-table">
                     <thead>
                         <tr>
-                            <th>代码</th>
-                            <th>名称</th>
-                            <th>余额(亿)</th>
-                            <th>变化(亿)</th>
-                            <th>收盘</th>
-                            <th>涨幅 (%)</th>
+                            <th class="sortable" data-column="SCODE" data-order="asc">代码</th>
+                            <th class="sortable" data-column="SECNAME" data-order="asc">名称</th>
+                            <th class="sortable" data-column="RZYE" data-order="asc">余额(亿)</th>
+                            <th class="sortable" data-column="RZJME" data-order="asc">变化(亿)</th>
+                            <th class="sortable" data-column="SPJ" data-order="asc">收盘</th>
+                            <th class="sortable" data-column="ZDF" data-order="asc">涨幅 (%)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -174,6 +198,75 @@
             `;
 
             document.getElementById('table-container').innerHTML = tableHTML;
+
+            // 添加排序功能
+            addSortListeners(filteredData);
+        }
+
+        // 添加表格排序功能
+        function addSortListeners(data) {
+            const headers = document.querySelectorAll('.sortable');
+            
+            headers.forEach(header => {
+                header.addEventListener('click', () => {
+                    const column = header.getAttribute('data-column');
+                    const order = header.getAttribute('data-order');
+                    const sortedData = sortData(data, column, order);
+                    
+                    // 更新排序顺序
+                    header.setAttribute('data-order', order === 'asc' ? 'desc' : 'asc');
+                    
+                    // 重新渲染表格
+                    updateTable(sortedData);
+                });
+            });
+        }
+
+        // 数据排序逻辑
+        function sortData(data, column, order) {
+            return data.slice().sort((a, b) => {
+                let aValue = a[column];
+                let bValue = b[column];
+
+                // 特别处理数字列
+                if (!isNaN(aValue) && !isNaN(bValue)) {
+                    aValue = parseFloat(aValue);
+                    bValue = parseFloat(bValue);
+                }
+
+                if (order === 'asc') {
+                    return aValue > bValue ? 1 : -1;
+                } else {
+                    return aValue < bValue ? 1 : -1;
+                }
+            });
+        }
+
+        // 更新表格内容
+        function updateTable(data) {
+            let tableBody = '';
+            data.forEach(item => {
+                const rzBalanceChange = item.RZJME;
+                const absChange = Math.abs(rzBalanceChange);
+                let rowClass = '';
+
+                if (absChange > 1e8) {
+                    rowClass = rzBalanceChange > 0 ? 'highlight-red' : 'highlight-green';
+                }
+
+                tableBody += `
+                    <tr class="${rowClass}">
+                        <td>${item.SCODE}</td>
+                        <td>${item.SECNAME}</td>
+                        <td>${formatToBillion(item.RZYE)}</td>
+                        <td>${formatToBillion(rzBalanceChange)}</td>
+                        <td>${item.SPJ}</td>
+                        <td>${item.ZDF.toFixed(2)}</td>
+                    </tr>
+                `;
+            });
+
+            document.querySelector('#data-table tbody').innerHTML = tableBody;
         }
 
         // 页面加载时调用
