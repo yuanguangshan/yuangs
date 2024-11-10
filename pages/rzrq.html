@@ -19,14 +19,14 @@
         th, td {
             padding: 12px;
             border-bottom: 1px solid #ddd;
-            cursor: pointer; /* 添加光标指示 */
+            cursor: pointer;
         }
         th {
             background-color: #f5f5f5;
             color: #333;
         }
         th.sortable:hover {
-            background-color: #e0e0e0; /* 鼠标悬停时的效果 */
+            background-color: #e0e0e0;
         }
         tr:nth-child(even) {
             background-color: #f9f9f9;
@@ -44,7 +44,7 @@
             justify-content: space-between;
             align-items: center;
             margin-top: 20px;
-            cursor: pointer; /* 添加光标指示 */
+            cursor: pointer;
         }
         .title h2 {
             margin: 0;
@@ -53,25 +53,11 @@
             font-size: 16px;
             color: #666;
         }
-        /* 红涨绿跌的颜色 */
         .highlight-red {
-            background-color: #fbe4e6; /* 红色高亮 (涨) */
+            background-color: #fbe4e6;
         }
         .highlight-green {
-            background-color: #e0f7e9; /* 绿色高亮 (跌) */
-        }
-        /* 波浪线样式 */
-        .strikethrough {
-            text-decoration: line-through;
-        }
-        /* 绿色小点 */
-        .green-dot {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            background-color: #28a745;
-            border-radius: 50%;
-            margin-left: 5px;
+            background-color: #e0f7e9;
         }
     </style>
 </head>
@@ -85,31 +71,32 @@
     <div id="table-container" class="loading">正在加载数据...</div>
 
     <script>
-        // 获取前一个工作日
-        function getPreviousWorkday(daysAgo = 1) {
+        // 获取过去几个工作日的日期
+        function getPreviousWorkdays(daysAgo = 2) {
             const today = new Date();
-            let day = today.getDay(); // 0 (Sun) -> 6 (Sat)
-            let offset = daysAgo; // 默认偏移指定天数
+            let dates = [];
+            let day = today.getDay(); // 当前是星期几
 
-            // 如果今天是周日
-            if (day === 0) {
-                offset += 1;
+            for (let i = 1; i <= daysAgo; i++) {
+                let offset = i;
+                // 如果今天是周日，跳过周末，取最近的工作日
+                if (day === 0) {
+                    offset += 1;
+                }
+                // 如果今天是周一，跳过周末，取上周五
+                else if (day === 1) {
+                    offset += 2;
+                }
+                let pastDate = new Date();
+                pastDate.setDate(today.getDate() - offset);
+                dates.push(pastDate.toISOString().split('T')[0]);
             }
-            // 如果今天是周一，算上周末
-            else if (day === 1) {
-                offset += 2;
-            }
-            today.setDate(today.getDate() - offset);
 
-            return today.toISOString().split('T')[0]; // 返回YYYY-MM-DD格式
+            return dates;
         }
 
-        // 获取过去三天的工作日日期
-        const previousWorkdays = [
-            getPreviousWorkday(1),
-            getPreviousWorkday(2),
-            getPreviousWorkday(3)
-        ];
+        // 获取最近两个工作日
+        const previousWorkdays = getPreviousWorkdays(2);
 
         // API URL 和参数
         const apiUrl = "https://datacenter-web.eastmoney.com/api/data/v1/get";
@@ -128,21 +115,21 @@
         };
 
         // 构造URL参数字符串
-        function constructUrl(date) {
+        function constructUrl(url, params, date) {
             const queryParams = { ...params, filter: `(DATE='${date}')` };
             const queryString = Object.keys(queryParams)
                 .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(queryParams[key])}`)
                 .join('&');
-            return `${apiUrl}?${queryString}`;
+            return `${url}?${queryString}`;
         }
 
         // 获取数据并展示
         async function fetchData() {
             let allData = [];
 
-            // 遍历最近三天的日期，获取数据
+            // 遍历最近两个工作日的日期，获取数据
             for (let i = 0; i < previousWorkdays.length; i++) {
-                const url = constructUrl(previousWorkdays[i]);
+                const url = constructUrl(apiUrl, params, previousWorkdays[i]);
                 try {
                     const response = await fetch(url);
                     const data = await response.json();
@@ -158,19 +145,22 @@
             displayDate(previousWorkdays[0]);  // 显示最近日期
         }
 
-        // 去重逻辑：根据股票代码去重并保留最新数据
+        // 去重逻辑：根据股票代码去重，并保留最新数据
         function deduplicateData(data) {
             const uniqueDataMap = new Map();
+
             data.forEach(item => {
                 if (!uniqueDataMap.has(item.SCODE)) {
                     uniqueDataMap.set(item.SCODE, item);
                 } else {
                     const existingItem = uniqueDataMap.get(item.SCODE);
+                    // 如果当前日期比已有项更新，替换掉旧数据
                     if (item.DATE > existingItem.DATE) {
                         uniqueDataMap.set(item.SCODE, item);
                     }
                 }
             });
+
             return Array.from(uniqueDataMap.values());
         }
 
@@ -191,9 +181,6 @@
 
         // 展示数据为表格
         function displayData(data) {
-            const latestDate = previousWorkdays[0];
-            const secondLatestDate = previousWorkdays[1];
-
             // 过滤融资余额大于 10 亿的股票
             const filteredData = data.filter(item => item.RZYE > 1e9);
 
@@ -212,6 +199,9 @@
                             <th class="sortable" data-column="RZJME" data-order="asc">变化(亿)</th>
                             <th class="sortable" data-column="SPJ" data-order="asc">收盘</th>
                             <th class="sortable" data-column="ZDF" data-order="asc">涨幅 (%)</th>
+                            <th class="sortable" data-column="RZJME3D" data-order="asc">3日净买入(亿)</th>
+                            <th class="sortable" data-column="RZJME5D" data-order="asc">5日净买入(亿)</th>
+                            <th class="sortable" data-column="RZJME10D" data-order="asc">10日净买入(亿)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -227,27 +217,17 @@
                     rowClass = rzBalanceChange > 0 ? 'highlight-red' : 'highlight-green';
                 }
 
-                // 判断是否是最新日期
-                let secName = item.SECNAME;
-                let greenDot = '';
-
-                // 如果是最新日期，显示绿色小点
-                if (item.DATE === latestDate) {
-                    greenDot = `<span class="green-dot"></span>`;
-                } 
-                // 如果比最新日期早一天，名称加波浪线
-                else if (item.DATE === secondLatestDate) {
-                    secName = `<del>${secName}</del>`;
-                }
-
                 tableHTML += `
                     <tr class="${rowClass}">
                         <td onclick="window.location.href='https://emdata.eastmoney.com/rzrq/singlestockrzrq.html?fc=${item.SCODE}'">${item.SCODE}</td>
-                        <td>${secName} ${greenDot}</td>
+                        <td>${item.SECNAME}</td>
                         <td>${formatToBillion(item.RZYE)}</td>
                         <td>${formatToBillion(rzBalanceChange)}</td>
                         <td>${item.SPJ}</td>
                         <td>${item.ZDF.toFixed(2)}</td>
+                        <td>${formatToBillion(item.RZJME3D)}</td>
+                        <td>${formatToBillion(item.RZJME5D)}</td>
+                        <td>${formatToBillion(item.RZJME10D)}</td>
                     </tr>
                 `;
             });
@@ -305,9 +285,6 @@
         // 更新表格内容
         function updateTable(data) {
             let tableBody = '';
-            const latestDate = previousWorkdays[0];
-            const secondLatestDate = previousWorkdays[1];
-
             data.forEach(item => {
                 const rzBalanceChange = item.RZJME;
                 const absChange = Math.abs(rzBalanceChange);
@@ -317,26 +294,17 @@
                     rowClass = rzBalanceChange > 0 ? 'highlight-red' : 'highlight-green';
                 }
 
-                let secName = item.SECNAME;
-                let greenDot = '';
-
-                // 如果是最新日期，显示绿色小点
-                if (item.DATE === latestDate) {
-                    greenDot = `<span class="green-dot"></span>`;
-                } 
-                // 如果比最新日期早一天，名称加波浪线
-                else if (item.DATE === secondLatestDate) {
-                    secName = `<del>${secName}</del>`;
-                }
-
                 tableBody += `
                     <tr class="${rowClass}">
                         <td onclick="window.location.href='https://wap.eastmoney.com/quote/stock/0.${item.SCODE}.html'">${item.SCODE}</td>
-                        <td>${secName} ${greenDot}</td>
+                        <td>${item.SECNAME}</td>
                         <td>${formatToBillion(item.RZYE)}</td>
                         <td>${formatToBillion(rzBalanceChange)}</td>
                         <td>${item.SPJ}</td>
                         <td>${item.ZDF.toFixed(2)}</td>
+                        <td>${formatToBillion(item.RZJME3D)}</td>
+                        <td>${formatToBillion(item.RZJME5D)}</td>
+                        <td>${formatToBillion(item.RZJME10D)}</td>
                     </tr>
                 `;
             });
