@@ -55,28 +55,42 @@
     function getQueryParams() {
         const params = new URLSearchParams(window.location.search);
         const scode = params.get('scode') || '300059';  // 默认证券代码 300059
-        const displayCount = parseInt(params.get('displaycount')) || 40;  // 注意小写的 'displaycount'
+        const displayCount = parseInt(params.get('displaycount')) || 30;  // 注意小写的 'displaycount'
         return { scode, displayCount };
     }
 
-    // 调用 API 获取数据
-    async function fetchData(scode) {
+    // 调用 API 获取所有分页数据
+    async function fetchAllPages(scode) {
         const url = 'https://datacenter-web.eastmoney.com/api/data/v1/get';
-        const params = new URLSearchParams({
-            'reportName': 'RPTA_WEB_RZRQ_GGMX',
-            'columns': 'ALL',
-            'source': 'WEB',
-            'sortColumns': 'DATE',
-            'sortTypes': '-1',
-            'pageNumber': '1',
-            'pageSize': '500',
-            'filter': `(scode=${scode})`
-        });
+        let allData = [];
+        let pageNumber = 1;
+        let totalPages = 1;
 
-        const response = await fetch(`${url}?${params}`);
-        const data = await response.json();
-        console.log(data); // 调试输出，检查数据是否正确
-        return data.result.data;
+        do {
+            const params = new URLSearchParams({
+                'reportName': 'RPTA_WEB_RZRQ_GGMX',
+                'columns': 'ALL',
+                'source': 'WEB',
+                'sortColumns': 'DATE',
+                'sortTypes': '-1',
+                'pageNumber': pageNumber,  // 当前页数
+                'pageSize': '500',  // 每页500条数据
+                'filter': `(scode=${scode})`
+            });
+
+            const response = await fetch(`${url}?${params}`);
+            const result = await response.json();
+
+            // 合并每页的数据
+            allData = allData.concat(result.result.data);
+
+            // 总页数
+            totalPages = result.result.pages;
+            pageNumber++;
+
+        } while (pageNumber <= totalPages);  // 循环请求直到获取所有页的数据
+
+        return allData;
     }
 
     // 初始化图表
@@ -158,32 +172,37 @@
         });
     }
 
-    // 主函数，处理数据并展示图表和表格
-    async function main() {
-        // 获取 URL 参数
-        const { scode, displayCount } = getQueryParams();
+// 主函数，处理数据并展示图表和表格
+async function main() {
+    // 获取 URL 参数
+    const { scode, displayCount } = getQueryParams();
 
-        // 请求数据
-        const data = await fetchData(scode);
+    // 获取所有分页的数据
+    const data = await fetchAllPages(scode);
 
-        // 仅展示最近的 displayCount 条数据
-        const slicedData = data.slice(-displayCount);
+    // 打印调试信息，确认数据是否正确获取
+    console.log('获取的数据：', data);  // 检查数据是否正确合并
 
-        // 提取日期、收盘价（spj）和融资净买入额（rzjme）
-        let dates = slicedData.map(item => item.DATE.split(' ')[0]);
-        let spjData = slicedData.map(item => parseFloat(item.SPJ));
-        let rzjmeData = slicedData.map(item => parseFloat(item.RZJME));
+    // 确保数据是按日期倒序排列的（最新数据在前）
+    data.sort((a, b) => new Date(b.DATE) - new Date(a.DATE));
 
-        // 反转数组，让最新的数据在右侧显示
-        dates = dates.reverse();
-        spjData = spjData.reverse();
-        rzjmeData = rzjmeData.reverse();
+    // 仅展示最近的 displayCount 条数据
+    const slicedData = data.slice(0, displayCount);  // 从最新数据开始取前 displayCount 条
 
-        // 初始化图表和表格
-        initChart(dates, spjData, rzjmeData);
-        fillTable(dates, spjData, rzjmeData);
-    }
+    // 提取日期、收盘价（spj）和融资净买入额（rzjme）
+    let dates = slicedData.map(item => item.DATE.split(' ')[0]);
+    let spjData = slicedData.map(item => parseFloat(item.SPJ));
+    let rzjmeData = slicedData.map(item => parseFloat(item.RZJME));
 
+    // 反转数组，让最新的数据在右侧显示
+    dates = dates.reverse();
+    spjData = spjData.reverse();
+    rzjmeData = rzjmeData.reverse();
+
+    // 初始化图表和表格
+    initChart(dates, spjData, rzjmeData);
+    fillTable(dates, spjData, rzjmeData);
+}
     // 执行主函数
     main();
 </script>
