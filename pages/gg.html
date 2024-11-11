@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Closing Price vs Net Financing Buy</title>
+    <title>收盘价与融资净买入额走势图</title> <!-- 初始标题 -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.0.2/dist/echarts.min.js"></script>
     <style>
         body {
@@ -33,7 +33,7 @@
 </head>
 <body>
 
-<h2>Closing Price vs Net Financing Buy over Time</h2>
+<h2 id="page-title">收盘价与融资净买入额走势图</h2> <!-- 动态标题 -->
 
 <!-- Echarts 图表容器 -->
 <div id="chart"></div>
@@ -42,169 +42,219 @@
 <table id="data-table">
     <thead>
         <tr>
-            <th>Date</th>
-            <th>Closing Price (SPJ)</th>
-            <th>Net Financing Buy (RZJME)</th>
+            <th>日期</th>
+            <th>收盘价</th>
+            <th>涨跌幅（%）</th>
+            <th>前日净买（亿）</th>
+            <th>三日净买</th>
+            <th>五日净买</th>
+            <th>十日净买</th>
+            <th id="customNHeader">N日净买</th> <!-- 动态显示 N 日净买额 -->
         </tr>
     </thead>
     <tbody></tbody>
 </table>
 
 <script>
-    // 从 URL 查询参数中提取 scode 和 displayCount
-    function getQueryParams() {
-        const params = new URLSearchParams(window.location.search);
-        const scode = params.get('scode') || '300059';  // 默认证券代码 300059
-        const displayCount = parseInt(params.get('displaycount')) || 30;  // 注意小写的 'displaycount'
-        return { scode, displayCount };
-    }
+// 从 URL 查询参数中提取 scode, displayCount, and N
+function getQueryParams() {
+    const params = new URLSearchParams(window.location.search);
+    const scode = params.get('scode') || '300059';  // 默认证券代码 300059
+    const displayCount = parseInt(params.get('displaycount')) || 30;  // 注意小写的 'displaycount'
+    const customN = parseInt(params.get('N')) || 7;  // 默认N=7天
+    return { scode, displayCount, customN };
+}
 
-    // 调用 API 获取所有分页数据
-    async function fetchAllPages(scode) {
-        const url = 'https://datacenter-web.eastmoney.com/api/data/v1/get';
-        let allData = [];
-        let pageNumber = 1;
-        let totalPages = 1;
+// 调用 API 获取所有分页数据
+async function fetchAllPages(scode) {
+    const url = 'https://datacenter-web.eastmoney.com/api/data/v1/get';
+    let allData = [];
+    let pageNumber = 1;
+    let totalPages = 1;
+    let securityName = ''; // 用于存储证券名称
 
-        do {
-            const params = new URLSearchParams({
-                'reportName': 'RPTA_WEB_RZRQ_GGMX',
-                'columns': 'ALL',
-                'source': 'WEB',
-                'sortColumns': 'DATE',
-                'sortTypes': '-1',
-                'pageNumber': pageNumber,  // 当前页数
-                'pageSize': '500',  // 每页500条数据
-                'filter': `(scode=${scode})`
-            });
+    do {
+        const params = new URLSearchParams({
+            'reportName': 'RPTA_WEB_RZRQ_GGMX',
+            'columns': 'ALL',
+            'source': 'WEB',
+            'sortColumns': 'DATE',
+            'sortTypes': '-1',
+            'pageNumber': pageNumber,  // 当前页数
+            'pageSize': '500',  // 每页500条数据
+            'filter': `(scode=${scode})`
+        });
 
-            const response = await fetch(`${url}?${params}`);
-            const result = await response.json();
+        const response = await fetch(`${url}?${params}`);
+        const result = await response.json();
 
-            // 合并每页的数据
-            allData = allData.concat(result.result.data);
+        // 提取证券名称，使用 secname 字段
+        if (result.result.data.length > 0 && !securityName) {
+            securityName = result.result.data[0].SECNAME;  // 使用 secname 获取证券名称
+        }
 
-            // 总页数
-            totalPages = result.result.pages;
-            pageNumber++;
+        // 合并每页的数据
+        allData = allData.concat(result.result.data);
 
-        } while (pageNumber <= totalPages);  // 循环请求直到获取所有页的数据
+        // 总页数
+        totalPages = result.result.pages;
+        pageNumber++;
 
-        return allData;
-    }
+    } while (pageNumber <= totalPages);  // 循环请求直到获取所有页的数据
 
-    // 初始化图表
-    function initChart(dates, spjData, rzjmeData) {
-        const chartDom = document.getElementById('chart');
-        const myChart = echarts.init(chartDom);
-        const option = {
-            tooltip: {
-                trigger: 'axis',
-                axisPointer: {
-                    type: 'cross'
-                }
-            },
-            xAxis: {
-                type: 'category',
-                data: dates,
-                axisLabel: {
-                    rotate: 45
-                }
-            },
-            yAxis: [
-                {
-                    type: 'value',
-                    name: 'Net Financing Buy (RZJME)',
-                    position: 'left',
-                    axisLine: {
-                        lineStyle: {
-                            color: 'green'
-                        }
-                    }
-                },
-                {
-                    type: 'value',
-                    name: 'Closing Price (SPJ)',
-                    position: 'right',
-                    axisLine: {
-                        lineStyle: {
-                            color: 'blue'
-                        }
-                    }
-                }
-            ],
-            series: [
-                {
-                    name: 'Net Financing Buy (RZJME)',
-                    type: 'bar',
-                    data: rzjmeData,
-                    itemStyle: {
+    return { allData, securityName };  // 返回数据和证券名称
+}
+
+// 初始化图表
+function initChart(dates, spjData, rzjmeData) {
+    const chartDom = document.getElementById('chart');
+    const myChart = echarts.init(chartDom);
+    const option = {
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: {
+                type: 'cross'
+            }
+        },
+        xAxis: {
+            type: 'category',
+            data: dates,
+            axisLabel: {
+                rotate: 45
+            }
+        },
+        yAxis: [
+            {
+                type: 'value',
+                name: '融资净买入额（亿）',  // 修改单位
+                position: 'left',
+                axisLine: {
+                    lineStyle: {
                         color: 'green'
                     }
-                },
-                {
-                    name: 'Closing Price (SPJ)',
-                    type: 'line',
-                    yAxisIndex: 1,
-                    data: spjData,
+                }
+            },
+            {
+                type: 'value',
+                name: '收盘价',
+                position: 'right',
+                axisLine: {
                     lineStyle: {
-                        color: 'blue',
-                        width: 2
+                        color: 'blue'
                     }
                 }
-            ]
-        };
-        myChart.setOption(option);
-    }
+            }
+        ],
+        series: [
+            {
+                name: '融资净买入额（亿）',  // 修改单位
+                type: 'bar',
+                data: rzjmeData,
+                itemStyle: {
+                    color: 'green'
+                }
+            },
+            {
+                name: '收盘价',
+                type: 'line',
+                yAxisIndex: 1,
+                data: spjData,
+                lineStyle: {
+                    color: 'blue',
+                    width: 2
+                }
+            }
+        ]
+    };
+    myChart.setOption(option);
+}
 
-    // 填充表格数据
-    function fillTable(dates, spjData, rzjmeData) {
-        const tableBody = document.querySelector('#data-table tbody');
-        tableBody.innerHTML = ''; // 清空表格
-
-        dates.forEach((date, index) => {
-            const row = `<tr>
-                <td>${date}</td>
-                <td>${spjData[index]}</td>
-                <td>${rzjmeData[index]}</td>
-            </tr>`;
-            tableBody.innerHTML += row;
-        });
+// 计算三日、五日、十日净买额和自定义N日净买额
+function calculateRollingSums(rzjmeData, period) {
+    const rollingSums = [];
+    for (let i = 0; i < rzjmeData.length; i++) {
+        // 计算过去 period 天的和，如果不足 period 天，则只取现有数据
+        const sum = rzjmeData.slice(Math.max(0, i - period + 1), i + 1).reduce((acc, val) => acc + val, 0);
+        rollingSums.push(sum);
     }
+    return rollingSums;
+}
+
+// 填充表格数据（按逆序填充）
+function fillTable(dates, spjData, zdfData, rzjmeData, rzjme3Data, rzjme5Data, rzjme10Data, rzjmeNData) {
+    const tableBody = document.querySelector('#data-table tbody');
+    tableBody.innerHTML = ''; // 清空表格
+
+    // 按逆序插入表格行，确保最新数据在表格顶部
+    for (let index = dates.length - 1; index >= 0; index--) {
+        const row = `<tr>
+            <td>${dates[index]}</td>
+            <td>${spjData[index]}</td>
+            <td>${zdfData[index].toFixed(2)}</td>  <!-- 保留两位小数 -->
+            <td>${rzjmeData[index].toFixed(2)}</td>  <!-- 保留两位小数 -->
+            <td>${rzjme3Data[index].toFixed(2)}</td> <!-- 三日净买额 -->
+            <td>${rzjme5Data[index].toFixed(2)}</td> <!-- 五日净买额 -->
+            <td>${rzjme10Data[index].toFixed(2)}</td> <!-- 十日净买额 -->
+            <td>${rzjmeNData[index].toFixed(2)}</td> <!-- 自定义N日净买额 -->
+        </tr>`;
+        tableBody.innerHTML += row;
+    }
+}
 
 // 主函数，处理数据并展示图表和表格
 async function main() {
     // 获取 URL 参数
-    const { scode, displayCount } = getQueryParams();
+    const { scode, displayCount, customN } = getQueryParams();
 
-    // 获取所有分页的数据
-    const data = await fetchAllPages(scode);
+    // 获取所有分页的数据和证券名称
+    const { allData, securityName } = await fetchAllPages(scode);
 
     // 打印调试信息，确认数据是否正确获取
-    console.log('获取的数据：', data);  // 检查数据是否正确合并
+    console.log('获取的数据：', allData);  // 检查数据是否正确合并
 
     // 确保数据是按日期倒序排列的（最新数据在前）
-    data.sort((a, b) => new Date(b.DATE) - new Date(a.DATE));
+    allData.sort((a, b) => new Date(b.DATE) - new Date(a.DATE));
 
     // 仅展示最近的 displayCount 条数据
-    const slicedData = data.slice(0, displayCount);  // 从最新数据开始取前 displayCount 条
+    const slicedData = allData.slice(0, displayCount);  // 从最新数据开始取前 displayCount 条
 
-    // 提取日期、收盘价（spj）和融资净买入额（rzjme）
+    // 提取日期、收盘价（spj）、涨跌幅（zdf）和融资净买入额（rzjme）
     let dates = slicedData.map(item => item.DATE.split(' ')[0]);
     let spjData = slicedData.map(item => parseFloat(item.SPJ));
-    let rzjmeData = slicedData.map(item => parseFloat(item.RZJME));
+    let zdfData = slicedData.map(item => parseFloat(item.ZDF));  // 新增涨跌幅数据
+    let rzjmeData = slicedData.map(item => parseFloat(item.RZJME) / 100000000);  // 转换为亿
 
-    // 反转数组，让最新的数据在右侧显示
+    // 计算三日、五日、十日净买额和自定义N日净买额
+    let rzjme3Data = calculateRollingSums(rzjmeData, 3);  // 计算三日净买额
+    let rzjme5Data = calculateRollingSums(rzjmeData, 5);  // 计算五日净买额
+    let rzjme10Data = calculateRollingSums(rzjmeData, 10);  // 计算十日净买额
+    let rzjmeNData = calculateRollingSums(rzjmeData, customN);  // 计算自定义N日净买额
+
+    // 修改N日净买额表头
+    document.getElementById('customNHeader').innerText = `${customN}日净买`;
+
+    // 动态修改标题和页面标题
+    const pageTitle = `${securityName}（${scode}）收盘价与融资净买入额走势图`;
+    document.title = pageTitle;
+    document.getElementById('page-title').innerText = pageTitle;
+
+    // 反转数组，让最新的数据在右侧显示（图表显示）
     dates = dates.reverse();
     spjData = spjData.reverse();
+    zdfData = zdfData.reverse();
     rzjmeData = rzjmeData.reverse();
+    rzjme3Data = rzjme3Data.reverse();
+    rzjme5Data = rzjme5Data.reverse();
+    rzjme10Data = rzjme10Data.reverse();
+    rzjmeNData = rzjmeNData.reverse();
 
     // 初始化图表和表格
     initChart(dates, spjData, rzjmeData);
-    fillTable(dates, spjData, rzjmeData);
+    fillTable(dates, spjData, zdfData, rzjmeData, rzjme3Data, rzjme5Data, rzjme10Data, rzjmeNData);  // 传递自定义N日净买额数据
 }
-    // 执行主函数
-    main();
+
+// 执行主函数
+main();
 </script>
 
 </body>
