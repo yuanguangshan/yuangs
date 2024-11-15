@@ -77,35 +77,28 @@
     <div id="table-container" class="loading">正在加载数据...</div>
 
     <script>
- function getPreviousWorkdays(daysCount = 3) {
-    // 创建一个以北京时间为基础的日期对象
-    const today = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
-    let dates = [];
-    let currentDate = new Date(today);
-    let workdaysFound = 0;
-
-    while (workdaysFound < daysCount) {
-        // 往前推一天
-        currentDate.setDate(currentDate.getDate() - 1);
-        
-        // 获取星期几 (0 = 周日, 1 = 周一, ..., 6 = 周六)
-        let dayOfWeek = currentDate.getDay();
-        
-        // 如果不是周末（周六或周日），则添加到结果中
-        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-            dates.push(currentDate.toISOString().split('T')[0]);
-            workdaysFound++;
+    
+       //获取过去几个工作日的日期（使用北京时间）
+        function getPreviousWorkdays(daysAgo = 2) {
+            const today = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
+            let dates = [];
+            let day = today.getDay();
+            for (let i = 1; i <= daysAgo; i++) {
+                let offset = i;
+                if (day === 0) {
+                    offset += 1;
+                } else if (day === 2) {
+                    offset += 0;
+                }
+                let pastDate = new Date(today);
+                pastDate.setDate(today.getDate() - offset);
+                dates.push(pastDate.toISOString().split('T')[0]);
+            }
+            return dates;
         }
-    }
 
-    return dates;
-}
+        const previousWorkdays = getPreviousWorkdays(3);
 
-// 使用示例：
-console.log(getPreviousWorkdays(3));
-// 获取最近两个工作日
-    const previousWorkdays = getPreviousWorkdays(3);
-        // API URL 和参数
         const apiUrl = "https://datacenter-web.eastmoney.com/api/data/v1/get";
         const params = {
             reportName: "RPTA_WEB_RZRQ_GGMX",
@@ -113,8 +106,6 @@ console.log(getPreviousWorkdays(3));
             source: "WEB",
             pageNumber: 1,
             pageSize: 500,
-            sortColumns: "rzjme",
-            sortTypes: -1,
             pageNo: 1,
             p: 1,
             pageNum: 1,
@@ -122,8 +113,8 @@ console.log(getPreviousWorkdays(3));
         };
 
         // 构造URL参数字符串
-        function constructUrl(url, params, date) {
-            const queryParams = { ...params, filter: `(DATE='${date}')` };
+        function constructUrl(url, params, date, page) {
+            const queryParams = { ...params, filter: `(DATE='${date}')`, pageNumber: page };
             const queryString = Object.keys(queryParams)
                 .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(queryParams[key])}`)
                 .join('&');
@@ -134,45 +125,46 @@ console.log(getPreviousWorkdays(3));
         async function fetchData() {
             let allData = [];
 
-            // 遍历最近两个工作日的日期，获取数据
             for (let i = 0; i < previousWorkdays.length; i++) {
-                const url 
-                = constructUrl(apiUrl, params, previousWorkdays[i]);
-                try {
-                    const response = await fetch(url);
-                    const data = await response.json();
-                    allData = allData.concat(data.result.data);
-                } catch (error) {
-                    console.error(`Error fetching data for ${previousWorkdays[i]}:`, error);
+                const totalPages = 8; // 假设总共有8页数据
+                for (let page = 1; page <= totalPages; page++) {
+                    const url = constructUrl(apiUrl, params, previousWorkdays[i], page);
+                    try {
+                        const response = await fetch(url);
+                        const data = await response.json();
+                        if (data.result && data.result.data) {
+                            allData = allData.concat(data.result.data);
+                        }
+                    } catch (error) {
+                        console.error(`Error fetching data for ${previousWorkdays[i]} (Page ${page}):`, error);
+                    }
                 }
             }
 
-            // 去重并显示数据
-            const uniqueData = deduplicateData(allData);
+            // 去重并根据净买入额的绝对值进行排序
+            const uniqueData = deduplicateAndSortData(allData);
             displayData(uniqueData);
-            displayDate(previousWorkdays[0]);  // 显示最近日期
+            displayDate(previousWorkdays[0]);
         }
 
-        // 去重逻辑：根据股票代码去重，并保留最新数据
-        function deduplicateData(data) {
+        // 去重逻辑：根据股票代码去重，并按净买入额绝对值排序
+        function deduplicateAndSortData(data) {
             const uniqueDataMap = new Map();
-
             data.forEach(item => {
                 if (!uniqueDataMap.has(item.SCODE)) {
                     uniqueDataMap.set(item.SCODE, item);
                 } else {
                     const existingItem = uniqueDataMap.get(item.SCODE);
-                    // 如果当前日期比已有项更新，替换掉旧数据
                     if (item.DATE > existingItem.DATE) {
                         uniqueDataMap.set(item.SCODE, item);
                     }
                 }
             });
 
-            return Array.from(uniqueDataMap.values());
+            const uniqueData = Array.from(uniqueDataMap.values());
+            return uniqueData.sort((a, b) => Math.abs(b.RZJME) - Math.abs(a.RZJME)); // 按净买入额绝对值排序
         }
 
-        // 在标题旁边显示日期
         function displayDate(dateString) {
             const date = new Date(dateString).toLocaleDateString('zh-CN', {
                 year: 'numeric',
@@ -182,14 +174,11 @@ console.log(getPreviousWorkdays(3));
             document.getElementById('date').innerText = `日期: ${date}`;
         }
 
-        // 将数字转换为以“亿”为单位
         function formatToBillion(value) {
             return (value / 1e8).toFixed(2);
         }
 
-        // 展示数据为表格
         function displayData(data) {
-            // 过滤融资余额大于 10 亿的股票
             const filteredData = data.filter(item => item.RZYE > 1e9);
 
             if (filteredData.length === 0) {
@@ -216,27 +205,22 @@ console.log(getPreviousWorkdays(3));
             `;
 
             filteredData.forEach(item => {
-                const rzBalanceChange = item.RZJME;  // 融资余额变化（与前一日相比）
-                const absChange = Math.abs(rzBalanceChange); // 变化的绝对值
+                const rzBalanceChange = item.RZJME;
+                const absChange = Math.abs(rzBalanceChange);
 
-                // 判断加速买入 (3日净买入 > 5日净买入 > 10日净买入)
                 const isAcceleratingBuy = item.RZJME3D > item.RZJME5D && item.RZJME5D > item.RZJME10D;
-
-                // 判断减缓买入 (3日净买入 < 5日净买入 < 10日净买入)
                 const isSlowingBuy = item.RZJME3D < item.RZJME5D && item.RZJME5D < item.RZJME10D;
 
-                // 设置行的背景颜色，如果变化绝对值大于 1 亿则标红或标绿
                 let rowClass = '';
                 if (absChange > 1e8) {
                     rowClass = rzBalanceChange > 0 ? 'highlight-red' : 'highlight-green';
                 }
 
-                // 根据不同条件应用不同的字体颜色
                 let fontClass = '';
                 if (isAcceleratingBuy) {
-                    fontClass = 'highlight-accelerating';  // 加速买入，红色字体
+                    fontClass = 'highlight-accelerating';
                 } else if (isSlowingBuy) {
-                    fontClass = 'highlight-slowing';  // 减缓买入，绿色字体
+                    fontClass = 'highlight-slowing';
                 }
 
                 tableHTML += `
@@ -261,41 +245,30 @@ console.log(getPreviousWorkdays(3));
 
             document.getElementById('table-container').innerHTML = tableHTML;
 
-            // 添加排序功能
             addSortListeners(filteredData);
         }
 
-        // 添加表格排序功能
         function addSortListeners(data) {
             const headers = document.querySelectorAll('.sortable');
-            
             headers.forEach(header => {
                 header.addEventListener('click', () => {
                     const column = header.getAttribute('data-column');
                     const order = header.getAttribute('data-order');
                     const sortedData = sortData(data, column, order);
-                    
-                    // 更新排序顺序
                     header.setAttribute('data-order', order === 'asc' ? 'desc' : 'asc');
-                    
-                    // 重新渲染表格
                     updateTable(sortedData);
                 });
             });
         }
 
-        // 数据排序逻辑
         function sortData(data, column, order) {
             return data.slice().sort((a, b) => {
                 let aValue = a[column];
                 let bValue = b[column];
-
-                // 特别处理数字列
                 if (!isNaN(aValue) && !isNaN(bValue)) {
                     aValue = parseFloat(aValue);
                     bValue = parseFloat(bValue);
                 }
-
                 if (order === 'asc') {
                     return aValue > bValue ? 1 : -1;
                 } else {
@@ -304,21 +277,17 @@ console.log(getPreviousWorkdays(3));
             });
         }
 
-        // 更新表格内容
         function updateTable(data) {
             let tableBody = '';
             data.forEach(item => {
                 const rzBalanceChange = item.RZJME;
                 const absChange = Math.abs(rzBalanceChange);
                 let rowClass = '';
-
                 if (absChange > 1e8) {
                     rowClass = rzBalanceChange > 0 ? 'highlight-red' : 'highlight-green';
                 }
-
                 const isAcceleratingBuy = item.RZJME3D > item.RZJME5D && item.RZJME5D > item.RZJME10D;
                 const isSlowingBuy = item.RZJME3D < item.RZJME5D && item.RZJME5D < item.RZJME10D;
-                
                 let fontClass = '';
                 if (isAcceleratingBuy) {
                     fontClass = 'highlight-accelerating';
@@ -344,10 +313,8 @@ console.log(getPreviousWorkdays(3));
             document.querySelector('#data-table tbody').innerHTML = tableBody;
         }
 
-        // 页面加载时调用
         fetchData();
 
-        // 点击标题跳转到指定页面
         document.getElementById('title-link').addEventListener('click', () => {
             const targetUrl = `https://emdata.eastmoney.com/rzrq/index.html`;
             window.location.href = targetUrl;
