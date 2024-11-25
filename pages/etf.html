@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ETF 数据展示</title>
+  <title>集思录ETF数据监控</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -29,6 +29,15 @@
 
     th {
       background-color: #f4f4f4;
+      cursor: pointer;
+    }
+
+    th.sort-asc::after {
+      content: " ▲";
+    }
+
+    th.sort-desc::after {
+      content: " ▼";
     }
 
     tr:nth-child(even) {
@@ -66,12 +75,12 @@
     <table id="top20Table">
       <thead>
         <tr>
-          <th>名称</th>
-          <th>代码</th>
-          <th>涨幅</th>
-          <th>总规模 (亿)</th>
-          <th>规模变化 (亿)</th>
-          <th>规模变化率</th>
+          <th data-sort="名称">名称</th>
+          <th data-sort="代码">代码</th>
+          <th data-sort="涨幅">涨幅</th>
+          <th data-sort="总规模">总规模 (亿)</th>
+          <th data-sort="规模变化">规模变化 (亿)</th>
+          <th data-sort="规模变化率">规模变化率</th>
         </tr>
       </thead>
       <tbody>
@@ -85,7 +94,7 @@
         <tr>
           <th>类别</th>
           <th>总规模 (亿)</th>
-          <th>记录数</th>
+          <th>数量</th>
         </tr>
       </thead>
       <tbody>
@@ -95,6 +104,10 @@
   </div>
 
   <script>
+    let originalData = []; // 用于保存原始数据
+    let currentSortColumn = null; // 当前排序的列
+    let isAsc = true; // 当前排序方向
+
     async function fetchEtfData() {
       const url = "https://q.889.ink/etf/";
       const loadingMessage = document.getElementById("loadingMessage");
@@ -115,81 +128,27 @@
         const rows = data.rows.map(row => row.cell);
 
         // 过滤无效数据并计算规模变化率
-        const filteredData = rows.filter(row => row.unit_total && row.unit_incr).map(row => {
+        originalData = rows.filter(row => row.unit_total && row.unit_incr).map(row => {
           row.unit_total = parseFloat(row.unit_total);
           row.unit_incr = parseFloat(row.unit_incr);
           row["规模变化率"] = ((row.unit_incr / row.unit_total) * 100).toFixed(2) + "%";
-          return row;
+          return {
+            名称: row.index_nm || "未知", // 处理 index_nm 为空的情况
+            代码: row.fund_id,
+            涨幅: parseFloat(row.increase_rt),
+            总规模: parseFloat((row.unit_total).toFixed(2)), // 转换为亿
+            规模变化: parseFloat((row.unit_incr).toFixed(2)), // 转换为亿
+            规模变化率: parseFloat(((row.unit_incr / row.unit_total) * 100).toFixed(2))
+          };
         });
 
-        // 过滤总规模大于 100 的记录，按规模变化率降序排序
-        const largeScaleData = filteredData.filter(row => row.unit_total > 1).sort((a, b) => {
-          const rateA = parseFloat(a["规模变化率"]);
-          const rateB = parseFloat(b["规模变化率"]);
-          return rateB - rateA;
-        });
+        // 默认按"总规模"降序排序并渲染
+        currentSortColumn = "总规模";
+        isAsc = false;
+        renderSortedTable();
 
-        // 获取前 20 条记录
-        const top20Data = largeScaleData.slice(0, 200).map(row => ({
-          名称: row.index_nm || "未知", // 处理 index_nm 为空的情况
-          代码: row.fund_id,
-          涨幅: row.increase_rt + "%",
-          总规模: (row.unit_total / 100).toFixed(2), // 转换为亿
-          规模变化: (row.unit_incr / 100).toFixed(2), // 转换为亿
-          规模变化率: row["规模变化率"]
-        }));
-
-        // 渲染 Top 20 数据到表格
-        top20Data.forEach(row => {
-          const tr = document.createElement("tr");
-          for (const key in row) {
-            const td = document.createElement("td");
-            td.textContent = row[key];
-            tr.appendChild(td);
-          }
-          top20Table.appendChild(tr);
-        });
-
-        // 定义统计类别关键词
-        const categories = [
-          "沪深300", "中证500", "创业板指", "中证1000",
-          "科创50", "中证A500", "证券公司", "上证50",
-          "光伏", "芯片"
-        ];
-
-        // 初始化类别统计对象
-        const categoryStats = {};
-        categories.forEach(category => {
-          categoryStats[category] = { 总规模: 0, 记录数: 0 };
-        });
-
-        // 统计每个类别的总规模和记录数
-        filteredData.forEach(row => {
-          categories.forEach(category => {
-            if (row.index_nm && row.index_nm.includes(category)) {
-              categoryStats[category].总规模 += row.unit_total || 0;
-              categoryStats[category].记录数 += 1;
-            }
-          });
-        });
-
-        // 转换统计结果为数组
-        const categorySummary = Object.entries(categoryStats).map(([category, stats]) => ({
-          类别: category,
-          总规模: (stats.总规模 / 100).toFixed(2), // 转换为亿
-          记录数: stats.记录数
-        }));
-
-        // 渲染类别统计结果到表格
-        categorySummary.forEach(row => {
-          const tr = document.createElement("tr");
-          for (const key in row) {
-            const td = document.createElement("td");
-            td.textContent = row[key];
-            tr.appendChild(td);
-          }
-          categorySummaryTable.appendChild(tr);
-        });
+        // 渲染类别统计数据
+        renderCategoryStatistics(originalData);
 
         // 数据加载完成后隐藏加载提示
         loadingMessage.classList.add("hidden");
@@ -198,6 +157,105 @@
         loadingMessage.classList.add("hidden");
         errorMessage.classList.remove("hidden");
       }
+
+      // 表格排序功能
+      const headers = document.querySelectorAll("#top20Table thead th");
+      headers.forEach(header => {
+        header.addEventListener("click", () => {
+          const sortKey = header.getAttribute("data-sort");
+
+          // 检查是否点击的是当前列
+          if (currentSortColumn === sortKey) {
+            isAsc = !isAsc; // 切换排序方向
+          } else {
+            currentSortColumn = sortKey; // 切换排序列
+            isAsc = true; // 默认升序
+          }
+
+          // 清除所有列的排序样式
+          headers.forEach(h => h.classList.remove("sort-asc", "sort-desc"));
+
+          // 设置当前列的排序样式
+          if (isAsc) {
+            header.classList.add("sort-asc");
+          } else {
+            header.classList.add("sort-desc");
+          }
+
+          // 渲染排序后的表格
+          renderSortedTable();
+        });
+      });
+    }
+
+    // 渲染排序后的表格
+    function renderSortedTable() {
+      const top20Table = document.getElementById("top20Table").querySelector("tbody");
+      top20Table.innerHTML = ""; // 清空表格内容
+
+      // 对原始数据排序
+      const sortedData = [...originalData].sort((a, b) => {
+        if (isAsc) {
+          return a[currentSortColumn] > b[currentSortColumn] ? 1 : -1;
+        } else {
+          return a[currentSortColumn] < b[currentSortColumn] ? 1 : -1;
+        }
+      });
+
+      // 获取前20条数据
+      const top20Data = sortedData.slice(0, 20);
+
+      // 渲染数据
+      top20Data.forEach(row => {
+        const tr = document.createElement("tr");
+        for (const key in row) {
+          const td = document.createElement("td");
+          td.textContent = row[key];
+          tr.appendChild(td);
+        }
+        top20Table.appendChild(tr);
+      });
+    }
+
+    // 渲染类别统计结果
+    function renderCategoryStatistics(data) {
+      const categorySummaryTable = document.getElementById("categorySummaryTable").querySelector("tbody");
+      categorySummaryTable.innerHTML = ""; // 清空表格内容
+
+      const categories = [
+        "沪深300", "中证500", "创业板指", "中证1000",
+        "科创50", "中证A500", "证券公司", "上证50",
+        "光伏", "芯片"
+      ];
+
+      // 初始化统计对象
+      const categoryStats = {};
+
+      categories.forEach(category => {
+        categoryStats[category] = { 总规模: 0, 数量: 0 };
+      });
+
+      // 统计数据
+      data.forEach(row => {
+        const { 名称, 总规模 } = row;
+        categories.forEach(category => {
+          if (名称.includes(category)) {
+            categoryStats[category].总规模 += 总规模;
+            categoryStats[category].数量 += 1;
+          }
+        });
+      });
+
+      // 渲染统计数据
+      Object.entries(categoryStats).forEach(([category, stats]) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${category}</td>
+          <td>${stats.总规模.toFixed(2)}</td>
+          <td>${stats.数量}</td>
+        `;
+        categorySummaryTable.appendChild(tr);
+      });
     }
 
     // 调用函数加载数据
