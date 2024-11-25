@@ -102,7 +102,9 @@
         <tr>
           <th>类别</th>
           <th>总规模 (亿)</th>
+          <th>规模变化 (亿)</th>
           <th>数量</th>
+          <th>占比</th>
         </tr>
       </thead>
       <tbody>
@@ -292,18 +294,24 @@
       categorySummaryTable.innerHTML = ""; // 清空表格内容
 
       const categoryStats = {};
+      let totalScale = 0; // 记录所有类别的总规模
+      let totalChange = 0; // 记录所有类别的总规模变化
 
+      // 初始化类别统计对象
       categories.forEach(category => {
-        categoryStats[category] = { 总规模: 0, 数量: 0 };
+        categoryStats[category] = { 总规模: 0, 规模变化: 0, 数量: 0 };
       });
 
       // 统计数据
       data.forEach(row => {
-        const { 名称, 总规模 } = row;
+        const { 名称, 总规模, 规模变化 } = row;
         categories.forEach(category => {
           if (名称.includes(category)) {
             categoryStats[category].总规模 += 总规模;
+            categoryStats[category].规模变化 += 规模变化;
             categoryStats[category].数量 += 1;
+            totalScale += 总规模; // 累计总规模
+            totalChange += 规模变化; // 累计规模变化
           }
         });
       });
@@ -311,16 +319,19 @@
       // 渲染统计数据
       const chartData = [];
       Object.entries(categoryStats).forEach(([category, stats]) => {
+        const scalePercent = totalScale > 0 ? ((stats.总规模 / totalScale) * 100).toFixed(2) + "%" : "0%"; // 计算占比
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${category}</td>
           <td>${stats.总规模.toFixed(2)}</td>
+          <td>${stats.规模变化.toFixed(2)}</td>
           <td>${stats.数量}</td>
+          <td>${scalePercent}</td>
         `;
         categorySummaryTable.appendChild(tr);
 
         // 准备图表数据
-        chartData.push({ name: category, value: stats.总规模 });
+        chartData.push({ name: category, value: stats.总规模, change: stats.规模变化 });
       });
 
       return chartData;
@@ -333,15 +344,21 @@
 
       const option = {
         title: {
-          text: "类别统计总规模 (亿)",
+          text: "类别统计总规模及规模变化 (亿)",
           left: "center",
           textStyle: {
             fontSize: 16
           }
         },
         tooltip: {
-          trigger: "item",
-          formatter: "{b}: {c} 亿"
+          trigger: "axis",
+          axisPointer: {
+            type: "shadow"
+          }
+        },
+        legend: {
+          data: ["总规模", "规模变化"],
+          top: "10%"
         },
         xAxis: {
           type: "category",
@@ -353,13 +370,20 @@
         },
         yAxis: {
           type: "value",
-          name: "总规模 (亿)"
+          name: "金额 (亿)"
         },
         series: [
           {
+            name: "总规模",
             data: data.map(item => item.value),
             type: "bar",
             color: "#67a9f8"
+          },
+          {
+            name: "规模变化",
+            data: data.map(item => item.change),
+            type: "bar",
+            color: "#f78c6b"
           }
         ]
       };
