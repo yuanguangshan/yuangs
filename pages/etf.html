@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ETF 数据展示</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+
+    h1, h2 {
+      color: #333;
+      text-align: center;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: center;
+    }
+
+    th {
+      background-color: #f4f4f4;
+    }
+
+    tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .loading, .error {
+      text-align: center;
+      font-size: 18px;
+      color: #555;
+    }
+
+    .error {
+      color: red;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>ETF 数据展示</h1>
+
+    <p id="loadingMessage" class="loading">数据加载中，请稍候...</p>
+    <p id="errorMessage" class="error hidden">数据加载失败，请稍后重试。</p>
+
+    <h2>Top 20 ETF 数据</h2>
+    <table id="top20Table">
+      <thead>
+        <tr>
+          <th>名称</th>
+          <th>代码</th>
+          <th>涨幅</th>
+          <th>总规模 (亿)</th>
+          <th>规模变化 (亿)</th>
+          <th>规模变化率</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- 数据将由 JavaScript 动态填充 -->
+      </tbody>
+    </table>
+
+    <h2>类别统计结果</h2>
+    <table id="categorySummaryTable">
+      <thead>
+        <tr>
+          <th>类别</th>
+          <th>总规模 (亿)</th>
+          <th>记录数</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- 数据将由 JavaScript 动态填充 -->
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    async function fetchEtfData() {
+      const url = "https://www.jisilu.cn/data/etf/etf_list/";
+      const loadingMessage = document.getElementById("loadingMessage");
+      const errorMessage = document.getElementById("errorMessage");
+      const top20Table = document.getElementById("top20Table").querySelector("tbody");
+      const categorySummaryTable = document.getElementById("categorySummaryTable").querySelector("tbody");
+
+      try {
+        // 请求数据
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP 错误：状态码 ${response.status}`);
+        const data = await response.json();
+
+        // 检查数据是否有效
+        if (!data || !data.rows) throw new Error("无有效数据");
+
+        // 处理 ETF 列表数据
+        const rows = data.rows.map(row => row.cell);
+
+        // 过滤无效数据并计算规模变化率
+        const filteredData = rows.filter(row => row.unit_total && row.unit_incr).map(row => {
+          row.unit_total = parseFloat(row.unit_total);
+          row.unit_incr = parseFloat(row.unit_incr);
+          row["规模变化率"] = ((row.unit_incr / row.unit_total) * 100).toFixed(2) + "%";
+          return row;
+        });
+
+        // 过滤总规模大于 100 的记录，按规模变化率降序排序
+        const largeScaleData = filteredData.filter(row => row.unit_total > 100).sort((a, b) => {
+          const rateA = parseFloat(a["规模变化率"]);
+          const rateB = parseFloat(b["规模变化率"]);
+          return rateB - rateA;
+        });
+
+        // 获取前 20 条记录
+        const top20Data = largeScaleData.slice(0, 20).map(row => ({
+          名称: row.index_nm || "未知", // 处理 index_nm 为空的情况
+          代码: row.fund_id,
+          涨幅: row.increase_rt + "%",
+          总规模: (row.unit_total / 100).toFixed(2), // 转换为亿
+          规模变化: (row.unit_incr / 100).toFixed(2), // 转换为亿
+          规模变化率: row["规模变化率"]
+        }));
+
+        // 渲染 Top 20 数据到表格
+        top20Data.forEach(row => {
+          const tr = document.createElement("tr");
+          for (const key in row) {
+            const td = document.createElement("td");
+            td.textContent = row[key];
+            tr.appendChild(td);
+          }
+          top20Table.appendChild(tr);
+        });
+
+        // 定义统计类别关键词
+        const categories = [
+          "沪深300", "中证500", "创业板指", "中证1000",
+          "科创50", "中证A500", "证券公司", "上证50",
+          "光伏", "芯片"
+        ];
+
+        // 初始化类别统计对象
+        const categoryStats = {};
+        categories.forEach(category => {
+          categoryStats[category] = { 总规模: 0, 记录数: 0 };
+        });
+
+        // 统计每个类别的总规模和记录数
+        filteredData.forEach(row => {
+          categories.forEach(category => {
+            if (row.index_nm && row.index_nm.includes(category)) {
+              categoryStats[category].总规模 += row.unit_total || 0;
+              categoryStats[category].记录数 += 1;
+            }
+          });
+        });
+
+        // 转换统计结果为数组
+        const categorySummary = Object.entries(categoryStats).map(([category, stats]) => ({
+          类别: category,
+          总规模: (stats.总规模 / 100).toFixed(2), // 转换为亿
+          记录数: stats.记录数
+        }));
+
+        // 渲染类别统计结果到表格
+        categorySummary.forEach(row => {
+          const tr = document.createElement("tr");
+          for (const key in row) {
+            const td = document.createElement("td");
+            td.textContent = row[key];
+            tr.appendChild(td);
+          }
+          categorySummaryTable.appendChild(tr);
+        });
+
+        // 数据加载完成后隐藏加载提示
+        loadingMessage.classList.add("hidden");
+      } catch (error) {
+        console.error("数据请求或处理失败:", error);
+        loadingMessage.classList.add("hidden");
+        errorMessage.classList.remove("hidden");
+      }
+    }
+
+    // 调用函数加载数据
+    fetchEtfData();
+  </script>
+</body>
+</html>
