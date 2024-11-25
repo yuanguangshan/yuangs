@@ -114,6 +114,7 @@
 
   <script>
     let originalData = []; // 用于保存原始数据
+    let filteredData = []; // 用于保存过滤后的数据
     let currentSortColumn = null; // 当前排序的列
     let isAsc = true; // 当前排序方向
     const categories = [
@@ -122,7 +123,14 @@
       "光伏", "芯片"
     ];
 
+    // 从 URL 中解析参数
+    function getUrlParameter(name) {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(name);
+    }
+
     async function fetchEtfData() {
+      const vol = parseFloat(getUrlParameter('vol')) || 0; // 从 URL 获取 vol 参数，默认为 0
       const url = "https://q.889.ink/etf/";
       const loadingMessage = document.getElementById("loadingMessage");
       const errorMessage = document.getElementById("errorMessage");
@@ -153,13 +161,16 @@
           };
         });
 
+        // 根据 vol 参数进行过滤
+        filteredData = originalData.filter(row => row.总规模 > vol);
+
         // 默认按"总规模"降序排序并渲染
         currentSortColumn = "总规模";
         isAsc = false;
         renderSortedTable();
 
         // 渲染类别统计数据
-        const categoryData = renderCategoryStatistics(originalData);
+        const categoryData = renderCategoryStatistics(filteredData);
 
         // 绘制类别统计图表
         renderCategoryChart(categoryData);
@@ -208,7 +219,7 @@
       top20Table.innerHTML = ""; // 清空表格内容
 
       // 对原始数据排序
-      const sortedData = [...originalData].sort((a, b) => {
+      const sortedData = [...filteredData].sort((a, b) => {
         if (isAsc) {
           return a[currentSortColumn] > b[currentSortColumn] ? 1 : -1;
         } else {
