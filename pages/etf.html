@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>集思录ETF数据监控</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -13,6 +14,11 @@
     h1, h2 {
       color: #333;
       text-align: center;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
     }
 
     table {
@@ -44,9 +50,10 @@
       background-color: #f9f9f9;
     }
 
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
+    .chart-container {
+      width: 100%;
+      height: 400px;
+      margin-top: 20px;
     }
 
     .loading, .error {
@@ -66,7 +73,7 @@
 </head>
 <body>
   <div class="container">
-    <h1>ETF 数据展示</h1>
+    <h1>A股ETF数据一览表</h1>
 
     <p id="loadingMessage" class="loading">数据加载中，请稍候...</p>
     <p id="errorMessage" class="error hidden">数据加载失败，请稍后重试。</p>
@@ -87,6 +94,7 @@
         <!-- 数据将由 JavaScript 动态填充 -->
       </tbody>
     </table>
+    <div id="chart-top20" class="chart-container"></div>
 
     <h2>类别统计结果</h2>
     <table id="categorySummaryTable">
@@ -101,19 +109,23 @@
         <!-- 数据将由 JavaScript 动态填充 -->
       </tbody>
     </table>
+    <div id="chart-category" class="chart-container"></div>
   </div>
 
   <script>
     let originalData = []; // 用于保存原始数据
     let currentSortColumn = null; // 当前排序的列
     let isAsc = true; // 当前排序方向
+    const categories = [
+      "沪深300", "中证500", "创业板指", "中证1000",
+      "科创50", "中证A500", "证券公司", "上证50",
+      "光伏", "芯片"
+    ];
 
     async function fetchEtfData() {
       const url = "https://q.889.ink/etf/";
       const loadingMessage = document.getElementById("loadingMessage");
       const errorMessage = document.getElementById("errorMessage");
-      const top20Table = document.getElementById("top20Table").querySelector("tbody");
-      const categorySummaryTable = document.getElementById("categorySummaryTable").querySelector("tbody");
 
       try {
         // 请求数据
@@ -131,14 +143,13 @@
         originalData = rows.filter(row => row.unit_total && row.unit_incr).map(row => {
           row.unit_total = parseFloat(row.unit_total);
           row.unit_incr = parseFloat(row.unit_incr);
-          row["规模变化率"] = ((row.unit_incr / row.unit_total) * 100).toFixed(2) + "%";
           return {
             名称: row.index_nm || "未知", // 处理 index_nm 为空的情况
             代码: row.fund_id,
-            涨幅: parseFloat(row.increase_rt),
+            涨幅: parseFloat(row.increase_rt).toFixed(2),
             总规模: parseFloat((row.unit_total).toFixed(2)), // 转换为亿
             规模变化: parseFloat((row.unit_incr).toFixed(2)), // 转换为亿
-            规模变化率: parseFloat(((row.unit_incr / row.unit_total) * 100).toFixed(2))
+            规模变化率: ((row.unit_incr / row.unit_total) * 100).toFixed(2) + "%"
           };
         });
 
@@ -148,7 +159,10 @@
         renderSortedTable();
 
         // 渲染类别统计数据
-        renderCategoryStatistics(originalData);
+        const categoryData = renderCategoryStatistics(originalData);
+
+        // 绘制类别统计图表
+        renderCategoryChart(categoryData);
 
         // 数据加载完成后隐藏加载提示
         loadingMessage.classList.add("hidden");
@@ -182,7 +196,7 @@
             header.classList.add("sort-desc");
           }
 
-          // 渲染排序后的表格
+          // 渲染排序后的表格，并同步更新图表
           renderSortedTable();
         });
       });
@@ -215,6 +229,50 @@
         }
         top20Table.appendChild(tr);
       });
+
+      // 更新图表
+      renderTop20Chart(top20Data);
+    }
+
+    // 绘制 Top 20 图表
+    function renderTop20Chart(data) {
+      const chartDom = document.getElementById("chart-top20");
+      const chart = echarts.init(chartDom);
+
+      const option = {
+        title: {
+          text: "Top 20 总规模 (亿)",
+          left: "center",
+          textStyle: {
+            fontSize: 16
+          }
+        },
+        tooltip: {
+          trigger: "item",
+          formatter: "{b}: {c} 亿"
+        },
+        xAxis: {
+          type: "category",
+          data: data.map(item => item.名称),
+          axisLabel: {
+            interval: 0,
+            rotate: 30 // 旋转以避免重叠
+          }
+        },
+        yAxis: {
+          type: "value",
+          name: "总规模 (亿)"
+        },
+        series: [
+          {
+            data: data.map(item => item.总规模),
+            type: "bar",
+            color: "#67a9f8"
+          }
+        ]
+      };
+
+      chart.setOption(option);
     }
 
     // 渲染类别统计结果
@@ -222,13 +280,6 @@
       const categorySummaryTable = document.getElementById("categorySummaryTable").querySelector("tbody");
       categorySummaryTable.innerHTML = ""; // 清空表格内容
 
-      const categories = [
-        "沪深300", "中证500", "创业板指", "中证1000",
-        "科创50", "中证A500", "证券公司", "上证50",
-        "光伏", "芯片"
-      ];
-
-      // 初始化统计对象
       const categoryStats = {};
 
       categories.forEach(category => {
@@ -247,6 +298,7 @@
       });
 
       // 渲染统计数据
+      const chartData = [];
       Object.entries(categoryStats).forEach(([category, stats]) => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
@@ -255,7 +307,53 @@
           <td>${stats.数量}</td>
         `;
         categorySummaryTable.appendChild(tr);
+
+        // 准备图表数据
+        chartData.push({ name: category, value: stats.总规模 });
       });
+
+      return chartData;
+    }
+
+    // 绘制类别统计图表
+    function renderCategoryChart(data) {
+      const chartDom = document.getElementById("chart-category");
+      const chart = echarts.init(chartDom);
+
+      const option = {
+        title: {
+          text: "类别统计总规模 (亿)",
+          left: "center",
+          textStyle: {
+            fontSize: 16
+          }
+        },
+        tooltip: {
+          trigger: "item",
+          formatter: "{b}: {c} 亿"
+        },
+        xAxis: {
+          type: "category",
+          data: data.map(item => item.name),
+          axisLabel: {
+            interval: 0,
+            rotate: 30 // 旋转以避免重叠
+          }
+        },
+        yAxis: {
+          type: "value",
+          name: "总规模 (亿)"
+        },
+        series: [
+          {
+            data: data.map(item => item.value),
+            type: "bar",
+            color: "#67a9f8"
+          }
+        ]
+      };
+
+      chart.setOption(option);
     }
 
     // 调用函数加载数据
