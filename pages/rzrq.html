@@ -60,10 +60,10 @@
             background-color: #e0f7e9;
         }
         .highlight-accelerating {
-            color: red; /* 加速融资买入的记录用红色字体显示 */
+            color: red;
         }
         .highlight-slowing {
-            color: green; /* 减缓融资买入的记录用绿色字体显示 */
+            color: green;
         }
     </style>
 </head>
@@ -76,37 +76,26 @@
 
     <div id="table-container" class="loading">正在加载数据...</div>
 
- 
     <script>
- function getPreviousWorkdays(daysCount = 3) {
-    // 创建一个以北京时间为基础的日期对象
-    const today = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
-    let dates = [];
-    let currentDate = new Date(today);
-    let workdaysFound = 0;
+        // 获取最近工作日
+        function getPreviousWorkdays(daysCount = 3) {
+            const today = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
+            let dates = [];
+            let currentDate = new Date(today);
+            let workdaysFound = 0;
 
-    while (workdaysFound < daysCount) {
-        // 往前推一天
-        currentDate.setDate(currentDate.getDate() - 1);
-        
-        // 获取星期几 (0 = 周日, 1 = 周一, ..., 6 = 周六)
-        let dayOfWeek = currentDate.getDay();
-        
-        // 如果不是周末（周六或周日），则添加到结果中
-        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-            dates.push(currentDate.toISOString().split('T')[0]);
-            workdaysFound++;
+            while (workdaysFound < daysCount) {
+                currentDate.setDate(currentDate.getDate() - 1);
+                let dayOfWeek = currentDate.getDay(); // 0 = 周日, 6 = 周六
+                if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                    dates.push(currentDate.toISOString().split('T')[0]);
+                    workdaysFound++;
+                }
+            }
+            return dates;
         }
-    }
 
-    return dates;
-}
-
-// 使用示例：
-console.log(getPreviousWorkdays(3));
-// 获取最近两个工作日
-    const previousWorkdays = getPreviousWorkdays(3);
-    
+        const previousWorkdays = getPreviousWorkdays(3);
         const apiUrl = "https://datacenter-web.eastmoney.com/api/data/v1/get";
         const params = {
             reportName: "RPTA_WEB_RZRQ_GGMX",
@@ -120,7 +109,7 @@ console.log(getPreviousWorkdays(3));
             _: new Date().getTime()
         };
 
-        // 构造URL参数字符串
+        // 构造URL参数
         function constructUrl(url, params, date, page) {
             const queryParams = { ...params, filter: `(DATE='${date}')`, pageNumber: page };
             const queryString = Object.keys(queryParams)
@@ -134,7 +123,7 @@ console.log(getPreviousWorkdays(3));
             let allData = [];
 
             for (let i = 0; i < previousWorkdays.length; i++) {
-                const totalPages = 8; // 假设总共有8页数据
+                const totalPages = 8; // 假设总共有 8 页数据
                 for (let page = 1; page <= totalPages; page++) {
                     const url = constructUrl(apiUrl, params, previousWorkdays[i], page);
                     try {
@@ -149,13 +138,12 @@ console.log(getPreviousWorkdays(3));
                 }
             }
 
-            // 去重并根据净买入额的绝对值进行排序
             const uniqueData = deduplicateAndSortData(allData);
             displayData(uniqueData);
             displayDate(previousWorkdays[0]);
         }
 
-        // 去重逻辑：根据股票代码去重，并按净买入额绝对值排序
+        // 去重并排序
         function deduplicateAndSortData(data) {
             const uniqueDataMap = new Map();
             data.forEach(item => {
@@ -170,9 +158,10 @@ console.log(getPreviousWorkdays(3));
             });
 
             const uniqueData = Array.from(uniqueDataMap.values());
-            return uniqueData.sort((a, b) => Math.abs(b.RZJME) - Math.abs(a.RZJME)); // 按净买入额绝对值排序
+            return uniqueData.sort((a, b) => Math.abs(b.RZJME ?? 0) - Math.abs(a.RZJME ?? 0));
         }
 
+        // 显示日期
         function displayDate(dateString) {
             const date = new Date(dateString).toLocaleDateString('zh-CN', {
                 year: 'numeric',
@@ -182,12 +171,9 @@ console.log(getPreviousWorkdays(3));
             document.getElementById('date').innerText = `日期: ${date}`;
         }
 
-        function formatToBillion(value) {
-            return (value / 1e8).toFixed(2);
-        }
-
+        // 显示数据
         function displayData(data) {
-            const filteredData = data.filter(item => item.RZYE > 1e9);
+            const filteredData = data.filter(item => (item.RZYE ?? 0) > 1e9);
 
             if (filteredData.length === 0) {
                 document.getElementById('table-container').innerHTML = '没有满足条件的数据。';
@@ -213,11 +199,11 @@ console.log(getPreviousWorkdays(3));
             `;
 
             filteredData.forEach(item => {
-                const rzBalanceChange = item.RZJME;
+                const rzBalanceChange = item.RZJME ?? 0;
                 const absChange = Math.abs(rzBalanceChange);
 
-                const isAcceleratingBuy = item.RZJME3D > item.RZJME5D && item.RZJME5D > item.RZJME10D;
-                const isSlowingBuy = item.RZJME3D < item.RZJME5D && item.RZJME5D < item.RZJME10D;
+                const isAcceleratingBuy = (item.RZJME3D ?? 0) > (item.RZJME5D ?? 0) && (item.RZJME5D ?? 0) > (item.RZJME10D ?? 0);
+                const isSlowingBuy = (item.RZJME3D ?? 0) < (item.RZJME5D ?? 0) && (item.RZJME5D ?? 0) < (item.RZJME10D ?? 0);
 
                 let rowClass = '';
                 if (absChange > 1e8) {
@@ -233,15 +219,15 @@ console.log(getPreviousWorkdays(3));
 
                 tableHTML += `
                     <tr class="${rowClass}">
-                        <td class="${fontClass}" onclick="window.location.href='https://blog.want.biz/pages/gg.html?code=${item.SCODE}&days=30&n=7'">${item.SCODE}</td>
-                        <td class="${fontClass}">${item.SECNAME}</td>
-                        <td class="${fontClass}">${formatToBillion(item.RZYE)}</td>
-                        <td class="${fontClass}">${formatToBillion(rzBalanceChange)}</td>
-                        <td class="${fontClass}">${item.SPJ}</td>
-                        <td class="${fontClass}">${item.ZDF.toFixed(2)}</td>
-                        <td class="${fontClass}">${formatToBillion(item.RZJME3D)}</td>
-                        <td class="${fontClass}">${formatToBillion(item.RZJME5D)}</td>
-                        <td class="${fontClass}">${formatToBillion(item.RZJME10D)}</td>
+                        <td class="${fontClass}" onclick="window.location.href='https://blog.want.biz/pages/gg.html?code=${item.SCODE}&days=30&n=7'">${item.SCODE || 'N/A'}</td>
+                        <td>${item.SECNAME || 'N/A'}</td>
+                        <td>${formatToBillion(item.RZYE ?? 0)}</td>
+                        <td>${formatToBillion(rzBalanceChange)}</td>
+                        <td>${item.SPJ ?? 0}</td>
+                        <td>${(item.ZDF ?? 0).toFixed(2)}</td>
+                        <td>${formatToBillion(item.RZJME3D ?? 0)}</td>
+                        <td>${formatToBillion(item.RZJME5D ?? 0)}</td>
+                        <td>${formatToBillion(item.RZJME10D ?? 0)}</td>
                     </tr>
                 `;
             });
@@ -256,6 +242,12 @@ console.log(getPreviousWorkdays(3));
             addSortListeners(filteredData);
         }
 
+        // 格式化为“亿”单位
+        function formatToBillion(value) {
+            return (value / 1e8).toFixed(2);
+        }
+
+        // 添加排序功能
         function addSortListeners(data) {
             const headers = document.querySelectorAll('.sortable');
             headers.forEach(header => {
@@ -269,33 +261,34 @@ console.log(getPreviousWorkdays(3));
             });
         }
 
+        // 排序数据
         function sortData(data, column, order) {
             return data.slice().sort((a, b) => {
-                let aValue = a[column];
-                let bValue = b[column];
+                let aValue = a[column] ?? 0;
+                let bValue = b[column] ?? 0;
                 if (!isNaN(aValue) && !isNaN(bValue)) {
                     aValue = parseFloat(aValue);
                     bValue = parseFloat(bValue);
                 }
-                if (order === 'asc') {
-                    return aValue > bValue ? 1 : -1;
-                } else {
-                    return aValue < bValue ? 1 : -1;
-                }
+                return order === 'asc' ? aValue - bValue : bValue - aValue;
             });
         }
 
+        // 更新表格
         function updateTable(data) {
             let tableBody = '';
             data.forEach(item => {
-                const rzBalanceChange = item.RZJME;
+                const rzBalanceChange = item.RZJME ?? 0;
                 const absChange = Math.abs(rzBalanceChange);
+
                 let rowClass = '';
                 if (absChange > 1e8) {
                     rowClass = rzBalanceChange > 0 ? 'highlight-red' : 'highlight-green';
                 }
-                const isAcceleratingBuy = item.RZJME3D > item.RZJME5D && item.RZJME5D > item.RZJME10D;
-                const isSlowingBuy = item.RZJME3D < item.RZJME5D && item.RZJME5D < item.RZJME10D;
+
+                const isAcceleratingBuy = (item.RZJME3D ?? 0) > (item.RZJME5D ?? 0) && (item.RZJME5D ?? 0) > (item.RZJME10D ?? 0);
+                const isSlowingBuy = (item.RZJME3D ?? 0) < (item.RZJME5D ?? 0) && (item.RZJME5D ?? 0) < (item.RZJME10D ?? 0);
+
                 let fontClass = '';
                 if (isAcceleratingBuy) {
                     fontClass = 'highlight-accelerating';
@@ -305,15 +298,15 @@ console.log(getPreviousWorkdays(3));
 
                 tableBody += `
                     <tr class="${rowClass}">
-                        <td class="${fontClass}" onclick="window.location.href='https://blog.want.biz/pages/gg.html?code=${item.SCODE}&days=30&n=7'">${item.SCODE}</td>
-                        <td class="${fontClass}">${item.SECNAME}</td>
-                        <td class="${fontClass}">${formatToBillion(item.RZYE)}</td>
-                        <td class="${fontClass}">${formatToBillion(rzBalanceChange)}</td>
-                        <td class="${fontClass}">${item.SPJ}</td>
-                        <td class="${fontClass}">${item.ZDF.toFixed(2)}</td>
-                        <td class="${fontClass}">${formatToBillion(item.RZJME3D)}</td>
-                        <td class="${fontClass}">${formatToBillion(item.RZJME5D)}</td>
-                        <td class="${fontClass}">${formatToBillion(item.RZJME10D)}</td>
+                        <td class="${fontClass}" onclick="window.location.href='https://blog.want.biz/pages/gg.html?code=${item.SCODE}&days=30&n=7'">${item.SCODE || 'N/A'}</td>
+                        <td>${item.SECNAME || 'N/A'}</td>
+                        <td>${formatToBillion(item.RZYE ?? 0)}</td>
+                        <td>${formatToBillion(rzBalanceChange)}</td>
+                        <td>${item.SPJ ?? 0}</td>
+                        <td>${(item.ZDF ?? 0).toFixed(2)}</td>
+                        <td>${formatToBillion(item.RZJME3D ?? 0)}</td>
+                        <td>${formatToBillion(item.RZJME5D ?? 0)}</td>
+                        <td>${formatToBillion(item.RZJME10D ?? 0)}</td>
                     </tr>
                 `;
             });
@@ -321,8 +314,10 @@ console.log(getPreviousWorkdays(3));
             document.querySelector('#data-table tbody').innerHTML = tableBody;
         }
 
+        // 执行数据抓取
         fetchData();
 
+        // 添加标题点击跳转功能
         document.getElementById('title-link').addEventListener('click', () => {
             const targetUrl = `https://emdata.eastmoney.com/rzrq/index.html`;
             window.location.href = targetUrl;
