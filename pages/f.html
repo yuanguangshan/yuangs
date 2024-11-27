@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>期货合约升贴水展示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .select-area {
+            margin-bottom: 20px;
+        }
+
+        select {
+            padding: 8px;
+            font-size: 14px;
+            min-width: 200px;
+        }
+
+        #chart {
+            width: 100%;
+            height: 500px;
+            border: 1px solid #ddd;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="select-area">
+            <select id="varietySelect">
+                <option value="">请选择品种</option>
+            </select>
+        </div>
+        <div class="loading">加载中...</div>
+        <div id="chart"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script>
+        const EXCHANGE_MAP = {
+            'SHFE': 113,
+            'DCE': 114,
+            'CZCE': 115,
+            'GFEX': 225,
+            'INE': 142,
+            'CFFEX': 220
+        };
+
+        const chart = echarts.init(document.getElementById('chart'));
+
+        async function fetchVarieties() {
+            try {
+                const response = await fetch('https://q.want.biz/');
+                const data = await response.json();
+                
+                // 按交易所和品种代码分组
+                const groupedData = {};
+                data.list.forEach(item => {
+                    const [exchange, code] = item.uid.split('|');
+                    const variety = code.replace(/\d+/g, '');
+                    
+                    if (!groupedData[exchange]) {
+                        groupedData[exchange] = new Set();
+                    }
+                    groupedData[exchange].add({
+                        code: variety,
+                        name: item.name.replace(/\d+/g, '')
+                    });
+                });
+
+                // 填充选择框
+                const select = document.getElementById('varietySelect');
+                Object.entries(groupedData).forEach(([exchange, varieties]) => {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = exchange;
+                    
+                    varieties.forEach(variety => {
+                        const option = document.createElement('option');
+                        option.value = `${EXCHANGE_MAP[exchange]}_${variety.code}`;
+                        option.textContent = variety.name;
+                        optgroup.appendChild(option);
+                    });
+                    
+                    select.appendChild(optgroup);
+                });
+            } catch (error) {
+                console.error('Error fetching varieties:', error);
+            }
+        }
+
+        async function fetchContracts(variety) {
+            try {
+                const response = await fetch(`http://futsse-static.eastmoney.com/redis?msgid=${variety}`);
+                const data = await response.json();
+                
+                return data
+                    .filter(item => /\d+/.test(item.code)) // 过滤掉全字母代码
+                    .map(item => `${item.mktid}_${item.code}`);
+            } catch (error) {
+                console.error('Error fetching contracts:', error);
+                return [];
+            }
+        }
+
+        async function fetchPrices(contracts) {
+            try {
+                const response = await fetch(`http://futsse.eastmoney.com/list/custom/${contracts.join(',')}`);
+                const data = await response.json();
+                return data.list;
+            } catch (error) {
+                console.error('Error fetching prices:', error);
+                return [];
+            }
+        }
+
+        function updateChart(data) {
+            const option = {
+                title: {
+                    text: '期货合约升贴水',
+                    left: 'center'
+                },
+                tooltip: {
+                    trigger: 'axis'
+                },
+                xAxis: {
+                    type: 'category',
+                    data: data.map(item => item.name)
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '价格'
+                },
+                series: [{
+                    data: data.map(item => item.p),
+                    type: 'line'
+                }]
+            };
+            
+            chart.setOption(option);
+        }
+
+        document.getElementById('varietySelect').addEventListener('change', async (e) => {
+            const variety = e.target.value;
+            if (!variety) return;
+
+            document.querySelector('.loading').style.display = 'block';
+            
+            const contracts = await fetchContracts(variety);
+            const prices = await fetchPrices(contracts);
+            
+            updateChart(prices);
+            
+            document.querySelector('.loading').style.display = 'none';
+        });
+
+        // 初始化
+        fetchVarieties();
+
+        // 响应窗口调整
+        window.addEventListener('resize', () => chart.resize());
+    </script>
+</body>
+</html>
