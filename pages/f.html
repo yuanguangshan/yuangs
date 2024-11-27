@@ -60,7 +60,6 @@
             background: #f5f5f5;
             border-radius: 4px;
             padding: 15px;
-            overflow-x: auto;
         }
 
         table {
@@ -83,10 +82,6 @@
 
         tr:hover {
             background-color: #f5f5f5;
-        }
-
-        td.percentage {
-            text-align: right;
         }
 
         #chartContainer {
@@ -120,9 +115,7 @@
                             <th>合约</th>
                             <th>最新价(p)</th>
                             <th>成交量(vol)</th>
-                            <th>成交量占比</th>
                             <th>持仓量(ccl)</th>
-                            <th>持仓量占比</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -146,18 +139,85 @@
             'CFFEX': 220
         };
 
-        function calculatePercentages(prices) {
-            const totalVol = prices.reduce((sum, item) => sum + (item.vol || 0), 0);
-            const totalCcl = prices.reduce((sum, item) => sum + (item.ccl || 0), 0);
+        async function fetchVarieties() {
+            try {
+                const response = await fetch('https://q.want.biz/');
+                const data = await response.json();
+                
+                const groupedData = {};
+                data.list.forEach(item => {
+                    const [exchange, code] = item.uid.split('|');
+                    const variety = code.replace(/\d+/g, '');
+                    
+                    if (!groupedData[exchange]) {
+                        groupedData[exchange] = new Set();
+                    }
+                    groupedData[exchange].add({
+                        code: variety,
+                        name: item.name.replace(/\d+/g, '')
+                    });
+                });
 
-            return prices.map(item => ({
-                ...item,
-                volPercentage: totalVol ? ((item.vol || 0) / totalVol * 100).toFixed(2) : '0.00',
-                cclPercentage: totalCcl ? ((item.ccl || 0) / totalCcl * 100).toFixed(2) : '0.00'
-            }));
+                const select = document.getElementById('varietySelect');
+                Object.entries(groupedData).forEach(([exchange, varieties]) => {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = exchange;
+                    
+                    varieties.forEach(variety => {
+                        const option = document.createElement('option');
+                        option.value = `${EXCHANGE_MAP[exchange]}_${variety.code}`;
+                        option.textContent = variety.name;
+                        optgroup.appendChild(option);
+                    });
+                    
+                    select.appendChild(optgroup);
+                });
+            } catch (error) {
+                console.error('Error fetching varieties:', error);
+            }
         }
 
-        // [前面的 fetchVarieties, fetchContracts, fetchPrices 函数保持不变]
+        async function fetchContracts(variety) {
+            try {
+                const response = await fetch(`https://q.889.ink/redis?msgid=${variety}`);
+                const data = await response.json();
+                
+                return data
+                    .filter(item => /\d+/.test(item.code))
+                    .map(item => `${item.mktid}_${item.code}`);
+            } catch (error) {
+                console.error('Error fetching contracts:', error);
+                return [];
+            }
+        }
+
+        async function fetchPrices(contracts) {
+            try {
+                console.log('Fetching prices for contracts:', contracts);
+                const response = await fetch(`https://q.889.ink/custom/${contracts.join(',')}?orderBy=zdf&sort=asc&pageSize=100&pageIndex=0&callbackName=`);
+                const text = await response.text();
+                console.log('Raw response:', text);
+                
+                const jsonStr = text.replace(/^[^({]*\(|\)[^}]*$/g, '');
+                console.log('Processed JSON string:', jsonStr);
+                
+                try {
+                    const data = JSON.parse(jsonStr);
+                    console.log('Parsed data:', data);
+                    if (data && Array.isArray(data.list)) {
+                        return data.list;
+                    }
+                    return [];
+                } catch (parseError) {
+                    console.error('Error parsing JSON:', parseError);
+                    console.log('Problematic JSON string:', jsonStr);
+                    return [];
+                }
+            } catch (error) {
+                console.error('Error fetching prices:', error);
+                return [];
+            }
+        }
 
         function updatePriceTable(prices) {
             const tbody = document.querySelector('#priceData tbody');
@@ -165,22 +225,18 @@
             
             if (!Array.isArray(prices) || prices.length === 0) {
                 const row = document.createElement('tr');
-                row.innerHTML = '<td colspan="6" style="text-align: center;">暂无数据</td>';
+                row.innerHTML = '<td colspan="4" style="text-align: center;">暂无数据</td>';
                 tbody.appendChild(row);
                 return;
             }
 
-            const pricesWithPercentages = calculatePercentages(prices);
-
-            pricesWithPercentages.forEach(item => {
+            prices.forEach(item => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>${item.name || '-'}</td>
                     <td>${item.p || '-'}</td>
                     <td>${item.vol || 0}</td>
-                    <td class="percentage">${item.volPercentage}%</td>
                     <td>${item.ccl || 0}</td>
-                    <td class="percentage">${item.cclPercentage}%</td>
                 `;
                 tbody.appendChild(row);
             });
@@ -200,12 +256,6 @@
             
             const sortedPrices = sortContracts(prices);
             
-            // 计算价格的最大最小值，用于设置y轴范围
-            const priceValues = sortedPrices.map(item => Number(item.p) || 0).filter(p => p > 0);
-            const minPrice = Math.min(...priceValues);
-            const maxPrice = Math.max(...priceValues);
-            const pricePadding = (maxPrice - minPrice) * 0.1; // 上下留出10%的空间
-
             const option = {
                 title: {
                     text: '期货合约价格与交易数据',
@@ -215,19 +265,6 @@
                     trigger: 'axis',
                     axisPointer: {
                         type: 'cross'
-                    },
-                    formatter: function(params) {
-                        let result = `${params[0].name}<br/>`;
-                        params.forEach(param => {
-                            let value = param.value;
-                            if (param.seriesName === '价格') {
-                                value = value.toFixed(2);
-                            } else {
-                                value = value.toLocaleString();
-                            }
-                            result += `${param.marker} ${param.seriesName}: ${value}<br/>`;
-                        });
-                        return result;
                     }
                 },
                 legend: {
@@ -247,7 +284,7 @@
                 xAxis: [{
                     type: 'category',
                     data: sortedPrices.map(item => item.name),
-                    axisLine: { onZero: false },
+                    axisLine: { onZero: true },
                     grid: { top: '50%' }
                 }, {
                     type: 'category',
@@ -258,14 +295,8 @@
                 yAxis: [{
                     name: '价格',
                     type: 'value',
-                    scale: true,
-                    min: Math.max(0, minPrice - pricePadding),
-                    max: maxPrice + pricePadding,
                     splitLine: {
                         show: true
-                    },
-                    axisLabel: {
-                        formatter: '{value}'
                     }
                 }, {
                     gridIndex: 1,
@@ -285,10 +316,7 @@
                     },
                     itemStyle: {
                         color: '#5470c6'
-                    },
-                    symbol: 'circle',
-                    symbolSize: 6,
-                    connectNulls: true
+                    }
                 }, {
                     name: '成交量',
                     type: 'bar',
