@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>期货合约升贴水展示</title>
+    <title>期货合约列表</title>
     <style>
         * {
             margin: 0;
@@ -14,16 +14,11 @@
         body {
             font-family: Arial, sans-serif;
             padding: 20px;
-            background-color: #f5f5f5;
         }
 
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
         .select-area {
@@ -34,14 +29,23 @@
             padding: 8px;
             font-size: 14px;
             min-width: 200px;
-            border-radius: 4px;
-            border: 1px solid #ddd;
         }
 
-        #chart {
-            width: 100%;
-            height: 600px;
-            border: 1px solid #ddd;
+        .data-section {
+            margin-bottom: 20px;
+        }
+
+        .data-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        #contractList, #priceData {
+            font-family: monospace;
+            padding: 15px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            background: #f5f5f5;
             border-radius: 4px;
         }
 
@@ -49,30 +53,6 @@
             display: none;
             text-align: center;
             padding: 20px;
-            font-size: 16px;
-            color: #666;
-        }
-
-        .error-message {
-            color: #ff4444;
-            text-align: center;
-            padding: 10px;
-            display: none;
-        }
-
-        .retry-button {
-            display: none;
-            margin: 10px auto;
-            padding: 8px 16px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .retry-button:hover {
-            background-color: #45a049;
         }
     </style>
 </head>
@@ -81,90 +61,70 @@
         <div class="select-area">
             <select id="varietySelect">
                 <option value="">请选择品种</option>
-                <option value="113_fu">燃料油</option>
-                <option value="113_bu">沥青</option>
-                <option value="113_ru">天然橡胶</option>
-                <option value="113_au">黄金</option>
-                <option value="113_ag">白银</option>
-                <option value="113_cu">铜</option>
-                <option value="113_al">铝</option>
-                <option value="113_zn">锌</option>
-                <option value="113_pb">铅</option>
-                <option value="113_ni">镍</option>
-                <option value="113_sn">锡</option>
-                <option value="114_m">豆粕</option>
-                <option value="114_y">豆油</option>
-                <option value="114_a">黄大豆1号</option>
-                <option value="114_b">黄大豆2号</option>
-                <option value="114_p">棕榈油</option>
-                <option value="114_c">玉米</option>
-                <option value="114_cs">玉米淀粉</option>
-                <option value="114_jd">鸡蛋</option>
-                <option value="115_CF">棉花</option>
-                <option value="115_SR">白糖</option>
-                <option value="115_TA">PTA</option>
-                <option value="115_OI">菜油</option>
-                <option value="115_MA">甲醇</option>
             </select>
         </div>
         <div class="loading">加载中...</div>
-        <div class="error-message"></div>
-        <button class="retry-button">重试</button>
-        <div id="chart"></div>
+        <div class="data-section">
+            <div class="data-title">合约列表：</div>
+            <div id="contractList"></div>
+        </div>
+        <div class="data-section">
+            <div class="data-title">价格数据：</div>
+            <div id="priceData"></div>
+        </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <script>
-        const chart = echarts.init(document.getElementById('chart'));
-        const errorDiv = document.querySelector('.error-message');
-        const loadingDiv = document.querySelector('.loading');
-        const retryButton = document.querySelector('.retry-button');
+        const EXCHANGE_MAP = {
+            'SHFE': 113,
+            'DCE': 114,
+            'CZCE': 115,
+            'GFEX': 225,
+            'INE': 142,
+            'CFFEX': 220
+        };
 
-        function showLoading() {
-            loadingDiv.style.display = 'block';
-            errorDiv.style.display = 'none';
-            retryButton.style.display = 'none';
-        }
+        async function fetchVarieties() {
+            try {
+                const response = await fetch('https://q.want.biz/');
+                const data = await response.json();
+                
+                const groupedData = {};
+                data.list.forEach(item => {
+                    const [exchange, code] = item.uid.split('|');
+                    const variety = code.replace(/\d+/g, '');
+                    
+                    if (!groupedData[exchange]) {
+                        groupedData[exchange] = new Set();
+                    }
+                    groupedData[exchange].add({
+                        code: variety,
+                        name: item.name.replace(/\d+/g, '')
+                    });
+                });
 
-        function hideLoading() {
-            loadingDiv.style.display = 'none';
-        }
-
-        function showError(message) {
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-            retryButton.style.display = 'block';
-            hideLoading();
-        }
-
-        async function fetchWithRetry(url, options = {}, retries = 3) {
-            for (let i = 0; i < retries; i++) {
-                try {
-                    const response = await fetch(url, {
-                        ...options,
-                        headers: {
-                            'Accept': 'application/json',
-                            'Cache-Control': 'no-cache',
-                            ...options.headers
-                        }
+                const select = document.getElementById('varietySelect');
+                Object.entries(groupedData).forEach(([exchange, varieties]) => {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = exchange;
+                    
+                    varieties.forEach(variety => {
+                        const option = document.createElement('option');
+                        option.value = `${EXCHANGE_MAP[exchange]}_${variety.code}`;
+                        option.textContent = variety.name;
+                        optgroup.appendChild(option);
                     });
                     
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    
-                    return response;
-                } catch (error) {
-                    if (i === retries - 1) throw error;
-                    await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-                }
+                    select.appendChild(optgroup);
+                });
+            } catch (error) {
+                console.error('Error fetching varieties:', error);
             }
         }
 
         async function fetchContracts(variety) {
             try {
-                const [exchangeId, code] = variety.split('_');
-                const response = await fetchWithRetry(`https://q.889.ink/redis?msgid=${exchangeId}_${code}`);
+                const response = await fetch(`https://q.889.ink/redis?msgid=${variety}`);
                 const data = await response.json();
                 
                 return data
@@ -172,177 +132,53 @@
                     .map(item => `${item.mktid}_${item.code}`);
             } catch (error) {
                 console.error('Error fetching contracts:', error);
-                showError('获取合约列表失败，请重试');
                 return [];
             }
         }
 
         async function fetchPrices(contracts) {
             try {
-                const response = await fetchWithRetry(`https://q.889.ink/custom/${contracts.join(',')}`);
+                const response = await fetch(`http://futsse.eastmoney.com/list/custom/${contracts.join(',')}?orderBy=zdf&sort=asc&pageSize=100&pageIndex=0&callbackName=`);
                 const text = await response.text();
                 
-                // 检查是否是错误响应
-                if (text.includes('error code:')) {
-                    throw new Error('API返回错误: ' + text);
-                }
-
-                const jsonStr = text.replace(/^\(/, '').replace(/\)$/, '');
-                const data = JSON.parse(jsonStr);
+                const jsonStr = text.replace(/^\w+\(|\)$/g, '');
                 
-                if (!data || !data.list || data.list.length === 0) {
-                    throw new Error('没有获取到价格数据');
+                try {
+                    const data = JSON.parse(jsonStr);
+                    return data.list || [];
+                } catch (parseError) {
+                    console.error('Error parsing JSON:', parseError);
+                    return [];
                 }
-                
-                return data.list;
             } catch (error) {
                 console.error('Error fetching prices:', error);
-                showError('获取价格数据失败，请重试');
                 return [];
             }
         }
 
-        function updateChart(data) {
-            const chartData = Array.isArray(data) ? data : [];
-            
-            if (chartData.length === 0) {
-                showError('没有数据可显示');
+        document.getElementById('varietySelect').addEventListener('change', async (e) => {
+            const variety = e.target.value;
+            if (!variety) {
+                document.getElementById('contractList').textContent = '';
+                document.getElementById('priceData').textContent = '';
                 return;
             }
 
-            // 按合约月份排序
-            chartData.sort((a, b) => {
-                const monthA = parseInt(a.dm.replace(/[^\d]/g, ''));
-                const monthB = parseInt(b.dm.replace(/[^\d]/g, ''));
-                return monthA - monthB;
-            });
-
-            const option = {
-                title: {
-                    text: '期货合约升贴水',
-                    left: 'center',
-                    top: 10
-                },
-                tooltip: {
-                    trigger: 'axis',
-                    formatter: function(params) {
-                        const item = chartData[params[0].dataIndex];
-                        return `${item.name}<br/>
-                               最新价：${item.zjsj}<br/>
-                               涨跌幅：${item.zdf}%<br/>
-                               成交量：${item.vol}<br/>
-                               持仓量：${item.ccl}`;
-                    }
-                },
-                grid: {
-                    left: '5%',
-                    right: '5%',
-                    bottom: '15%',
-                    containLabel: true
-                },
-                xAxis: {
-                    type: 'category',
-                    data: chartData.map(item => item.name),
-                    axisLabel: {
-                        interval: 0,
-                        rotate: 45
-                    }
-                },
-                yAxis: {
-                    type: 'value',
-                    name: '价格',
-                    scale: true,
-                    splitLine: {
-                        show: true,
-                        lineStyle: {
-                            type: 'dashed'
-                        }
-                    }
-                },
-                series: [{
-                    name: '价格',
-                    data: chartData.map(item => item.zjsj),
-                    type: 'line',
-                    smooth: true,
-                    symbol: 'circle',
-                    symbolSize: 8,
-                    label: {
-                        show: true,
-                        position: 'top',
-                        formatter: '{c}'
-                    },
-                    itemStyle: {
-                        color: '#5470c6'
-                    },
-                    markPoint: {
-                        data: [
-                            {type: 'max', name: '最高值'},
-                            {type: 'min', name: '最低值'}
-                        ]
-                    }
-                }],
-                dataZoom: [{
-                    type: 'inside',
-                    start: 0,
-                    end: 100
-                }, {
-                    type: 'slider',
-                    start: 0,
-                    end: 100
-                }],
-                toolbox: {
-                    feature: {
-                        saveAsImage: {},
-                        dataZoom: {},
-                        restore: {}
-                    }
-                }
-            };
+            document.querySelector('.loading').style.display = 'block';
             
-            chart.setOption(option);
-        }
-
-        let currentVariety = '';
-
-        async function loadData() {
-            if (!currentVariety) return;
+            const contracts = await fetchContracts(variety);
+            document.getElementById('contractList').textContent = 
+                `[${contracts.map(c => c.split('_')[1]).join(',')}]`;
             
-            showLoading();
+            const prices = await fetchPrices(contracts);
+            document.getElementById('priceData').textContent = 
+                JSON.stringify(prices, null, 2);
             
-            try {
-                const contracts = await fetchContracts(currentVariety);
-                if (contracts.length === 0) {
-                    showError('没有可用的合约数据');
-                    return;
-                }
-
-                const prices = await fetchPrices(contracts);
-                if (prices.length === 0) {
-                    showError('没有可用的价格数据');
-                    return;
-                }
-
-                updateChart(prices);
-                hideLoading();
-            } catch (error) {
-                showError('数据加载失败，请重试');
-            }
-        }
-
-        document.getElementById('varietySelect').addEventListener('change', (e) => {
-            currentVariety = e.target.value;
-            if (!currentVariety) return;
-            loadData();
+            document.querySelector('.loading').style.display = 'none';
         });
 
-        retryButton.addEventListener('click', () => {
-            if (currentVariety) {
-                loadData();
-            }
-        });
-
-        // 响应窗口调整
-        window.addEventListener('resize', () => chart.resize());
+        // 初始化
+        fetchVarieties();
     </script>
 </body>
 </html>
