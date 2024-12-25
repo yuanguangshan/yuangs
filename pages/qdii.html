@@ -104,7 +104,7 @@
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 20px;
-            margin-bottom: 30px;
+            margin-bottom: 20px; /* Reduced margin */
         }
 
         .info-card {
@@ -112,6 +112,7 @@
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 0px; /* Added margin to separate from the table */
         }
 
         .info-label {
@@ -164,10 +165,23 @@
             background-color: #fafafa;
             font-weight: bold;
             color: #666;
+            cursor: pointer;
+        }
+
+        .data-table th:hover {
+            background-color: #f0f0f0;
         }
 
         .data-table tr:last-child td {
             border-bottom: none;
+        }
+
+        .data-table tbody tr:hover {
+            background-color: #f5f9ff;
+        }
+
+        .data-table tr.selected {
+            background-color: #f0f7ff;
         }
 
         .refresh-button {
@@ -190,29 +204,8 @@
             background-color: #3a8ee6;
         }
 
-        .charts-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .chart-card {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .chart-title {
-            font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 15px;
-            color: #333;
-        }
-
         .fund-list-table {
-            margin-bottom: 30px;
+            margin-top: 20px; /* Added margin */
         }
 
         @media (max-width: 768px) {
@@ -220,13 +213,93 @@
                 grid-template-columns: 1fr;
             }
 
-            .charts-container {
-                grid-template-columns: 1fr;
-            }
-
             .info-value {
                 font-size: 20px;
             }
+        }
+
+        .sort-indicator {
+            display: inline-block;
+            width: 0;
+            height: 0;
+            margin-left: 5px;
+            vertical-align: middle;
+        }
+
+        .sort-indicator.asc {
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-bottom: 4px solid #666;
+        }
+
+        .sort-indicator.desc {
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-top: 4px solid #666;
+        }
+
+        .sticky-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: white;
+            z-index: 100;
+            padding-top: 10px;
+            padding-bottom: 10px;
+        }
+
+        .sticky-header .container {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .sticky-header .info-card {
+            margin-bottom: 0;
+        }
+
+        .content-wrapper {
+            padding-top: 120px; /* Adjust this value based on the height of your sticky header */
+        }
+
+        .fund-header-sticky {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 1200px; /* Or the max-width of your .container */
+            z-index: 101; /* Ensure it's above other fixed elements */
+            background: white;
+            padding: 10px 20px;
+            border-radius: 0 0 8px 8px; /* Optional: if you want rounded corners at the bottom */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Optional: adds a subtle shadow */
+        }
+
+        .fund-header-sticky .fund-title-container {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+
+        .fund-header-sticky .fund-title {
+            font-size: 18px; /* Adjust size as needed */
+            font-weight: bold;
+            color: #333;
+        }
+
+        .fund-header-sticky .fund-code {
+            color: #666;
+            font-size: 14px; /* Adjust size as needed */
+        }
+
+        .fund-header-sticky .fund-manager {
+            color: #666;
+            font-size: 12px; /* Adjust size as needed */
         }
     </style>
 </head>
@@ -234,97 +307,76 @@
     <div id="loadingOverlay" class="loading-overlay" style="display: none;">
         <div class="loading-spinner"></div>
     </div>
-
-    <div class="container">
-        <button class="refresh-button" onclick="loadFundData()">
-            刷新数据
-        </button>
-
-        <div class="data-table fund-list-table">
-            <h2>基金列表</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>代码</th>
-                        <th>名称</th>
-                        <th>最新净值</th>
-                        <th>涨跌幅</th>
-                        <th>更新时间</th>
-                    </tr>
-                </thead>
-                <tbody id="fundListTable">
-                    <!-- 基金列表将通过JavaScript动态填充 -->
-                </tbody>
-            </table>
+    <div class="sticky-header" id="stickyHeader" style="display: none;">
+        <div class="container">
         </div>
-
-        <div class="fund-header">
-            <div class="fund-title-container">
-                <h1 class="fund-title" id="fundName"></h1>
-                <span class="fund-code" id="fundCode"></span>
-            </div>
-            <div class="fund-manager" id="fundManager"></div>
+    </div>
+    <div class="fund-header-sticky" id="fundHeaderSticky" style="display: none;">
+        <div class="fund-title-container">
+            <h1 class="fund-title" id="fundNameSticky"></h1>
+            <span class="fund-code" id="fundCodeSticky"></span>
         </div>
+        <div class="fund-manager" id="fundManagerSticky"></div>
+    </div>
 
-        <div class="key-info">
-            <div class="info-card">
-                <div class="info-label">最新净值</div>
-                <div class="info-value" id="price"></div>
-                <div class="info-sublabel" id="priceDate"></div>
+    <div class="content-wrapper">
+        <div class="container">
+            <button class="refresh-button" onclick="loadFundData()">
+                刷新数据
+            </button>
+
+            <div class="fund-header">
+                <div class="fund-title-container">
+                    <h1 class="fund-title" id="fundName"></h1>
+                    <span class="fund-code" id="fundCode"></span>
+                </div>
+                <div class="fund-manager" id="fundManager"></div>
             </div>
 
-            <div class="info-card">
-                <div class="info-label">涨跌幅</div>
-                <div class="info-value" id="increaseRt"></div>
-                <div class="info-sublabel">日增长率</div>
+            <div class="key-info" id="keyInfo">
+                <div class="info-card">
+                    <div class="info-label">最新净值</div>
+                    <div class="info-value" id="price"></div>
+                    <div class="info-sublabel" id="priceDate"></div>
+                </div>
+
+                <div class="info-card">
+                    <div class="info-label">涨跌幅</div>
+                    <div class="info-value" id="increaseRt"></div>
+                    <div class="info-sublabel">日增长率</div>
+                </div>
+
+                <div class="info-card">
+                    <div class="info-label">成交量</div>
+                    <div class="info-value" id="volume"></div>
+                    <div class="info-sublabel" id="stockVolume"></div>
+                </div>
             </div>
 
-            <div class="info-card">
-                <div class="info-label">成交量</div>
-                <div class="info-value" id="volume"></div>
-                <div class="info-sublabel" id="stockVolume"></div>
-            </div>
-
-            <div class="info-card">
-                <div class="info-label">基金类型</div>
-                <div class="info-value" id="fundType"></div>
-                <div class="info-sublabel" id="assetRatio"></div>
-            </div>
-        </div>
-
-        <div class="data-table">
-            <table>
-                <thead>
-                    <tr>
-                        <th>指标</th>
-                        <th>数值</th>
-                        <th>更新时间</th>
-                    </tr>
-                </thead>
-                <tbody id="detailsTable">
-                    <!-- 将通过JavaScript动态填充 -->
-                </tbody>
-            </table>
-        </div>
-
-        <div class="charts-container">
-            <div class="chart-card">
-                <div class="chart-title">净值走势</div>
-                <canvas id="navChart"></canvas>
-            </div>
-            <div class="chart-card">
-                <div class="chart-title">成交量分析</div>
-                <canvas id="volumeChart"></canvas>
+            <div class="data-table fund-list-table">
+                <h2>QDII基金列表</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th onclick="sortTable(0)">代码 <span class="sort-indicator"></span></th>
+                            <th onclick="sortTable(1)">名称 <span class="sort-indicator"></span></th>
+                            <th onclick="sortTable(2)">最新净值 <span class="sort-indicator"></span></th>
+                            <th onclick="sortTable(3)">涨跌幅 <span class="sort-indicator"></span></th>
+                            <th onclick="sortTable(4)">更新时间 <span class="sort-indicator"></span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="fundListTable">
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        let navChart = null;
-        let volumeChart = null;
-
-        const FUND_ID_TO_TRACK = '159660'; // 指定要跟踪的基金代码
+        let currentSortColumn = null;
+        let isAscending = true;
+        let FUND_ID_TO_TRACK = '159660';
+        let isHeaderSticky = false;
 
         function showLoading() {
             document.getElementById('loadingOverlay').style.display = 'flex';
@@ -361,85 +413,158 @@
             return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
         }
 
+        function updateSortIndicators(columnIndex) {
+            const indicators = document.querySelectorAll('.sort-indicator');
+            indicators.forEach((indicator, index) => {
+                if (index === columnIndex) {
+                    indicator.className = 'sort-indicator ' + (isAscending ? 'asc' : 'desc');
+                } else {
+                    indicator.className = 'sort-indicator';
+                }
+            });
+        }
+
+        function sortTable(column) {
+            const fundListTable = document.getElementById('fundListTable');
+            const rows = Array.from(fundListTable.getElementsByTagName('tr'));
+            
+            if (currentSortColumn === column) {
+                isAscending = !isAscending;
+            } else {
+                isAscending = true;
+                currentSortColumn = column;
+            }
+
+            updateSortIndicators(column);
+
+            rows.sort((a, b) => {
+                let aVal = a.cells[column].textContent;
+                let bVal = b.cells[column].textContent;
+                
+                if (column === 2 || column === 3) { // 净值和涨跌幅列
+                    aVal = parseFloat(aVal.replace('%', ''));
+                    bVal = parseFloat(bVal.replace('%', ''));
+                }
+                
+                if (aVal < bVal) return isAscending ? -1 : 1;
+                if (aVal > bVal) return isAscending ? 1 : -1;
+                return 0;
+            });
+
+            rows.forEach(row => fundListTable.appendChild(row));
+        }
+
+        function updateFundDetails(fundData) {
+            // Update the main fund header
+            document.getElementById('fundName').textContent = fundData.fund_nm;
+            document.getElementById('fundCode').textContent = fundData.fund_id;
+            document.getElementById('fundManager').textContent = `基金管理人: ${fundData.issuer_nm}`;
+            document.getElementById('price').textContent = fundData.price;
+            document.getElementById('priceDate').textContent = `更新时间: ${fundData.price_dt}`;
+            const increaseRtElement = document.getElementById('increaseRt');
+            increaseRtElement.textContent = fundData.increase_rt;
+            increaseRtElement.className = parseFloat(fundData.increase_rt) >= 0 ? 'info-value increase' : 'info-value decrease';
+            document.getElementById('volume').textContent = `${(parseFloat(fundData.volume) / 10000).toFixed(2)}万`;
+            document.getElementById('stockVolume').textContent = `股票成交量: ${(parseFloat(fundData.stock_volume) / 10000).toFixed(2)}万`;
+
+            // Update the sticky fund header
+            document.getElementById('fundNameSticky').textContent = fundData.fund_nm;
+            document.getElementById('fundCodeSticky').textContent = fundData.fund_id;
+            document.getElementById('fundManagerSticky').textContent = `基金管理人: ${fundData.issuer_nm}`;
+        }
+
         function updateFundListTable(allFundData) {
             const fundListTable = document.getElementById('fundListTable');
-            fundListTable.innerHTML = ''; // 清空表格
+            fundListTable.innerHTML = '';
 
             allFundData.forEach(fund => {
                 const row = fundListTable.insertRow();
+                row.style.cursor = 'pointer';
                 
-                // 创建一个链接元素，将 fund_id 放入 URL 中
-                const fundLink = document.createElement('a');
-                fundLink.href = `https://fund.eastmoney.com/${fund.cell.fund_id}.html`;
-                fundLink.textContent = fund.cell.fund_id; // 将 fund_id 显示为链接文本
-                fundLink.target = "_blank"; // 在新标签页打开链接
+                if (fund.cell.fund_id === FUND_ID_TO_TRACK) {
+                    row.classList.add('selected');
+                }
                 
-                // 将 fund_id 的链接插入表格
-                row.insertCell().appendChild(fundLink);
+                row.onclick = () => {
+                    FUND_ID_TO_TRACK = fund.cell.fund_id;
+                    document.querySelectorAll('#fundListTable tr').forEach(r => {
+                        r.classList.remove('selected');
+                    });
+                    row.classList.add('selected');
+                    updateFundDetails(fund.cell);
+                };
                 
-                // 插入其他数据
+                row.insertCell().textContent = fund.cell.fund_id;
                 row.insertCell().textContent = fund.cell.fund_nm;
                 row.insertCell().textContent = fund.cell.price;
                 row.insertCell().textContent = fund.cell.increase_rt;
                 row.insertCell().textContent = fund.cell.price_dt;
             });
-            
-        }
-        
-        function getLocalData(fundId) {
-            const storedData = localStorage.getItem(fundId);
-            return storedData ? JSON.parse(storedData) : { nav: [], volume: [], dates: [] };
-        }
 
-        function setLocalData(fundId, data) {
-            localStorage.setItem(fundId, JSON.stringify(data));
-        }
-        
-        function updateCharts(fundId) {
-            const localData = getLocalData(fundId);
-
-            // 净值走势图
-            if (navChart) {
-                navChart.destroy();
+            if (currentSortColumn !== null) {
+                sortTable(currentSortColumn);
             }
-            const navCtx = document.getElementById('navChart').getContext('2d');
-            navChart = new Chart(navCtx, {
-                type: 'line',
-                data: {
-                    labels: localData.dates,
-                    datasets: [{
-                        label: '单位净值',
-                        data: localData.nav,
-                        borderColor: 'rgb(75, 192, 192)',
-                        tension: 0.1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false
-                }
-            });
+        }
 
-            // 成交量分析图
-            if (volumeChart) {
-                volumeChart.destroy();
-            }
-            const volumeCtx = document.getElementById('volumeChart').getContext('2d');
-            volumeChart = new Chart(volumeCtx, {
-                type: 'bar',
-                data: {
-                    labels: localData.dates,
-                    datasets: [{
-                        label: '成交量',
-                        data: localData.volume,
-                        backgroundColor: 'rgba(54, 162, 235, 0.5)'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false
+        function cloneAndAttachStickyHeader(fundData) {
+            const keyInfo = document.getElementById('keyInfo');
+            const stickyHeader = document.getElementById('stickyHeader');
+            const fundHeader = document.getElementsByClassName('fund-header')[0];
+            stickyHeader.innerHTML = '';
+
+            // Clone and append the fund header
+            const clonedFundHeader = fundHeader.cloneNode(true);
+            clonedFundHeader.classList.add('fund-header-sticky');
+            clonedFundHeader.setAttribute('id', 'fundHeaderSticky');
+            stickyHeader.appendChild(clonedFundHeader);
+
+            // Clone and append each info card to the sticky header
+            const clonedKeyInfo = keyInfo.cloneNode(true);
+            stickyHeader.appendChild(clonedKeyInfo);
+
+            // Update the cloned elements with the current fund data
+            clonedKeyInfo.querySelector('#price').textContent = fundData.price;
+            clonedKeyInfo.querySelector('#priceDate').textContent = `更新时间: ${fundData.price_dt}`;
+            const increaseRtElement = clonedKeyInfo.querySelector('#increaseRt');
+            increaseRtElement.textContent = fundData.increase_rt;
+            increaseRtElement.className = parseFloat(fundData.increase_rt) >= 0 ? 'info-value increase' : 'info-value decrease';
+            clonedKeyInfo.querySelector('#volume').textContent = `${(parseFloat(fundData.volume) / 10000).toFixed(2)}万`;
+            clonedKeyInfo.querySelector('#stockVolume').textContent = `股票成交量: ${(parseFloat(fundData.stock_volume) / 10000).toFixed(2)}万`;
+        }
+
+        function checkScroll() {
+            const stickyHeader = document.getElementById('stickyHeader');
+            const fundHeader = document.querySelector('.fund-header');
+            const keyInfo = document.getElementById('keyInfo');
+            const keyInfoRect = keyInfo.getBoundingClientRect();
+
+            if (keyInfoRect.top <= 0) {
+                if (!isHeaderSticky) {
+                    stickyHeader.style.display = 'block';
+                    // Only clone if it hasn't been cloned yet
+                    if (!document.getElementById('fundHeaderSticky')) {
+                        const fundData = {
+                            fund_nm: document.getElementById('fundName').textContent,
+                            fund_id: document.getElementById('fundCode').textContent,
+                            issuer_nm: document.getElementById('fundManager').textContent,
+                            price: document.getElementById('price').textContent,
+                            price_dt: document.getElementById('priceDate').textContent,
+                            increase_rt: document.getElementById('increaseRt').textContent,
+                            volume: document.getElementById('volume').textContent,
+                            stock_volume: document.getElementById('stockVolume').textContent
+                        };
+                        cloneAndAttachStickyHeader(fundData);
+                    }
+                    document.getElementById('fundHeaderSticky').style.display = 'block';
+                    isHeaderSticky = true;
                 }
-            });
+            } else {
+                if (isHeaderSticky) {
+                    stickyHeader.style.display = 'none';
+                    document.getElementById('fundHeaderSticky').style.display = 'none';
+                    isHeaderSticky = false;
+                }
+            }
         }
 
         async function loadFundData() {
@@ -449,68 +574,13 @@
                 const data = await response.json();
 
                 updateFundListTable(data.rows);
-
                 const fundData = data.rows.find(row => row.id === FUND_ID_TO_TRACK).cell;
-
-                // 更新本地存储的数据
-                let localData = getLocalData(FUND_ID_TO_TRACK);
-                const today = formatDate(new Date());
-
-                if (localData.dates.length === 0 || localData.dates[localData.dates.length - 1] !== today) {
-                  // 如果没有今天的日期，则添加
-                  localData.dates.push(today);
-                  localData.nav.push(parseFloat(fundData.price));
-                  localData.volume.push(parseFloat(fundData.volume));
-              
-                  // 保持数据长度不超过30天
-                  if (localData.dates.length > 30) {
-                      localData.dates.shift();
-                      localData.nav.shift();
-                      localData.volume.shift();
-                  }
-              
-                  setLocalData(FUND_ID_TO_TRACK, localData);
-                } else {
-                  // 如果有，则更新
-                  localData.nav[localData.nav.length - 1] = parseFloat(fundData.price);
-                  localData.volume[localData.volume.length - 1] = parseFloat(fundData.volume);
-                  setLocalData(FUND_ID_TO_TRACK, localData);
+                updateFundDetails(fundData);
+                
+                // Clone and attach the sticky header with the initial data
+                if (!isHeaderSticky) {
+                    cloneAndAttachStickyHeader(fundData);
                 }
-
-                // 更新详细信息
-                document.getElementById('fundName').textContent = fundData.fund_nm;
-                document.getElementById('fundCode').textContent = fundData.fund_id;
-                document.getElementById('fundManager').textContent = `基金管理人: ${fundData.issuer_nm}`;
-                document.getElementById('price').textContent = fundData.price;
-                document.getElementById('priceDate').textContent = `更新时间: ${fundData.price_dt}`;
-                const increaseRtElement = document.getElementById('increaseRt');
-                increaseRtElement.textContent = fundData.increase_rt;
-                increaseRtElement.className = parseFloat(fundData.increase_rt) >= 0 ? 'info-value increase' : 'info-value decrease';
-                document.getElementById('volume').textContent = `${(parseFloat(fundData.volume) / 10000).toFixed(2)}万`;
-                document.getElementById('stockVolume').textContent = `股票成交量: ${(parseFloat(fundData.stock_volume) / 10000).toFixed(2)}万`;
-                document.getElementById('fundType').textContent = fundData.lof_type;
-                document.getElementById('assetRatio').textContent = `资产比例: ${fundData.asset_ratio}%`;
-
-                const detailsTable = document.getElementById('detailsTable');
-                detailsTable.innerHTML = `
-                    <tr>
-                        <td>T+0交易</td>
-                        <td>${fundData.t0 === 'Y' ? '支持' : '不支持'}</td>
-                        <td>${fundData.price_dt}</td>
-                    </tr>
-                    <tr>
-                        <td>估算净值</td>
-                        <td>${fundData.estimate_value || '-'}</td>
-                        <td>${fundData.est_val_dt || '-'}</td>
-                    </tr>
-                    <tr>
-                        <td>溢价率</td>
-                        <td>${fundData.discount_rt || '-'}</td>
-                        <td>${fundData.last_est_dt || '-'}</td>
-                    </tr>
-                `;
-
-
 
                 showMessage('数据更新成功', 'success');
             } catch (error) {
@@ -528,6 +598,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadFundData();
             setupAutoRefresh();
+            window.addEventListener('scroll', checkScroll);
         });
     </script>
 </body>
