@@ -234,106 +234,119 @@
       // 获取前20条数据
       const top20Data = sortedData.slice(0, 20);
 
-// 渲染数据
-top20Data.forEach(row => {
-  const tr = document.createElement("tr");
-  for (const key in row) {
-    const td = document.createElement("td");
-    
-    // 检查字段是否为代码字段
-    if (key === "代码") { // 假设代码字段的键名为"代码"
-      const link = document.createElement("a");
-      const code = row[key]; // 获取代码
-      link.href = `https://fund.eastmoney.com/${code}.html`; // 创建链接
-      link.textContent = code; // 链接文本
-      td.appendChild(link); // 将链接添加到单元格中
-    } else {
-      td.textContent = row[key];
-    }
+      // 渲染数据
+      top20Data.forEach(row => {
+        const tr = document.createElement("tr");
+        for (const key in row) {
+          const td = document.createElement("td");
+          
+          // 检查字段是否为代码字段
+          if (key === "代码") { // 假设代码字段的键名为"代码"
+            const link = document.createElement("a");
+            const code = row[key]; // 获取代码
+            link.href = `https://fund.eastmoney.com/${code}.html`; // 创建链接
+            link.textContent = code; // 链接文本
+            td.appendChild(link); // 将链接添加到单元格中
+          } else {
+            td.textContent = row[key];
+          }
 
-    tr.appendChild(td);
-  }
-  top20Table.appendChild(tr);
-});
+          // 如果是涨幅列，添加 change 类
+          if (key === "涨幅") {
+            td.classList.add("change");
+          }
 
+          tr.appendChild(td);
+        }
+        top20Table.appendChild(tr);
+      });
 
+      // 获取所有涨幅列的单元格
+      const changeCells = document.querySelectorAll('.change');
 
+      // 遍历每个单元格
+      changeCells.forEach(cell => {
+          // 获取单元格的文本内容，并转换为数字
+          const changeValue = parseFloat(cell.textContent);
 
+          // 根据涨幅的正负设置颜色
+          if (changeValue > 0) {
+              cell.style.color = 'red';
+          } else if (changeValue < 0) {
+              cell.style.color = 'green';
+          }
+      });
 
       // 更新图表
       renderTop20Chart(top20Data);
     }
 
+    // 绘制 Top 20 图表
+    function renderTop20Chart(data) {
+      const chartDom = document.getElementById("chart-top20");
+      const chart = echarts.init(chartDom);
 
-// 绘制 Top 20 图表
+      // 根据数值决定颜色
+      const getColor = (value) => {
+        return value >= 0 ?  '#1ea54c' : '#da0e1c'
+      };
 
-function renderTop20Chart(data) {
-  const chartDom = document.getElementById("chart-top20");
-  const chart = echarts.init(chartDom);
+      const option = {
+        title: {
+          text: "Top 20 总规模及规模变化 (亿)",
+          left: "center",
+          textStyle: {
+            fontSize: 16
+          }
+        },
+        tooltip: {
+          trigger: "item",
+          formatter: "{b}: {c} 亿"
+        },
+        xAxis: {
+          type: "category",
+          data: data.map(item => item.名称),
+          axisLabel: {
+            interval: 0,
+            rotate: 30 // 旋转以避免重叠
+          }
+        },
+        yAxis: [
+          {
+            type: "value",
+            name: "总规模 (亿)",
+            position: "left",
+            color: "#0e15da"
+          },
+          {
+            type: "value",
+            name: "规模变化 (亿)",
+            position: "right",
+            color: "#f78c6b"
+          }
+        ],
+        series: [
+          {
+            data: data.map(item => item.总规模),
+            type: "bar",
+            yAxisIndex: 0,
+            itemStyle: {
+              color:"#0e82da" 
+            }
+          },
+          {
+            data: data.map(item => item.规模变化),
+            type: "bar",
+            yAxisIndex: 1,
+            itemStyle: {
+              color: (params) => getColor(params.value) // 动态设置颜色
+            }
+          }
+        ]
+      };
 
-  // 根据数值决定颜色
-  const getColor = (value) => {
-    return value >= 0 ?  '#1ea54c' : '#da0e1c'
-  };
-
-  const option = {
-    title: {
-      text: "Top 20 总规模及规模变化 (亿)",
-      left: "center",
-      textStyle: {
-        fontSize: 16
-      }
-    },
-    tooltip: {
-      trigger: "item",
-      formatter: "{b}: {c} 亿"
-    },
-    xAxis: {
-      type: "category",
-      data: data.map(item => item.名称),
-      axisLabel: {
-        interval: 0,
-        rotate: 30 // 旋转以避免重叠
-      }
-    },
-    yAxis: [
-      {
-        type: "value",
-        name: "总规模 (亿)",
-        position: "left",
-        color: "#0e15da"
-      },
-      {
-        type: "value",
-        name: "规模变化 (亿)",
-        position: "right",
-        color: "#f78c6b"
-      }
-    ],
-    series: [
-      {
-        data: data.map(item => item.总规模),
-        type: "bar",
-        yAxisIndex: 0,
-        itemStyle: {
-          color:"#0e82da" 
-        }
-      },
-      {
-        data: data.map(item => item.规模变化),
-        type: "bar",
-        yAxisIndex: 1,
-        itemStyle: {
-          color: (params) => getColor(params.value) // 动态设置颜色
-        }
-      }
-    ]
-  };
-
-  chart.setOption(option);
-}
-
-
+      chart.setOption(option);
+    }
 
     // 渲染类别统计结果
     function renderCategoryStatistics(data) {
@@ -384,7 +397,7 @@ function renderTop20Chart(data) {
       return chartData;
     }
 
-           // 绘制类别统计图表,@cursor edited
+    // 绘制类别统计图表,@cursor edited
     function renderCategoryChart(data) {
       const chartDom = document.getElementById("chart-category");
       const chart = echarts.init(chartDom);
