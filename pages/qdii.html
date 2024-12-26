@@ -134,7 +134,15 @@
         }
 
         .fund-list-table {
-            margin-top: 20px; /* Added margin */
+            margin-top: 20px;
+        }
+
+        .chart-container {
+            margin-top: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
         }
 
         @media (max-width: 768px) {
@@ -191,7 +199,7 @@
         }
 
         .content-wrapper {
-            padding-top: 70px; /* Adjust this value based on the height of your sticky header */
+            padding-top: 70px;
         }
 
         .fund-header-sticky {
@@ -200,12 +208,12 @@
             left: 50%;
             transform: translateX(-50%);
             width: 100%;
-            max-width: 1200px; /* Or the max-width of your .container */
-            z-index: 101; /* Ensure it's above other fixed elements */
+            max-width: 1200px;
+            z-index: 101;
             background: white;
             padding: 10px 20px;
-            border-radius: 0 0 8px 8px; /* Optional: if you want rounded corners at the bottom */
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Optional: adds a subtle shadow */
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
         .fund-header-sticky .fund-title-container {
@@ -216,31 +224,36 @@
         }
 
         .fund-header-sticky .fund-title {
-            font-size: 18px; /* Adjust size as needed */
+            font-size: 18px;
             font-weight: bold;
             color: #333;
         }
 
         .fund-header-sticky .fund-code {
             color: #666;
-            font-size: 14px; /* Adjust size as needed */
+            font-size: 14px;
         }
+
         .fund-header {
             display: none;
         }
+
         .key-info {
             display: none;
         }
+
         .fund-header-sticky .fund-manager {
             display: none;
         }
-        .sticky-header .container{
+
+        .sticky-header .container {
             display: flex;
             justify-content: space-between;
             align-items: center;
             max-width: 1200px;
             margin: 0 auto;
         }
+
         .info-card {
             background: white;
             padding: 10px;
@@ -260,6 +273,7 @@
             font-weight: bold;
             margin-bottom: 5px;
         }
+
         .increase {
             color: #f56c6c;
         }
@@ -302,14 +316,20 @@
                     </tbody>
                 </table>
             </div>
+
+            <div class="chart-container">
+                <div id="chart" style="width: 100%; height: 400px;"></div>
+            </div>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.3.2/dist/echarts.min.js"></script>
     <script>
         let currentSortColumn = null;
         let isAscending = true;
         let FUND_ID_TO_TRACK = '159660';
         let isHeaderSticky = false;
+        let chartInstance = null;
 
         function showLoading() {
             document.getElementById('loadingOverlay').style.display = 'flex';
@@ -360,49 +380,49 @@
         function sortTable(column) {
             const fundListTable = document.getElementById('fundListTable');
             const rows = Array.from(fundListTable.getElementsByTagName('tr'));
-        
+
             if (currentSortColumn === column) {
                 isAscending = !isAscending;
             } else {
                 isAscending = true;
                 currentSortColumn = column;
             }
-        
+
             updateSortIndicators(column);
-        
+
             rows.sort((a, b) => {
                 let aVal = a.cells[column].textContent;
                 let bVal = b.cells[column].textContent;
-        
-                // 将 "金额（万元）" 和 "份额（万份）" 列转换为数字
-                if (column === 4 || column === 5) { 
+
+                if (column === 4 || column === 5) {
                     aVal = parseFloat(aVal);
                     bVal = parseFloat(bVal);
-                } else if (column === 2 || column === 3) { // 净值和涨跌幅列
+                } else if (column === 2 || column === 3) {
                     aVal = parseFloat(aVal.replace('%', ''));
                     bVal = parseFloat(bVal.replace('%', ''));
                 }
-        
+
                 if (aVal < bVal) return isAscending ? -1 : 1;
                 if (aVal > bVal) return isAscending ? 1 : -1;
                 return 0;
             });
-        
+
             rows.forEach(row => fundListTable.appendChild(row));
+            updateChart();
         }
+
         function updateFundListTable(allFundData) {
             const fundListTable = document.getElementById('fundListTable');
-            fundListTable.innerHTML = ''; // 清空现有内容
-        
+            fundListTable.innerHTML = '';
+
             allFundData.forEach(fund => {
                 const row = fundListTable.insertRow();
                 row.style.cursor = 'pointer';
-                
+
                 if (fund.cell.fund_id === FUND_ID_TO_TRACK) {
                     row.classList.add('selected');
                 }
-                
-                // 处理点击事件，选中行并更新数据
+
                 row.onclick = () => {
                     FUND_ID_TO_TRACK = fund.cell.fund_id;
                     document.querySelectorAll('#fundListTable tr').forEach(r => {
@@ -412,55 +432,43 @@
                     const fundData = allFundData.find(f => f.cell.fund_id === FUND_ID_TO_TRACK).cell;
                     cloneAndAttachStickyHeader(fundData);
                 };
-                
-                // 插入 fund_id 链接
+
                 const fundIdCell = row.insertCell();
                 const fundIdLink = document.createElement('a');
-                fundIdLink.href = 'https://fund.eastmoney.com/' + fund.cell.fund_id + '.html'; // 构造 URL
-                fundIdLink.textContent = fund.cell.fund_id; // 显示 fund_id
-                fundIdCell.appendChild(fundIdLink); // 将链接添加到单元格中
-                
-                // 插入基金名称
+                fundIdLink.href = 'https://fund.eastmoney.com/' + fund.cell.fund_id + '.html';
+                fundIdLink.textContent = fund.cell.fund_id;
+                fundIdCell.appendChild(fundIdLink);
+
                 row.insertCell().textContent = fund.cell.fund_nm;
-        
-                // 插入价格
                 row.insertCell().textContent = fund.cell.price;
-        
-                // 插入涨跌幅，并根据正负值显示为红色或绿色
+
                 const increaseRtCell = row.insertCell();
                 increaseRtCell.textContent = fund.cell.increase_rt;
                 if (parseFloat(fund.cell.increase_rt) < 0) {
-                    increaseRtCell.style.color = 'green'; // 涨幅为正，显示绿色
+                    increaseRtCell.style.color = 'green';
                 } else if (parseFloat(fund.cell.increase_rt) > 0) {
-                    increaseRtCell.style.color = 'red'; // 跌幅为负，显示红色
+                    increaseRtCell.style.color = 'red';
                 } else {
-                    increaseRtCell.style.color = 'black'; // 无涨跌幅，默认黑色
+                    increaseRtCell.style.color = 'black';
                 }
-        
-                // 插入日期
+
                 row.insertCell().textContent = fund.cell.volume;
-                        
-                // 插入份额
                 row.insertCell().textContent = fund.cell.discount_rt;
             });
-        
-            // 如果存在排序列，进行排序
+
             if (currentSortColumn !== null) {
                 sortTable(currentSortColumn);
             }
         }
-        
-        
 
         function cloneAndAttachStickyHeader(fundData) {
             const stickyHeader = document.getElementById('stickyHeader');
-            stickyHeader.innerHTML = ''; // Clear existing content
+            stickyHeader.innerHTML = '';
 
             const headerContainer = document.createElement('div');
             headerContainer.classList.add('container');
             headerContainer.style.justifyContent = 'space-between';
 
-            // Fund name and code (left side)
             const fundTitleContainer = document.createElement('div');
             fundTitleContainer.classList.add('fund-title-container');
             fundTitleContainer.innerHTML = `
@@ -469,13 +477,11 @@
             `;
             headerContainer.appendChild(fundTitleContainer);
 
-            // Info cards (right side)
             const keyInfoContainer = document.createElement('div');
             keyInfoContainer.style.display = 'flex';
             keyInfoContainer.style.alignItems = 'center';
             keyInfoContainer.style.gap = '20px';
 
-            // Latest price
             const priceCard = document.createElement('div');
             priceCard.classList.add('info-card');
             priceCard.innerHTML = `
@@ -484,7 +490,6 @@
             `;
             keyInfoContainer.appendChild(priceCard);
 
-            // Increase rate
             const increaseCard = document.createElement('div');
             increaseCard.classList.add('info-card');
             increaseCard.innerHTML = `
@@ -514,6 +519,61 @@
             }
         }
 
+        function updateChart() {
+            const fundListTable = document.getElementById('fundListTable');
+            const rows = Array.from(fundListTable.getElementsByTagName('tr'));
+
+            const data = rows.map(row => ({
+                name: row.cells[1].textContent,
+                value: parseFloat(row.cells[3].textContent.replace('%', ''))
+            }));
+
+            const topGainers = data.sort((a, b) => b.value - a.value).slice(0, 5);
+            const topLosers = data.sort((a, b) => a.value - b.value).slice(0, 5);
+
+            const chartData = [...topGainers, ...topLosers];
+
+            const chartOption = {
+                title: {
+                    text: '涨跌幅前五名',
+                    left: 'center'
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                xAxis: {
+                    type: 'category',
+                    data: chartData.map(item => item.name),
+                    axisLabel: {
+                        rotate: 45
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: {
+                        formatter: '{value}%'
+                    }
+                },
+                series: [{
+                    data: chartData.map(item => item.value),
+                    type: 'bar',
+                    itemStyle: {
+                        color: function(params) {
+                            return params.value >= 0 ? '#f56c6c' : '#67c23a';
+                        }
+                    }
+                }]
+            };
+
+            if (!chartInstance) {
+                chartInstance = echarts.init(document.getElementById('chart'));
+            }
+            chartInstance.setOption(chartOption);
+        }
+
         async function loadFundData() {
             showLoading();
             try {
@@ -522,12 +582,12 @@
 
                 updateFundListTable(data.rows);
                 const fundData = data.rows.find(row => row.id === FUND_ID_TO_TRACK).cell;
-                
-                // Clone and attach the sticky header with the initial data
+
                 if (!isHeaderSticky) {
                     cloneAndAttachStickyHeader(fundData);
                 }
 
+                updateChart();
                 showMessage('数据更新成功', 'success');
             } catch (error) {
                 console.error('Error loading fund data:', error);
