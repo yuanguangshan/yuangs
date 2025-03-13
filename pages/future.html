@@ -1,0 +1,1926 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>期货市场概览</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <style>
+    /* 现有的CSS样式 */
+    body {
+      font-family: 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      width: 380px;
+      padding: 0;
+      margin: 0;
+      color: #333;
+      background-color: #f0f1f8;
+      overflow-x: hidden;
+    }
+
+    .container {
+      padding: 16px;
+      box-sizing: border-box;
+    }
+
+    .header {
+      position: relative;
+      padding: 10px 0;
+      margin-bottom: 10px;
+      text-align: center;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+      background: linear-gradient(135deg, #a18cd1, #fbc2eb);
+      color: white;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    h1 {
+      font-size: 18px;
+      margin: 0;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .refresh-btn-header {
+      position: absolute;
+      right: 15px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255, 255, 255, 0.25);
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      transition: all 0.3s ease;
+    }
+
+    .refresh-btn-header:hover {
+      background: rgba(255, 255, 255, 0.35);
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    }
+
+    .refresh-btn-header:active {
+      transform: translateY(-50%) scale(0.95);
+    }
+
+    .update-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 15px;
+      margin-bottom: 15px;
+      background-color: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      font-size: 13px;
+    }
+
+    .market-status {
+      display: flex;
+      align-items: center;
+    }
+
+    /* 添加刷新按钮暂停状态的样式 */
+    .refresh-btn-header.paused {
+      background-color: #ffa69e;
+      color: white;
+    }
+
+    /* 添加状态指示器的样式 */
+    .status-indicator {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 5px;
+    }
+
+    .status-normal {
+      background-color: #84fab0;
+      animation: pulse 2s infinite;
+    }
+
+    .status-paused {
+      background-color: #ffa69e;
+    }
+
+    @keyframes pulse {
+      0% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.5;
+      }
+      100% {
+        opacity: 1;
+      }
+    }
+
+    .data-time {
+      color: #666;
+      font-size: 12px;
+    }
+
+    .chart-container {
+      width: 100%;
+      height: 300px;
+      margin-bottom: 15px;
+      background-color: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .chart-container:hover {
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      transform: translateY(-2px);
+    }
+
+    .data-summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 15px;
+    }
+
+    .data-item {
+      text-align: center;
+      padding: 14px 10px;
+      background-color: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      transition: all 0.3s ease;
+    }
+
+    .data-item:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .data-label {
+      font-size: 12px;
+      color: #777;
+      margin-bottom: 6px;
+    }
+
+    .data-value {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .up {
+      color: #ff7675;
+    }
+
+    .down {
+      color: #55efc4;
+    }
+
+    .neutral {
+      color: #a29bfe;
+    }
+
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      color: #666;
+    }
+
+    .loading-spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #a18cd1;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin-bottom: 15px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .error {
+      color: #ff7675;
+      text-align: center;
+      padding: 15px;
+      background-color: rgba(255, 118, 117, 0.1);
+      border-radius: 12px;
+      margin: 15px 0;
+    }
+
+    .refresh-btn {
+      background: linear-gradient(135deg, #a18cd1, #fbc2eb);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 25px;
+      cursor: pointer;
+      font-weight: 500;
+      display: block;
+      margin: 20px auto;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+      transition: all 0.3s ease;
+    }
+
+    .refresh-btn:hover {
+      background: linear-gradient(135deg, #8e72d6, #f9a8e0);
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+      transform: translateY(-3px);
+    }
+
+    .refresh-btn:active {
+      transform: translateY(1px);
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+
+    /* 添加合约详情视图的样式 */
+    .contract-detail {
+      display: none;
+      background-color: white;
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 15px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      position: relative;
+    }
+
+    .contract-detail-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+
+    .contract-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .close-detail {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: none;
+      border: none;
+      font-size: 18px;
+      color: #999;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 50%;
+      line-height: 1;
+    }
+
+    .close-detail:hover {
+      background-color: #f0f0f0;
+      color: #666;
+    }
+
+    .contract-info-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .contract-info-item {
+      padding: 8px;
+      background-color: #f8f9fa;
+      border-radius: 8px;
+    }
+
+    .contract-info-label {
+      font-size: 12px;
+      color: #777;
+      margin-bottom: 4px;
+    }
+
+    .contract-info-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .contract-chart {
+      width: 100%;
+      height: 220px;
+      margin-top: 10px;
+      background-color: #f8f9fa;
+      border-radius: 8px;
+    }
+
+    /* 下拉选择器的样式 */
+    .contract-selector {
+      display: none;
+      margin-bottom: 15px;
+    }
+
+    .select-wrapper {
+      position: relative;
+      margin-bottom: 10px;
+    }
+
+    select {
+      width: 100%;
+      padding: 10px 15px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      background-color: white;
+      appearance: none;
+      font-size: 14px;
+      color: #333;
+      cursor: pointer;
+    }
+
+    .select-arrow {
+      position: absolute;
+      right: 15px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 0;
+      height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 5px solid #666;
+      pointer-events: none;
+    }
+
+    /* 返回按钮 */
+    .back-btn {
+      background: rgba(161, 140, 209, 0.2);
+      color: #666;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-bottom: 10px;
+    }
+
+    .back-btn:hover {
+      background: rgba(161, 140, 209, 0.3);
+      color: #333;
+    }
+
+    .back-btn svg {
+      margin-right: 5px;
+      width: 12px;
+      height: 12px;
+    }
+
+    /* 合约表格 */
+    .contracts-table {
+      width: 100%;
+      margin-top: 10px;
+      border-collapse: collapse;
+      font-size: 13px;
+      display: none;
+    }
+
+    .contracts-table th, .contracts-table td {
+      padding: 8px 10px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+
+    .contracts-table th {
+      font-weight: 600;
+      color: #666;
+      background-color: #f8f9fa;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .contracts-table tbody tr {
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .contracts-table tbody tr:hover {
+      background-color: #f5f5f5;
+    }
+
+    .price-up {
+      color: #ff7675;
+    }
+
+    .price-down {
+      color: #55efc4;
+    }
+
+    .table-container {
+      max-height: 300px;
+      overflow-y: auto;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      background-color: white;
+      margin-top: 10px;
+      display: none;
+    }
+    
+    /* 刷新数据按钮 */
+    .refresh-data-btn {
+      background: linear-gradient(135deg, #a18cd1, #fbc2eb);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      margin: 10px 0;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+      transition: all 0.3s ease;
+      display: block;
+      text-align: center;
+    }
+
+    .refresh-data-btn:hover {
+      background: linear-gradient(135deg, #8e72d6, #f9a8e0);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* 合约升贴水图表容器 */
+    .premium-chart-container {
+      width: 100%;
+      height: 250px;
+      background-color: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      margin-top: 15px;
+      padding: 5px;
+      box-sizing: border-box;
+    }
+    
+    /* 错误信息样式 */
+    .error-message {
+      color: #ff7675;
+      text-align: center;
+      padding: 20px;
+      background-color: rgba(255, 118, 117, 0.05);
+      border-radius: 8px;
+      margin: 10px 0;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>期货市场概览</h1>
+      <button id="refresh-btn-header" class="refresh-btn-header">暂停刷新</button>
+    </header>
+    
+    <div class="update-info">
+      <div class="market-status">
+        <span class="status-indicator status-normal"></span>
+        <span>市场状态: </span>
+        <span id="market-status">-</span>
+      </div>
+      <div class="data-time">
+        <span>更新时间: </span>
+        <span id="update-time">-</span>
+      </div>
+    </div>
+    
+    <div id="loading" class="loading">
+      <div class="loading-spinner"></div>
+      <div>加载数据中...</div>
+    </div>
+    
+    <div id="error" class="error" style="display: none;"></div>
+    
+    <div id="content" style="display: none;">
+      <!-- 市场概览部分 -->
+      <div id="overview-section">
+        <div id="chart" class="chart-container"></div>
+        
+        <div class="data-summary">
+          <div class="data-item" title="点击查看K线页面">
+            <div class="data-label">上涨</div>
+            <div id="up-count" class="data-value up">-</div>
+          </div>
+          
+          <div class="data-item" title="点击查看YGS页面">
+            <div class="data-label">下跌</div>
+            <div id="down-count" class="data-value down">-</div>
+          </div>
+          
+          <div class="data-item" title="点击查看融资融券页面">
+            <div class="data-label">持平</div>
+            <div id="neutral-count" class="data-value neutral">-</div>
+          </div>
+          
+          <div class="data-item">
+            <div class="data-label">均涨</div>
+            <div id="limit-up-count" class="data-value up">-</div>
+          </div>
+          
+          <div class="data-item">
+            <div class="data-label">均跌</div>
+            <div id="limit-down-count" class="data-value down">-</div>
+          </div>
+          
+          <div class="data-item">
+            <div class="data-label">总计</div>
+            <div id="total-count" class="data-value">-</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 品种选择器部分 -->
+      <div id="contract-selector" class="contract-selector">
+        <button id="back-to-overview" class="back-btn">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+          返回概览
+        </button>
+        
+        <div class="select-wrapper">
+          <select id="variety-select">
+            <option value="">请选择品种</option>
+          </select>
+          <div class="select-arrow"></div>
+        </div>
+        
+        <button id="refresh-variety-data" class="refresh-data-btn">刷新数据</button>
+        
+        <!-- 升贴水图表 -->
+        <div id="premium-chart-container" class="premium-chart-container">
+          <div id="premium-chart-wrapper" style="width: 100%; height: 100%;">
+            <div id="premium-chart" style="width: 100%; height: 100%;"></div>
+          </div>
+        </div>
+        
+        <div id="table-container" class="table-container">
+          <table id="contracts-table" class="contracts-table">
+            <thead>
+              <tr>
+                <th>合约</th>
+                <th>最新</th>
+                <th>涨幅</th>
+                <th>成交</th>
+                <th>持仓</th>
+              </tr>
+            </thead>
+            <tbody id="contracts-body">
+              <!-- 合约数据将通过JavaScript填充 -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <!-- 合约详情视图 -->
+      <div id="contract-detail" class="contract-detail">
+        <div class="contract-detail-header">
+          <div class="contract-name" id="contract-name"></div>
+          <button id="close-detail" class="close-detail">×</button>
+        </div>
+        
+        <div class="contract-info-grid">
+          <div class="contract-info-item">
+            <div class="contract-info-label">最新价</div>
+            <div id="contract-price" class="contract-info-value">-</div>
+          </div>
+          <div class="contract-info-item">
+            <div class="contract-info-label">涨跌幅</div>
+            <div id="contract-change" class="contract-info-value">-</div>
+          </div>
+          <div class="contract-info-item">
+            <div class="contract-info-label">成交量</div>
+            <div id="contract-volume" class="contract-info-value">-</div>
+          </div>
+          <div class="contract-info-item">
+            <div class="contract-info-label">持仓量</div>
+            <div id="contract-position" class="contract-info-value">-</div>
+          </div>
+        </div>
+        
+        <div id="contract-premium-chart-wrapper" style="width: 100%; height: 220px; margin-top: 10px;">
+          <div id="contract-premium-chart" class="contract-chart"></div>
+        </div>
+      </div>
+    </div>
+    
+    <button id="refresh-btn" class="refresh-btn">刷新数据</button>
+  </div>
+  
+  <script>
+    // 全局变量
+    let chart = null;
+    let premiumChart = null;
+    let contractDetailChart = null;
+    let echartsLoadRetries = 0;
+    const MAX_RETRIES = 3;
+    let autoUpdateInterval = null;
+    let isAutoUpdateEnabled = true;
+    let futuresData = [];
+    let contractsData = {};
+
+    // 初始化页面
+    document.addEventListener('DOMContentLoaded', function() {
+      // 隐藏错误信息
+      document.getElementById('error').style.display = 'none';
+      
+      // 绑定刷新按钮事件
+      const refreshBtn = document.getElementById('refresh-btn');
+      const refreshBtnHeader = document.getElementById('refresh-btn-header');
+      const refreshVarietyBtn = document.getElementById('refresh-variety-data');
+      
+      refreshBtn.addEventListener('click', function() {
+        fetchData();
+      });
+      
+      refreshBtnHeader.addEventListener('click', function() {
+        if (isAutoUpdateEnabled) {
+          // 如果自动更新开启，点击按钮暂停
+          stopAutoUpdate();
+          refreshBtnHeader.textContent = '开启自动更新';
+          refreshBtnHeader.classList.add('paused');
+        } else {
+          // 如果自动更新关闭，点击按钮开启
+          startAutoUpdate();
+          refreshBtnHeader.textContent = '暂停自动更新';
+          refreshBtnHeader.classList.remove('paused');
+        }
+      });
+      
+      refreshVarietyBtn.addEventListener('click', function() {
+        const variety = document.getElementById('variety-select').value;
+        if (variety) {
+          fetchVarietyContracts(variety);
+        }
+      });
+      
+      // 绑定后退按钮事件
+      document.getElementById('back-to-overview').addEventListener('click', function() {
+        showOverview();
+      });
+      
+      // 绑定关闭合约详情按钮事件
+      document.getElementById('close-detail').addEventListener('click', function() {
+        document.getElementById('contract-detail').style.display = 'none';
+        document.getElementById('overview-section').style.display = 'block';
+      });
+      
+      // 绑定品种选择器事件
+      document.getElementById('variety-select').addEventListener('change', function() {
+        const variety = this.value;
+        if (variety) {
+          fetchVarietyContracts(variety);
+        }
+      });
+      
+      // 检查ECharts是否加载
+      checkEChartsLoaded();
+      
+      // 启动自动更新
+      startAutoUpdate();
+      
+      // 为图表容器添加点击事件，打开合约选择器
+      document.getElementById('chart').addEventListener('click', function(e) {
+        // 选择一个品种打开合约选择器
+        if (futuresData && futuresData.length > 0) {
+          let variety = '';
+          
+          // 尝试获取点击的数据点
+          if (chart) {
+            try {
+              // 这段代码可能会失败，使用try-catch确保程序不会崩溃
+              const pointIndex = chart.convertFromPixel({seriesIndex: 0}, [e.offsetX, e.offsetY]);
+              if (pointIndex && pointIndex[1] >= 0 && pointIndex[1] < futuresData.length) {
+                variety = extractVarietyCode(futuresData[pointIndex[1]].name);
+              }
+            } catch (error) {
+              console.log('无法确定点击的数据点:', error);
+            }
+          }
+          
+          // 如果没有通过点击获取到品种，随机选择一个
+          if (!variety && futuresData.length > 0) {
+            const randomIndex = Math.floor(Math.random() * futuresData.length);
+            variety = extractVarietyCode(futuresData[randomIndex].name);
+          }
+          
+          if (variety) {
+            showContractSelector(variety);
+          }
+        }
+      });
+      
+      // 添加新标签页打开按钮
+      const newTabBtn = document.createElement('button');
+      newTabBtn.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M13 3H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>
+          <path d="M20 12h-7m3-3 3 3-3 3"/>
+        </svg>
+      `;
+      Object.assign(newTabBtn.style, {
+        position: 'absolute',
+        top: '0px',
+        left: '8px',
+        background: 'transparent',
+        border: 'none',
+        cursor: 'pointer',
+        padding: '2px',
+        borderRadius: '50%',
+        transition: 'all 0.2s'
+      });
+      
+      // 悬停效果
+      newTabBtn.addEventListener('mouseenter', () => {
+        newTabBtn.style.background = 'rgba(0,0,0,0.05)';
+      });
+      newTabBtn.addEventListener('mouseleave', () => {
+        newTabBtn.style.background = 'transparent';
+      });
+
+      // 保持原有点击事件
+      newTabBtn.addEventListener('click', function() {
+        if (typeof chrome !== 'undefined' && chrome.tabs) {
+          chrome.tabs.create({
+            url: chrome.runtime.getURL('popup.html?mode=standalone'),
+            active: true
+          });
+        } else {
+          window.open('popup.html?mode=standalone', '_blank');
+        }
+      });
+
+      const container = document.querySelector('.container');
+      if (container) {
+        container.prepend(newTabBtn);
+      }
+    });
+
+    // 开始自动更新
+    function startAutoUpdate() {
+      isAutoUpdateEnabled = true;
+      fetchData(); // 立即获取一次数据
+      autoUpdateInterval = setInterval(fetchData, 30000); // 每30秒更新一次
+    }
+
+    // 停止自动更新
+    function stopAutoUpdate() {
+      isAutoUpdateEnabled = false;
+      if (autoUpdateInterval) {
+        clearInterval(autoUpdateInterval);
+        autoUpdateInterval = null;
+      }
+    }
+
+    // 检查ECharts是否加载
+    function checkEChartsLoaded() {
+      if (typeof echarts !== 'undefined') {
+        console.log('ECharts已成功加载');
+        // ECharts已加载，初始加载数据
+        fetchData();
+      } else if (echartsLoadRetries < MAX_RETRIES) {
+        console.log(`ECharts未加载，尝试重新加载 (${echartsLoadRetries + 1}/${MAX_RETRIES})`);
+        echartsLoadRetries++;
+        
+        // 尝试动态加载ECharts
+        const script = document.createElement('script');
+        // 使用CDN链接作为备选，以防本地文件加载失败
+        script.src = 'https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js';
+        script.onload = function() {
+          console.log('ECharts动态加载成功');
+          fetchData();
+        };
+        script.onerror = function() {
+          console.error('ECharts动态加载失败');
+          setTimeout(checkEChartsLoaded, 1000); // 1秒后重试
+        };
+        document.head.appendChild(script);
+      } else {
+        console.error('ECharts加载失败，已达到最大重试次数');
+        const errorElement = document.getElementById('error');
+        errorElement.textContent = 'ECharts加载失败，请检查网络连接';
+        errorElement.style.display = 'block';
+        document.getElementById('loading').style.display = 'none';
+      }
+    }
+
+    // 获取期货市场数据
+    async function fetchData() {
+      const loadingIndicator = document.getElementById('loading');
+      const contentElement = document.getElementById('content');
+      const errorElement = document.getElementById('error');
+      
+      // 显示加载指示器
+      loadingIndicator.style.display = 'block';
+      contentElement.style.display = 'none';
+      errorElement.style.display = 'none';
+      
+      try {
+        // 检查ECharts是否可用
+        if (typeof echarts === 'undefined') {
+          throw new Error('ECharts未加载，无法显示图表');
+        }
+        
+        // 分别获取图表数据和统计数据
+        const [chartData, statsData] = await Promise.allSettled([
+          fetchChartData(),
+          fetchStatsData()
+        ]);
+        
+        // 处理图表数据
+        if (chartData.status === 'fulfilled' && chartData.value) {
+          futuresData = chartData.value;
+        } else {
+          throw new Error('图表数据获取失败');
+        }
+        
+        // 处理统计数据
+        let analysisResults;
+        if (statsData.status === 'fulfilled' && statsData.value) {
+          analysisResults = statsData.value;
+        } else {
+          console.warn('统计数据获取失败，使用基于图表数据的分析');
+          analysisResults = analyzeFuturesData(futuresData, null);
+        }
+        
+        // 先显示内容容器，因为图表需要可见的容器来计算尺寸
+        contentElement.style.display = 'block';
+        loadingIndicator.style.display = 'none';
+        
+        // 更新图表和摘要
+        setTimeout(() => {
+          updateChart(futuresData);
+          updateSummary(analysisResults);
+        }, 100); // 短暂延迟以确保DOM已更新
+        
+      } catch (error) {
+        console.error('获取或处理数据时出错:', error);
+        
+        // 显示错误信息
+        errorElement.textContent = error.message || '加载数据失败';
+        errorElement.style.display = 'block';
+        loadingIndicator.style.display = 'none';
+      }
+    }
+
+    // 判断当前是否是夜盘交易时间
+    function isNightTradingHours() {
+      const now = new Date();
+      const hours = now.getHours();
+      
+      // 夜盘交易时间：晚上9点到凌晨2点30分
+      // 或者早上9点前（凌晨2点30分到早上9点之间没有交易）
+      return (hours >= 21 || hours < 9);
+    }
+
+    // 获取图表数据（从q.889.ink）
+    async function fetchChartData() {
+      try {
+        // 根据当前时间选择API地址
+        const apiUrl = isNightTradingHours() ? 'https://q.889.ink/night' : 'https://q.889.ink/';
+        console.log(`当前使用API地址: ${apiUrl}`);
+        
+        // 模拟数据用于测试
+        const mockData = {
+          list: [
+            { name: "沪铜", zdf: 2.5, vol: 123456 },
+            { name: "沪铝", zdf: -1.8, vol: 98765 },
+            { name: "沪锌", zdf: 3.2, vol: 76543 },
+            { name: "沪镍", zdf: -2.7, vol: 54321 },
+            { name: "沪锡", zdf: 1.9, vol: 45678 },
+            { name: "菜粕", zdf: -1.5, vol: 34567 },
+            { name: "棕榈", zdf: 1.2, vol: 23456 },
+            { name: "豆油", zdf: -0.8, vol: 12345 },
+            { name: "螺纹", zdf: 0.5, vol: 65432 },
+            { name: "热卷", zdf: -0.3, vol: 54321 }
+          ]
+        };
+        
+        // 使用模拟数据作为备用
+        return mockData.list;
+        
+        /* 实际API调用，如果需要使用真实API请取消注释此段代码
+        // 从选定的API地址获取数据
+        const response = await fetch(apiUrl);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        
+        // 检查数据结构
+        if (data && data.list && data.list.length > 0) {
+          console.log(`成功从${apiUrl}获取图表数据`);
+          
+          // 确保每个品种都有ccl和rz字段，如果没有则设为0
+          const processedData = data.list.map(item => ({
+            ...item,
+            ccl: item.ccl || 0,
+            rz: item.rz || 0
+          }));
+          
+          return processedData;
+        } else {
+          throw new Error('数据结构不符合预期');
+        }
+        */
+      } catch (error) {
+        console.warn('API请求失败:', error);
+        throw error;
+      }
+    }
+
+    // 获取统计数据
+    async function fetchStatsData() {
+      try {
+        // 模拟统计数据用于测试
+        return {
+          totalVolume: 0,
+          totalContracts: 10,
+          maxVolumeContract: '无数据',
+          maxRangeContract: '无数据',
+          upCount: 5,
+          downCount: 5,
+          neutralCount: 0,
+          avgUpChange: 1.86,
+          avgDownChange: -1.42,
+          lastUpdated: new Date().toLocaleString('zh-CN')
+        };
+        
+        /* 实际API调用，如果需要使用真实API请取消注释此段代码
+        // 根据当前时间选择API地址
+        const apiUrl = isNightTradingHours() ? 'https://q.889.ink/night' : 'https://q.889.ink/';
+        console.log(`当前使用统计数据API地址: ${apiUrl}`);
+        
+        // 从选定的API地址获取数据
+        const response = await fetch(apiUrl);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        
+        // 检查数据结构
+        if (data && data.list && data.list.length > 0) {
+          console.log(`成功从${apiUrl}获取统计数据`);
+          return calculateStats(data.list);
+        } else {
+          throw new Error('数据结构不符合预期');
+        }
+        */
+      } catch (error) {
+        console.warn('统计数据API请求失败:', error);
+        throw error; // 将错误传递给调用者
+      }
+    }
+
+    // 计算统计数据
+    function calculateStats(futuresData) {
+      // 默认值
+      let result = {
+        totalVolume: 0,
+        totalContracts: 0,
+        maxVolumeContract: '无数据',
+        maxRangeContract: '无数据',
+        upCount: 0,
+        downCount: 0,
+        neutralCount: 0,
+        avgUpChange: 0,
+        avgDownChange: 0,
+        lastUpdated: new Date().toLocaleString('zh-CN')
+      };
+      
+      // 如果没有数据，返回默认值
+      if (!futuresData || futuresData.length === 0) {
+        return result;
+      }
+      
+      // 计算上涨和下跌的品种数量和平均涨跌幅
+      const upItems = futuresData.filter(item => parseFloat(item.zdf) > 0);
+      const downItems = futuresData.filter(item => parseFloat(item.zdf) < 0);
+      const neutralItems = futuresData.filter(item => parseFloat(item.zdf) === 0);
+      
+      const upCount = upItems.length;
+      const downCount = downItems.length;
+      const neutralCount = neutralItems.length;
+      
+      // 计算平均涨跌幅
+      const avgUpChange = upItems.length > 0 ? 
+        (upItems.reduce((sum, item) => sum + parseFloat(item.zdf), 0) / upItems.length).toFixed(2) : 0;
+      
+      const avgDownChange = downItems.length > 0 ? 
+        (downItems.reduce((sum, item) => sum + parseFloat(item.zdf), 0) / downItems.length).toFixed(2) : 0;
+      
+      return {
+        ...result,
+        totalContracts: futuresData.length,
+        upCount,
+        downCount,
+        neutralCount,
+        avgUpChange,
+        avgDownChange
+      };
+    }
+
+    // 分析期货数据
+    function analyzeFuturesData(futuresData, rawData) {
+      // 默认值
+      let result = {
+        totalVolume: 0,
+        totalContracts: 0,
+        maxVolumeContract: '无数据',
+        maxRangeContract: '无数据',
+        upCount: 0,
+        downCount: 0,
+        neutralCount: 0,
+        avgUpChange: 0,
+        avgDownChange: 0,
+        lastUpdated: new Date().toLocaleString('zh-CN')
+      };
+      
+      // 如果没有数据，返回默认值
+      if (!futuresData || futuresData.length === 0) {
+        return result;
+      }
+      
+      // 计算上涨和下跌的品种数量
+      const upCount = futuresData.filter(item => parseFloat(item.zdf) > 0).length;
+      const downCount = futuresData.filter(item => parseFloat(item.zdf) < 0).length;
+      const neutralCount = futuresData.filter(item => parseFloat(item.zdf) === 0).length;
+      
+      // 计算平均涨跌幅
+      const upItems = futuresData.filter(item => parseFloat(item.zdf) > 0);
+      const downItems = futuresData.filter(item => parseFloat(item.zdf) < 0);
+      
+      const avgUpChange = upItems.length > 0 ? 
+        (upItems.reduce((sum, item) => sum + parseFloat(item.zdf), 0) / upItems.length).toFixed(2) : 0;
+      
+      const avgDownChange = downItems.length > 0 ? 
+        (downItems.reduce((sum, item) => sum + parseFloat(item.zdf), 0) / downItems.length).toFixed(2) : 0;
+      
+      // 获取当前时间
+      const now = new Date();
+      const lastUpdated = now.toLocaleString('zh-CN');
+      
+      return {
+        ...result,
+        totalContracts: futuresData.length,
+        upCount,
+        downCount,
+        neutralCount,
+        avgUpChange,
+        avgDownChange,
+        lastUpdated
+      };
+    }
+
+    // 更新图表
+    function updateChart(futuresData) {
+      const chartContainer = document.getElementById('chart');
+      
+      // 确保ECharts已加载
+      if (typeof echarts === 'undefined') {
+        throw new Error('echarts is not defined');
+      }
+      
+      // 确保容器可见
+      chartContainer.style.display = 'block';
+      
+      // 准备图表数据
+      const topContracts = [...futuresData]
+        .sort((a, b) => Math.abs(parseFloat(b.zdf) || 0) - Math.abs(parseFloat(a.zdf) || 0))
+        .slice(0, 10);
+      
+      // 计算增减仓比率并格式化显示名称
+      const formattedCategories = topContracts.map(item => item.name);
+      
+      const categories = formattedCategories;
+      const values = topContracts.map(item => parseFloat(item.zdf) || 0);
+      
+      // 安全地处理图表实例
+      try {
+        // 如果图表已存在，先销毁
+        if (chart) {
+          chart.dispose();
+          chart = null;
+        }
+        
+        // 创建新图表
+        chart = echarts.init(chartContainer);
+        
+        // 设置图表选项
+        const option = {
+          title: {
+            text: '期货品种涨跌幅',
+            left: 'center',
+            textStyle: {
+              fontSize: 14,
+              fontWeight: 'normal',
+              color: '#333'
+            },
+            padding: [10, 0]
+          },
+          tooltip: {
+            trigger: 'axis',
+            formatter: function(params) {
+              const item = params[0];
+              const index = item.dataIndex;
+              const contract = topContracts[index];
+              
+              return `${contract.name}<br/>涨跌幅: ${item.value}%`;
+            },
+            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            borderColor: '#eee',
+            borderWidth: 1,
+            textStyle: {
+              color: '#333'
+            },
+            axisPointer: {
+              type: 'shadow',
+              shadowStyle: {
+                color: 'rgba(0, 0, 0, 0.03)'
+              }
+            }
+          },
+          grid: {
+            left: '10%',
+            right: '15%',
+            bottom: '8%',
+            top: '12%',
+            containLabel: true
+          },
+          xAxis: {
+            type: 'value',
+            axisLabel: {
+              formatter: '{value}%',
+              color: '#666',
+              fontSize: 10
+            },
+            splitLine: {
+              lineStyle: {
+                color: '#eee'
+              }
+            },
+            axisLine: {
+              lineStyle: {
+                color: '#ddd'
+              }
+            }
+          },
+          yAxis: {
+            type: 'category',
+            data: categories,
+            axisLabel: {
+              interval: 0,
+              fontSize: 11,
+              color: '#666'
+            },
+            axisLine: {
+              lineStyle: {
+                color: '#ddd'
+              }
+            },
+            axisTick: {
+              alignWithLabel: true,
+              lineStyle: {
+                color: '#ddd'
+              }
+            }
+          },
+          series: [
+            {
+              name: '涨跌幅',
+              type: 'bar',
+              data: values.map((value, index) => {
+                return {
+                  value: value,
+                  itemStyle: {
+                    color: value >= 0 ? '#ff7675' : '#55efc4' // 修改为与CSS匹配的颜色
+                  }
+                };
+              }),
+              label: {
+                show: true,
+                position: 'right',
+                formatter: '{c}%',
+                fontSize: 10,
+                color: '#666'
+              },
+              barWidth: '60%'
+            }
+          ]
+        };
+        
+        // 设置图表
+        chart.setOption(option);
+        
+        // 添加窗口大小变化事件
+        window.addEventListener('resize', function() {
+          if (chart) chart.resize();
+        });
+        
+        // 添加图表点击事件
+        chart.on('click', function(params) {
+          if (params.dataIndex >= 0 && params.dataIndex < topContracts.length) {
+            const varietyName = topContracts[params.dataIndex].name;
+            const variety = extractVarietyCode(varietyName);
+            if (variety) {
+              showContractSelector(variety);
+            }
+          }
+        });
+      } catch (error) {
+        console.error('更新图表失败:', error);
+        chartContainer.innerHTML = `<div class="error-message">更新图表失败: ${error.message}</div>`;
+      }
+    }
+
+    // 更新数据摘要
+    function updateSummary(data) {
+      // 更新市场状态和时间
+      const statusText = isAutoUpdateEnabled ? '自动更新中' : '已暂停更新';
+      document.getElementById('market-status').textContent = statusText;
+      document.getElementById('update-time').textContent = data.lastUpdated;
+      
+      // 更新状态指示器样式
+      const statusIndicator = document.querySelector('.status-indicator');
+      if (statusIndicator) {
+        if (isAutoUpdateEnabled) {
+          statusIndicator.classList.remove('status-paused');
+          statusIndicator.classList.add('status-normal');
+        } else {
+          statusIndicator.classList.remove('status-normal');
+          statusIndicator.classList.add('status-paused');
+        }
+      }
+      
+      // 更新涨跌统计
+      document.getElementById('up-count').textContent = data.upCount;
+      document.getElementById('down-count').textContent = data.downCount;
+      document.getElementById('neutral-count').textContent = data.neutralCount;
+      
+      // 更新平均涨跌幅和总计数据
+      document.getElementById('limit-up-count').textContent = data.avgUpChange + '%';
+      document.getElementById('limit-down-count').textContent = data.avgDownChange + '%';
+      document.getElementById('total-count').textContent = data.totalContracts;
+      
+      // 添加动画效果
+      animateCounters();
+      
+      // 为数据块添加点击事件
+      setupDataItemLinks();
+    }
+
+    // 设置数据项的链接
+    function setupDataItemLinks() {
+      // 获取所有data-item元素
+      const dataItems = document.querySelectorAll('.data-item');
+      if (!dataItems || dataItems.length === 0) return;
+      
+      // 为每个data-item添加点击事件
+      dataItems.forEach(item => {
+        // 移除旧的事件监听器（如果有）
+        const newItem = item.cloneNode(true);
+        if (item.parentNode) {
+          item.parentNode.replaceChild(newItem, item);
+        }
+        
+        // 添加点击事件
+        newItem.style.cursor = 'pointer';
+        newItem.addEventListener('click', function(e) {
+          // 随机选择一个品种打开合约选择器
+          if (futuresData.length > 0) {
+            const randomIndex = Math.floor(Math.random() * futuresData.length);
+            const variety = extractVarietyCode(futuresData[randomIndex].name);
+            if (variety) {
+              showContractSelector(variety);
+            }
+          }
+        });
+      });
+    }
+
+    // 添加数字变化的动画效果
+    function animateCounters() {
+      const counters = document.querySelectorAll('.data-value');
+      if (!counters || counters.length === 0) return;
+      
+      counters.forEach(counter => {
+        counter.style.transition = 'all 0.5s ease-out';
+        counter.style.opacity = '1';
+        counter.style.transform = 'translateY(0)';
+      });
+    }
+
+    // 格式化数字
+    function formatNumber(num) {
+      if (isNaN(num)) return '0';
+      
+      if (num >= 100000000) {
+        return (num / 100000000).toFixed(2) + '亿';
+      } else if (num >= 10000) {
+        return (num / 10000).toFixed(2) + '万';
+      } else {
+        return num.toString();
+      }
+    }
+
+    // 显示合约选择器
+    function showContractSelector(variety) {
+      console.log('显示合约选择器，品种:', variety);
+      
+      // 隐藏概览区域
+      document.getElementById('overview-section').style.display = 'none';
+      document.getElementById('contract-detail').style.display = 'none';
+      
+      // 显示选择器区域
+      const contractSelector = document.getElementById('contract-selector');
+      contractSelector.style.display = 'block';
+      
+      // 更新品种选择框
+      updateVarietySelect(variety);
+      
+      // 获取指定品种的合约列表并显示升贴水图表
+      fetchVarietyContracts(variety);
+    }
+
+    // 更新品种选择框
+    function updateVarietySelect(selectedVariety) {
+      const varietySelect = document.getElementById('variety-select');
+      if (!varietySelect) return;
+      
+      varietySelect.innerHTML = '<option value="">请选择品种</option>';
+      
+      // 获取所有期货品种
+      const varieties = [...new Set(futuresData.map(item => extractVarietyCode(item.name)))].filter(Boolean);
+      
+      // 添加品种选项
+      varieties.forEach(variety => {
+        const option = document.createElement('option');
+        option.value = variety;
+        option.textContent = variety;
+        
+        // 如果是当前选中的品种，设置为选中状态
+        if (variety === selectedVariety) {
+          option.selected = true;
+        }
+        
+        varietySelect.appendChild(option);
+      });
+    }
+
+    // 从品种名称中提取品种代码
+    function extractVarietyCode(name) {
+      if (!name) return '';
+      
+      // 移除所有数字和特殊字符，保留中文
+      return name.replace(/[0-9()（）]/g, '').trim();
+    }
+
+    // 获取指定品种的合约列表
+    async function fetchVarietyContracts(variety) {
+      const premiumChartElement = document.getElementById('premium-chart');
+      const contractsBody = document.getElementById('contracts-body');
+      
+      if (!premiumChartElement || !contractsBody) {
+        console.error('找不到必要的DOM元素');
+        return;
+      }
+      
+      try {
+        console.log(`获取${variety}的合约列表`);
+        
+        // 显示加载状态
+        premiumChartElement.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:#666;">加载中...</div>';
+        contractsBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">加载中...</td></tr>';
+        
+        // 模拟合约数据
+        const mockContractsData = generateMockContractsData(variety);
+        contractsData[variety] = mockContractsData;
+        
+        // 显示合约列表
+        renderContractsTable(mockContractsData);
+        
+        // 显示升贴水图表
+        renderPremiumChart(variety, mockContractsData);
+        
+        /* 实际API调用，如果需要使用真实API请取消注释此段代码
+        // 从接口获取合约数据
+        const apiUrl = `https://q.889.ink/contracts?variety=${encodeURIComponent(variety)}`;
+        console.log(`请求合约列表 URL: ${apiUrl}`);
+        
+        const response = await fetch(apiUrl);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('获取到合约数据:', data);
+        
+        if (data && data.contracts && data.contracts.length > 0) {
+          contractsData[variety] = data.contracts;
+          
+          // 显示合约列表
+          renderContractsTable(data.contracts);
+          
+          // 显示升贴水图表
+          renderPremiumChart(variety, data.contracts);
+        } else {
+          throw new Error('没有获取到合约数据');
+        }
+        */
+        
+      } catch (error) {
+        console.error('获取合约列表失败:', error);
+        
+        // 安全地更新DOM
+        if (premiumChartElement) {
+          premiumChartElement.innerHTML = `<div style="display:flex;justify-content:center;align-items:center;height:100%;color:#ff7675;">加载失败: ${error.message}</div>`;
+        }
+        
+        if (contractsBody) {
+          contractsBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">获取合约列表失败，${error.message}</td></tr>`;
+        }
+      }
+    }
+
+    // 生成模拟合约数据
+    function generateMockContractsData(variety) {
+      const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+      const basePrice = Math.floor(Math.random() * 5000) + 1000;
+      
+      const contracts = [];
+      
+      for (let i = 0; i < 6; i++) {
+        const monthIndex = (new Date().getMonth() + i) % 12;
+        const month = months[monthIndex];
+        const year = new Date().getFullYear() + Math.floor((new Date().getMonth() + i) / 12);
+        const contractCode = `${variety}${year.toString().substr(2)}${month}`;
+        
+        // 价格有小幅波动
+        const price = (basePrice + (Math.random() * 200 - 100)).toFixed(2);
+        const change = (Math.random() * 6 - 3).toFixed(2);
+        const volume = Math.floor(Math.random() * 100000);
+        const position = Math.floor(Math.random() * 500000);
+        
+        contracts.push({
+          code: contractCode,
+          price: price,
+          change: change,
+          volume: volume,
+          position: position
+        });
+      }
+      
+      return contracts;
+    }
+
+    // 渲染合约表格
+    function renderContractsTable(contracts) {
+      const contractsBody = document.getElementById('contracts-body');
+      const contractsTable = document.getElementById('contracts-table');
+      const tableContainer = document.getElementById('table-container');
+      
+      if (!contractsBody || !contractsTable || !tableContainer) {
+        console.error('找不到必要的DOM元素');
+        return;
+      }
+      
+      // 清空现有内容
+      contractsBody.innerHTML = '';
+      
+      if (!contracts || contracts.length === 0) {
+        contractsBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">无合约数据</td></tr>';
+        return;
+      }
+      
+      try {
+        // 按合约月份排序
+        contracts.sort((a, b) => a.code.localeCompare(b.code));
+        
+        // 填充表格
+        contracts.forEach(contract => {
+          const row = document.createElement('tr');
+          
+          // 为涨跌幅添加颜色样式
+          const change = parseFloat(contract.change);
+          const changeClass = change >= 0 ? 'price-up' : 'price-down';
+          const changeSign = change >= 0 ? '+' : '';
+          const changeText = change ? `${changeSign}${change}%` : '-';
+          
+          row.innerHTML = `
+            <td>${contract.code}</td>
+            <td>${contract.price || '-'}</td>
+            <td class="${changeClass}">${changeText}</td>
+            <td>${formatNumber(contract.volume)}</td>
+            <td>${formatNumber(contract.position)}</td>
+          `;
+          
+          // 为行添加点击事件
+          row.addEventListener('click', function() {
+            showContractDetail(contract);
+          });
+          
+          contractsBody.appendChild(row);
+        });
+        
+        // 显示表格容器
+        tableContainer.style.display = 'block';
+        contractsTable.style.display = 'table';
+      } catch (error) {
+        console.error('渲染合约表格失败:', error);
+        contractsBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">渲染表格失败: ${error.message}</td></tr>`;
+      }
+    }
+
+    // 显示合约详情
+    function showContractDetail(contract) {
+      // 隐藏合约选择器和概览
+      document.getElementById('contract-selector').style.display = 'none';
+      document.getElementById('overview-section').style.display = 'none';
+      
+      // 显示合约详情
+      const detailElement = document.getElementById('contract-detail');
+      detailElement.style.display = 'block';
+      
+      // 更新合约详情数据
+      document.getElementById('contract-name').textContent = contract.code;
+      document.getElementById('contract-price').textContent = contract.price || '-';
+      
+      const change = parseFloat(contract.change);
+      const changeValue = document.getElementById('contract-change');
+      changeValue.textContent = change ? `${change >= 0 ? '+' : ''}${change}%` : '-';
+      changeValue.className = `contract-info-value ${change >= 0 ? 'up' : 'down'}`;
+      
+      document.getElementById('contract-volume').textContent = formatNumber(contract.volume);
+      document.getElementById('contract-position').textContent = formatNumber(contract.position);
+      
+      // 生成并显示升贴水图表
+      setTimeout(() => {
+        renderContractPremiumChart(contract);
+      }, 100);
+    }
+
+    // 渲染品种升贴水图表 (品种选择页面)
+    function renderPremiumChart(variety, contracts) {
+      const chartContainer = document.getElementById('premium-chart');
+      const chartWrapper = document.getElementById('premium-chart-wrapper');
+      
+      if (!chartContainer || !chartWrapper) {
+        console.error('找不到图表容器');
+        return;
+      }
+      
+      // 确保容器中只有一个图表元素
+      chartWrapper.innerHTML = '<div id="premium-chart" style="width: 100%; height: 100%;"></div>';
+      const newChartContainer = document.getElementById('premium-chart');
+      
+      // 确保ECharts已加载
+      if (typeof echarts === 'undefined') {
+        newChartContainer.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:#ff7675;">ECharts未加载</div>';
+        return;
+      }
+      
+      // 确保有合约数据
+      if (!contracts || contracts.length === 0) {
+        newChartContainer.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:#666;">无合约数据</div>';
+        return;
+      }
+      
+      // 确保至少有价格数据的合约
+      const validContracts = contracts.filter(c => c.price && !isNaN(parseFloat(c.price)));
+      if (validContracts.length === 0) {
+        newChartContainer.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:#666;">无有效价格数据</div>';
+        return;
+      }
+      
+      // 按合约月份排序
+      validContracts.sort((a, b) => a.code.localeCompare(b.code));
+      
+      try {
+        // 获取合约月份和价格
+        const months = validContracts.map(c => {
+          // 提取合约月份，例如从 "沪铜2310" 中提取 "2310"
+          const match = c.code.match(/[0-9]{2,6}/);
+          return match ? match[0] : c.code;
+        });
+        
+        const prices = validContracts.map(c => parseFloat(c.price) || 0);
+        
+        // 计算升贴水（相对于第一个合约）
+        const basePrice = parseFloat(validContracts[0].price);
+        const premium = prices.map(price => ((price - basePrice) / basePrice * 100).toFixed(2));
+        
+        // 生成柱状图颜色
+        const colors = premium.map((p, idx) => {
+          // 当前合约为橙色
+          if (idx === 0) return '#f8cda6';
+          // 升水为红色，贴水为绿色
+          return parseFloat(p) >= 0 ? '#ff7675' : '#55efc4';
+        });
+        
+        // 创建新图表
+        if (premiumChart) {
+          premiumChart.dispose();
+          premiumChart = null;
+        }
+        
+        premiumChart = echarts.init(newChartContainer);
+        
+        // 设置图表选项
+        const option = {
+          title: {
+            text: `${variety}合约升贴水结构`,
+            left: 'center',
+            textStyle: {
+              fontSize: 14,
+              fontWeight: 'normal',
+              color: '#333'
+            }
+          },
+          tooltip: {
+            trigger: 'axis',
+            formatter: function(params) {
+              const idx = params[0].dataIndex;
+              return `${validContracts[idx].code}<br/>价格: ${validContracts[idx].price}<br/>升贴水: ${premium[idx]}%`;
+            }
+          },
+          grid: {
+            left: '3%',
+            right: '4%',
+            bottom: '10%',
+            top: '15%',
+            containLabel: true
+          },
+          xAxis: {
+            type: 'category',
+            data: months,
+            axisLabel: {
+              interval: 0,
+              fontSize: 11,
+              color: '#666'
+            }
+          },
+          yAxis: {
+            type: 'value',
+            name: '升贴水(%)',
+            nameTextStyle: {
+              fontSize: 12,
+              color: '#666'
+            },
+            axisLabel: {
+              formatter: '{value}%',
+              fontSize: 11,
+              color: '#666'
+            },
+            splitLine: {
+              lineStyle: {
+                color: '#eee'
+              }
+            }
+          },
+          series: [
+            {
+              name: '升贴水',
+              type: 'bar',
+              barWidth: '60%',
+              data: premium.map((value, idx) => {
+                return {
+                  value: value,
+                  itemStyle: {
+                    color: colors[idx]
+                  }
+                };
+              }),
+              label: {
+                show: true,
+                position: 'top',
+                formatter: '{c}%',
+                fontSize: 10,
+                color: '#666'
+              }
+            }
+          ]
+        };
+        
+        // 设置图表
+        premiumChart.setOption(option);
+        
+        // 添加窗口大小变化事件
+        window.addEventListener('resize', function() {
+          if (premiumChart) premiumChart.resize();
+        });
+      } catch (error) {
+        console.error('渲染升贴水图表失败:', error);
+        newChartContainer.innerHTML = `<div style="display:flex;justify-content:center;align-items:center;height:100%;color:#ff7675;">渲染图表失败: ${error.message}</div>`;
+      }
+    }
+
+    // 渲染合约详情页的升贴水图表
+    function renderContractPremiumChart(contract) {
+      const chartContainer = document.getElementById('contract-premium-chart');
+      const chartWrapper = document.getElementById('contract-premium-chart-wrapper');
+      
+      if (!chartContainer || !chartWrapper) {
+        console.error('找不到合约详情图表容器');
+        return;
+      }
+      
+      // 确保容器中只有一个图表元素
+      chartWrapper.innerHTML = '<div id="contract-premium-chart" class="contract-chart"></div>';
+      const newChartContainer = document.getElementById('contract-premium-chart');
+      
+      // 确保ECharts已加载
+      if (typeof echarts === 'undefined') {
+        newChartContainer.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:#ff7675;">ECharts未加载</div>';
+        return;
+      }
+      
+      // 获取品种
+      const variety = extractVarietyCode(contract.code);
+      
+      // 如果没有该品种的合约数据，尝试获取
+      if (!contractsData[variety]) {
+        newChartContainer.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:#666;">正在获取升贴水数据...</div>';
+        fetchVarietyContracts(variety)
+          .then(() => {
+            if (contractsData[variety]) {
+              renderContractPremiumChart(contract);
+            }
+          })
+          .catch(error => {
+            newChartContainer.innerHTML = `<div style="display:flex;justify-content:center;align-items:center;height:100%;color:#ff7675;">获取升贴水数据失败: ${error.message}</div>`;
+          });
+        return;
+      }
+      
+      const contracts = contractsData[variety];
+      
+      // 确保有合约数据
+      if (!contracts || contracts.length === 0) {
+        newChartContainer.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:#666;">无合约数据</div>';
+        return;
+      }
+      
+      // 确保至少有价格数据的合约
+      const validContracts = contracts.filter(c => c.price && !isNaN(parseFloat(c.price)));
+      if (validContracts.length === 0) {
+        newChartContainer.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:#666;">无有效价格数据</div>';
+        return;
+      }
+      
+      try {
+        // 按合约月份排序
+        validContracts.sort((a, b) => a.code.localeCompare(b.code));
+        
+        // 获取合约月份和价格
+        const months = validContracts.map(c => {
+          // 提取合约月份，例如从 "沪铜2310" 中提取 "2310"
+          const match = c.code.match(/[0-9]{2,6}/);
+          return match ? match[0] : c.code;
+        });
+        
+        const prices = validContracts.map(c => parseFloat(c.price) || 0);
+        
+        // 找出当前合约在列表中的位置
+        const basePriceIndex = validContracts.findIndex(c => c.code === contract.code);
+        const basePrice = parseFloat(validContracts[basePriceIndex >= 0 ? basePriceIndex : 0].price);
+        
+        // 计算升贴水（相对于当前合约）
+        const premium = prices.map(price => ((price - basePrice) / basePrice * 100).toFixed(2));
+        
+        // 生成柱状图颜色
+        const colors = premium.map((p, idx) => {
+          // 当前合约为橙色
+          if (idx === basePriceIndex) return '#f8cda6';
+          // 升水为红色，贴水为绿色
+          return parseFloat(p) >= 0 ? '#ff7675' : '#55efc4';
+        });
+        
+        // 创建新图表
+        if (contractDetailChart) {
+          contractDetailChart.dispose();
+          contractDetailChart = null;
+        }
+        
+        contractDetailChart = echarts.init(newChartContainer);
+        
+        // 设置图表选项
+        const option = {
+          title: {
+            text: `${contract.code}升贴水结构`,
+            left: 'center',
+            textStyle: {
+              fontSize: 14,
+              fontWeight: 'normal',
+              color: '#333'
+            }
+          },
+          tooltip: {
+            trigger: 'axis',
+            formatter: function(params) {
+              const idx = params[0].dataIndex;
+              return `${validContracts[idx].code}<br/>价格: ${validContracts[idx].price}<br/>升贴水: ${premium[idx]}%`;
+            }
+          },
+          grid: {
+            left: '3%',
+            right: '4%',
+            bottom: '10%',
+            top: '15%',
+            containLabel: true
+          },
+          xAxis: {
+            type: 'category',
+            data: months,
+            axisLabel: {
+              interval: 0,
+              fontSize: 11,
+              color: '#666'
+            }
+          },
+          yAxis: {
+            type: 'value',
+            name: '升贴水(%)',
+            nameTextStyle: {
+              fontSize: 12,
+              color: '#666'
+            },
+            axisLabel: {
+              formatter: '{value}%',
+              fontSize: 11,
+              color: '#666'
+            },
+            splitLine: {
+              lineStyle: {
+                color: '#eee'
+              }
+            }
+          },
+          series: [
+            {
+              name: '升贴水',
+              type: 'bar',
+              barWidth: '60%',
+              data: premium.map((value, idx) => {
+                return {
+                  value: value,
+                  itemStyle: {
+                    color: colors[idx]
+                  }
+                };
+              }),
+              label: {
+                show: true,
+                position: 'top',
+                formatter: '{c}%',
+                fontSize: 10,
+                color: '#666'
+              }
+            }
+          ]
+        };
+        
+        // 设置图表
+        contractDetailChart.setOption(option);
+        
+        // 添加窗口大小变化事件
+        window.addEventListener('resize', function() {
+          if (contractDetailChart) contractDetailChart.resize();
+        });
+      } catch (error) {
+        console.error('渲染合约详情图表失败:', error);
+        newChartContainer.innerHTML = `<div style="display:flex;justify-content:center;align-items:center;height:100%;color:#ff7675;">渲染图表失败: ${error.message}</div>`;
+      }
+    }
+
+    // 显示概览
+    function showOverview() {
+      document.getElementById('overview-section').style.display = 'block';
+      document.getElementById('contract-selector').style.display = 'none';
+      document.getElementById('contract-detail').style.display = 'none';
+      
+      // 调整图表大小
+      if (chart) {
+        setTimeout(() => chart.resize(), 100);
+      }
+    }
+  </script>
+</body>
+</html>
