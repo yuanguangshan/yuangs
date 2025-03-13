@@ -581,6 +581,7 @@
                 <th>涨幅</th>
                 <th>成交</th>
                 <th>持仓</th>
+                <th>增仓率</th>
               </tr>
             </thead>
             <tbody id="contracts-body">
@@ -614,6 +615,10 @@
             <div class="contract-info-label">持仓量</div>
             <div id="contract-position" class="contract-info-value">-</div>
           </div>
+          <div class="contract-info-item">
+            <div class="contract-info-label">增仓率</div>
+            <div id="contract-pos-change" class="contract-info-value">-</div>
+          </div>
         </div>
         
         <div id="contract-premium-chart-wrapper" style="width: 100%; height: 220px; margin-top: 10px;">
@@ -638,6 +643,7 @@
     let contractsData = {};
     let varietyIdMap = {}; // 品种ID映射
     let currentVariety = null; // 当前选择的品种
+    let previousPositionData = {}; // 存储前一次获取的持仓数据，用于计算增仓率
     
     // 交易所映射表
     const EXCHANGE_MAP = {
@@ -714,7 +720,7 @@
           }
           const contractsBody = document.getElementById('contracts-body');
           if (contractsBody) {
-            contractsBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">请选择品种</td></tr>';
+            contractsBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">请选择品种</td></tr>';
           }
         }
       });
@@ -1316,7 +1322,7 @@
         }
         const contractsBody = document.getElementById('contracts-body');
         if (contractsBody) {
-          contractsBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">请选择品种</td></tr>';
+          contractsBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">请选择品种</td></tr>';
         }
         return;
       }
@@ -1394,6 +1400,26 @@
       return name.replace(/[0-9()（）]/g, '').trim();
     }
 
+    // 计算增仓率
+    function calculatePositionChange(contractCode, currentPosition) {
+      // 尝试将字符串转换为数字
+      const current = parseFloat(currentPosition) || 0;
+      
+      // 从先前的数据中获取旧持仓量数据
+      const previous = previousPositionData[contractCode] || 0;
+      
+      // 存储当前持仓量数据以便下次计算
+      previousPositionData[contractCode] = current;
+      
+      // 如果没有旧数据或当前数据为0，则返回0
+      if (previous === 0 || current === 0) return 0;
+      
+      // 计算增仓率
+      const changeRate = ((current - previous) / previous) * 100;
+      
+      return changeRate.toFixed(2);
+    }
+
     // 获取指定品种的合约列表
     async function fetchVarietyContracts(variety) {
       const premiumChartElement = document.getElementById('premium-chart');
@@ -1409,7 +1435,7 @@
         
         // 显示加载状态
         premiumChartElement.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:#666;">加载中...</div>';
-        contractsBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">加载中...</td></tr>';
+        contractsBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">加载中...</td></tr>';
         
         // 保证variety不为空
         if (!variety) {
@@ -1485,14 +1511,19 @@
             throw new Error('未获取到任何价格数据');
           }
           
-          // 转换数据为统一格式
-          const formattedPrices = prices.map(item => ({
-            code: item.name || '',
-            price: item.p || '0',
-            change: item.zdf || '0',
-            volume: item.vol || '0',
-            position: item.ccl || '0'
-          }));
+          // 转换数据为统一格式，并计算增仓率
+          const formattedPrices = prices.map(item => {
+            const positionChange = calculatePositionChange(item.name, item.ccl);
+            
+            return {
+              code: item.name || '',
+              price: item.p || '0',
+              change: item.zdf || '0',
+              volume: item.vol || '0',
+              position: item.ccl || '0',
+              positionChange: positionChange // 增仓率
+            };
+          });
           
           // 保存数据 - 使用正确的品种名称作为键
           const varietyName = extractVarietyCode(prices[0]?.name || '');
@@ -1518,7 +1549,7 @@
           }
           
           if (contractsBody) {
-            contractsBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">获取价格数据失败: ${pricesError.message}</td></tr>`;
+            contractsBody.innerHTML = `<tr><td colspan="6" style="text-align:center;">获取价格数据失败: ${pricesError.message}</td></tr>`;
           }
         }
         
@@ -1531,7 +1562,7 @@
         }
         
         if (contractsBody) {
-          contractsBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">获取合约列表失败，${error.message}</td></tr>`;
+          contractsBody.innerHTML = `<tr><td colspan="6" style="text-align:center;">获取合约列表失败，${error.message}</td></tr>`;
         }
       }
     }
@@ -1551,7 +1582,7 @@
       contractsBody.innerHTML = '';
       
       if (!contracts || contracts.length === 0) {
-        contractsBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">无合约数据</td></tr>';
+        contractsBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">无合约数据</td></tr>';
         return;
       }
       
@@ -1573,12 +1604,19 @@
           const changeSign = change >= 0 ? '+' : '';
           const changeText = change ? `${changeSign}${change}%` : '-';
           
+          // 为增仓率添加颜色样式
+          const posChange = parseFloat(contract.positionChange);
+          const posChangeClass = posChange >= 0 ? 'price-up' : 'price-down';
+          const posChangeSign = posChange >= 0 ? '+' : '';
+          const posChangeText = posChange ? `${posChangeSign}${posChange}%` : '-';
+          
           row.innerHTML = `
             <td>${contract.code || '-'}</td>
             <td>${contract.price || '-'}</td>
             <td class="${changeClass}">${changeText}</td>
             <td>${formatNumber(contract.volume)}</td>
             <td>${formatNumber(contract.position)}</td>
+            <td class="${posChangeClass}">${posChangeText}</td>
           `;
           
           // 为行添加点击事件 - 确保保存contract对象的副本
@@ -1596,7 +1634,7 @@
         contractsTable.style.display = 'table';
       } catch (error) {
         console.error('渲染合约表格失败:', error);
-        contractsBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">渲染表格失败: ${error.message}</td></tr>`;
+        contractsBody.innerHTML = `<tr><td colspan="6" style="text-align:center;">渲染表格失败: ${error.message}</td></tr>`;
       }
     }
 
@@ -1628,6 +1666,12 @@
       
       document.getElementById('contract-volume').textContent = formatNumber(contract.volume);
       document.getElementById('contract-position').textContent = formatNumber(contract.position);
+      
+      // 显示增仓率数据
+      const posChange = parseFloat(contract.positionChange);
+      const posChangeValue = document.getElementById('contract-pos-change');
+      posChangeValue.textContent = posChange ? `${posChange >= 0 ? '+' : ''}${posChange}%` : '-';
+      posChangeValue.className = `contract-info-value ${posChange >= 0 ? 'up' : 'down'}`;
       
       // 生成并显示升贴水图表
       setTimeout(() => {
