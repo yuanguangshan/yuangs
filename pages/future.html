@@ -110,6 +110,10 @@
       background-color: #ffa69e;
     }
 
+    .status-closed {
+      background-color: #dfe6e9;
+    }
+
     @keyframes pulse {
       0% {
         opacity: 1;
@@ -654,9 +658,9 @@
     </header>
     
     <div class="update-info">
-      <div class="market-status">
+      <div class="market-status" id="market-status">
         <span class="status-indicator status-normal"></span>
-        <span>市场状态: </span>
+        <span>状态: </span>
         <span id="market-status">-</span>
       </div>
       <div class="data-time">
@@ -676,7 +680,7 @@
       <!-- 市场概览部分 -->
       <div id="overview-section">
         <div class="chart-container">
-          <div class="chart-title">期货品种涨跌幅</div>
+          <div class="chart-title">期货品种涨跌幅及增仓率</div>
           <ul id="futures-list" class="futures-list">
             <!-- 期货品种列表将通过JavaScript生成 -->
           </ul>
@@ -1204,13 +1208,20 @@
     }
 
     // 判断当前是否是夜盘交易时间
-    function isNightTradingHours() {
-      const now = new Date();
-      const hours = now.getHours();
-      
-      // 夜盘交易时间：晚上9点到凌晨2点30分
-      // 或者早上9点前（凌晨2点30分到早上9点之间没有交易）
-      return (hours >= 21 || hours < 9);
+    function isTradingHours() {
+        const now = new Date();
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+        const totalMinutes = hours * 60 + minutes;
+
+        // 日盘交易时段：9:00-11:30 和 13:30-15:00
+        const daySession1 = (9 * 60) <= totalMinutes && totalMinutes < (11 * 60 + 30);
+        const daySession2 = (13 * 60 + 30) <= totalMinutes && totalMinutes < (15 * 60);
+        
+        // 夜盘交易时段：21:00-次日2:30
+        const nightSession = (totalMinutes >= 21 * 60) || (totalMinutes < 2 * 60 + 30);
+
+        return daySession1 || daySession2 || nightSession;
     }
 
     // 计算增仓率 - 使用原始公式: rz/(ccl-rz)
@@ -1352,8 +1363,14 @@
 
  // 更新数据摘要
 function updateSummary(data) {
+  const statusElement = document.getElementById('market-status');
+  if (!statusElement) {
+    console.error('状态元素未找到');
+    return;
+  }
   // 更新市场状态和时间
-  const statusText = isAutoUpdateEnabled ? '自动更新中' : '已暂停更新';
+  const statusText = isTradingHours() ? '🟢 交易中' : '🔴 休市中';
+  <!-- statusElement.style.color = isTradingHours() ? '#2ecc71' : '#95a5a6'; -->
   document.getElementById('market-status').textContent = statusText;
   document.getElementById('update-time').textContent = data.lastUpdated;
   
