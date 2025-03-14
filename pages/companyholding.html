@@ -88,10 +88,23 @@
       padding-right: 30px;
     }
     
+    /* 图表容器固定高度和显示 */
     .chart-container {
       width: 100%;
       height: 300px;
       margin: 20px 0;
+      position: relative;
+      overflow: visible;
+      visibility: visible !important;
+      display: block !important;
+    }
+    
+    /* 确保图表总是可见 */
+    #chart {
+      width: 100%;
+      height: 100%;
+      visibility: visible !important;
+      display: block !important;
     }
     
     .quick-select {
@@ -217,7 +230,7 @@
     </div>
 
     <div id="data-container" style="display: none;">
-      <div class="chart-container">
+      <div id="chart-container" class="chart-container">
         <div id="chart" style="width: 100%; height: 100%;"></div>
       </div>
       
@@ -268,6 +281,7 @@
     let sortOrder = 'desc';
     let showAll = false;
     let chart = null;
+    let chartInitialized = false;
     
     // 优先机构列表
     const priorityInstitutions = [
@@ -326,9 +340,6 @@
 
     // 初始化页面
     document.addEventListener('DOMContentLoaded', function() {
-      // 初始化Chart
-      chart = echarts.init(document.getElementById('chart'));
-      
       // 设置默认日期
       setDefaultDates();
       
@@ -357,6 +368,13 @@
       
       // 获取机构列表
       fetchInstitutions();
+      
+      // 监听窗口大小变化
+      window.addEventListener('resize', function() {
+        if (chart) {
+          chart.resize();
+        }
+      });
     });
 
     // 设置默认日期
@@ -456,17 +474,37 @@
         // 重置显示状态
         showAll = false;
         
-        // 渲染数据
-        renderData();
-        
-        // 显示数据区域
-        showLoading(false);
+        // 先显示容器，确保图表容器尺寸正确
         showData(true);
+        
+        // 在确保数据容器可见之后初始化图表
+        setTimeout(() => {
+          initOrUpdateChart();
+          
+          // 渲染数据
+          renderData();
+          
+          // 隐藏加载中
+          showLoading(false);
+        }, 50);
         
       } catch (error) {
         console.error('获取机构数据失败:', error);
         showLoading(false);
       }
+    }
+    
+    // 初始化或更新图表
+    function initOrUpdateChart() {
+      const chartDom = document.getElementById('chart');
+      
+      // 如果图表已经初始化，先销毁
+      if (chart) {
+        chart.dispose();
+      }
+      
+      // 重新初始化图表
+      chart = echarts.init(chartDom);
     }
 
     // 排序函数
@@ -631,7 +669,10 @@
 
     // 渲染图表
     function renderChart(data) {
-      if (!chart) return;
+      if (!chart || !data || data.length === 0) return;
+      
+      // 先确保图表正确大小
+      chart.resize();
       
       const option = {
         title: {
@@ -710,6 +751,11 @@
       };
       
       chart.setOption(option);
+      
+      // 再次调整大小确保显示正确
+      setTimeout(() => {
+        chart.resize();
+      }, 100);
     }
 
     // 显示/隐藏加载指示器
@@ -721,13 +767,6 @@
     function showData(show) {
       document.getElementById('data-container').style.display = show ? 'block' : 'none';
     }
-
-    // 当窗口尺寸变化时重新调整图表大小
-    window.addEventListener('resize', function() {
-      if (chart) {
-        chart.resize();
-      }
-    });
   </script>
 </body>
 </html>
