@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>机构持仓盈亏一览</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    :root {
+      --header-bg: #6952a3;
+      --bg-color: #222;
+      --text-color: #eee;
+      --positive-color: #ff5555;
+      --negative-color: #47deaf;
+      --border-color: #444;
+      --row-alt-bg: #2a2a2a;
+      --control-bg: #333;
+      --button-bg: #6952a3;
+      --button-hover: #8a70d2;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-size: 14px;
+      line-height: 1.2;
+      padding: 0;
+      margin: 0;
+    }
+    
+    #app {
+      max-width: 100%;
+      padding: 10px;
+    }
+    
+    .inst {
+      background-color: var(--header-bg);
+      padding: 15px;
+      text-align: center;
+      margin-bottom: 15px;
+      border-radius: 4px;
+    }
+    
+    .title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 500;
+    }
+    
+    .form-group {
+      display: flex;
+      align-items: center;
+      margin: 10px 0;
+    }
+    
+    label {
+      width: 100px;
+      margin-right: 10px;
+      text-align: right;
+      font-size: 14px;
+    }
+    
+    select, input {
+      width: 180px;
+      padding: 8px 12px;
+      background-color: var(--control-bg);
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      font-size: 14px;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+    }
+    
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 30px;
+    }
+    
+    .chart-container {
+      width: 100%;
+      height: 300px;
+      margin: 20px 0;
+    }
+    
+    .quick-select {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin: 10px 0 20px;
+      justify-content: center;
+    }
+    
+    .quick-select button {
+      background-color: var(--button-bg);
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background-color 0.2s;
+    }
+    
+    .quick-select button:hover {
+      background-color: var(--button-hover);
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+      table-layout: fixed;
+    }
+    
+    th, td {
+      padding: 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    th {
+      background-color: var(--control-bg);
+      font-weight: normal;
+      cursor: pointer;
+      position: relative;
+    }
+    
+    th:hover {
+      background-color: #444;
+    }
+    
+    tr:nth-child(even) {
+      background-color: var(--row-alt-bg);
+    }
+    
+    .profit {
+      color: var(--positive-color);
+    }
+    
+    .loss {
+      color: var(--negative-color);
+    }
+    
+    .show-more {
+      display: block;
+      margin: 15px auto;
+      padding: 8px 20px;
+      background-color: var(--button-bg);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    
+    .show-more:hover {
+      background-color: var(--button-hover);
+    }
+    
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 200px;
+    }
+    
+    .loading-spinner {
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top: 3px solid var(--header-bg);
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin-bottom: 10px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="inst">
+      <h2 class="title">机构持仓盈亏一览</h2>
+    </div>
+
+    <div class="form-group">
+      <label for="institution">选择机构: </label>
+      <select id="institution">
+        <option value="">加载中...</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="startDate">开始日期: </label>
+      <input type="date" id="startDate" />
+    </div>
+
+    <div class="form-group">
+      <label for="endDate">结束日期: </label>
+      <input type="date" id="endDate" />
+    </div>
+
+    <div id="data-container" style="display: none;">
+      <div class="chart-container">
+        <div id="chart" style="width: 100%; height: 100%;"></div>
+      </div>
+      
+      <div class="quick-select">
+        <button id="today">今日</button>
+        <button id="week">一周</button>
+        <button id="month">1月</button>
+        <button id="3months">3月</button>
+        <button id="6months">6月</button>
+        <button id="year">1年</button>
+        <button id="2years">2年</button>
+        <button id="5years">5年</button>
+      </div>
+      
+      <table>
+        <thead>
+          <tr>
+            <th data-sort="variety">品种</th>
+            <th data-sort="varietyName">名称</th>
+            <th data-sort="netPosition">净仓</th>
+            <th data-sort="netPositionChange">变化</th>
+            <th data-sort="fluctuatePal">盈亏</th>
+          </tr>
+        </thead>
+        <tbody id="data-body">
+          <!-- 数据将通过JavaScript填充 -->
+        </tbody>
+      </table>
+      
+      <button id="show-more" class="show-more" style="display: none;">显示全部</button>
+    </div>
+
+    <div id="loading" class="loading">
+      <div class="loading-spinner"></div>
+      <div>加载数据中...</div>
+    </div>
+  </div>
+
+  <script>
+    // 全局变量
+    let institutions = [];
+    let selectedInstitution = '';
+    let selectedInstitutionName = '';
+    let startDate = '';
+    let endDate = '';
+    let institutionData = [];
+    let sortKey = 'fluctuatePal';
+    let sortOrder = 'desc';
+    let showAll = false;
+    let chart = null;
+    
+    // 优先机构列表
+    const priorityInstitutions = [
+      '东方财富',
+      '徽商期货',
+      '永安期货',
+      '国泰君安',
+      '中信期货',
+      '中粮期货',
+      '五矿期货',
+      '金瑞期货',
+      '浙商期货',
+      '东证期货',
+      '摩根大通',
+      '中财期货',
+      '中金财富',
+      '华安期货',
+      '银河期货',
+      '华泰期货',
+      '广发期货',
+      '国投安信',
+      '中信建投',
+      '中泰期货',
+      '方正中期',
+      '海通期货',
+      '光大期货',
+      '南华期货',
+      '申银万国',
+      '乾坤期货',
+      '国信期货',
+      '宏源期货',
+      '国贸期货',
+      '一德期货',
+      '东吴期货',
+      '新湖期货',
+      '平安期货',
+      '瑞达期货',
+      '兴证期货',
+      '海证期货',
+      '宝城期货',
+      '招商期货',
+      '国富期货',
+      '创元期货',
+      '东海期货',
+      '华闻期货',
+      '物产中大',
+      '建信期货',
+      '国元期货',
+      '中辉期货',
+      '弘业期货',
+      '国联期货',
+      '大地期货',
+      '国海良时',
+      '兴业期货'
+    ];
+
+    // 初始化页面
+    document.addEventListener('DOMContentLoaded', function() {
+      // 初始化Chart
+      chart = echarts.init(document.getElementById('chart'));
+      
+      // 设置默认日期
+      setDefaultDates();
+      
+      // 绑定事件
+      document.getElementById('institution').addEventListener('change', onInstitutionChange);
+      document.getElementById('startDate').addEventListener('change', fetchInstitutionData);
+      document.getElementById('endDate').addEventListener('change', fetchInstitutionData);
+      document.getElementById('show-more').addEventListener('click', toggleShowAll);
+      
+      // 绑定排序事件
+      document.querySelectorAll('th[data-sort]').forEach(th => {
+        th.addEventListener('click', function() {
+          sortBy(this.dataset.sort);
+        });
+      });
+      
+      // 绑定快速选择按钮
+      document.getElementById('today').addEventListener('click', () => quickSelect('today'));
+      document.getElementById('week').addEventListener('click', () => quickSelect('week'));
+      document.getElementById('month').addEventListener('click', () => quickSelect('month'));
+      document.getElementById('3months').addEventListener('click', () => quickSelect('3months'));
+      document.getElementById('6months').addEventListener('click', () => quickSelect('6months'));
+      document.getElementById('year').addEventListener('click', () => quickSelect('year'));
+      document.getElementById('2years').addEventListener('click', () => quickSelect('2years'));
+      document.getElementById('5years').addEventListener('click', () => quickSelect('5years'));
+      
+      // 获取机构列表
+      fetchInstitutions();
+    });
+
+    // 设置默认日期
+    function setDefaultDates() {
+      const today = new Date();
+      const endDateElement = document.getElementById('endDate');
+      endDateElement.value = today.toISOString().split('T')[0];
+      endDate = endDateElement.value;
+      
+      const oneMonthAgo = new Date(today);
+      oneMonthAgo.setMonth(today.getMonth() - 1);
+      const startDateElement = document.getElementById('startDate');
+      startDateElement.value = oneMonthAgo.toISOString().split('T')[0];
+      startDate = startDateElement.value;
+    }
+
+    // 获取机构列表
+    async function fetchInstitutions() {
+      showLoading(true);
+      
+      try {
+        const response = await axios.get('https://q.889.ink/lhb/getChoiceOrg');
+        
+        // 处理并排序机构列表
+        institutions = response.data.data
+          .flatMap(group => group.orgList)
+          .sort((a, b) => {
+            const aPriority = priorityInstitutions.indexOf(a.ownerOrgNameAbbr);
+            const bPriority = priorityInstitutions.indexOf(b.ownerOrgNameAbbr);
+            if (aPriority === -1) return 1;
+            if (bPriority === -1) return -1;
+            return aPriority - bPriority;
+          });
+        
+        // 填充机构下拉列表
+        const selectElement = document.getElementById('institution');
+        selectElement.innerHTML = '';
+        
+        institutions.forEach(org => {
+          const option = document.createElement('option');
+          option.value = org.orgCode;
+          option.textContent = org.ownerOrgNameAbbr;
+          selectElement.appendChild(option);
+        });
+        
+        // 选择默认机构
+        const defaultInstitution = institutions.find(org => org.ownerOrgNameAbbr === '东方财富(代客)' || org.ownerOrgNameAbbr === '东方财富');
+        if (defaultInstitution) {
+          selectedInstitution = defaultInstitution.orgCode;
+          selectedInstitutionName = defaultInstitution.ownerOrgNameAbbr;
+          selectElement.value = defaultInstitution.orgCode;
+        } else if (institutions.length > 0) {
+          selectedInstitution = institutions[0].orgCode;
+          selectedInstitutionName = institutions[0].ownerOrgNameAbbr;
+          selectElement.value = institutions[0].orgCode;
+        }
+        
+        // 获取机构数据
+        fetchInstitutionData();
+        
+      } catch (error) {
+        console.error('获取机构列表失败:', error);
+        showLoading(false);
+      }
+    }
+
+    // 机构下拉列表变更事件
+    function onInstitutionChange() {
+      const selectElement = document.getElementById('institution');
+      selectedInstitution = selectElement.value;
+      
+      const selectedOption = selectElement.options[selectElement.selectedIndex];
+      selectedInstitutionName = selectedOption.textContent;
+      
+      fetchInstitutionData();
+    }
+
+    // 获取机构持仓盈亏数据
+    async function fetchInstitutionData() {
+      if (!selectedInstitution || !startDate || !endDate) return;
+      
+      showLoading(true);
+      showData(false);
+      
+      try {
+        const response = await axios.get('https://q.889.ink/lhb/getVarietyPayGraphData', {
+          params: {
+            startDate: startDate.replace(/-/g, ''),
+            endDate: endDate.replace(/-/g, ''),
+            companyCode: selectedInstitution,
+            initFlag: 0
+          }
+        });
+        
+        institutionData = response.data.data.companyPals || [];
+        
+        // 重置显示状态
+        showAll = false;
+        
+        // 渲染数据
+        renderData();
+        
+        // 显示数据区域
+        showLoading(false);
+        showData(true);
+        
+      } catch (error) {
+        console.error('获取机构数据失败:', error);
+        showLoading(false);
+      }
+    }
+
+    // 排序函数
+    function sortBy(key) {
+      if (sortKey === key) {
+        sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortKey = key;
+        sortOrder = 'desc';
+      }
+      
+      renderData();
+    }
+
+    // 切换显示全部
+    function toggleShowAll() {
+      showAll = !showAll;
+      renderData();
+    }
+
+    // 获取行样式类
+    function getRowClass(item, top10Items) {
+      if (top10Items.some(topItem => topItem.variety === item.variety)) {
+        return item.fluctuatePal > 0 ? 'profit' : 'loss';
+      }
+      return '';
+    }
+
+    // 快速选择日期
+    function quickSelect(period) {
+      const endDateValue = document.getElementById('endDate').value;
+      const today = new Date(endDateValue);
+      let newStartDate;
+      
+      switch (period) {
+        case 'today':
+          newStartDate = new Date(today);
+          break;
+        case 'week':
+          newStartDate = new Date(today);
+          newStartDate.setDate(newStartDate.getDate() - 7);
+          break;
+        case 'month':
+          newStartDate = new Date(today);
+          newStartDate.setMonth(newStartDate.getMonth() - 1);
+          break;
+        case '3months':
+          newStartDate = new Date(today);
+          newStartDate.setMonth(newStartDate.getMonth() - 3);
+          break;
+        case '6months':
+          newStartDate = new Date(today);
+          newStartDate.setMonth(newStartDate.getMonth() - 6);
+          break;
+        case 'year':
+          newStartDate = new Date(today);
+          newStartDate.setFullYear(newStartDate.getFullYear() - 1);
+          break;
+        case '2years':
+          newStartDate = new Date(today);
+          newStartDate.setFullYear(newStartDate.getFullYear() - 2);
+          break;
+        case '5years':
+          newStartDate = new Date(today);
+          newStartDate.setFullYear(newStartDate.getFullYear() - 5);
+          break;
+        default:
+          newStartDate = today;
+      }
+      
+      startDate = newStartDate.toISOString().split('T')[0];
+      document.getElementById('startDate').value = startDate;
+      
+      fetchInstitutionData();
+    }
+
+    // 渲染数据
+    function renderData() {
+      if (!institutionData || institutionData.length === 0) return;
+      
+      // 排序数据
+      const sortedData = [...institutionData].sort((a, b) => {
+        let aValue = a[sortKey];
+        let bValue = b[sortKey];
+        
+        if (sortKey === 'fluctuatePal') {
+          aValue = Math.abs(aValue);
+          bValue = Math.abs(bValue);
+        }
+        
+        if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+        return 0;
+      });
+      
+      // 获取前10项（按盈亏绝对值排序）用于图表
+      const top10ByAbsPal = [...institutionData]
+        .sort((a, b) => Math.abs(b.fluctuatePal) - Math.abs(a.fluctuatePal))
+        .slice(0, 6);
+      
+      // 确定显示数据
+      const displayedData = showAll ? sortedData : sortedData.slice(0, 10);
+      
+      // 渲染表格
+      renderTable(displayedData, top10ByAbsPal);
+      
+      // 渲染图表
+      renderChart(top10ByAbsPal);
+      
+      // 显示/隐藏"显示全部"按钮
+      const showMoreButton = document.getElementById('show-more');
+      if (sortedData.length > 10) {
+        showMoreButton.style.display = 'block';
+        showMoreButton.textContent = showAll ? '隐藏' : '显示全部';
+      } else {
+        showMoreButton.style.display = 'none';
+      }
+    }
+
+    // 渲染表格
+    function renderTable(data, top10Items) {
+      const tableBody = document.getElementById('data-body');
+      tableBody.innerHTML = '';
+      
+      data.forEach(item => {
+        const row = document.createElement('tr');
+        row.className = getRowClass(item, top10Items);
+        
+        // 品种
+        const varietyCell = document.createElement('td');
+        varietyCell.textContent = item.variety;
+        row.appendChild(varietyCell);
+        
+        // 名称
+        const nameCell = document.createElement('td');
+        nameCell.textContent = item.varietyName;
+        row.appendChild(nameCell);
+        
+        // 净仓
+        const positionCell = document.createElement('td');
+        positionCell.textContent = item.netPosition;
+        row.appendChild(positionCell);
+        
+        // 变化
+        const changeCell = document.createElement('td');
+        changeCell.textContent = item.netPositionChange;
+        row.appendChild(changeCell);
+        
+        // 盈亏
+        const palCell = document.createElement('td');
+        palCell.textContent = (item.fluctuatePal / 10000).toFixed(0);
+        if (item.fluctuatePal > 0) {
+          palCell.className = 'profit';
+        } else if (item.fluctuatePal < 0) {
+          palCell.className = 'loss';
+        }
+        row.appendChild(palCell);
+        
+        tableBody.appendChild(row);
+      });
+    }
+
+    // 渲染图表
+    function renderChart(data) {
+      if (!chart) return;
+      
+      const option = {
+        title: {
+          text: `${selectedInstitutionName}盈亏`,
+          left: 'center',
+          top: 10,
+          textStyle: {
+            color: '#eee',
+            fontSize: 16,
+            fontWeight: 'bold'
+          }
+        },
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: {
+            type: 'shadow'
+          },
+          formatter: function (params) {
+            const data = params[0];
+            return `${data.name}<br/>盈亏: ${data.value} 亿元`;
+          }
+        },
+        grid: {
+          top: 60,
+          left: 10,
+          right: 10,
+          bottom: 0,
+          containLabel: true,
+          height: '240px'
+        },
+        xAxis: {
+          type: 'category',
+          data: data.map(item => item.varietyName),
+          axisLabel: {
+            interval: 0,
+            rotate: 45,
+            textStyle: {
+              color: '#aaa',
+              fontSize: 12
+            }
+          },
+          axisLine: {
+            lineStyle: { color: '#444' }
+          }
+        },
+        yAxis: {
+          type: 'value',
+          axisLabel: { 
+            color: '#aaa',
+            fontSize: 12
+          },
+          splitLine: {
+            lineStyle: { color: '#333' }
+          }
+        },
+        series: [
+          {
+            name: '盈亏',
+            type: 'bar',
+            data: data.map(item => ({
+              value: (item.fluctuatePal / 100000000).toFixed(2),
+              itemStyle: {
+                color: item.fluctuatePal > 0 ? '#ff5555' : '#47deaf'
+              }
+            })),
+            label: {
+              show: true,
+              position: 'top',
+              formatter: function (params) {
+                return params.value > 0 ? `+${params.value}` : params.value;
+              },
+              color: '#eee'
+            }
+          }
+        ]
+      };
+      
+      chart.setOption(option);
+    }
+
+    // 显示/隐藏加载指示器
+    function showLoading(show) {
+      document.getElementById('loading').style.display = show ? 'flex' : 'none';
+    }
+
+    // 显示/隐藏数据区域
+    function showData(show) {
+      document.getElementById('data-container').style.display = show ? 'block' : 'none';
+    }
+
+    // 当窗口尺寸变化时重新调整图表大小
+    window.addEventListener('resize', function() {
+      if (chart) {
+        chart.resize();
+      }
+    });
+  </script>
+</body>
+</html>
