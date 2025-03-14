@@ -247,6 +247,44 @@
       margin: 8px 0;
       font-size: 12px;
     }
+
+    /* 添加统计栏样式 */
+    .stats-container {
+      margin-top: 10px;
+      background-color: #333;
+      border-radius: 4px;
+      padding: 10px;
+    }
+
+    .stats-title {
+      font-weight: bold;
+      margin-bottom: 5px;
+      font-size: 13px;
+      border-bottom: 1px solid #444;
+      padding-bottom: 5px;
+    }
+
+    .stats-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .stats-item {
+      flex: 1;
+      text-align: center;
+      padding: 0 5px;
+    }
+
+    .stats-label {
+      font-size: 11px;
+      color: #aaa;
+      margin-bottom: 3px;
+    }
+
+    .stats-value {
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
@@ -320,6 +358,25 @@
           <!-- 数据将通过JavaScript填充 -->
         </tbody>
       </table>
+
+      <!-- 新增统计信息区 -->
+      <div class="stats-container">
+        <div class="stats-title">统计汇总（前20名）</div>
+        <div class="stats-row">
+          <div class="stats-item">
+            <div class="stats-label">总计持仓</div>
+            <div id="total-positions" class="stats-value">-</div>
+          </div>
+          <div class="stats-item">
+            <div class="stats-label">持仓比</div>
+            <div id="position-ratio" class="stats-value">-</div>
+          </div>
+          <div class="stats-item">
+            <div class="stats-label">变化比</div>
+            <div id="change-ratio" class="stats-value">-</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -522,6 +579,63 @@
       
       // 重新渲染图表以确保正确显示
       resetAndRenderChart();
+      
+      // 计算并显示统计信息
+      calculateAndDisplayStats();
+    }
+
+    // 计算并显示统计信息
+    function calculateAndDisplayStats() {
+      // 获取前20条数据
+      const longList = data.longInfoList || [];
+      const shortList = data.shortInfoList || [];
+      const maxCount = 20;
+      
+      // 计算多头总持仓和变化
+      let totalLongPosition = 0;
+      let totalLongChange = 0;
+      for (let i = 0; i < Math.min(longList.length, maxCount); i++) {
+        totalLongPosition += longList[i].longNum;
+        totalLongChange += longList[i].longChange;
+      }
+      
+      // 计算空头总持仓和变化
+      let totalShortPosition = 0;
+      let totalShortChange = 0;
+      for (let i = 0; i < Math.min(shortList.length, maxCount); i++) {
+        totalShortPosition += shortList[i].shortNum;
+        totalShortChange += shortList[i].shortChange;
+      }
+      
+      // 计算持仓比
+      const positionRatio = totalLongPosition / totalShortPosition;
+      
+      // 计算变化比 (需要处理分母为0的情况)
+      let changeRatio;
+      if (totalShortChange === 0) {
+        changeRatio = totalLongChange > 0 ? "∞" : totalLongChange < 0 ? "-∞" : "1.00";
+      } else {
+        changeRatio = totalLongChange / totalShortChange;
+        // 如果分子分母符号不同，确保显示正确
+        if ((totalLongChange < 0 && totalShortChange > 0) || 
+            (totalLongChange > 0 && totalShortChange < 0)) {
+          changeRatio = -Math.abs(changeRatio);
+        }
+      }
+      
+      // 更新DOM
+      document.getElementById('total-positions').innerHTML = `
+        <span class="positive">${formatNumber(totalLongPosition)}</span> / 
+        <span class="negative">${formatNumber(totalShortPosition)}</span>
+      `;
+      
+      document.getElementById('position-ratio').innerHTML = 
+        `<span class="${getChangeClass(positionRatio - 1)}">${positionRatio.toFixed(2)}</span>`;
+      
+      document.getElementById('change-ratio').innerHTML = 
+        typeof changeRatio === 'string' ? 
+        `<span>${changeRatio}</span>` : 
+        `<span class="${getChangeClass(changeRatio)}">${changeRatio.toFixed(2)}</span>`;
     }
 
     // 重置并渲染图表
