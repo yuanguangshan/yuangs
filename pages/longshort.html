@@ -433,6 +433,22 @@
     let chart = null;
     let chartInitialized = false;
 
+    // 从URL获取参数
+    function getUrlParams() {
+      const params = {};
+      const queryString = window.location.search.substring(1);
+      const pairs = queryString.split('&');
+      
+      for (const pair of pairs) {
+        if (pair) {
+          const [key, value] = pair.split('=');
+          params[key] = decodeURIComponent(value || '');
+        }
+      }
+      
+      return params;
+    }
+    
     // 初始化页面
     document.addEventListener('DOMContentLoaded', function() {
       // 设置默认日期为今天
@@ -445,8 +461,15 @@
       document.getElementById('toggle-view').addEventListener('click', toggleView);
       document.getElementById('remove-number').addEventListener('change', onRemoveNumberChange);
       
+      // 获取URL参数
+      const urlParams = getUrlParams();
+      const contractParam = urlParams.contract;
+      const dmParam = urlParams.dm;
+      const scParam = urlParams.sc;
+      const varietyParam = urlParams.variety;
+      
       // 立即获取品种列表
-      fetchContracts();
+      fetchContracts(contractParam, dmParam, scParam, varietyParam);
       
       // 窗口大小变化时重绘图表
       window.addEventListener('resize', function() {
@@ -457,7 +480,7 @@
     });
 
     // 获取品种列表
-    async function fetchContracts() {
+    async function fetchContracts(contractParam, dmParam, scParam, varietyParam) {
       showLoading(true);
       showError(false);
       
@@ -482,12 +505,36 @@
           selectElement.appendChild(option);
         });
         
-        // 选择第一个选项
-        if (contracts.length > 0) {
+        // 根据URL参数选择合约
+        if (dmParam && scParam) {
+          // 如果URL中有合约代码和市场代码
+          const matchedContract = contracts.find(c => c.dm === dmParam && c.sc === scParam);
+          if (matchedContract) {
+            selectedContract = matchedContract;
+            selectElement.value = selectedContract.dm;
+          }
+        } else if (contractParam) {
+          // 如果URL中有合约名称
+          const matchedContract = contracts.find(c => c.name === contractParam);
+          if (matchedContract) {
+            selectedContract = matchedContract;
+            selectElement.value = selectedContract.dm;
+          }
+        } else if (varietyParam) {
+          // 如果URL中有品种代码
+          const matchedContract = contracts.find(c => c.dm.startsWith(varietyParam));
+          if (matchedContract) {
+            selectedContract = matchedContract;
+            selectElement.value = selectedContract.dm;
+          }
+        } else if (contracts.length > 0) {
+          // 默认选择第一个选项
           selectedContract = contracts[0];
           selectElement.value = selectedContract.dm;
-          fetchData();
         }
+        
+        // 获取数据
+        fetchData();
         
       } catch (error) {
         console.error('获取品种列表失败:', error);
@@ -720,9 +767,13 @@
         
         // 多头名称
         const longNameCell = document.createElement('td');
-        longNameCell.className = 'col-name';
+        longNameCell.className = 'col-name company-name';
+        longNameCell.style.cursor = 'pointer';
         if (long) {
           longNameCell.textContent = long.futureCompanyName.replace('(代客)', '');
+          longNameCell.dataset.company = long.futureCompanyName.replace('(代客)', '');
+          longNameCell.dataset.code = long.futureCompanyCode || '';
+          longNameCell.title = '点击查看机构持仓';
         }
         row.appendChild(longNameCell);
         
@@ -747,9 +798,13 @@
         
         // 空头名称
         const shortNameCell = document.createElement('td');
-        shortNameCell.className = 'col-name';
+        shortNameCell.className = 'col-name company-name';
+        shortNameCell.style.cursor = 'pointer';
         if (short) {
           shortNameCell.textContent = short.futureCompanyName.replace('(代客)', '');
+          shortNameCell.dataset.company = short.futureCompanyName.replace('(代客)', '');
+          shortNameCell.dataset.code = short.futureCompanyCode || '';
+          shortNameCell.title = '点击查看机构持仓';
         }
         row.appendChild(shortNameCell);
         
@@ -774,6 +829,19 @@
         
         tableBody.appendChild(row);
       }
+      
+      // 添加机构名称点击事件
+      document.querySelectorAll('.company-name').forEach(cell => {
+        if (cell.textContent.trim()) {
+          cell.addEventListener('click', function() {
+            const companyName = this.getAttribute('data-company');
+            const companyCode = this.getAttribute('data-code');
+            if (companyName && companyCode) {
+              window.location.href = `companyholding.html?company=${encodeURIComponent(companyName)}&code=${companyCode}`;
+            }
+          });
+        }
+      });
     }
 
     // 渲染图表 - 修复版本

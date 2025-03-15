@@ -5,6 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>机构持仓盈亏一览</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
   <style>
@@ -274,6 +275,9 @@
 <body>
   <div id="app">
     <div class="inst">
+      <a href="javascript:history.back()" style="position: absolute; left: 15px; color: white; text-decoration: none;">
+        <i class="fas fa-arrow-left"></i> 返回
+      </a>
       <h2 class="title">机构持仓盈亏一览</h2>
     </div>
 
@@ -404,10 +408,31 @@
       '兴业期货'
     ];
 
+    // 从URL获取参数
+    function getUrlParams() {
+      const params = {};
+      const queryString = window.location.search.substring(1);
+      const pairs = queryString.split('&');
+      
+      for (const pair of pairs) {
+        if (pair) {
+          const [key, value] = pair.split('=');
+          params[key] = decodeURIComponent(value || '');
+        }
+      }
+      
+      return params;
+    }
+    
     // 初始化页面
     document.addEventListener('DOMContentLoaded', function () {
       // 设置默认日期
       setDefaultDates();
+
+      // 获取URL参数
+      const urlParams = getUrlParams();
+      const companyCode = urlParams.code;
+      const companyName = urlParams.company;
 
       // 绑定事件
       document.getElementById('institution').addEventListener('change', onInstitutionChange);
@@ -486,16 +511,46 @@
           selectElement.appendChild(option);
         });
 
-        // 选择默认机构
-        const defaultInstitution = institutions.find(org => org.ownerOrgNameAbbr === '东方财富(代客)' || org.ownerOrgNameAbbr === '东方财富');
-        if (defaultInstitution) {
-          selectedInstitution = defaultInstitution.orgCode;
-          selectedInstitutionName = defaultInstitution.ownerOrgNameAbbr;
-          selectElement.value = defaultInstitution.orgCode;
-        } else if (institutions.length > 0) {
-          selectedInstitution = institutions[0].orgCode;
-          selectedInstitutionName = institutions[0].ownerOrgNameAbbr;
-          selectElement.value = institutions[0].orgCode;
+        // 获取URL参数
+        const urlParams = getUrlParams();
+        const companyCode = urlParams.code;
+        const companyName = urlParams.company;
+        
+        // 根据URL参数选择机构
+        let institutionFound = false;
+        
+        if (companyCode) {
+          // 如果URL中有机构代码
+          const matchedInstitution = institutions.find(org => org.orgCode === companyCode);
+          if (matchedInstitution) {
+            selectedInstitution = matchedInstitution.orgCode;
+            selectedInstitutionName = matchedInstitution.ownerOrgNameAbbr;
+            selectElement.value = matchedInstitution.orgCode;
+            institutionFound = true;
+          }
+        } else if (companyName) {
+          // 如果URL中有机构名称
+          const matchedInstitution = institutions.find(org => org.ownerOrgNameAbbr === companyName);
+          if (matchedInstitution) {
+            selectedInstitution = matchedInstitution.orgCode;
+            selectedInstitutionName = matchedInstitution.ownerOrgNameAbbr;
+            selectElement.value = matchedInstitution.orgCode;
+            institutionFound = true;
+          }
+        }
+        
+        // 如果没有找到匹配的机构，使用默认机构
+        if (!institutionFound) {
+          const defaultInstitution = institutions.find(org => org.ownerOrgNameAbbr === '东方财富(代客)' || org.ownerOrgNameAbbr === '东方财富');
+          if (defaultInstitution) {
+            selectedInstitution = defaultInstitution.orgCode;
+            selectedInstitutionName = defaultInstitution.ownerOrgNameAbbr;
+            selectElement.value = defaultInstitution.orgCode;
+          } else if (institutions.length > 0) {
+            selectedInstitution = institutions[0].orgCode;
+            selectedInstitutionName = institutions[0].ownerOrgNameAbbr;
+            selectElement.value = institutions[0].orgCode;
+          }
         }
 
         // 获取机构数据
@@ -702,16 +757,29 @@
         // 品种
         const varietyCell = document.createElement('td');
         varietyCell.textContent = item.variety;
+        varietyCell.className = 'variety-code';
         row.appendChild(varietyCell);
 
         // 名称
         const nameCell = document.createElement('td');
         nameCell.textContent = item.varietyName;
+        nameCell.className = 'variety-name';
+        nameCell.style.cursor = 'pointer';
+        nameCell.title = '点击查看品种行情';
+        nameCell.addEventListener('click', function() {
+          window.location.href = `future.html?variety=${item.variety}`;
+        });
         row.appendChild(nameCell);
 
         // 净仓
         const positionCell = document.createElement('td');
         positionCell.textContent = item.netPosition;
+        positionCell.className = 'net-position';
+        positionCell.style.cursor = 'pointer';
+        positionCell.title = '点击查看品种多空持仓';
+        positionCell.addEventListener('click', function() {
+          window.location.href = `longshort.html?variety=${item.variety}`;
+        });
         row.appendChild(positionCell);
 
         // 变化
@@ -730,7 +798,7 @@
         row.appendChild(palCell);
 
         tableBody.appendChild(row);
-      });
+      });}
     }
 
     // 渲染图表
