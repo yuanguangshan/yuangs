@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>主力概况</title>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <style>
+    :root {
+      --header-bg: #a18cd1;
+      /* Header Gradient Start */
+      --header-bg-end: #fbc2eb;
+      /* Header Gradient End */
+      --bg-color: #f0f1f8;
+      /* Body Background */
+      --text-color: #333;
+      /* Main Text */
+      --positive-color: #ff7675;
+      /* Up/Positive */
+      --negative-color: #55efc4;
+      /* Down/Negative */
+      --border-color: #ddd;
+      --row-alt-bg: #f9f9f9;
+      /* Alternate Row */
+      --control-bg: #fff;
+      /* Input/Select */
+      --button-bg: #a18cd1;
+      /* Button Background */
+      --button-hover: #8e72d6;
+      /* Button Hover */
+      --table-header-bg: #f8f9fa;
+      /* Table Header */
+      --table-header-text: #666;
+      /* Table Header Text */
+      --chart-title-bg: #f0f0f0;
+      /* Chart Title Border */
+
+      /* New Colors */
+      --overview-bg: #f0f0f0;
+      --overview-text: #666;
+      --progress-bg: #e0e0e0;
+      --neutral-segment: #cccccc;
+      --red: #ff6347;
+      --green: #32cd32;
+      --summary-bg: #f8f9fa;
+      --summary-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      --type-selector-bg: #e0e0e0;
+      --type-selector-active: var(--red);
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+    }
+
+    .zhuli-container {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 1200px;
+      margin: auto;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+
+    .market-overview {
+      background-color: var(--overview-bg);
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .summary {
+      font-size: 14px;
+      color: var(--overview-text);
+    }
+
+    .progress-bar-container {
+      width: 100%;
+      background-color: var(--progress-bg);
+      height: 24px;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .progress-bar {
+      display: flex;
+      height: 100%;
+    }
+
+    .progress-segment {
+      height: 100%;
+    }
+
+    .positive {
+      background-color: var(--red);
+    }
+
+    .neutral {
+      background-color: var(--neutral-segment);
+    }
+
+    .negative {
+      background-color: var(--green);
+    }
+
+    .labels {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .label {
+      font-size: 14px;
+    }
+
+    .statistics {
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    .red {
+      color: var(--red);
+    }
+
+    .green {
+      color: var(--green);
+    }
+
+    .zhuli-overview {
+      width: 100%;
+      margin: 8px 0;
+      padding: 1px;
+      background-color: var(--summary-bg);
+      border-radius: 10px;
+      box-shadow: var(--summary-shadow);
+    }
+
+    .title {
+      font-size: 18px;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    .type-selector {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+
+    .type-selector button {
+      padding: 8px 16px;
+      margin: 0 4px;
+      border: none;
+      border-radius: 4px;
+      background-color: var(--type-selector-bg);
+      cursor: pointer;
+    }
+
+    .type-selector button.active {
+      background-color: var(--type-selector-active);
+      color: white;
+    }
+
+    .heatmap-container {
+      width: 100%;
+      height: 600px;
+      margin: 20px auto;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      background-color: white;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .bg-positive {
+      background-color: #ffe5e5;
+    }
+
+    .bg-neutral {
+      background-color: #e0e0e0;
+    }
+
+    .bg-negative {
+      background-color: #e0ffe5;
+    }
+
+    .icon-clock {
+      width: 16px;
+      height: 16px;
+      background: url('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSVyY7OFVMM2_wek4yO8j6G-1SN0HhlLFO2fQ&s') no-repeat center center;
+      /* 添加时钟图标 */
+      background-size: contain;
+      /* 确保图标适应容器 */
+    }
+
+    .update-time {
+      font-size: 12px;
+      /* 字体大小适中 */
+      font-family: 'Roboto', sans-serif;
+      /* 使用流行的现代字体 */
+      color: #888;
+      /* 使用柔和的颜色，避免喧宾夺主 */
+      display: flex;
+      margin-left: 8px;
+      margin-right: -50px;
+      align-items: right;
+      /* 图标和文字垂直居中 */
+      gap: 5px;
+      /* 图标与文字之间的间距 */
+      padding: 6px 6px;
+      /* 给一些内边距，让整个元素看起来不拥挤 */
+      background-color: #f7f7f7;
+      /* 使用浅色背景，提升可读性 */
+      border-radius: 6px;
+      /* 圆角化，增加视觉柔和感 */
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      /* 添加微妙的阴影 */
+      transition: all 0.3s ease;
+      /* 添加平滑的过渡效果 */
+    }
+
+    .update-time:hover {
+      color: #555;
+      /* 鼠标悬停时文字颜色加深 */
+      background-color: #eaeaea;
+      /* 鼠标悬停时背景颜色稍微加深 */
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+      /* 鼠标悬停时阴影加重 */
+    }
+
+    @media (max-width: 768px) {
+      .heatmap-container {
+        height: 550px;
+      }
+
+      .zhuli-overview {
+        padding: 10px;
+      }
+
+      .market-overview {
+        padding: 12px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="zhuli-container">
+    <!-- 主力涨跌概况部分 -->
+    <div class="market-overview" :class="backgroundClass">
+      <div class="header">
+        <h2>主力概况</h2>
+        <div class="summary">
+          总数: <span id="total">0</span> &nbsp; 更新: <span id="formattedTime"></span>
+        </div>
+      </div>
+
+      <div class="progress-bar-container">
+        <div class="progress-bar">
+          <div class="progress-segment positive" style="width: 0%" id="positiveBar"></div>
+          <div class="progress-segment neutral" style="width: 0%" id="neutralBar"></div>
+          <div class="progress-segment negative" style="width: 0%" id="negativeBar"></div>
+        </div>
+      </div>
+
+      <div class="labels">
+        <div class="label positive-label">
+          上涨 <span id="positiveCount">0</span>
+          <div class="statistics red">
+            <span id="risingContractsCount">0</span> / <span id="avgRisingChange">0.00</span>%
+          </div>
+        </div>
+        <div class="label neutral-label">平 <span id="neutralCount">0</span></div>
+        <div class="label negative-label">
+          下跌 <span id="negativeCount">0</span>
+          <div class="statistics green">
+            <span id="fallingContractsCount">0</span> / <span id="avgFallingChange">0.00</span>%
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 品种/行业涨跌图部分 -->
+    <div class="zhuli-overview">
+      <h2 class="title" id="chartTitle">行业涨跌图</h2>
+      <div class="type-selector">
+        <button id="industryButton" class="active">行业</button>
+        <button id="varietyButton">品种</button>
+        <p class="update-time">
+          <i class="icon-clock"></i>
+          <span id="mapTreeFormattedTime"></span>
+        </p>
+      </div>
+      <div id="mapTreeChart" class="heatmap-container"></div>
+    </div>
+  </div>
+
+  <script>
+    const totalElement = document.getElementById('total');
+    const formattedTimeElement = document.getElementById('formattedTime');
+    const positiveBarElement = document.getElementById('positiveBar');
+    const neutralBarElement = document.getElementById('neutralBar');
+    const negativeBarElement = document.getElementById('negativeBar');
+    const positiveCountElement = document.getElementById('positiveCount');
+    const neutralCountElement = document.getElementById('neutralCount');
+    const negativeCountElement = document.getElementById('negativeCount');
+    const risingContractsCountElement = document.getElementById('risingContractsCount');
+    const avgRisingChangeElement = document.getElementById('avgRisingChange');
+    const fallingContractsCountElement = document.getElementById('fallingContractsCount');
+    const avgFallingChangeElement = document.getElementById('avgFallingChange');
+    const mapTreeFormattedTimeElement = document.getElementById('mapTreeFormattedTime');
+    const chartTitleElement = document.getElementById('chartTitle');
+
+    let myChart = null;
+    let currentView = 'industry';
+    let currentIndustry = null;
+    let intervalId = null;
+
+    const fetchData = async () => {
+      try {
+        const overviewResponse = await axios.get('https://q.889.ink/overview');
+        if (overviewResponse.data && overviewResponse.data.result) {
+          const data = overviewResponse.data.result;
+
+          totalElement.textContent = data.total;
+          formattedTimeElement.textContent = formatTime(data.datatime);
+          positiveBarElement.style.width = (data.z / data.total) * 100 + '%';
+          neutralBarElement.style.width = (data.p / data.total) * 100 + '%';
+          negativeBarElement.style.width = (data.d / data.total) * 100 + '%';
+          positiveCountElement.textContent = data.z;
+          neutralCountElement.textContent = data.p;
+          negativeCountElement.textContent = data.d;
+        }
+
+        await fetchContractData();
+        await fetchMapTreeData();
+      } catch (err) {
+        console.error('Error fetching overview data:', err);
+      }
+    };
+
+    const fetchContractData = async () => {
+      try {
+        const response = await axios.get('https://q.889.ink');
+        if (response.data && response.data.list) {
+          const contracts = response.data.list.filter(
+            (contract) => contract.cje > 100000000
+          );
+
+          const risingContracts = contracts.filter(
+            (contract) => contract.zdf > 0
+          );
+          const fallingContracts = contracts.filter(
+            (contract) => contract.zdf < 0
+          );
+
+          const risingContractsCount = risingContracts.length;
+          const avgRisingChange =
+            risingContracts.reduce((sum, contract) => sum + contract.zdf, 0) /
+            (risingContracts.length || 1);
+
+          const fallingContractsCount = fallingContracts.length;
+          const avgFallingChange =
+            fallingContracts.reduce((sum, contract) => sum + contract.zdf, 0) /
+            (fallingContracts.length || 1);
+
+          risingContractsCountElement.textContent = risingContractsCount;
+          avgRisingChangeElement.textContent = avgRisingChange.toFixed(2);
+          fallingContractsCountElement.textContent = fallingContractsCount;
+          avgFallingChangeElement.textContent = avgFallingChange.toFixed(2);
+        }
+      } catch (error) {
+        console.error('Error fetching contract data:', error);
+      }
+    };
+
+    const fetchMapTreeData = async () => {
+      const url =
+        currentView === 'industry'
+          ? 'https://q.889.ink/em_heatmap?type=0&filter=&'
+          : 'https://q.889.ink/em_heatmap?type=1&filter=&';
+
+      try {
+        const mapTreeResponse = await axios.get(url);
+        if (mapTreeResponse.data && mapTreeResponse.data.result) {
+          const mapTreeData = mapTreeResponse.data.result.list;
+          mapTreeFormattedTimeElement.textContent = formatTime(mapTreeResponse.data.result.datatime);
+          drawMapTree(mapTreeData);
+        } else {
+          console.error('No data received for map tree');
+        }
+      } catch (err) {
+        console.error('Error fetching mapTree data:', err);
+      }
+    };
+
+    const drawMapTree = (mapTreeData) => {
+      const chartDom = document.getElementById('mapTreeChart');
+      if (!chartDom) {
+        console.error('MapTreeChart element not found');
+        return;
+      }
+
+      if (!myChart) {
+        myChart = echarts.init(chartDom);
+      }
+
+      const processedData = mapTreeData
+        .filter((item) => parseFloat(item.cdzj) !== 0 && item.name && item.zdf)
+        .map((item) => ({
+          name: item.name.replace('加权', ''),
+          value: Math.abs(parseFloat(item.cdzj)),
+          zdf: parseFloat(item.zdf),
+          dm: item.dm,
+          itemStyle: {
+            color: getColor(item.zdf),
+          },
+        }));
+
+      if (processedData.length === 0) {
+        console.error('No valid data for MapTree');
+        return;
+      }
+
+      const sortedData = [...processedData].sort((a, b) => b.zdf - a.zdf);
+      const topThree = sortedData.slice(0, 3);
+      const bottomThree = sortedData.slice(-3).reverse();
+
+      const option = {
+        series: [
+          {
+            type: 'treemap',
+            data: processedData,
+            top: '60',
+            bottom: '12',
+            left: '12',
+            right: '12',
+            label: {
+              show: true,
+              formatter: (params) => {
+                const item = params.data;
+                return `${item.name}\n${(item.value / 100000000).toFixed(
+                  2
+                )}亿\n${item.zdf.toFixed(2)}%`;
+              },
+            },
+            breadcrumb: { show: false },
+          },
+        ],
+        tooltip: {
+          formatter: (info) => {
+            const item = info.data;
+            const value = (item.value / 100000000).toFixed(2);
+            return `<strong>${item.name}</strong><br/>资金: ${value}亿<br/>涨跌幅: ${item.zdf.toFixed(
+              2
+            )}%`;
+          },
+        },
+        title: [
+          {
+            text: topThree
+              .map((item) => `🔴 ${item.name}:${item.zdf.toFixed(2)}%`)
+              .join('  '),
+            top: 5,
+            left: 5,
+            textStyle: { fontSize: 11, color: '#FF4500' },
+          },
+          {
+            text: bottomThree
+              .map((item) => `🟢 ${item.name}:${item.zdf.toFixed(2)}%`)
+              .join('  '),
+            top: 25,
+            left: 10,
+            textStyle: { fontSize: 11, color: '#006400' },
+          },
+        ],
+      };
+
+      myChart.setOption(option);
+
+      myChart.off('click');
+      myChart.on('click', async (params) => {
+        if (currentView === 'industry') {
+          const industry = mapTreeData.find(
+            (item) => item.name === params.data.name
+          );
+          if (industry) {
+            currentIndustry = industry;
+            await drawIndustryDetail(industry.dm, mapTreeData);
+          }
+        }
+      });
+    };
+
+    const drawIndustryDetail = async (industryCode, mapTreeData) => {
+      try {
+        const response = await axios.get(
+          `https://q.889.ink/em_heatmap?type=1&filter=${industryCode}`
+        );
+        const industryData = response.data.result.list;
+
+        const processedData = industryData
+          .filter((item) => parseFloat(item.cdzj) !== 0 && item.name && item.zdf)
+          .map((item) => ({
+            name: item.name,
+            value: Math.abs(parseFloat(item.cdzj)),
+            zdf: parseFloat(item.zdf),
+            itemStyle: { color: getColor(item.zdf) },
+          }));
+
+        const option = {
+          series: [
+            {
+              type: 'treemap',
+              data: processedData,
+              label: {
+                show: true,
+                formatter: (params) => {
+                  const item = params.data;
+                  return `${item.name}\n${(item.value / 100000000).toFixed(
+                    2
+                  )}亿\n${item.zdf.toFixed(2)}%`;
+                },
+              },
+            },
+          ],
+          tooltip: {
+            formatter: (info) => {
+              const item = info.data;
+              const value = (item.value / 100000000).toFixed(2);
+              return `<strong>${item.name}</strong><br/>资金: ${value}亿<br/>涨跌幅: ${item.zdf.toFixed(
+                2
+              )}%`;
+            },
+          },
+          title: {
+            text: `${currentIndustry.name} 详情`,
+            left: 'center',
+            top: 10,
+          },
+        };
+
+        myChart.setOption(option);
+      } catch (err) {
+        console.error('Error fetching industry detail data:', err);
+      }
+    };
+
+    const getColor = (zdf) => {
+      const colors = [
+        '#006400',
+        '#228B22',
+        '#32CD32',
+        '#90EE90',
+        '#98FB98',
+        '#d4cccd',
+        '#FFA07A',
+        '#FF6347',
+        '#FF4500',
+        '#8B0000',
+      ];
+      const thresholds = [-5, -3, -1.5, -1, -0.25, 0.25, 1, 1.5, 3, 5];
+
+      for (let i = 0; i < thresholds.length; i++) {
+        if (zdf < thresholds[i]) {
+          return colors[i];
+        }
+      }
+      return colors[colors.length - 1];
+    };
+
+    const formatTime = (datatime) => {
+      if (datatime) {
+        const [date, time] = datatime.split(' ');
+        return time;
+      }
+      return '';
+    };
+
+    const changeView = async (view) => {
+      currentView = view;
+      currentIndustry = null;
+      if (view === 'industry') {
+        chartTitleElement.textContent = '行业涨跌图';
+      } else {
+        chartTitleElement.textContent = '品种涨跌图';
+      }
+      await fetchMapTreeData();
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      fetchData();
+      intervalId = setInterval(fetchData, 10000);
+
+      window.addEventListener('resize', () => {
+        if (myChart) {
+          myChart.resize();
+        }
+      });
+
+      document.getElementById('industryButton').addEventListener('click', () => {
+        changeView('industry');
+        document.getElementById('industryButton').classList.add('active');
+        document.getElementById('varietyButton').classList.remove('active');
+      });
+
+      document.getElementById('varietyButton').addEventListener('click', () => {
+        changeView('variety');
+        document.getElementById('varietyButton').classList.add('active');
+        document.getElementById('industryButton').classList.remove('active');
+      });
+    });
+
+    window.addEventListener('beforeunload', () => {
+      clearInterval(intervalId);
+      if (myChart) {
+        myChart.dispose();
+        myChart = null;
+      }
+    });
+  </script>
+</body>
+
+</html>
