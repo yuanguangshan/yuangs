@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>商品席位盈亏分布</title>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    :root {
+      --header-bg: rgba(183, 223, 235, 0.6);
+      /* Header Background */
+      --header-bg-end: rgba(0, 255, 0, 0.1);
+      /* Header Background End */
+      --bg-color: #f5f5f5;
+      /* Body Background */
+      --text-color: #333;
+      /* Main Text */
+      --positive-color: #ff4d4f;
+      /* Profit */
+      --negative-color: #52c41a;
+      /* Loss */
+      --border-color: #ddd;
+      --control-bg: #ffffff;
+      /* Input/Select */
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      box-sizing: border-box;
+    }
+
+    #app {
+      width: 100%;
+      max-width: 100%;
+      margin: 0 auto;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+
+    .header {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, var(--header-bg), var(--header-bg-end));
+      padding: 15px;
+      border-radius: 8px;
+      backdrop-filter: blur(5px);
+    }
+
+    .form-group {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+
+    .date-group {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+
+    .preset-group {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+
+    .preset-group button {
+      background-color: #1890ff;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      margin: 0 5px;
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .preset-group button:hover {
+      background-color: hsl(119, 51%, 51%);
+    }
+
+    label {
+      margin: 1px 2px;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    select {
+      padding: 8px 12px;
+      font-size: 16px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      background-color: var(--control-bg);
+    }
+
+    input[type='date'] {
+      padding: 8px;
+      font-size: 14px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      margin-left: 8px;
+    }
+
+    .company-list {
+      background-color: white;
+      border-radius: 8px;
+      padding: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .company-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      position: relative;
+      padding-bottom: 15px;
+    }
+
+    .company-name {
+      font-size: 16px;
+      flex: 1;
+      color: #1890ff;
+    }
+
+    .company-value {
+      font-size: 16px;
+      font-weight: bold;
+      width: 120px;
+      text-align: right;
+    }
+
+    .profit {
+      color: var(--positive-color);
+    }
+
+    .loss {
+      color: var(--negative-color);
+    }
+
+    .bar {
+      position: absolute;
+      height: 8px;
+      bottom: 0;
+      left: 0;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <div class="header">
+      <h2>商品席位盈亏分布</h2>
+    </div>
+
+    <div class="form-group">
+      <label for="variety">品种:</label>
+      <select id="variety"></select>
+    </div>
+
+    <div class="date-group">
+      <label for="startDate">时段:</label>
+      <input type="date" id="startDate" />
+      <label for="endDate">至</label>
+      <input type="date" id="endDate" />
+    </div>
+
+    <div class="preset-group">
+      <button onclick="setPresetTime('today')">今日</button>
+      <button onclick="setPresetTime('1w')">1周</button>
+      <button onclick="setPresetTime('1m')">1月</button>
+      <button onclick="setPresetTime('3m')">3月</button>
+      <button onclick="setPresetTime('6m')">6月</button>
+      <button onclick="setPresetTime('1y')">1年</button>
+    </div>
+
+    <div class="company-list" id="companyList">
+      <!-- Company items will be inserted here -->
+    </div>
+  </div>
+
+  <script>
+    const varietyList = [];
+    let selectedVariety = '';
+    let companyPals = [];
+    let startDate = '';
+    let endDate = '';
+
+    const setPresetTime = (preset) => {
+      const now = new Date();
+      let newStartDate = new Date();
+
+      switch (preset) {
+        case 'today':
+          newStartDate = new Date(now);
+          break;
+        case '1w':
+          newStartDate.setDate(now.getDate() - 7);
+          break;
+        case '1m':
+          newStartDate.setMonth(now.getMonth() - 1);
+          break;
+        case '3m':
+          newStartDate.setMonth(now.getMonth() - 3);
+          break;
+        case '6m':
+          newStartDate.setMonth(now.getMonth() - 6);
+          break;
+        case '1y':
+          newStartDate.setFullYear(now.getFullYear() - 1);
+          break;
+        default:
+          newStartDate = new Date(now);
+      }
+
+      startDate = newStartDate.toISOString().slice(0, 10);
+      endDate = now.toISOString().slice(0, 10);
+
+      document.getElementById('startDate').value = startDate;
+      document.getElementById('endDate').value = endDate;
+
+      fetchData();
+    };
+
+    const fetchVarietyList = async () => {
+      try {
+        const response = await axios.get('https://q.889.ink');
+        let jsonpData;
+
+        if (typeof response.data === 'string') {
+          jsonpData = response.data.replace(/^aaa_callback\(/, '').replace(/\);$/, '');
+          jsonpData = JSON.parse(jsonpData);
+        } else {
+          jsonpData = response.data;
+        }
+
+        if (jsonpData && jsonpData.list) {
+          varietyList.length = 0; // Clear existing list
+          varietyList.push(...jsonpData.list);
+
+          if (varietyList.length > 0) {
+            selectedVariety = varietyList[0].dm;
+            updateVarietyOptions(varietyList);
+            fetchData();
+          }
+        }
+      } catch (error) {
+        console.error('获取品种列表失败:', error);
+      }
+    };
+
+    const fetchData = async () => {
+      try {
+        const market = varietyList.find(item => item.dm === selectedVariety)?.sc;
+        const response = await axios.get(
+          'https://q.889.ink/commodity_profit', {
+            params: {
+              startDate: startDate.replace(/-/g, ''),
+              endDate: endDate.replace(/-/g, ''),
+              variety: selectedVariety.replace(/\d+$/, ''),
+              market: market,
+              initFlag: 0
+            }
+          }
+        );
+        if (response.data.code === 10000) {
+          companyPals = response.data.data.companyPals;
+          renderCompanyList();
+        }
+      } catch (error) {
+        console.error('获取数据失败:', error);
+      }
+    };
+
+    const updateVarietyOptions = (varietyList) => {
+      const selectElement = document.getElementById('variety');
+      selectElement.innerHTML = ''; // Clear existing options
+
+      varietyList.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item.dm;
+        option.textContent = removeTrailingDigits(item.name);
+        selectElement.appendChild(option);
+      });
+
+      selectElement.value = selectedVariety; // Set selected value
+    };
+
+    const removeTrailingDigits = (str) => {
+      return str.replace(/\d+$/, '');
+    };
+
+    const formatValue = (value) => {
+      return (value / 10000).toFixed(2) + '万';
+    };
+
+    const getBarWidth = (value) => {
+      const maxValue = Math.max(...companyPals.map(c => Math.abs(c.fluctuatePal)), 1);
+      return `${(Math.abs(value) / maxValue) * 80}%`;
+    };
+
+    const renderCompanyList = () => {
+      const companyListElement = document.getElementById('companyList');
+      companyListElement.innerHTML = ''; // Clear existing list
+
+      const sortedCompanyPals = [...companyPals].sort((a, b) => b.fluctuatePal - a.fluctuatePal);
+      const visibleCompanies = [...sortedCompanyPals.slice(0, 5), ...sortedCompanyPals.slice(-5)];
+
+      visibleCompanies.forEach(company => {
+        const companyItem = document.createElement('div');
+        companyItem.className = 'company-item';
+
+        const companyName = document.createElement('span');
+        companyName.className = 'company-name';
+        companyName.textContent = company.companyName;
+
+        const companyValue = document.createElement('span');
+        companyValue.className = 'company-value';
+        if (company.fluctuatePal > 0) {
+          companyValue.classList.add('profit');
+        } else if (company.fluctuatePal < 0) {
+          companyValue.classList.add('loss');
+        }
+        companyValue.textContent = formatValue(company.fluctuatePal);
+
+        const bar = document.createElement('div');
+        bar.className = 'bar';
+        bar.style.width = getBarWidth(company.fluctuatePal);
+        bar.style.backgroundColor = company.fluctuatePal > 0 ? '#ff4d4f' : '#52c41a';
+
+        companyItem.appendChild(companyName);
+        companyItem.appendChild(companyValue);
+        companyItem.appendChild(bar);
+
+        companyListElement.appendChild(companyItem);
+      });
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      setPresetTime('1m');
+      fetchVarietyList();
+
+      document.getElementById('variety').addEventListener('change', (event) => {
+        selectedVariety = event.target.value;
+        fetchData();
+      });
+
+      document.getElementById('startDate').addEventListener('change', (event) => {
+        startDate = event.target.value;
+        fetchData();
+      });
+
+      document.getElementById('endDate').addEventListener('change', (event) => {
+        endDate = event.target.value;
+        fetchData();
+      });
+    });
+  </script>
+</body>
+
+</html>
