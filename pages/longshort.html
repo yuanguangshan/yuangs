@@ -202,6 +202,10 @@
       background-color: #47deaf;
     }
 
+    .legend-net {
+      background-color: #74b9ff;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -433,6 +437,50 @@
     let chart = null;
     let chartInitialized = false;
 
+    // 市场简称到市场 ID 的映射（根据您提供的信息更新）
+    const marketIdMap = {
+      'SHFE': '113', // 上海期货交易所
+      'DCE': '114',  // 大连商品交易所
+      'CZCE': '115', // 郑州商品交易所
+      'INE': '142',  // 上海国际能源交易中心
+      'CFFEX': '220', // 中金所（已更新为正确的ID）
+      'GFEX': '225'  // 广期所
+    };
+
+    // 品种代码前缀到市场简称的映射
+    // 根据品种代码自动判断它属于哪个交易所
+    const varietyPrefixToMarket = {
+      // 上期所
+      'cu': 'SHFE', 'al': 'SHFE', 'zn': 'SHFE', 'pb': 'SHFE', 'ni': 'SHFE', 
+      'sn': 'SHFE', 'au': 'SHFE', 'ag': 'SHFE', 'rb': 'SHFE', 'wr': 'SHFE', 
+      'hc': 'SHFE', 'ss': 'SHFE', 'bu': 'SHFE', 'ru': 'SHFE', 'sp': 'SHFE',
+      'fu': 'SHFE',
+      
+      // 大商所
+      'c': 'DCE', 'cs': 'DCE', 'a': 'DCE', 'b': 'DCE', 'm': 'DCE', 
+      'y': 'DCE', 'p': 'DCE', 'fb': 'DCE', 'bb': 'DCE', 'jd': 'DCE', 
+      'rr': 'DCE', 'l': 'DCE', 'v': 'DCE', 'pp': 'DCE', 'j': 'DCE', 
+      'jm': 'DCE', 'i': 'DCE', 'eg': 'DCE', 'eb': 'DCE', 'pg': 'DCE',
+      
+      // 郑商所 - 注意郑商所的合约代码可能会比较特殊
+      'WH': 'CZCE', 'PM': 'CZCE', 'RI': 'CZCE', 'JR': 'CZCE', 'LR': 'CZCE', 
+      'RS': 'CZCE', 'OI': 'CZCE', 'RM': 'CZCE', 'CF': 'CZCE', 'CY': 'CZCE', 
+      'SR': 'CZCE', 'TA': 'CZCE', 'MA': 'CZCE', 'FG': 'CZCE', 'ZC': 'CZCE', 
+      'SF': 'CZCE', 'SM': 'CZCE', 'AP': 'CZCE', 'CJ': 'CZCE', 'UR': 'CZCE',
+      'SA': 'CZCE', 'PF': 'CZCE',
+      
+      // 上海国际能源交易中心
+      'sc': 'INE', 'lu': 'INE', 'nr': 'INE', 'bc': 'INE',
+      
+      // 中金所
+      'IF': 'CFFEX', 'IC': 'CFFEX', 'IH': 'CFFEX', 'IM': 'CFFEX', 
+      'TF': 'CFFEX', 'T': 'CFFEX', 'TS': 'CFFEX', '2Y': 'CFFEX',
+      '5Y': 'CFFEX', '10Y': 'CFFEX', '30Y': 'CFFEX',
+      
+      // 广期所
+      'SI': 'GFEX', 'LC': 'GFEX'
+    };
+
     // 从URL获取参数
     function getUrlParams() {
       const params = {};
@@ -447,6 +495,33 @@
       }
       
       return params;
+    }
+
+    // 根据品种代码获取市场ID
+    function getMarketIdFromVariety(varietyCode) {
+      // 转换为大写，因为某些交易所的品种代码是大写的
+      const upperVariety = varietyCode.toUpperCase();
+      
+      // 先尝试直接匹配上大写的
+      if (varietyPrefixToMarket[upperVariety]) {
+        return marketIdMap[varietyPrefixToMarket[upperVariety]];
+      }
+      
+      // 然后尝试匹配小写的
+      if (varietyPrefixToMarket[varietyCode]) {
+        return marketIdMap[varietyPrefixToMarket[varietyCode]];
+      }
+      
+      // 如果没有直接匹配，尝试查找前缀
+      for (const prefix in varietyPrefixToMarket) {
+        if (varietyCode.startsWith(prefix) || upperVariety.startsWith(prefix)) {
+          return marketIdMap[varietyPrefixToMarket[prefix]];
+        }
+      }
+      
+      // 默认返回上期所的ID
+      console.warn(`无法确定品种"${varietyCode}"的市场ID，默认返回上期所`);
+      return marketIdMap['SHFE'];
     }
 
     // 初始化页面
@@ -506,31 +581,55 @@
         });
         
         // 根据URL参数选择合约
+        let contractFound = false;
+        
+        // 1. 优先根据dm和sc参数精确匹配
         if (dmParam && scParam) {
-          // 如果URL中有合约代码和市场代码
           const matchedContract = contracts.find(c => c.dm === dmParam && c.sc === scParam);
           if (matchedContract) {
             selectedContract = matchedContract;
             selectElement.value = selectedContract.dm;
+            contractFound = true;
           }
-        } else if (contractParam) {
-          // 如果URL中有合约名称，进行包含匹配
-          const matchedContract = contracts.find(c =>
-            (c.name && c.name.includes(contractParam)) || (c.dm && c.dm.includes(contractParam))
+        }
+        
+        // 2. 如果没有找到，尝试根据合约参数匹配
+        if (!contractFound && contractParam) {
+          // 先尝试精确匹配dm
+          let matchedContract = contracts.find(c => c.dm === contractParam);
+          
+          // 如果没找到，尝试模糊匹配名称或代码
+          if (!matchedContract) {
+            matchedContract = contracts.find(c => 
+              (c.name && c.name.includes(contractParam)) || 
+              (c.dm && c.dm.includes(contractParam))
+            );
+          }
+          
+          if (matchedContract) {
+            selectedContract = matchedContract;
+            selectElement.value = selectedContract.dm;
+            contractFound = true;
+          }
+        }
+        
+        // 3. 如果还没找到，尝试根据品种代码匹配
+        if (!contractFound && varietyParam) {
+          // 尝试找到以varietyParam开头的合约
+          const matchedContract = contracts.find(c => 
+            c.dm.startsWith(varietyParam) || 
+            c.dm.toUpperCase().startsWith(varietyParam.toUpperCase())
           );
+          
           if (matchedContract) {
             selectedContract = matchedContract;
             selectElement.value = selectedContract.dm;
+            contractFound = true;
           }
-        } else if (varietyParam) {
-          // 如果URL中有品种代码，进行精确匹配
-          const matchedContract = contracts.find(c => c.dm === varietyParam);
-          if (matchedContract) {
-            selectedContract = matchedContract;
-            selectElement.value = selectedContract.dm;
-          }
-        } else if (contracts.length > 0) {
-          // 默认选择第一个选项
+        }
+        
+        // 4. 如果都没找到，使用第一个合约
+        if (!contractFound && contracts.length > 0) {
           selectedContract = contracts[0];
           selectElement.value = selectedContract.dm;
         }
@@ -569,15 +668,30 @@
       
       const dateInput = document.getElementById('date');
       const formattedDate = dateInput.value.replace(/-/g, '');
-      let marketCode = selectedContract.sc;
+      
       let contractCode = selectedContract.dm;
+      // 提取品种代码（移除尾部的数字）
+      let varietyCode = contractCode.replace(/\d+$/, '');
       
       // 根据开关的状态决定是否去除尾部数字
       if (removeNumber) {
-        contractCode = contractCode.replace(/\d+$/, '');
+        contractCode = varietyCode;
       }
       
-      const url = `https://q.889.ink/lhb/getLongAndShortPosition?date=${formattedDate}&market=${marketCode}&contract=${contractCode}`;
+      // 优先使用合约中的市场代码
+      let marketId = marketIdMap[selectedContract.sc];
+      
+      // 如果没有找到市场ID，尝试根据品种代码判断
+      if (!marketId) {
+        marketId = getMarketIdFromVariety(varietyCode);
+      }
+      
+      // 构建API URL
+      const url = `https://q.889.ink/lhb/getLongAndShortPosition?date=${formattedDate}&market=${marketId}&contract=${contractCode}`;
+      
+      console.log('请求URL:', url);
+      console.log('品种代码:', varietyCode);
+      console.log('市场ID:', marketId);
       
       try {
         const response = await fetch(url);
@@ -612,7 +726,7 @@
       } catch (error) {
         console.error('获取数据失败:', error);
         showLoading(false);
-        showError(true, '获取数据失败');
+        showError(true, '获取数据失败: ' + error.message);
       }
     }
 
@@ -849,21 +963,18 @@
         
         tableBody.appendChild(row);
       }
-      
-      // 不再需要这个额外的点击事件处理，因为我们已经在单元格创建时添加了正确的事件处理
-      // 这段代码会导致事件被重复添加，并且使用的是不完整的公司名称
     }
 
-    // 渲染图表 - 修复版本
+    // 渲染图表
     function renderChart() {
       if (!data || !data.longInfoList || !data.shortInfoList || !chart) return;
       
-      // 取前4个公司数据用于绘制图表（确保与截图相符）
+      // 取前4个公司数据用于绘制图表
       const displayCount = 4;
       const longData = data.longInfoList.slice(0, displayCount);
       const shortData = data.shortInfoList.slice(0, displayCount);
       
-      // 准备Y轴数据（公司名称）
+      // 准备X轴数据（公司名称）
       const categories = [];
       for (let i = 0; i < displayCount; i++) {
         if (longData[i]) {
@@ -871,7 +982,7 @@
         }
       }
       
-      // 计算最大值用于设置X轴范围
+      // 计算最大值用于设置Y轴范围
       let maxValue = 0;
       longData.forEach(item => {
         maxValue = Math.max(maxValue, item.longNum);
@@ -905,12 +1016,12 @@
           data: categories,
           axisLabel: {
             interval: 0,
-            color: '#aaa',
+            color: '#666',
             fontSize: 11
           },
           axisLine: {
             lineStyle: {
-              color: '#444'
+              color: '#ddd'
             }
           },
           axisTick: {
@@ -919,20 +1030,18 @@
         },
         yAxis: {
           type: 'value',
-          // 把刻度绘制在左侧
           position: 'left',
-          // 使用自定义刻度标签
           axisLabel: {
             formatter: function(value) {
               return (value / 10000).toFixed(1) + '万';
             },
-            color: '#aaa',
+            color: '#666',
             fontSize: 11
           },
           max: maxValue,
           splitLine: {
             lineStyle: {
-              color: '#333',
+              color: '#f0f0f0',
               type: 'dashed'
             }
           }
