@@ -540,20 +540,47 @@ risingSection.innerHTML = `
     // 检查当前时间是否在允许更新的时间段内
     function isMarketOpen() {
         const now = new Date();
-        const hour = now.getHours();
-        // 允许更新的时间段：9:00 到 15:00，或 21:00 到 24:00
-        return (hour >= 9 && hour < 15) || (hour >= 21 && hour < 24);
+        const day = now.getDay();
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+
+        // 周末不更新（周六=6，周日=0）
+        if (day === 0 || day === 6) return false;
+
+        // 日盘时段：9:00-15:00（包含15:00整）
+        const daySession = (hours > 9 || (hours === 9 && minutes >= 0)) && 
+                          (hours < 15 || (hours === 15 && minutes === 0));
+
+        // 夜盘时段：21:00-次日02:30（考虑跨天情况）
+        const nightSession = (hours >= 21 || hours < 2) || 
+                            (hours === 2 && minutes <= 30);
+
+        return daySession || nightSession;
     }
 
     // 页面加载时，立即获取数据
     window.addEventListener('load', fetchData)
 
     // 每 20 秒检查一次，只有在市场开放时间段内才更新数据
-    setInterval(() => {
+    // 带状态检查的定时器
+    let updateInterval = setInterval(() => {
         if (isMarketOpen()) {
             fetchData();
+        } else {
+            console.log('当前非交易时段，暂停更新');
         }
     }, 20000);
+
+    // 页面失去焦点时暂停更新
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            clearInterval(updateInterval);
+        } else {
+            updateInterval = setInterval(() => {
+                if (isMarketOpen()) fetchData();
+            }, 20000);
+        }
+    });
 </script>
 </body>
 </html>
