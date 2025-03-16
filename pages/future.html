@@ -850,7 +850,7 @@
     let varietyIdMap = {}; // 品种ID映射
     let currentVariety = null; // 当前选择的品种
     
-    // 数据备份和回退机制（方案五）
+    // 数据备份和回退机制
     let lastSuccessfulFuturesData = null; // 上次成功获取的期货数据
     let lastSuccessfulContractsData = {}; // 上次成功获取的合约数据
     let lastUpdateTime = null; // 上次成功更新的时间
@@ -952,16 +952,6 @@
       startAutoUpdate();
     });
 
-    // 新增：从UID提取纯字母品种代码的函数
-    function extractVarietyCodeFromUID(uid) {
-      if (!uid) return '';
-      const parts = uid.split('|');
-      if (parts.length < 2) return '';
-      const contractCode = parts[1];
-      const matches = contractCode.match(/[A-Za-z]+/);
-      return matches ? matches[0] : '';
-    }
-
     // 带超时的fetch请求
     async function fetchWithTimeout(url, options = {}, timeout = 10000) {
       const controller = new AbortController();
@@ -1000,7 +990,7 @@
       throw lastError;
     }
 
-    // 修改：从品种名称获取品种ID
+    // 从品种名称获取品种ID
     function getVarietyIdFromName(name) {
       if (!name) return '';
       
@@ -1018,11 +1008,39 @@
       });
       
       if (matchedItem && matchedItem.uid) {
-        return extractVarietyCodeFromUID(matchedItem.uid);
+        // 解析UID得到交易所和品种代码
+        const parts = matchedItem.uid.split('|');
+        if (parts.length >= 2) {
+          const exchange = parts[0];
+          const code = parts[1];
+          
+          // 从代码中提取品种部分（去掉月份数字）
+          const variety = code.replace(/\d+/g, '');
+          
+          // 组合成msgid格式
+          if (EXCHANGE_MAP[exchange] && variety) {
+            return `${EXCHANGE_MAP[exchange]}_${variety.toLowerCase()}`;
+          }
+        }
       }
       
       // 如果找不到，尝试直接将名称用作ID
       return varietyName.toLowerCase();
+    }
+
+    // 从UID提取纯字母品种代码
+    function extractVarietyCodeFromUID(uid) {
+      if (!uid) return '';
+      
+      const parts = uid.split('|');
+      if (parts.length < 2) return '';
+      
+      const contractCode = parts[1];
+      // 提取代码中的字母部分
+      const letterMatches = contractCode.match(/[A-Za-z]+/);
+      if (!letterMatches) return '';
+      
+      return letterMatches[0].toLowerCase();
     }
 
     // 开始自动更新 - 使用setTimeout代替setInterval，避免重叠执行
@@ -1241,22 +1259,33 @@
       }
     }
 
-    // 修改：构建品种ID映射表
+    // 构建品种ID映射表
     function buildVarietyIdMap() {
       varietyIdMap = {};
       
       futuresData.forEach(item => {
         if (!item.uid || !item.name) return;
         
-        const code = extractVarietyCodeFromUID(item.uid);
+        const parts = item.uid.split('|');
+        if (parts.length < 2) return;
+        
+        const exchange = parts[0];
+        const code = parts[1];
+        
+        // 从代码中提取品种部分（去掉月份数字）
+        const variety = code.replace(/\d+/g, '');
         const varietyName = extractVarietyCode(item.name);
         
-        if (code && varietyName) {
-          varietyIdMap[varietyName] = code;
+        if (variety && varietyName && EXCHANGE_MAP[exchange]) {
+          const msgid = `${EXCHANGE_MAP[exchange]}_${variety.toLowerCase()}`;
+          varietyIdMap[varietyName] = msgid;
+          
+          // 同时储存小写字母代码到映射表，方便查找
+          varietyIdMap[variety.toLowerCase()] = msgid;
         }
       });
       
-      console.log('已构建品种代码映射表:', varietyIdMap);
+      console.log('已构建品种ID映射表:', varietyIdMap);
     }
 
     // 判断当前是否是夜盘交易时间
@@ -1344,7 +1373,7 @@
       }
     }
 
-    // 修改：更新期货列表
+    // 更新期货列表
     function updateFuturesList(futuresData) {
       const listContainer = document.getElementById('futures-list');
       if (!listContainer) return;
@@ -1355,7 +1384,7 @@
         titleElement.style.cursor = 'pointer';
         titleElement.title = '点击查看升贴水页面';
         titleElement.addEventListener('click', function() {
-          // 这里应该跳转到升贴水页面，目前直接显示合约列表
+          // 显示合约选择器
           showContractSelector();
         });
       }
@@ -1385,18 +1414,18 @@
             posRateStatusClass = 'down';
           }
           
-          // It's always better to use isFinite to check for a valid number
+          // 检查是否为有效数字
           const absChange = isFinite(change) ? Math.abs(change) : 0;
           
           // 确定涨跌幅颜色
           const changeColor = change > 0 ? '#ff7675' : '#55efc4';
           
           // 使用非线性缩放，让小数值也能看到一定的进度条长度
-          // 增加了系数从2.5到5，最大值从30%增加到50%
-          const scaledWidth = Math.min(absChange *10, 90);
+          const scaledWidth = Math.min(absChange * 10, 90);
           
-          // 修改：直接从UID提取品种代码
-          const varietyCode = extractVarietyCodeFromUID(item.uid);
+          // 构建品种编码
+          const msgid = getVarietyIdFromName(item.name);
+          const varietyCode = msgid ? msgid.split('_')[1] || '' : '';
           
           li.innerHTML = `
             <div class="change-arrow ${posRateStatusClass}"></div>
@@ -1417,6 +1446,9 @@
           
           // 添加点击事件
           li.addEventListener('click', () => {
+            // 获取品种ID
+            const varietyId = getVarietyIdFromName(item.name);
+            
             // 检查是否按下了Ctrl键或Command键
             const isModifierKeyPressed = event.ctrlKey || event.metaKey;
             
@@ -1425,8 +1457,15 @@
               window.open(`https://wealth.want.biz/pages/longshort.html?variety=${varietyCode}`, '_blank');
             } else {
               // 否则显示合约选择器
-              showContractSelector(varietyCode);
+              showContractSelector(varietyId);
             }
+          });
+          
+          // 为增仓率添加点击事件，打开龙虎榜
+          const posrateElement = li.querySelector('.futures-posrate');
+          posrateElement.addEventListener('click', (event) => {
+            event.stopPropagation(); // 阻止冒泡，避免触发li的点击事件
+            window.open(`https://wealth.want.biz/pages/longshort.html?variety=${varietyCode}`, '_blank');
           });
           
           // 添加到列表
@@ -1438,41 +1477,41 @@
       }
     }
 
- // 更新数据摘要
-function updateSummary(data) {
-  const statusElement = document.getElementById('market-status');
-  if (!statusElement) {
-    console.error('状态元素未找到');
-    return;
-  }
-  // 更新市场状态和时间
-  const statusText = isTradingHours() ? '🟢 交易中' : '🔴 休市中';
-  statusElement.style.color = isTradingHours() ? '#2ecc71' : '#95a5a6';
-  document.getElementById('market-status').textContent = statusText;
-  document.getElementById('update-time').textContent = data.lastUpdated;
-  
-  // 更新状态指示器样式
-  const statusIndicator = document.querySelector('.status-indicator');
-  if (statusIndicator) {
-    if (isAutoUpdateEnabled) {
-      statusIndicator.classList.remove('status-paused');
-      statusIndicator.classList.add('status-normal');
-    } else {
-      statusIndicator.classList.remove('status-normal');
-      statusIndicator.classList.add('status-paused');
+    // 更新数据摘要
+    function updateSummary(data) {
+      const statusElement = document.getElementById('market-status');
+      if (!statusElement) {
+        console.error('状态元素未找到');
+        return;
+      }
+      // 更新市场状态和时间
+      const statusText = isTradingHours() ? '🟢 交易中' : '🔴 休市中';
+      statusElement.style.color = isTradingHours() ? '#2ecc71' : '#95a5a6';
+      document.getElementById('market-status').textContent = statusText;
+      document.getElementById('update-time').textContent = data.lastUpdated;
+      
+      // 更新状态指示器样式
+      const statusIndicator = document.querySelector('.status-indicator');
+      if (statusIndicator) {
+        if (isAutoUpdateEnabled) {
+          statusIndicator.classList.remove('status-paused');
+          statusIndicator.classList.add('status-normal');
+        } else {
+          statusIndicator.classList.remove('status-normal');
+          statusIndicator.classList.add('status-paused');
+        }
+      }
+      
+      // 更新涨跌统计
+      document.getElementById('up-count').textContent = data.upCount;
+      document.getElementById('down-count').textContent = data.downCount;
+      document.getElementById('neutral-count').textContent = data.neutralCount;
+      
+      // 更新平均涨跌幅和总计数据
+      document.getElementById('limit-up-count').textContent = data.avgUpChange + '%';
+      document.getElementById('limit-down-count').textContent = data.avgDownChange + '%';
+      document.getElementById('total-count').textContent = data.totalContracts;
     }
-  }
-  
-  // 更新涨跌统计
-  document.getElementById('up-count').textContent = data.upCount;
-  document.getElementById('down-count').textContent = data.downCount;
-  document.getElementById('neutral-count').textContent = data.neutralCount;
-  
-  // 更新平均涨跌幅和总计数据
-  document.getElementById('limit-up-count').textContent = data.avgUpChange + '%';
-  document.getElementById('limit-down-count').textContent = data.avgDownChange + '%';
-  document.getElementById('total-count').textContent = data.totalContracts;
-}
 
     // 格式化数字
     function formatNumber(num) {
@@ -1493,8 +1532,10 @@ function updateSummary(data) {
       
       // 保存当前品种到sessionStorage，确保刷新时可以恢复
       try {
-        sessionStorage.setItem('currentVariety', variety);
-        currentVariety = variety;
+        if (variety) {
+          sessionStorage.setItem('currentVariety', variety);
+          currentVariety = variety;
+        }
       } catch (e) {
         console.warn('无法保存当前品种到sessionStorage:', e);
       }
@@ -1527,7 +1568,7 @@ function updateSummary(data) {
       fetchVarietyContracts(variety);
     }
 
-    // 修改：更新品种选择框
+    // 更新品种选择框
     function updateVarietySelect(selectedVariety) {
       const varietySelect = document.getElementById('variety-select');
       if (!varietySelect) return;
@@ -1538,32 +1579,47 @@ function updateSummary(data) {
         // 获取所有期货品种
         const varieties = [];
         
-        // 遍历futuresData提取品种信息
+        // 先构建完整的品种列表
         futuresData.forEach(item => {
-          if (!item.uid) return;
+          if (!item.uid || !item.name) return;
           
-          const code = extractVarietyCodeFromUID(item.uid);
-          const name = item.name ? extractVarietyCode(item.name) : '';
+          const parts = item.uid.split('|');
+          if (parts.length < 2) return;
           
-          if (!code || !name) return;
+          const exchange = parts[0];
+          const code = parts[1];
+          
+          if (!EXCHANGE_MAP[exchange]) return;
+          
+          // 提取品种代码（去掉数字）和中文名称
+          const variety = code.replace(/\d+/g, '');
+          const name = extractVarietyCode(item.name);
+          
+          // 构建msgid格式
+          const msgid = `${EXCHANGE_MAP[exchange]}_${variety.toLowerCase()}`;
           
           // 检查是否已经添加过这个品种
-          if (!varieties.some(v => v.code === code)) {
+          if (!varieties.some(v => v.msgid === msgid)) {
             varieties.push({
-              code: code,
-              name: name
+              code: variety,
+              name: name,
+              exchange: exchange,
+              msgid: msgid
             });
           }
         });
         
+        // 按名称排序
+        varieties.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+        
         // 添加品种选项
         varieties.forEach(variety => {
           const option = document.createElement('option');
-          option.value = variety.code;
+          option.value = variety.msgid;
           option.textContent = `${variety.name} (${variety.code})`;
           
           // 如果是当前选中的品种，设置为选中状态
-          if (variety.code === selectedVariety) {
+          if (variety.msgid === selectedVariety) {
             option.selected = true;
           }
           
@@ -1595,7 +1651,7 @@ function updateSummary(data) {
       }
       
       try {
-        console.log(`获取${variety}的合约列表，code:${variety}`);
+        console.log(`获取${variety}的合约列表`);
         
         // 显示加载状态
         premiumChartElement.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:#666;">加载中...</div>';
@@ -1603,23 +1659,36 @@ function updateSummary(data) {
         
         // 保证variety不为空
         if (!variety) {
-          throw new Error('品种代码为空');
+          throw new Error('品种ID为空');
         }
         
         // 1. 从API获取合约列表 - 使用try/catch分开处理每个步骤的错误
         let contractCodes = [];
         try {
+          // 调试日志
+          console.log(`请求URL: https://q.889.ink/redis?msgid=${encodeURIComponent(variety)}`);
+          
           const contractsResponse = await fetchWithRetry(`https://q.889.ink/redis?msgid=${encodeURIComponent(variety)}`);
           if (!contractsResponse.ok) {
             throw new Error(`HTTP error! status: ${contractsResponse.status}`);
           }
           
-          const contractsData = await contractsResponse.json();
-          console.log('获取到合约列表数据:', contractsData);
+          const responseText = await contractsResponse.text();
+          console.log(`Redis API响应: ${responseText.substring(0, 200)}...`);
+          
+          let contractsData;
+          try {
+            contractsData = JSON.parse(responseText);
+          } catch (e) {
+            console.error('JSON解析错误:', e);
+            throw new Error(`解析合约列表数据失败: ${e.message}`);
+          }
           
           if (!contractsData || !Array.isArray(contractsData)) {
             throw new Error('获取合约列表失败，数据格式不正确');
           }
+          
+          console.log('获取到合约列表数据:', contractsData);
           
           // 过滤并提取合约代码
           contractCodes = contractsData
@@ -1666,6 +1735,7 @@ function updateSummary(data) {
           
           // 提取和处理JSONP响应
           const pricesText = await pricesResponse.text();
+          console.log(`价格API响应的前100个字符: ${pricesText.substring(0, 100)}...`);
           
           // 提取JSON部分
           const jsonStr = pricesText.replace(/^[^({]*\(|\)[^}]*$/g, '');
