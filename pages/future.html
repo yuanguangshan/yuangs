@@ -945,6 +945,17 @@
         console.warn('无法从sessionStorage读取当前品种:', e);
       }
       
+      // 检查URL参数，处理从其他页面跳转过来的请求
+      const urlParams = new URLSearchParams(window.location.search);
+      const varietyParam = urlParams.get('variety');
+      const showPremium = urlParams.get('showPremium');
+      
+      if (varietyParam && showPremium === 'true') {
+        // 如果URL中包含品种参数和showPremium=true参数，直接显示升贴水页面
+        currentVariety = varietyParam;
+        showContractSelector(varietyParam);
+      }
+      
       // 检查ECharts是否加载
       checkEChartsLoaded();
       
@@ -1266,11 +1277,8 @@
       futuresData.forEach(item => {
         if (!item.uid || !item.name) return;
         
-        const parts = item.uid.split('|');
-        if (parts.length < 2) return;
-        
-        const exchange = parts[0];
-        const code = parts[1];
+        const [exchange, code] = item.uid.split('|');
+        if (!exchange || !code) return;
         
         // 从代码中提取品种部分（去掉月份数字）
         const variety = code.replace(/\d+/g, '');
@@ -1282,6 +1290,11 @@
           
           // 同时储存小写字母代码到映射表，方便查找
           varietyIdMap[variety.toLowerCase()] = msgid;
+          
+          // 添加更多映射关系，提高匹配成功率
+          if (item.code) {
+            varietyIdMap[item.code.toLowerCase()] = msgid;
+          }
         }
       });
       
@@ -1569,15 +1582,12 @@
         // 获取所有期货品种
         const varieties = [];
         
-        // 先构建完整的品种列表
+        // 遍历futuresData提取品种信息
         futuresData.forEach(item => {
           if (!item.uid || !item.name) return;
           
-          const parts = item.uid.split('|');
-          if (parts.length < 2) return;
-          
-          const exchange = parts[0];
-          const code = parts[1];
+          const [exchange, code] = item.uid.split('|');
+          if (!code || !exchange) return;
           
           if (!EXCHANGE_MAP[exchange]) return;
           
@@ -1587,6 +1597,10 @@
           
           // 构建msgid格式
           const msgid = `${EXCHANGE_MAP[exchange]}_${variety.toLowerCase()}`;
+          
+          // 保存到varietyIdMap映射
+          varietyIdMap[name] = msgid;
+          varietyIdMap[variety.toLowerCase()] = msgid;
           
           // 检查是否已经添加过这个品种
           if (!varieties.some(v => v.msgid === msgid)) {
@@ -1641,7 +1655,7 @@
       }
       
       try {
-        console.log(`获取${variety}的合约列表`);
+        console.log(`获取${variety}的合约列表，msgid:${variety}`);
         
         // 显示加载状态
         premiumChartElement.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:#666;">加载中...</div>';
@@ -1650,6 +1664,18 @@
         // 保证variety不为空
         if (!variety) {
           throw new Error('品种ID为空');
+        }
+        
+        // 确保品种ID格式正确
+        if (!variety.includes('_')) {
+          // 尝试从映射表中获取正确的品种ID
+          const mappedId = varietyIdMap[variety];
+          if (mappedId) {
+            console.log(`品种ID格式不正确，已从映射表中获取正确ID: ${variety} -> ${mappedId}`);
+            variety = mappedId;
+          } else {
+            console.warn(`品种ID格式不正确且无法从映射表中获取: ${variety}`);
+          }
         }
         
         // 1. 从API获取合约列表 - 使用try/catch分开处理每个步骤的错误
