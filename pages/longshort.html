@@ -967,59 +967,157 @@
       }
     }
 
-    // 渲染图表
+    // 渲染图表 - 修改后的函数
     function renderChart() {
       if (!data || !data.longInfoList || !data.shortInfoList || !chart) return;
       
-      // 取前4个公司数据用于绘制图表
-      const displayCount = 4;
-      const longData = data.longInfoList.slice(0, displayCount);
-      const shortData = data.shortInfoList.slice(0, displayCount);
+      // 创建机构映射，合并多空持仓信息
+      const companyMap = new Map();
       
-      // 准备X轴数据（公司名称）
-      const categories = [];
-      for (let i = 0; i < displayCount; i++) {
-        if (longData[i]) {
-          categories.push(longData[i].futureCompanyName.replace('(代客)', ''));
+      // 添加多头持仓信息到映射
+      data.longInfoList.forEach(item => {
+        const companyName = item.futureCompanyName.replace('(代客)', '');
+        companyMap.set(companyName, {
+          name: companyName,
+          longNum: item.longNum,
+          shortNum: 0,
+          longChange: item.longChange,
+          shortChange: 0,
+          hasBoth: false
+        });
+      });
+      
+      // 添加空头持仓信息到映射，并标记同时有多空持仓的机构
+      data.shortInfoList.forEach(item => {
+        const companyName = item.futureCompanyName.replace('(代客)', '');
+        if (companyMap.has(companyName)) {
+          // 已存在该机构的多头持仓，更新空头信息
+          const company = companyMap.get(companyName);
+          company.shortNum = item.shortNum;
+          company.shortChange = item.shortChange;
+          company.hasBoth = true;
+        } else {
+          // 新增只有空头持仓的机构
+          companyMap.set(companyName, {
+            name: companyName,
+            longNum: 0,
+            shortNum: item.shortNum,
+            longChange: 0,
+            shortChange: item.shortChange,
+            hasBoth: false
+          });
         }
+      });
+      
+      // 转换为数组并计算净持仓
+      let companiesArray = Array.from(companyMap.values()).map(company => {
+        company.netPosition = company.longNum - company.shortNum;
+        company.totalPosition = company.longNum + company.shortNum;
+        return company;
+      });
+      
+      // 首先筛选出同时有多空持仓的机构
+      const bothPositionCompanies = companiesArray.filter(company => company.hasBoth);
+      
+      // 如果同时有多空持仓的机构超过5家，则按净持仓排序取前5家
+      let displayCompanies;
+      if (bothPositionCompanies.length >= 5) {
+        displayCompanies = bothPositionCompanies
+          .sort((a, b) => b.netPosition - a.netPosition)
+          .slice(0, 5);
+      } else {
+        // 如果不足5家，则从所有机构中按总持仓量排序补足至5家
+        const remainingCount = 5 - bothPositionCompanies.length;
+        
+        // 先取出同时有多空持仓的机构
+        displayCompanies = [...bothPositionCompanies];
+        
+        // 从剩余机构中按总持仓量排序取前N家补足
+        const otherCompanies = companiesArray
+          .filter(company => !company.hasBoth)
+          .sort((a, b) => b.totalPosition - a.totalPosition)
+          .slice(0, remainingCount);
+        
+        // 合并两个列表
+        displayCompanies = displayCompanies.concat(otherCompanies);
       }
       
+      // 确保最多显示5家
+      displayCompanies = displayCompanies.slice(0, 5);
+      
+      // 根据公司多空持仓总量排序显示
+      displayCompanies.sort((a, b) => b.totalPosition - a.totalPosition);
+      
+      // 准备X轴数据（公司名称）
+      const categories = displayCompanies.map(company => company.name);
+      
+      // 准备多空持仓数据
+      const longData = displayCompanies.map(company => company.longNum);
+      const shortData = displayCompanies.map(company => company.shortNum);
+      
       // 计算最大值用于设置Y轴范围
-      let maxValue = 0;
-      longData.forEach(item => {
-        maxValue = Math.max(maxValue, item.longNum);
-      });
-      shortData.forEach(item => {
-        maxValue = Math.max(maxValue, item.shortNum);
-      });
+      let maxValue = Math.max(
+        ...displayCompanies.map(company => Math.max(company.longNum, company.shortNum))
+      );
       
       // 将最大值向上取整到合适的刻度单位
       const unit = 10000; // 1万单位
       maxValue = Math.ceil(maxValue / unit) * unit;
       
-      // 构建Y轴刻度
-      const yAxisValues = [];
-      const stepCount = 5; // 5个刻度
-      for (let i = 0; i < stepCount; i++) {
-        yAxisValues.push((maxValue / unit * (stepCount - i - 1) / (stepCount - 1)).toFixed(1) + '万');
-      }
-      
       // 配置图表选项
       const option = {
         grid: {
           top: 30,
-          right: 10,
-          bottom: 10,
-          left: 10,
+          right: 20,
+          bottom: 20,
+          left: 40,
           containLabel: true
+        },
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: {
+            type: 'shadow'
+          },
+          formatter: function(params) {
+            // 找到多空两个系列的数据
+            const longItem = params.find(item => item.seriesName === '多头持仓');
+            const shortItem = params.find(item => item.seriesName === '空头持仓');
+            
+            let html = `${params[0].name}<br/>`;
+            
+            if (longItem) {
+              html += `多头持仓: ${(longItem.value / 10000).toFixed(1)}万<br/>`;
+            }
+            
+            if (shortItem) {
+              html += `空头持仓: ${(shortItem.value / 10000).toFixed(1)}万<br/>`;
+            }
+            
+            // 如果有多空两项，计算净持仓
+            if (longItem && shortItem) {
+              const netPosition = longItem.value - shortItem.value;
+              const isPositive = netPosition > 0;
+              html += `净持仓: <span style="color:${isPositive ? '#ff5555' : '#47deaf'}">${(netPosition / 10000).toFixed(1)}万</span>`;
+            }
+            
+            return html;
+          }
         },
         xAxis: {
           type: 'category',
           data: categories,
           axisLabel: {
             interval: 0,
+            rotate: categories.length > 3 ? 30 : 0, // 当名称过多时旋转标签
             color: '#666',
-            fontSize: 11
+            fontSize: 11,
+            formatter: function(value) {
+              // 如果名称过长，截断显示
+              if (value.length > 6) {
+                return value.substring(0, 6) + '...';
+              }
+              return value;
+            }
           },
           axisLine: {
             lineStyle: {
@@ -1053,25 +1151,37 @@
             name: '多头持仓',
             type: 'bar',
             barWidth: '30%',
-            data: longData.map(item => item.longNum),
+            barGap: '0%',
+            data: longData,
             itemStyle: {
               color: '#ff5555'
+            },
+            label: {
+              show: true,
+              position: 'top',
+              formatter: function(params) {
+                return (params.value / 10000).toFixed(1);
+              },
+              fontSize: 10,
+              color: '#666'
             }
           },
           {
             name: '空头持仓',
             type: 'bar',
             barWidth: '30%',
-            data: Array(categories.length).fill(0).map((_, index) => {
-              // 查找对应公司在空头数据中的记录
-              const companyName = categories[index];
-              const match = shortData.find(item => 
-                item.futureCompanyName.replace('(代客)', '') === companyName
-              );
-              return match ? match.shortNum : 0;
-            }),
+            data: shortData,
             itemStyle: {
               color: '#47deaf'
+            },
+            label: {
+              show: true,
+              position: 'top',
+              formatter: function(params) {
+                return (params.value / 10000).toFixed(1);
+              },
+              fontSize: 10,
+              color: '#666'
             }
           }
         ]
