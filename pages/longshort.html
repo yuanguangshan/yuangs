@@ -967,7 +967,7 @@
       }
     }
 
-    // 渲染图表 - 修改后的函数
+    // 渲染图表 - 优化版本
     function renderChart() {
       if (!data || !data.longInfoList || !data.shortInfoList || !chart) return;
       
@@ -1012,6 +1012,7 @@
       // 转换为数组并计算净持仓
       let companiesArray = Array.from(companyMap.values()).map(company => {
         company.netPosition = company.longNum - company.shortNum;
+        company.absNetPosition = Math.abs(company.netPosition);
         company.totalPosition = company.longNum + company.shortNum;
         return company;
       });
@@ -1019,11 +1020,11 @@
       // 首先筛选出同时有多空持仓的机构
       const bothPositionCompanies = companiesArray.filter(company => company.hasBoth);
       
-      // 如果同时有多空持仓的机构超过5家，则按净持仓排序取前5家
+      // 如果同时有多空持仓的机构超过5家，则按净持仓绝对值排序取前5家
       let displayCompanies;
       if (bothPositionCompanies.length >= 5) {
         displayCompanies = bothPositionCompanies
-          .sort((a, b) => b.netPosition - a.netPosition)
+          .sort((a, b) => b.absNetPosition - a.absNetPosition) // 按净持仓绝对值排序
           .slice(0, 5);
       } else {
         // 如果不足5家，则从所有机构中按总持仓量排序补足至5家
@@ -1045,8 +1046,14 @@
       // 确保最多显示5家
       displayCompanies = displayCompanies.slice(0, 5);
       
-      // 根据公司多空持仓总量排序显示
-      displayCompanies.sort((a, b) => b.totalPosition - a.totalPosition);
+      // 添加一个文本标记，显示净持仓和多空状态
+      displayCompanies.forEach(company => {
+        company.netLabel = `${(company.netPosition / 10000).toFixed(1)}万`;
+        company.netPositionStatus = company.netPosition > 0 ? "多" : company.netPosition < 0 ? "空" : "平";
+      });
+      
+      // 按净持仓绝对值排序显示，保持前五名的顺序一致
+      displayCompanies.sort((a, b) => b.absNetPosition - a.absNetPosition);
       
       // 准备X轴数据（公司名称）
       const categories = displayCompanies.map(company => company.name);
@@ -1054,6 +1061,13 @@
       // 准备多空持仓数据
       const longData = displayCompanies.map(company => company.longNum);
       const shortData = displayCompanies.map(company => company.shortNum);
+      
+      // 净持仓标签数据
+      const netLabels = displayCompanies.map(company => ({
+        value: company.longNum > company.shortNum ? company.longNum : company.shortNum,
+        netPosition: company.netPosition,
+        label: `${company.netPositionStatus} ${company.netLabel}`
+      }));
       
       // 计算最大值用于设置Y轴范围
       let maxValue = Math.max(
@@ -1157,13 +1171,7 @@
               color: '#ff5555'
             },
             label: {
-              show: true,
-              position: 'top',
-              formatter: function(params) {
-                return (params.value / 10000).toFixed(1);
-              },
-              fontSize: 10,
-              color: '#666'
+              show: false
             }
           },
           {
@@ -1175,14 +1183,32 @@
               color: '#47deaf'
             },
             label: {
+              show: false
+            }
+          },
+          // 净持仓标签
+          {
+            name: '净持仓',
+            type: 'scatter',
+            data: netLabels.map((item, index) => ([index, item.value])),
+            symbolSize: 0,
+            label: {
               show: true,
               position: 'top',
               formatter: function(params) {
-                return (params.value / 10000).toFixed(1);
+                const index = params.dataIndex;
+                const netInfo = netLabels[index];
+                return netInfo.label;
               },
               fontSize: 10,
-              color: '#666'
-            }
+              color: function(params) {
+                const index = params.dataIndex;
+                const netInfo = netLabels[index];
+                return netInfo.netPosition > 0 ? '#ff5555' : '#47deaf';
+              },
+              offset: [0, 5]
+            },
+            z: 10
           }
         ]
       };
