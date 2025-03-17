@@ -634,6 +634,25 @@
       margin-bottom: 8px;
       border-bottom: 1px solid #f0f0f0;
       padding-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .toggle-btn {
+      font-size: 12px;
+      background-color: rgba(161, 140, 209, 0.2);
+      color: #666;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .toggle-btn:hover {
+      background-color: rgba(161, 140, 209, 0.4);
+      color: #333;
     }
     
     /* 底部统计栏 */
@@ -718,6 +737,7 @@
                 <path d="M10 14L21 3"></path>
               </svg>
             </a>
+            <button id="toggle-futures-btn" class="toggle-btn">展开全部</button>
           </div>
           <ul id="futures-list" class="futures-list">
             <!-- 期货品种列表将通过JavaScript生成 -->
@@ -856,6 +876,7 @@
     let contractsData = {};
     let varietyIdMap = {}; // 品种ID映射
     let currentVariety = null; // 当前选择的品种
+    let showAllFutures = false; // 控制是否显示全部品种
     
     // 数据备份和回退机制
     let lastSuccessfulFuturesData = null; // 上次成功获取的期货数据
@@ -881,6 +902,32 @@
       const refreshBtn = document.getElementById('refresh-btn');
       const refreshBtnHeader = document.getElementById('refresh-btn-header');
       const refreshVarietyBtn = document.getElementById('refresh-variety-data');
+      
+      // 初始化展开/折叠按钮
+      const toggleBtn = document.getElementById('toggle-futures-btn');
+      if (toggleBtn) {
+        // 从localStorage读取用户偏好
+        const savedPreference = localStorage.getItem('showAllFutures');
+        if (savedPreference !== null) {
+          showAllFutures = savedPreference === 'true';
+          toggleBtn.textContent = showAllFutures ? '折叠列表' : '展开全部';
+        }
+        
+        toggleBtn.addEventListener('click', function() {
+          showAllFutures = !showAllFutures;
+          this.textContent = showAllFutures ? '折叠列表' : '展开全部';
+          
+          // 保存用户偏好
+          try {
+            localStorage.setItem('showAllFutures', showAllFutures);
+          } catch (e) {
+            console.warn('无法保存用户偏好:', e);
+          }
+          
+          // 重新渲染列表
+          updateFuturesList(futuresData);
+        });
+      }
       
       refreshBtn.addEventListener('click', function() {
         fetchData();
@@ -1444,13 +1491,15 @@
         // 清空列表
         listContainer.innerHTML = '';
         
-        // 按涨跌幅绝对值排序，取前10
+        // 按涨跌幅绝对值排序，根据showAllFutures决定是否只显示前10个
         const sortedData = [...futuresData]
-          .sort((a, b) => Math.abs(parseFloat(b.zdf) || 0) - Math.abs(parseFloat(a.zdf) || 0))
-          .slice(0, 10);
+          .sort((a, b) => Math.abs(parseFloat(b.zdf) || 0) - Math.abs(parseFloat(a.zdf) || 0));
+        
+        // 如果不是显示全部，则只取前10个
+        const displayData = showAllFutures ? sortedData : sortedData.slice(0, 10);
         
         // 创建每个期货品种的列表项
-        sortedData.forEach(item => {
+        displayData.forEach(item => {
           const li = document.createElement('li');
           
           // 计算涨跌幅和增仓率
