@@ -364,6 +364,17 @@
       color: #666;
       z-index: 9;
     }
+
+    /* 缓存数据警告样式 */
+    .cache-warning {
+      color: #ff9800;
+      text-align: center;
+      padding: 10px;
+      background-color: rgba(255, 193, 7, 0.1);
+      border-radius: 8px;
+      margin: 5px 0;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
@@ -421,6 +432,7 @@
     </div>
     
     <div id="error" class="error" style="display: none;">加载失败</div>
+    <div id="cache-warning" class="cache-warning" style="display: none;">使用缓存数据</div>
     
     <div id="data-container" class="data-container" style="display: none;">
       <div id="chart-wrapper" class="chart-container">
@@ -484,6 +496,11 @@
     let chart = null;
     let chartInitialized = false;
     let currentChartView = 1; // 当前图表视图: 1=净持仓, 2=总持仓, 3=单边上榜
+    
+    // 缓存相关变量
+    let cachedData = {}; // 用于存储缓存的数据
+    const CACHE_EXPIRY_DAYS = 7; // 缓存过期时间（天）
+    let isUsingCache = false; // 是否正在使用缓存数据
 
     // 市场简称到市场 ID 的映射（根据您提供的信息更新）
     const marketIdMap = {
@@ -576,6 +593,9 @@
 
     // 初始化页面
     document.addEventListener('DOMContentLoaded', function() {
+      // 从localStorage加载缓存
+      loadCacheFromStorage();
+      
       // 设置默认日期为今天
       const today = new Date().toISOString().split('T')[0];
       document.getElementById('date').value = today;
@@ -723,6 +743,8 @@
       showLoading(true);
       showError(false);
       showData(false);
+      showCacheWarning(false);
+      isUsingCache = false;
       
       const dateInput = document.getElementById('date');
       const formattedDate = dateInput.value.replace(/-/g, '');
@@ -742,6 +764,41 @@
       // 如果没有找到市场ID，尝试根据品种代码判断
       if (!marketId) {
         marketId = getMarketIdFromVariety(varietyCode);
+      }
+      
+      // 构建缓存键
+      const cacheKey = `${formattedDate}_${marketId}_${contractCode}`;
+      
+      // 检查当前时间是否在数据更新时间段内（15:30-17:00）
+      const now = new Date();
+      const hours = now.getHours();
+      const minutes = now.getMinutes();
+      const isUpdateTime = (hours === 15 && minutes >= 30) || (hours === 16);
+      
+      // 检查是否有缓存数据且不在更新时间段内
+      if (cachedData[cacheKey] && !isUpdateTime) {
+        console.log(`使用缓存数据: ${cacheKey}`);
+        data = cachedData[cacheKey].data;
+        isUsingCache = true;
+        
+        // 显示数据区域和缓存警告
+        showLoading(false);
+        showData(true);
+        showCacheWarning(true, `使用缓存数据 (${new Date(cachedData[cacheKey].timestamp).toLocaleString()})`);
+        
+        // 延迟渲染图表以确保容器已完全呈现
+        setTimeout(() => {
+          // 初始化图表（如果还没初始化）
+          if (!chartInitialized) {
+            initChart();
+            chartInitialized = true;
+          }
+          
+          // 渲染数据
+          renderData();
+        }, 50);
+        
+        return;
       }
       
       // 构建API URL
@@ -765,6 +822,13 @@
         
         data = result.data;
         
+        // 保存到缓存
+        cachedData[cacheKey] = {
+          data: data,
+          timestamp: new Date().toISOString()
+        };
+        saveCacheToStorage();
+        
         // 先显示数据区域
         showLoading(false);
         showData(true);
@@ -783,6 +847,33 @@
         
       } catch (error) {
         console.error('获取数据失败:', error);
+        
+        // 尝试从缓存获取数据
+        if (cachedData[cacheKey]) {
+          console.log(`获取数据失败，使用缓存数据: ${cacheKey}`);
+          data = cachedData[cacheKey].data;
+          isUsingCache = true;
+          
+          // 显示数据区域和缓存警告
+          showLoading(false);
+          showData(true);
+          showCacheWarning(true, `获取数据失败，使用缓存数据 (${new Date(cachedData[cacheKey].timestamp).toLocaleString()})`);
+          
+          // 延迟渲染图表以确保容器已完全呈现
+          setTimeout(() => {
+            // 初始化图表（如果还没初始化）
+            if (!chartInitialized) {
+              initChart();
+              chartInitialized = true;
+            }
+            
+            // 渲染数据
+            renderData();
+          }, 50);
+          
+          return;
+        }
+        
         showLoading(false);
         showError(true, '获取数据失败: ' + error.message);
       }
@@ -818,9 +909,9 @@
       // 更新标题
       const chartTitle = document.getElementById('chart-title');
       if (viewId === 1) {
-        chartTitle.textContent = '净持仓排序 (同时上榜优先)';
+        chartTitle.textContent = '按净持仓排序 (同时上榜优先)';
       } else if (viewId === 2) {
-        chartTitle.textContent = '总持仓排序 (前五名)';
+        chartTitle.textContent = '按总持仓排序 (前五名)';
       } else if (viewId === 3) {
         chartTitle.textContent = '单边上榜(按持仓排序)';
       }
@@ -1345,6 +1436,62 @@
     // 显示/隐藏数据区域
     function showData(show) {
       document.getElementById('data-container').style.display = show ? 'block' : 'none';
+    }
+    
+    // 显示/隐藏缓存警告
+    function showCacheWarning(show, message = '使用缓存数据') {
+      const warningElement = document.getElementById('cache-warning');
+      if (warningElement) {
+        warningElement.style.display = show ? 'block' : 'none';
+        if (message) {
+          warningElement.textContent = message;
+        }
+      }
+    }
+    
+    // 保存缓存到localStorage
+    function saveCacheToStorage() {
+      try {
+        // 清理过期缓存
+        cleanExpiredCache();
+        
+        // 保存当前缓存
+        localStorage.setItem('longshort_cache', JSON.stringify(cachedData));
+        console.log('缓存已保存到localStorage');
+      } catch (error) {
+        console.error('保存缓存失败:', error);
+      }
+    }
+    
+    // 从localStorage加载缓存
+    function loadCacheFromStorage() {
+      try {
+        const cachedString = localStorage.getItem('longshort_cache');
+        if (cachedString) {
+          cachedData = JSON.parse(cachedString);
+          console.log('从localStorage加载缓存成功');
+          
+          // 清理过期缓存
+          cleanExpiredCache();
+        }
+      } catch (error) {
+        console.error('加载缓存失败:', error);
+        cachedData = {};
+      }
+    }
+    
+    // 清理过期缓存
+    function cleanExpiredCache() {
+      const now = new Date();
+      const expiryTime = CACHE_EXPIRY_DAYS * 24 * 60 * 60 * 1000; // 转换为毫秒
+      
+      for (const key in cachedData) {
+        const cacheTime = new Date(cachedData[key].timestamp).getTime();
+        if (now.getTime() - cacheTime > expiryTime) {
+          console.log(`删除过期缓存: ${key}`);
+          delete cachedData[key];
+        }
+      }
     }
   </script>
 </body>
