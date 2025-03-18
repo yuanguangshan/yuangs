@@ -293,6 +293,17 @@
       padding-bottom: 8px;
     }
 
+    /* 缓存数据警告样式 */
+    .cache-warning {
+      color: #ff9800;
+      text-align: center;
+      padding: 10px;
+      background-color: rgba(255, 193, 7, 0.1);
+      border-radius: 8px;
+      margin: 5px 0;
+      font-size: 12px;
+    }
+
     /* 媒体查询优化表单布局 */
     @media (max-width: 768px) {
       .form-container {
@@ -355,6 +366,8 @@
       </div>
     </div>
 
+    <div id="cache-warning" class="cache-warning" style="display: none;">使用缓存数据</div>
+
     <div id="data-container" style="display: none;">
       <div id="chart-container" class="chart-container">
         <div class="chart-title">盈亏情况</div>
@@ -398,6 +411,14 @@
     let showAll = false;
     let chart = null;
     let chartInitialized = false;
+    
+    // 缓存相关变量
+    let cachedData = {}; // 用于存储缓存的数据
+    const CACHE_EXPIRY_DAYS = 7; // 缓存过期时间（天）
+    let isUsingCache = false; // 是否正在使用缓存数据
+    
+    // 从localStorage加载缓存
+    loadCacheFromStorage();
     
     // 格式化机构名称
     function formatInstitutionName(name) {
@@ -537,6 +558,15 @@
       showLoading(true);
 
       try {
+        // 检查是否有缓存的机构列表
+        const cacheKey = 'institutions_list';
+        if (cachedData[cacheKey]) {
+          console.log('使用缓存的机构列表');
+          institutions = cachedData[cacheKey].data;
+          populateInstitutionDropdown();
+          return;
+        }
+        
         const response = await axios.get('https://q.889.ink/lhb/getChoiceOrg');
 
         // 处理并排序机构列表
@@ -549,59 +579,79 @@
             if (bPriority === -1) return -1;
             return aPriority - bPriority;
           });
+          
+        // 保存到缓存
+        cachedData[cacheKey] = {
+          data: institutions,
+          timestamp: new Date().toISOString()
+        };
+        saveCacheToStorage();
 
-        // 填充机构下拉列表
-        const selectElement = document.getElementById('institution');
-        selectElement.innerHTML = '';
-
-        institutions.forEach(org => {
-          const option = document.createElement('option');
-          option.value = org.orgCode;
-          option.textContent = formatInstitutionName(org.ownerOrgNameAbbr);
-          selectElement.appendChild(option);
-        });
-
-        // 获取URL参数
-        const urlParams = getUrlParams();
-        const companyCode = urlParams.code;
-        const companyName = urlParams.company;
-        
-        // 根据URL参数选择机构
-        let institutionFound = false;
-        
-        // 如果URL中有机构名称
-        if (companyName) {
-          const matchedInstitution = institutions.find(org => org.ownerOrgNameAbbr === companyName);
-          if (matchedInstitution) {
-            selectedInstitution = matchedInstitution.orgCode;
-            selectedInstitutionName = matchedInstitution.ownerOrgNameAbbr;
-            selectElement.value = matchedInstitution.orgCode;
-            institutionFound = true;
-          }
-        }
-        // 注意：companyCode现在可能是期货合约代码，不再用于匹配机构
-        
-        // 如果没有找到匹配的机构，使用默认机构
-        if (!institutionFound) {
-          const defaultInstitution = institutions.find(org => org.ownerOrgNameAbbr === '东方财富(代客)' || org.ownerOrgNameAbbr === '东方财富');
-          if (defaultInstitution) {
-            selectedInstitution = defaultInstitution.orgCode;
-            selectedInstitutionName = defaultInstitution.ownerOrgNameAbbr;
-            selectElement.value = defaultInstitution.orgCode;
-          } else if (institutions.length > 0) {
-            selectedInstitution = institutions[0].orgCode;
-            selectedInstitutionName = institutions[0].ownerOrgNameAbbr;
-            selectElement.value = institutions[0].orgCode;
-          }
-        }
-
-        // 获取机构数据
-        fetchInstitutionData();
+        populateInstitutionDropdown();
 
       } catch (error) {
         console.error('获取机构列表失败:', error);
         showLoading(false);
+        
+        // 尝试从缓存获取机构列表
+        const cacheKey = 'institutions_list';
+        if (cachedData[cacheKey]) {
+          console.log('获取机构列表失败，使用缓存数据');
+          institutions = cachedData[cacheKey].data;
+          populateInstitutionDropdown();
+        }
       }
+    }
+    
+    // 填充机构下拉列表
+    function populateInstitutionDropdown() {
+      // 填充机构下拉列表
+      const selectElement = document.getElementById('institution');
+      selectElement.innerHTML = '';
+
+      institutions.forEach(org => {
+        const option = document.createElement('option');
+        option.value = org.orgCode;
+        option.textContent = formatInstitutionName(org.ownerOrgNameAbbr);
+        selectElement.appendChild(option);
+      });
+
+      // 获取URL参数
+      const urlParams = getUrlParams();
+      const companyCode = urlParams.code;
+      const companyName = urlParams.company;
+      
+      // 根据URL参数选择机构
+      let institutionFound = false;
+      
+      // 如果URL中有机构名称
+      if (companyName) {
+        const matchedInstitution = institutions.find(org => org.ownerOrgNameAbbr === companyName);
+        if (matchedInstitution) {
+          selectedInstitution = matchedInstitution.orgCode;
+          selectedInstitutionName = matchedInstitution.ownerOrgNameAbbr;
+          selectElement.value = matchedInstitution.orgCode;
+          institutionFound = true;
+        }
+      }
+      // 注意：companyCode现在可能是期货合约代码，不再用于匹配机构
+      
+      // 如果没有找到匹配的机构，使用默认机构
+      if (!institutionFound) {
+        const defaultInstitution = institutions.find(org => org.ownerOrgNameAbbr === '东方财富(代客)' || org.ownerOrgNameAbbr === '东方财富');
+        if (defaultInstitution) {
+          selectedInstitution = defaultInstitution.orgCode;
+          selectedInstitutionName = defaultInstitution.ownerOrgNameAbbr;
+          selectElement.value = defaultInstitution.orgCode;
+        } else if (institutions.length > 0) {
+          selectedInstitution = institutions[0].orgCode;
+          selectedInstitutionName = institutions[0].ownerOrgNameAbbr;
+          selectElement.value = institutions[0].orgCode;
+        }
+      }
+
+      // 获取机构数据
+      fetchInstitutionData();
     }
 
     // 机构下拉列表变更事件
@@ -621,8 +671,39 @@
 
       showLoading(true);
       showData(false);
+      showCacheWarning(false);
+      isUsingCache = false;
 
       try {
+        // 构建缓存键
+        const cacheKey = `${selectedInstitution}_${startDate.replace(/-/g, '')}_${endDate.replace(/-/g, '')}`;
+        
+        // 检查当前时间是否在数据更新时间段内（15:30-17:00）
+        const now = new Date();
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+        const isUpdateTime = (hours === 15 && minutes >= 30) || (hours === 16);
+        
+        // 检查是否有缓存数据且不在更新时间段内
+        if (cachedData[cacheKey] && !isUpdateTime) {
+          console.log(`使用缓存数据: ${cacheKey}`);
+          institutionData = cachedData[cacheKey].data;
+          isUsingCache = true;
+          
+          // 显示数据区域和缓存警告
+          showLoading(false);
+          showData(true);
+          showCacheWarning(true, `使用缓存数据 (${new Date(cachedData[cacheKey].timestamp).toLocaleString()})`);
+          
+          // 延迟渲染图表以确保容器已完全呈现
+          setTimeout(() => {
+            initOrUpdateChart();
+            renderData();
+          }, 50);
+          
+          return;
+        }
+        
         console.log('请求参数:', {
             startDate: startDate.replace(/-/g, ''),
             endDate: endDate.replace(/-/g, ''),
@@ -639,6 +720,13 @@
         });
 
         institutionData = response.data.data.companyPals || [];
+
+        // 保存到缓存
+        cachedData[cacheKey] = {
+          data: institutionData,
+          timestamp: new Date().toISOString()
+        };
+        saveCacheToStorage();
 
         // 重置显示状态
         showAll = false;
@@ -659,7 +747,29 @@
 
       } catch (error) {
         console.error('获取机构数据失败:', error);
-        // 显示错误信息给用户
+        
+        // 尝试从缓存获取数据
+        const cacheKey = `${selectedInstitution}_${startDate.replace(/-/g, '')}_${endDate.replace(/-/g, '')}`;
+        if (cachedData[cacheKey]) {
+          console.log(`获取数据失败，使用缓存数据: ${cacheKey}`);
+          institutionData = cachedData[cacheKey].data;
+          isUsingCache = true;
+          
+          // 显示数据区域和缓存警告
+          showLoading(false);
+          showData(true);
+          showCacheWarning(true, `获取数据失败，使用缓存数据 (${new Date(cachedData[cacheKey].timestamp).toLocaleString()})`);
+          
+          // 延迟渲染图表以确保容器已完全呈现
+          setTimeout(() => {
+            initOrUpdateChart();
+            renderData();
+          }, 50);
+          
+          return;
+        }
+        
+        // 如果没有缓存数据，显示错误信息
         const loadingElement = document.getElementById('loading');
         loadingElement.innerHTML = `<div>加载失败: ${error.message || '网络错误'}</div><div>请稍后重试</div>`;
         showLoading(true);
@@ -954,6 +1064,62 @@
     // 显示/隐藏数据区域
     function showData(show) {
       document.getElementById('data-container').style.display = show ? 'block' : 'none';
+    }
+    
+    // 显示/隐藏缓存警告
+    function showCacheWarning(show, message = '使用缓存数据') {
+      const warningElement = document.getElementById('cache-warning');
+      if (warningElement) {
+        warningElement.style.display = show ? 'block' : 'none';
+        if (message) {
+          warningElement.textContent = message;
+        }
+      }
+    }
+    
+    // 保存缓存到localStorage
+    function saveCacheToStorage() {
+      try {
+        // 清理过期缓存
+        cleanExpiredCache();
+        
+        // 保存当前缓存
+        localStorage.setItem('institution_cache', JSON.stringify(cachedData));
+        console.log('缓存已保存到localStorage');
+      } catch (error) {
+        console.error('保存缓存失败:', error);
+      }
+    }
+    
+    // 从localStorage加载缓存
+    function loadCacheFromStorage() {
+      try {
+        const cachedString = localStorage.getItem('institution_cache');
+        if (cachedString) {
+          cachedData = JSON.parse(cachedString);
+          console.log('从localStorage加载缓存成功');
+          
+          // 清理过期缓存
+          cleanExpiredCache();
+        }
+      } catch (error) {
+        console.error('加载缓存失败:', error);
+        cachedData = {};
+      }
+    }
+    
+    // 清理过期缓存
+    function cleanExpiredCache() {
+      const now = new Date();
+      const expiryTime = CACHE_EXPIRY_DAYS * 24 * 60 * 60 * 1000; // 转换为毫秒
+      
+      for (const key in cachedData) {
+        const cacheTime = new Date(cachedData[key].timestamp).getTime();
+        if (now.getTime() - cacheTime > expiryTime) {
+          console.log(`删除过期缓存: ${key}`);
+          delete cachedData[key];
+        }
+      }
     }
     
     // 市场简称到市场 ID 的映射
