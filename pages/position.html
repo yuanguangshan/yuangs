@@ -371,13 +371,51 @@
         const row = document.createElement('tr');
         const netPosition = position.totalLongPosition - position.totalShortPosition;
         
+        // 获取正确的品种代码 - 首先尝试使用varietyCode，如果不存在则从varietyName提取
+        let varietyCode = '';
+        
+        // 检查是否存在varietyCode
+        if (position.varietyCode) {
+          varietyCode = position.varietyCode;
+        } 
+        // 如果品种名称是如 "铜 CU" 这样的格式，尝试提取后面的大写字母作为代码
+        else if (position.varietyName) {
+          const match = position.varietyName.match(/[A-Z]{1,4}\d*$/);
+          if (match) {
+            varietyCode = match[0];
+          } else {
+            // 使用品种名称的第一个字符的拼音首字母作为代码的备选
+            const firstChar = position.varietyName.charAt(0);
+            const pinyinMap = {
+              '铜': 'CU', '铝': 'AL', '锌': 'ZN', '镍': 'NI', '锡': 'SN', '铅': 'PB', 
+              '金': 'AU', '银': 'AG', '原': 'SC', '燃': 'LH', '甲': 'MA', '橡': 'RU',
+              '沥': 'BU', '螺': 'RB', '热': 'HC', '铁': 'I', '焦': 'J', '焦煤': 'JM',
+              '动': 'M', '豆': 'A', '玉': 'C', '棕': 'P', '白': 'RM', '菜': 'OI',
+              '硅': 'SI', '锰': 'SM', '碳': 'SA', '尿': 'UR', '纯': 'TA', '短': 'EG',
+              '乙': 'EB', '苯': 'PF', '丁': 'PG', 
+              '十': 'T', '五': 'TF', '二': 'TS', '三': 'TT'
+            };
+            varietyCode = pinyinMap[firstChar] || firstChar;
+          }
+        }
+        
+        // 如果主力合约代码存在，从中提取品种代码
+        if (!varietyCode && position.mainFutcode) {
+          const match = position.mainFutcode.match(/^([A-Za-z]+)/);
+          if (match) {
+            varietyCode = match[1].toUpperCase();
+          }
+        }
+        
         // 创建品种单元格
         const varietyCell = document.createElement('td');
         varietyCell.textContent = position.varietyName || '-';
         varietyCell.className = 'clickable';
         varietyCell.title = '点击查看品种龙虎榜';
         varietyCell.addEventListener('click', function() {
-          window.location.href = `longshort.html?variety=${position.varietyCode}`;
+          // 在控制台输出用于调试
+          console.log(`跳转到品种: ${varietyCode}, 原始名称: ${position.varietyName}`);
+          window.location.href = `longshort.html?variety=${varietyCode}`;
         });
         row.appendChild(varietyCell);
         
@@ -392,7 +430,8 @@
         netPositionCell.className = 'clickable';
         netPositionCell.title = '点击查看品种多空持仓';
         netPositionCell.addEventListener('click', function() {
-          window.location.href = `longshort.html?variety=${position.varietyCode}`;
+          console.log(`跳转到品种: ${varietyCode}, 原始名称: ${position.varietyName}`);
+          window.location.href = `longshort.html?variety=${varietyCode}`;
         });
         row.appendChild(netPositionCell);
         
