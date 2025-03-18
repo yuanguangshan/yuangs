@@ -1208,7 +1208,7 @@
         let progress = 0;
         const interval = setInterval(() => {
           progress = Math.min(progress + Math.random() * 10, 100);
-          loadingIndicator.innerHTML = `🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌹🌹加载中 【${Math.floor(progress)}%】🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹🌷🌷🌹`;
+          loadingIndicator.innerHTML = `加载中 【${Math.floor(progress)}%】🌷 🌹 🌷   `;
           if (progress >= 100) clearInterval(interval);
         }, 300);
       }
@@ -2057,21 +2057,31 @@
       }
     }
 
-    // 安全地销毁图表实例的通用函数
+    // 安全地销毁图表实例的通用函数 - 增强健壮性
     function safeDisposeChart(chartInstance) {
       if (!chartInstance) return;
       
       try {
         // 检查图表实例是否有效
         if (typeof chartInstance.getDom === 'function') {
-          const dom = chartInstance.getDom();
-          // 只有当DOM元素存在且在文档中时才尝试销毁
-          if (dom && document.body.contains(dom)) {
-            chartInstance.dispose();
-            console.log('图表实例已安全销毁');
-          } else {
-            // DOM元素不在文档中，直接设置为null
-            console.warn('图表DOM元素已不在文档中，跳过dispose');
+          try {
+            const dom = chartInstance.getDom();
+            // 只有当DOM元素存在且在文档中时才尝试销毁
+            if (dom && document.body.contains(dom)) {
+              chartInstance.dispose();
+              console.log('图表实例已安全销毁');
+            } else {
+              // DOM元素不在文档中，直接设置为null
+              console.warn('图表DOM元素已不在文档中，跳过dispose');
+            }
+          } catch (domError) {
+            // 获取DOM元素失败，可能是图表实例已部分损坏
+            console.warn('获取图表DOM元素失败，尝试直接销毁:', domError);
+            try {
+              chartInstance.dispose();
+            } catch (disposeError) {
+              console.warn('直接销毁图表失败:', disposeError);
+            }
           }
         } else {
           // 图表实例可能已损坏，直接设置为null
@@ -2092,6 +2102,10 @@
       console.log('显示合约详情:', contract);
       
       try {
+        // 在切换视图前先销毁premiumChart图表实例，防止DOM元素移除导致的错误
+        safeDisposeChart(premiumChart);
+        premiumChart = null;
+        
         // 隐藏合约选择器和概览
         document.getElementById('contract-selector').style.display = 'none';
         document.getElementById('overview-section').style.display = 'none';
