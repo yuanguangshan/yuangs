@@ -426,9 +426,10 @@
     }
 
     .contracts-table th, .contracts-table td {
-      padding: 8px 10px;
+      padding: 6px 8px;
       text-align: left;
       border-bottom: 1px solid #eee;
+      font-size: 10px;
     }
 
     .contracts-table th {
@@ -819,6 +820,10 @@
                 <th>涨幅</th>
                 <th>成交</th>
                 <th>持仓</th>
+                <th>成交额</th>
+                <th>沉淀</th>
+                <th>增仓率</th>
+                <th>五日</th>
               </tr>
             </thead>
             <tbody id="contracts-body">
@@ -851,6 +856,22 @@
           <div class="contract-info-item">
             <div class="contract-info-label">持仓量</div>
             <div id="contract-position" class="contract-info-value">-</div>
+          </div>
+          <div class="contract-info-item">
+            <div class="contract-info-label">成交额</div>
+            <div id="contract-cje" class="contract-info-value">-</div>
+          </div>
+          <div class="contract-info-item">
+            <div class="contract-info-label">沉淀资金</div>
+            <div id="contract-cdzj" class="contract-info-value">-</div>
+          </div>
+          <div class="contract-info-item">
+            <div class="contract-info-label">增仓率</div>
+            <div id="contract-zcl" class="contract-info-value">-</div>
+          </div>
+          <div class="contract-info-item">
+            <div class="contract-info-label">五日涨幅</div>
+            <div id="contract-zdf5" class="contract-info-value">-</div>
           </div>
         </div>
         
@@ -1865,13 +1886,35 @@
           }
           
           // 转换数据为统一格式
-          const formattedPrices = prices.map(item => ({
-            code: item.name || '',
-            price: item.p || '0',
-            change: item.zdf || '0',
-            volume: item.vol || '0',
-            position: item.ccl || '0'
-          }));
+          const formattedPrices = prices.map(item => {
+            // 计算成交额 (成交量 * 价格)
+            const cje = item.vol && item.p ? (parseFloat(item.vol) * parseFloat(item.p)).toFixed(2) : '0';
+            
+            // 计算沉淀资金 (持仓量 * 价格)
+            const cdzj = item.ccl && item.p ? (parseFloat(item.ccl) * parseFloat(item.p)).toFixed(2) : '0';
+            
+            // 计算增仓率 rz/(ccl-rz)，其中rz是增仓量
+            let zcl = '0';
+            if (item.rz && item.ccl) {
+              const rz = parseFloat(item.rz || 0);
+              const ccl = parseFloat(item.ccl || 0);
+              if (ccl > rz && ccl - rz !== 0) {
+                zcl = ((rz / (ccl - rz)) * 100).toFixed(2);
+              }
+            }
+            
+            return {
+              code: item.name || '',
+              price: item.p || '0',
+              change: item.zdf || '0',
+              volume: item.vol || '0',
+              position: item.ccl || '0',
+              cje: cje,
+              cdzj: cdzj,
+              zcl: zcl,
+              zdf5: item.zdf5 || '0'
+            };
+          });
           
           // 保存数据 - 使用正确的品种名称作为键
           const varietyName = extractVarietyCode(prices[0]?.name || '');
@@ -1914,7 +1957,7 @@
             }
             
             if (contractsBody) {
-              contractsBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">获取价格数据失败: ${pricesError.message}</td></tr>`;
+              contractsBody.innerHTML = `<tr><td colspan="9" style="text-align:center;">获取价格数据失败: ${pricesError.message}</td></tr>`;
             }
           }
         }
@@ -1928,7 +1971,7 @@
         }
         
         if (contractsBody) {
-          contractsBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">获取合约列表失败，${error.message}</td></tr>`;
+          contractsBody.innerHTML = `<tr><td colspan="9" style="text-align:center;">获取合约列表失败，${error.message}</td></tr>`;
         }
       }
     }
@@ -1948,7 +1991,7 @@
       contractsBody.innerHTML = '';
       
       if (!contracts || contracts.length === 0) {
-        contractsBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">无合约数据</td></tr>';
+        contractsBody.innerHTML = '<tr><td colspan="9" style="text-align:center;">无合约数据</td></tr>';
         return;
       }
       
@@ -1976,6 +2019,10 @@
             <td class="${changeClass}">${changeText}</td>
             <td>${formatNumber(contract.volume)}</td>
             <td>${formatNumber(contract.position)}</td>
+            <td>${formatNumber(contract.cje)}</td>
+            <td>${formatNumber(contract.cdzj)}</td>
+            <td>${contract.zcl || '-'}%</td>
+            <td class="${parseFloat(contract.zdf5) >= 0 ? 'price-up' : 'price-down'}">${parseFloat(contract.zdf5) ? (parseFloat(contract.zdf5) >= 0 ? '+' : '') + contract.zdf5 + '%' : '-'}</td>
           `;
           
           // 为行添加点击事件 - 确保保存contract对象的副本
@@ -1993,7 +2040,7 @@
         contractsTable.style.display = 'table';
       } catch (error) {
         console.error('渲染合约表格失败:', error);
-        contractsBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">渲染表格失败: ${error.message}</td></tr>`;
+        contractsBody.innerHTML = `<tr><td colspan="9" style="text-align:center;">渲染表格失败: ${error.message}</td></tr>`;
       }
     }
 
@@ -2026,6 +2073,19 @@
         
         document.getElementById('contract-volume').textContent = formatNumber(contract.volume);
         document.getElementById('contract-position').textContent = formatNumber(contract.position);
+        
+        // 添加新字段显示
+        document.getElementById('contract-cje').textContent = formatNumber(contract.cje);
+        document.getElementById('contract-cdzj').textContent = formatNumber(contract.cdzj);
+        
+        // 增仓率显示
+        document.getElementById('contract-zcl').textContent = contract.zcl ? `${contract.zcl}%` : '-';
+        
+        // 五日涨幅显示
+        const zdf5 = parseFloat(contract.zdf5);
+        const zdf5Element = document.getElementById('contract-zdf5');
+        zdf5Element.textContent = zdf5 ? `${zdf5 >= 0 ? '+' : ''}${contract.zdf5}%` : '-';
+        zdf5Element.className = `contract-info-value ${zdf5 >= 0 ? 'up' : 'down'}`;
         
         // 生成并显示升贴水图表
         setTimeout(() => {
