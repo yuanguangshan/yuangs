@@ -2150,6 +2150,11 @@
         const basePrice = parseFloat(validContracts[0].price);
         const premium = prices.map(price => ((price - basePrice) / basePrice * 100).toFixed(2));
         
+        // 获取持仓量数据并计算占比
+        const positions = validContracts.map(c => parseInt(c.position) || 0);
+        const totalPosition = positions.reduce((sum, pos) => sum + pos, 0);
+        const positionRatio = positions.map(pos => totalPosition > 0 ? ((pos / totalPosition) * 100).toFixed(2) : 0);
+        
         // 生成柱状图颜色
         const colors = premium.map((p, idx) => {
           // 当前合约为橙色
@@ -2185,16 +2190,29 @@
           tooltip: {
             trigger: 'axis',
             formatter: function(params) {
-              const idx = params[0].dataIndex;
-              return `${validContracts[idx].code}<br/>价格: ${validContracts[idx].price}<br/>升贴水: ${premium[idx]}%`;
+              let html = `${validContracts[params[0].dataIndex].code}<br/>`;
+              params.forEach(param => {
+                if (param.seriesName === '升贴水') {
+                  html += `价格: ${validContracts[param.dataIndex].price}<br/>升贴水: ${param.value}%<br/>`;
+                } else if (param.seriesName === '持仓占比') {
+                  html += `持仓量: ${formatNumber(validContracts[param.dataIndex].position)}<br/>占比: ${param.value}%`;
+                }
+              });
+              return html;
             }
           },
           grid: {
             left: '3%',
-            right: '4%',
-            bottom: '10%',
-            top: '15%',
+            right: '8%',  // 增加右侧空间以容纳第二个Y轴
+            bottom: '15%', // 增加底部空间
+            top: '25%',
             containLabel: true
+          },
+          legend: {
+            data: ['升贴水', '持仓占比'],
+            top: '5%',
+            right: '10%',
+            show: false
           },
           xAxis: {
             type: 'category',
@@ -2205,24 +2223,42 @@
               color: '#666'
             }
           },
-          yAxis: {
-            type: 'value',
-            name: '升贴水(%)',
-            nameTextStyle: {
-              fontSize: 12,
-              color: '#666'
+          yAxis: [
+            {
+              type: 'value',
+              name: '升贴水(%)',
+              nameTextStyle: {
+                fontSize: 12,
+                color: '#666'
+              },
+              axisLabel: {
+                formatter: '{value}%',
+                fontSize: 11,
+                color: '#666'
+              },
+              splitLine: {
+                lineStyle: {
+                  color: '#eee'
+                }
+              }
             },
-            axisLabel: {
-              formatter: '{value}%',
-              fontSize: 11,
-              color: '#666'
-            },
-            splitLine: {
-              lineStyle: {
-                color: '#eee'
+            {
+              type: 'value',
+              name: '持仓占比(%)',
+              nameTextStyle: {
+                fontSize: 12,
+                color: '#3498db'
+              },
+              axisLabel: {
+                formatter: '{value}%',
+                fontSize: 11,
+                color: '#3498db'
+              },
+              splitLine: {
+                show: false
               }
             }
-          },
+          ],
           series: [
             {
               name: '升贴水',
@@ -2242,6 +2278,32 @@
                 formatter: '{c}%',
                 fontSize: 10,
                 color: '#666'
+              }
+            },
+            {
+              name: '持仓占比',
+              type: 'line',
+              yAxisIndex: 1,
+              symbol: 'circle',
+              symbolSize: 6,
+              itemStyle: {
+                color: '#3498db'
+              },
+              lineStyle: {
+                width: 2,
+                type: 'solid',
+                color: '#3498db'
+              },
+              data: positionRatio,
+              label: {
+                show: true,
+                position: 'inside',
+                formatter: '{c}%',
+                fontSize: 10,
+                color: '#ffffff',
+                backgroundColor: '#3498db',
+                padding: [2, 4],
+                borderRadius: 3
               }
             }
           ]
@@ -2353,6 +2415,11 @@
         // 计算升贴水（相对于当前合约）
         const premium = prices.map(price => ((price - basePrice) / basePrice * 100).toFixed(2));
         
+        // 获取持仓量数据并计算占比
+        const positions = validContracts.map(c => parseInt(c.position) || 0);
+        const totalPosition = positions.reduce((sum, pos) => sum + pos, 0);
+        const positionRatio = positions.map(pos => totalPosition > 0 ? ((pos / totalPosition) * 100).toFixed(2) : 0);
+        
         // 生成柱状图颜色
         const colors = premium.map((p, idx) => {
           // 当前合约为橙色
@@ -2391,16 +2458,29 @@
           tooltip: {
             trigger: 'axis',
             formatter: function(params) {
-              const idx = params[0].dataIndex;
-              return `${validContracts[idx].code}<br/>价格: ${validContracts[idx].price}<br/>升贴水: ${premium[idx]}%`;
+              let html = `${validContracts[params[0].dataIndex].code}<br/>`;
+              params.forEach(param => {
+                if (param.seriesName === '升贴水') {
+                  html += `价格: ${validContracts[param.dataIndex].price}<br/>升贴水: ${param.value}%<br/>`;
+                } else if (param.seriesName === '持仓占比') {
+                  html += `持仓量: ${formatNumber(validContracts[param.dataIndex].position)}<br/>占比: ${param.value}%`;
+                }
+              });
+              return html;
             }
           },
           grid: {
             left: '3%',
-            right: '4%',
-            bottom: '10%',
+            right: '8%',  // 增加右侧空间以容纳第二个Y轴
+            bottom: '15%', // 增加底部空间
             top: '15%',
             containLabel: true
+          },
+          legend: {
+            data: ['升贴水', '持仓占比'],
+            top: '5%',
+            right: '10%',
+            show: false
           },
           xAxis: {
             type: 'category',
@@ -2411,24 +2491,42 @@
               color: '#666'
             }
           },
-          yAxis: {
-            type: 'value',
-            name: '升贴水(%)',
-            nameTextStyle: {
-              fontSize: 12,
-              color: '#666'
+          yAxis: [
+            {
+              type: 'value',
+              name: '升贴水(%)',
+              nameTextStyle: {
+                fontSize: 12,
+                color: '#666'
+              },
+              axisLabel: {
+                formatter: '{value}%',
+                fontSize: 11,
+                color: '#666'
+              },
+              splitLine: {
+                lineStyle: {
+                  color: '#eee'
+                }
+              }
             },
-            axisLabel: {
-              formatter: '{value}%',
-              fontSize: 11,
-              color: '#666'
-            },
-            splitLine: {
-              lineStyle: {
-                color: '#eee'
+            {
+              type: 'value',
+              name: '持仓占比(%)',
+              nameTextStyle: {
+                fontSize: 12,
+                color: '#3498db'
+              },
+              axisLabel: {
+                formatter: '{value}%',
+                fontSize: 11,
+                color: '#3498db'
+              },
+              splitLine: {
+                show: false
               }
             }
-          },
+          ],
           series: [
             {
               name: '升贴水',
@@ -2448,6 +2546,32 @@
                 formatter: '{c}%',
                 fontSize: 10,
                 color: '#666'
+              }
+            },
+            {
+              name: '持仓占比',
+              type: 'line',
+              yAxisIndex: 1,
+              symbol: 'circle',
+              symbolSize: 6,
+              itemStyle: {
+                color: '#3498db'
+              },
+              lineStyle: {
+                width: 2,
+                type: 'solid',
+                color: '#3498db'
+              },
+              data: positionRatio,
+              label: {
+                show: true,
+                position: 'inside',
+                formatter: '{c}%',
+                fontSize: 10,
+                color: '#ffffff',
+                backgroundColor: '#3498db',
+                padding: [2, 4],
+                borderRadius: 3
               }
             }
           ]
