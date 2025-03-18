@@ -162,6 +162,42 @@
       left: 0;
       border-radius: 4px;
     }
+    
+    /* 缓存数据警告样式 */
+    .cache-warning {
+      color: #ff9800;
+      text-align: center;
+      padding: 10px;
+      background-color: rgba(255, 193, 7, 0.1);
+      border-radius: 8px;
+      margin: 5px 0;
+      font-size: 12px;
+    }
+
+    /* 加载指示器样式 */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      color: #666;
+    }
+
+    .loading-spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #a18cd1;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      animation: spin 1s linear infinite;
+      margin-bottom: 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
   </style>
 </head>
 
@@ -192,6 +228,13 @@
       <button onclick="setPresetTime('1y')">1年</button>
     </div>
 
+    <div id="cache-warning" class="cache-warning" style="display: none;">使用缓存数据</div>
+    
+    <div id="loading" class="loading" style="display: none;">
+      <div class="loading-spinner"></div>
+      <div>加载数据中...</div>
+    </div>
+
     <div class="company-list" id="companyList">
       <!-- Company items will be inserted here -->
     </div>
@@ -203,6 +246,14 @@
     let companyPals = [];
     let startDate = '';
     let endDate = '';
+    
+    // 缓存相关变量
+    let cachedData = {}; // 用于存储缓存的数据
+    const CACHE_EXPIRY_DAYS = 7; // 缓存过期时间（天）
+    let isUsingCache = false; // 是否正在使用缓存数据
+    
+    // 从localStorage加载缓存
+    loadCacheFromStorage();
     
     // 格式化机构名称，去掉(代客)字样
     const formatInstitutionName = (name) => {
@@ -247,7 +298,28 @@
     };
 
     const fetchVarietyList = async () => {
+      showLoading(true);
+      
       try {
+        // 检查是否有缓存的品种列表
+        const cacheKey = 'variety_list';
+        if (cachedData[cacheKey]) {
+          console.log('使用缓存的品种列表');
+          varietyList.length = 0;
+          varietyList.push(...cachedData[cacheKey].data);
+          
+          if (varietyList.length > 0) {
+            selectedVariety = varietyList[0].dm;
+            updateVarietyOptions(varietyList);
+            
+            // 处理URL参数
+            handleUrlParams();
+            
+            showLoading(false);
+            return;
+          }
+        }
+        
         const response = await axios.get('https://q.889.ink');
         let jsonpData;
 
@@ -261,38 +333,145 @@
         if (jsonpData && jsonpData.list) {
           varietyList.length = 0; // Clear existing list
           varietyList.push(...jsonpData.list);
+          
+          // 保存到缓存
+          cachedData[cacheKey] = {
+            data: varietyList,
+            timestamp: new Date().toISOString()
+          };
+          saveCacheToStorage();
 
           if (varietyList.length > 0) {
             selectedVariety = varietyList[0].dm;
             updateVarietyOptions(varietyList);
-            fetchData();
+            
+            // 处理URL参数
+            handleUrlParams();
           }
         }
+        
+        showLoading(false);
       } catch (error) {
         console.error('获取品种列表失败:', error);
+        showLoading(false);
+        
+        // 尝试从缓存获取品种列表
+        const cacheKey = 'variety_list';
+        if (cachedData[cacheKey]) {
+          console.log('获取品种列表失败，使用缓存数据');
+          varietyList.length = 0;
+          varietyList.push(...cachedData[cacheKey].data);
+          
+          if (varietyList.length > 0) {
+            selectedVariety = varietyList[0].dm;
+            updateVarietyOptions(varietyList);
+            
+            // 处理URL参数
+            handleUrlParams();
+          }
+        }
+      }
+    };
+    
+    // 处理URL参数
+    const handleUrlParams = () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const varietyParam = urlParams.get('variety');
+      
+      if (varietyParam && varietyList.length > 0) {
+        // 查找匹配的品种
+        const matchedVariety = varietyList.find(item => 
+          item.dm.replace(/\d+$/, '').toLowerCase() === varietyParam.toLowerCase());
+        if (matchedVariety) {
+          selectedVariety = matchedVariety.dm;
+          document.getElementById('variety').value = selectedVariety;
+          fetchData();
+        } else {
+          fetchData(); // 如果没有匹配的品种，使用默认选中的品种
+        }
+      } else {
+        fetchData(); // 如果没有品种参数，使用默认选中的品种
       }
     };
 
     const fetchData = async () => {
+      if (!selectedVariety) return;
+      
+      showLoading(true);
+      showCacheWarning(false);
+      isUsingCache = false;
+      
       try {
         const market = varietyList.find(item => item.dm === selectedVariety)?.sc;
+        const variety = selectedVariety.replace(/\d+$/, '');
+        
+        // 构建缓存键
+        const cacheKey = `${variety}_${market}_${startDate.replace(/-/g, '')}_${endDate.replace(/-/g, '')}`;
+        
+        // 检查当前时间是否在数据更新时间段内（15:30-17:00）
+        const now = new Date();
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+        const isUpdateTime = (hours === 15 && minutes >= 30) || (hours === 16);
+        
+        // 检查是否有缓存数据且不在更新时间段内
+        if (cachedData[cacheKey] && !isUpdateTime) {
+          console.log(`使用缓存数据: ${cacheKey}`);
+          companyPals = cachedData[cacheKey].data;
+          isUsingCache = true;
+          
+          // 显示缓存警告
+          showCacheWarning(true, `使用缓存数据 (${new Date(cachedData[cacheKey].timestamp).toLocaleString()})`);
+          renderCompanyList();
+          showLoading(false);
+          return;
+        }
+        
         const response = await axios.get(
           'https://q.889.ink/commodity_profit', {
             params: {
               startDate: startDate.replace(/-/g, ''),
               endDate: endDate.replace(/-/g, ''),
-              variety: selectedVariety.replace(/\d+$/, ''),
+              variety: variety,
               market: market,
               initFlag: 0
             }
           }
         );
+        
         if (response.data.code === 10000) {
           companyPals = response.data.data.companyPals;
+          
+          // 保存到缓存
+          cachedData[cacheKey] = {
+            data: companyPals,
+            timestamp: new Date().toISOString()
+          };
+          saveCacheToStorage();
+          
           renderCompanyList();
         }
+        
+        showLoading(false);
       } catch (error) {
         console.error('获取数据失败:', error);
+        
+        // 尝试从缓存获取数据
+        const market = varietyList.find(item => item.dm === selectedVariety)?.sc;
+        const variety = selectedVariety.replace(/\d+$/, '');
+        const cacheKey = `${variety}_${market}_${startDate.replace(/-/g, '')}_${endDate.replace(/-/g, '')}`;
+        
+        if (cachedData[cacheKey]) {
+          console.log(`获取数据失败，使用缓存数据: ${cacheKey}`);
+          companyPals = cachedData[cacheKey].data;
+          isUsingCache = true;
+          
+          // 显示缓存警告
+          showCacheWarning(true, `获取数据失败，使用缓存数据 (${new Date(cachedData[cacheKey].timestamp).toLocaleString()})`);
+          renderCompanyList();
+        }
+        
+        showLoading(false);
       }
     };
 
@@ -364,30 +543,71 @@
         companyListElement.appendChild(companyItem);
       });
     };
+    
+    // 显示/隐藏加载指示器
+    function showLoading(show) {
+      document.getElementById('loading').style.display = show ? 'flex' : 'none';
+    }
+    
+    // 显示/隐藏缓存警告
+    function showCacheWarning(show, message = '使用缓存数据') {
+      const warningElement = document.getElementById('cache-warning');
+      if (warningElement) {
+        warningElement.style.display = show ? 'block' : 'none';
+        if (message) {
+          warningElement.textContent = message;
+        }
+      }
+    }
+    
+    // 保存缓存到localStorage
+    function saveCacheToStorage() {
+      try {
+        // 清理过期缓存
+        cleanExpiredCache();
+        
+        // 保存当前缓存
+        localStorage.setItem('commodity_profit_cache', JSON.stringify(cachedData));
+        console.log('缓存已保存到localStorage');
+      } catch (error) {
+        console.error('保存缓存失败:', error);
+      }
+    }
+    
+    // 从localStorage加载缓存
+    function loadCacheFromStorage() {
+      try {
+        const cachedString = localStorage.getItem('commodity_profit_cache');
+        if (cachedString) {
+          cachedData = JSON.parse(cachedString);
+          console.log('从localStorage加载缓存成功');
+          
+          // 清理过期缓存
+          cleanExpiredCache();
+        }
+      } catch (error) {
+        console.error('加载缓存失败:', error);
+        cachedData = {};
+      }
+    }
+    
+    // 清理过期缓存
+    function cleanExpiredCache() {
+      const now = new Date();
+      const expiryTime = CACHE_EXPIRY_DAYS * 24 * 60 * 60 * 1000; // 转换为毫秒
+      
+      for (const key in cachedData) {
+        const cacheTime = new Date(cachedData[key].timestamp).getTime();
+        if (now.getTime() - cacheTime > expiryTime) {
+          console.log(`删除过期缓存: ${key}`);
+          delete cachedData[key];
+        }
+      }
+    }
 
     document.addEventListener('DOMContentLoaded', () => {
       setPresetTime('1m');
       fetchVarietyList();
-      
-      // 处理URL参数
-      const urlParams = new URLSearchParams(window.location.search);
-      const varietyParam = urlParams.get('variety');
-      
-      if (varietyParam) {
-        // 如果URL中有品种参数，等待品种列表加载完成后设置选中的品种
-        const checkVarietyInterval = setInterval(() => {
-          if (varietyList.length > 0) {
-            // 查找匹配的品种
-            const matchedVariety = varietyList.find(item => item.dm.replace(/\d+$/, '').toLowerCase() === varietyParam.toLowerCase());
-            if (matchedVariety) {
-              selectedVariety = matchedVariety.dm;
-              document.getElementById('variety').value = selectedVariety;
-              fetchData();
-            }
-            clearInterval(checkVarietyInterval);
-          }
-        }, 100);
-      }
 
       document.getElementById('variety').addEventListener('change', (event) => {
         selectedVariety = event.target.value;
