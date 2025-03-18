@@ -919,6 +919,14 @@
       // 隐藏错误信息
       document.getElementById('error').style.display = 'none';
       
+      // 添加页面卸载事件，确保在页面刷新或跳转时销毁图表
+      window.addEventListener('beforeunload', function() {
+        // 安全地销毁所有图表实例
+        safeDisposeChart(premiumChart);
+        safeDisposeChart(contractDetailChart);
+        safeDisposeChart(chart);
+      });
+      
       // 绑定刷新按钮事件
       const refreshBtn = document.getElementById('refresh-btn');
       const refreshBtnHeader = document.getElementById('refresh-btn-header');
@@ -981,11 +989,16 @@
       
       // 绑定后退按钮事件
       document.getElementById('back-to-overview').addEventListener('click', function() {
+        // 返回概览前销毁图表
+        safeDisposeChart(premiumChart);
+        safeDisposeChart(contractDetailChart);
         showOverview();
       });
       
       // 绑定关闭合约详情按钮事件
       document.getElementById('close-detail').addEventListener('click', function() {
+        // 关闭合约详情前销毁图表
+        safeDisposeChart(contractDetailChart);
         document.getElementById('contract-detail').style.display = 'none';
         document.getElementById('contract-selector').style.display = 'block';
       });
@@ -2044,6 +2057,31 @@
       }
     }
 
+    // 安全地销毁图表实例的通用函数
+    function safeDisposeChart(chartInstance) {
+      if (!chartInstance) return;
+      
+      try {
+        // 检查图表实例是否有效
+        if (typeof chartInstance.getDom === 'function') {
+          const dom = chartInstance.getDom();
+          // 只有当DOM元素存在且在文档中时才尝试销毁
+          if (dom && document.body.contains(dom)) {
+            chartInstance.dispose();
+            console.log('图表实例已安全销毁');
+          } else {
+            // DOM元素不在文档中，直接设置为null
+            console.warn('图表DOM元素已不在文档中，跳过dispose');
+          }
+        } else {
+          // 图表实例可能已损坏，直接设置为null
+          console.warn('图表实例可能已损坏，跳过dispose');
+        }
+      } catch (e) {
+        console.warn('销毁图表实例失败:', e);
+      }
+    }
+    
     // 显示合约详情 - 增加错误处理
     function showContractDetail(contract) {
       if (!contract) {
@@ -2106,18 +2144,9 @@
         return;
       }
       
-      // 安全地销毁旧图表 - 在DOM替换前先销毁
-      if (premiumChart) {
-        try {
-          const dom = premiumChart.getDom();
-          if (dom && document.body.contains(dom)) {
-            premiumChart.dispose();
-          }
-        } catch (e) {
-          console.warn('销毁旧图表实例失败:', e);
-        }
-        premiumChart = null;
-      }
+      // 安全地销毁旧图表 - 使用通用函数
+      safeDisposeChart(premiumChart);
+      premiumChart = null;
       
       // 确保容器中只有一个图表元素
       chartWrapper.innerHTML = '<div id="premium-chart" style="width: 100%; height: 100%;"></div>';
@@ -2345,18 +2374,9 @@
         return;
       }
       
-      // 安全地销毁旧图表 - 在DOM替换前先销毁
-      if (contractDetailChart) {
-        try {
-          const dom = contractDetailChart.getDom();
-          if (dom && document.body.contains(dom)) {
-            contractDetailChart.dispose();
-          }
-        } catch (e) {
-          console.warn('销毁旧合约详情图表实例失败:', e);
-        }
-        contractDetailChart = null;
-      }
+      // 安全地销毁旧图表 - 使用通用函数
+      safeDisposeChart(contractDetailChart);
+      contractDetailChart = null;
       
       // 确保容器中只有一个图表元素
       chartWrapper.innerHTML = '<div id="contract-premium-chart" class="contract-chart"></div>';
