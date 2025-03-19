@@ -1125,7 +1125,50 @@
       
       // 启动自动更新
       startAutoUpdate();
+      
+      // 监听主题变化
+      const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      darkModeMediaQuery.addEventListener('change', handleThemeChange);
     });
+    
+    // 处理主题变化
+    function handleThemeChange() {
+      console.log('主题变化被检测到');
+      
+      // 如果图表已经创建，更新它们的主题
+      if (premiumChart) {
+        try {
+          // 延迟执行以确保CSS变量已更新
+          setTimeout(() => {
+            renderPremiumChart(currentVariety, contractsData[currentVariety] || []);
+          }, 100);
+        } catch (e) {
+          console.warn('更新升贴水图表主题失败:', e);
+        }
+      }
+      
+      if (contractDetailChart) {
+        try {
+          // 获取当前显示的合约详情
+          const contractName = document.getElementById('contract-name').textContent;
+          const contracts = contractsData[currentVariety] || [];
+          const contract = contracts.find(c => c.code === contractName);
+          
+          if (contract) {
+            setTimeout(() => {
+              renderContractPremiumChart(contract);
+            }, 100);
+          }
+        } catch (e) {
+          console.warn('更新合约详情图表主题失败:', e);
+        }
+      }
+    }
+
+    // 获取CSS变量的当前值
+    function getCssVariable(varName, defaultValue = '') {
+      return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || defaultValue;
+    }
 
     // 带超时的fetch请求
     async function fetchWithTimeout(url, options = {}, timeout = 10000) {
@@ -2225,7 +2268,7 @@
       }
     }
 
-    // 渲染品种升贴水图表 (品种选择页面) - 增加错误处理和回退机制
+    // 渲染品种升贴水图表 (品种选择页面) - 修复暗色主题支持
     function renderPremiumChart(variety, contracts) {
       const chartWrapper = document.getElementById('premium-chart-wrapper');
       
@@ -2234,7 +2277,7 @@
         return;
       }
       
-      // 安全地销毁旧图表 - 使用通用函数
+      // 安全地销毁旧图表
       safeDisposeChart(premiumChart);
       premiumChart = null;
       
@@ -2262,6 +2305,17 @@
       }
       
       try {
+        // 获取CSS变量当前值
+        const chartBg = getCssVariable('--chart-bg', '#ffffff');
+        const chartText = getCssVariable('--chart-text', '#333');
+        const chartTitle = getCssVariable('--chart-title', '#333');
+        const chartAxis = getCssVariable('--chart-axis', '#666');
+        const chartGrid = getCssVariable('--chart-grid', '#eee');
+        const borderColor = getCssVariable('--border-color', '#ddd');
+        const cardBg = getCssVariable('--card-bg', '#ffffff');
+        const positiveColor = getCssVariable('--positive-color', '#ff7675');
+        const negativeColor = getCssVariable('--negative-color', '#55efc4');
+        
         // 按合约月份排序
         validContracts.sort((a, b) => {
           const monthA = a.code.match(/\d+/) ? a.code.match(/\d+/)[0] : '';
@@ -2292,29 +2346,22 @@
           // 当前合约为橙色
           if (idx === 0) return '#f8cda6';
           // 升水为红色，贴水为绿色
-          return parseFloat(p) >= 0 ? 'var(--positive-color)' : 'var(--negative-color)';
+          return parseFloat(p) >= 0 ? positiveColor : negativeColor;
         });
-        
-        // 图表已在函数开始时安全销毁
         
         // 创建新图表
-        premiumChart = echarts.init(chartContainer, null, {
-          renderer: 'canvas',
-          useDirtyRect: false,
-          devicePixelRatio: window.devicePixelRatio,
-          backgroundColor: 'var(--chart-bg)' // 设置背景色为变量
-        });
+        premiumChart = echarts.init(chartContainer);
         
         // 设置图表选项
         const option = {
-          backgroundColor: 'var(--chart-bg)', // 整体背景颜色
+          backgroundColor: chartBg,
           title: {
             text: `${variety}合约升贴水结构`,
             left: 'center',
             textStyle: {
               fontSize: 14,
               fontWeight: 'normal',
-              color: 'var(--chart-title)' // 用CSS变量设置标题颜色
+              color: chartTitle
             }
           },
           tooltip: {
@@ -2330,10 +2377,10 @@
               });
               return html;
             },
-            backgroundColor: 'var(--card-bg)',
-            borderColor: 'var(--border-color)',
+            backgroundColor: cardBg,
+            borderColor: borderColor,
             textStyle: {
-              color: 'var(--text-color)'
+              color: chartText
             }
           },
           grid: {
@@ -2349,7 +2396,7 @@
             right: '30%',
             show: true,
             textStyle: {
-              color: 'var(--text-color)' // 用CSS变量设置图例文字颜色
+              color: chartText
             }
           },
           xAxis: {
@@ -2358,11 +2405,11 @@
             axisLabel: {
               interval: 0,
               fontSize: 11,
-              color: 'var(--chart-axis)' // 用CSS变量设置坐标轴文字颜色
+              color: chartAxis
             },
             axisLine: {
               lineStyle: {
-                color: 'var(--border-color)' // 用CSS变量设置坐标轴线颜色
+                color: borderColor
               }
             },
             splitLine: {
@@ -2375,21 +2422,21 @@
               name: '升贴水(%)',
               nameTextStyle: {
                 fontSize: 12,
-                color: 'var(--chart-axis)' // 用CSS变量设置名称颜色
+                color: chartAxis
               },
               axisLabel: {
                 formatter: '{value}%',
                 fontSize: 11,
-                color: 'var(--chart-axis)' // 用CSS变量设置坐标轴文字颜色
+                color: chartAxis
               },
               splitLine: {
                 lineStyle: {
-                  color: 'var(--chart-grid)' // 用CSS变量设置网格线颜色
+                  color: chartGrid
                 }
               },
               axisLine: {
                 lineStyle: {
-                  color: 'var(--border-color)' // 用CSS变量设置坐标轴线颜色
+                  color: borderColor
                 }
               }
             },
@@ -2410,7 +2457,7 @@
               },
               axisLine: {
                 lineStyle: {
-                  color: 'var(--border-color)' // 用CSS变量设置坐标轴线颜色
+                  color: borderColor
                 }
               }
             }
@@ -2433,7 +2480,7 @@
                 position: 'top',
                 formatter: '{c}%',
                 fontSize: 10,
-                color: 'var(--chart-text)' // 用CSS变量设置标签文字颜色
+                color: chartText
               }
             },
             {
@@ -2487,7 +2534,7 @@
       }
     }
 
-    // 渲染合约详情页的升贴水图表 - 增加错误处理和回退机制
+    // 渲染合约详情页的升贴水图表 - 修复暗色主题支持
     function renderContractPremiumChart(contract) {
       const chartWrapper = document.getElementById('contract-premium-chart-wrapper');
       
@@ -2496,7 +2543,7 @@
         return;
       }
       
-      // 安全地销毁旧图表 - 使用通用函数
+      // 安全地销毁旧图表
       safeDisposeChart(contractDetailChart);
       contractDetailChart = null;
       
@@ -2551,6 +2598,17 @@
       }
       
       try {
+        // 获取CSS变量当前值
+        const chartBg = getCssVariable('--chart-bg', '#ffffff');
+        const chartText = getCssVariable('--chart-text', '#333');
+        const chartTitle = getCssVariable('--chart-title', '#333');
+        const chartAxis = getCssVariable('--chart-axis', '#666');
+        const chartGrid = getCssVariable('--chart-grid', '#eee');
+        const borderColor = getCssVariable('--border-color', '#ddd');
+        const cardBg = getCssVariable('--card-bg', '#ffffff');
+        const positiveColor = getCssVariable('--positive-color', '#ff7675');
+        const negativeColor = getCssVariable('--negative-color', '#55efc4');
+        
         // 按合约月份排序
         validContracts.sort((a, b) => {
           const monthA = a.code.match(/\d+/) ? a.code.match(/\d+/)[0] : '';
@@ -2588,29 +2646,22 @@
             return '#f8cda6';
           }
           // 升水为红色，贴水为绿色
-          return parseFloat(p) >= 0 ? 'var(--positive-color)' : 'var(--negative-color)';
+          return parseFloat(p) >= 0 ? positiveColor : negativeColor;
         });
-        
-        // 图表已在函数开始时安全销毁
         
         // 创建新图表
-        contractDetailChart = echarts.init(chartContainer, null, {
-          renderer: 'canvas',
-          useDirtyRect: false,
-          devicePixelRatio: window.devicePixelRatio,
-          backgroundColor: 'var(--chart-bg)' // 设置背景色为变量
-        });
+        contractDetailChart = echarts.init(chartContainer);
         
         // 设置图表选项
         const option = {
-          backgroundColor: 'var(--chart-bg)', // 整体背景颜色
+          backgroundColor: chartBg,
           title: {
             text: `${contract.code}升贴水结构`,
             left: 'center',
             textStyle: {
               fontSize: 14,
               fontWeight: 'normal',
-              color: 'var(--chart-title)' // 用CSS变量设置标题颜色
+              color: chartTitle
             }
           },
           tooltip: {
@@ -2626,10 +2677,10 @@
               });
               return html;
             },
-            backgroundColor: 'var(--card-bg)',
-            borderColor: 'var(--border-color)',
+            backgroundColor: cardBg,
+            borderColor: borderColor,
             textStyle: {
-              color: 'var(--text-color)'
+              color: chartText
             }
           },
           grid: {
@@ -2645,7 +2696,7 @@
             right: '10%',
             show: false,
             textStyle: {
-              color: 'var(--text-color)' // 用CSS变量设置图例文字颜色
+              color: chartText
             }
           },
           xAxis: {
@@ -2654,11 +2705,11 @@
             axisLabel: {
               interval: 0,
               fontSize: 11,
-              color: 'var(--chart-axis)' // 用CSS变量设置坐标轴文字颜色
+              color: chartAxis
             },
             axisLine: {
               lineStyle: {
-                color: 'var(--border-color)' // 用CSS变量设置坐标轴线颜色
+                color: borderColor
               }
             },
             splitLine: {
@@ -2671,21 +2722,21 @@
               name: '升贴水(%)',
               nameTextStyle: {
                 fontSize: 12,
-                color: 'var(--positive-color)'
+                color: positiveColor
               },
               axisLabel: {
                 formatter: '{value}%',
                 fontSize: 11,
-                color: 'var(--chart-axis)' // 用CSS变量设置坐标轴文字颜色
+                color: chartAxis
               },
               splitLine: {
                 lineStyle: {
-                  color: 'var(--chart-grid)' // 用CSS变量设置网格线颜色
+                  color: chartGrid
                 }
               },
               axisLine: {
                 lineStyle: {
-                  color: 'var(--border-color)' // 用CSS变量设置坐标轴线颜色
+                  color: borderColor
                 }
               }
             },
@@ -2694,7 +2745,7 @@
               name: '持仓占比(%)',
               nameTextStyle: {
                 fontSize: 12,
-                color: 'var(--positive-color)'
+                color: positiveColor
               },
               axisLabel: {
                 formatter: '{value}%',
@@ -2706,7 +2757,7 @@
               },
               axisLine: {
                 lineStyle: {
-                  color: 'var(--border-color)' // 用CSS变量设置坐标轴线颜色
+                  color: borderColor
                 }
               }
             }
@@ -2729,7 +2780,7 @@
                 position: 'top',
                 formatter: '{c}%',
                 fontSize: 10,
-                color: 'var(--chart-text)' // 用CSS变量设置标签文字颜色
+                color: chartText
               }
             },
             {
