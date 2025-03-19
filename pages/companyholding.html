@@ -1388,32 +1388,115 @@ function renderChart(data) {
       'SI': 'GFEX', 'LC': 'GFEX', 'PS': 'GFEX'
     };
     
-    // 根据品种代码获取市场ID
-    function getMarketIdFromVariety(varietyCode) {
-      // 转换为大写，因为某些交易所的品种代码是大写的
-      const upperVariety = varietyCode.toUpperCase();
-      
-      // 先尝试直接匹配上大写的
-      if (varietyPrefixToMarket[upperVariety]) {
-        return marketIdMap[varietyPrefixToMarket[upperVariety]];
-      }
-      
-      // 然后尝试匹配小写的
-      if (varietyPrefixToMarket[varietyCode]) {
-        return marketIdMap[varietyPrefixToMarket[varietyCode]];
-      }
-      
-      // 如果没有直接匹配，尝试查找前缀
-      for (const prefix in varietyPrefixToMarket) {
-        if (varietyCode.startsWith(prefix) || upperVariety.startsWith(prefix)) {
-          return marketIdMap[varietyPrefixToMarket[prefix]];
-        }
-      }
-      
-      // 默认返回上期所的ID
-      console.warn(`无法确定品种"${varietyCode}"的市场ID，默认返回上期所`);
-      return marketIdMap['SHFE'];
+// 根据品种代码获取市场ID
+function getMarketIdFromVariety(varietyCode) {
+  if (!varietyCode) {
+    console.warn('品种代码为空，默认返回上期所ID');
+    return marketIdMap['SHFE'];
+  }
+  
+  console.log(`===== 开始尝试匹配品种代码: ${varietyCode} =====`);
+  
+  // 转换为大写和小写，便于不同情况的匹配
+  const upperVariety = varietyCode.toUpperCase();
+  const lowerVariety = varietyCode.toLowerCase();
+  
+  // 提取品种代码前缀（字母部分）
+  const codePrefixMatch = varietyCode.match(/^[A-Za-z]+/);
+  const codePrefix = codePrefixMatch ? codePrefixMatch[0] : varietyCode;
+  
+  const upperCodePrefixMatch = upperVariety.match(/^[A-Z]+/);
+  const upperCodePrefix = upperCodePrefixMatch ? upperCodePrefixMatch[0] : upperVariety;
+  
+  const lowerCodePrefixMatch = lowerVariety.match(/^[a-z]+/);
+  const lowerCodePrefix = lowerCodePrefixMatch ? lowerCodePrefixMatch[0] : lowerVariety;
+  
+  console.log(`提取的前缀 - 原始: "${codePrefix}", 大写: "${upperCodePrefix}", 小写: "${lowerCodePrefix}"`);
+  
+  // 1. 先尝试完整匹配
+  if (varietyPrefixToMarket[upperVariety]) {
+    console.log(`完整大写匹配成功: ${upperVariety} => ${varietyPrefixToMarket[upperVariety]}`);
+    return marketIdMap[varietyPrefixToMarket[upperVariety]];
+  }
+  
+  if (varietyPrefixToMarket[varietyCode]) {
+    console.log(`完整原始匹配成功: ${varietyCode} => ${varietyPrefixToMarket[varietyCode]}`);
+    return marketIdMap[varietyPrefixToMarket[varietyCode]];
+  }
+  
+  if (varietyPrefixToMarket[lowerVariety]) {
+    console.log(`完整小写匹配成功: ${lowerVariety} => ${varietyPrefixToMarket[lowerVariety]}`);
+    return marketIdMap[varietyPrefixToMarket[lowerVariety]];
+  }
+  
+  // 2. 然后尝试匹配提取的字母前缀
+  if (varietyPrefixToMarket[upperCodePrefix]) {
+    console.log(`大写前缀匹配成功: ${upperCodePrefix} => ${varietyPrefixToMarket[upperCodePrefix]}`);
+    return marketIdMap[varietyPrefixToMarket[upperCodePrefix]];
+  }
+  
+  if (varietyPrefixToMarket[codePrefix]) {
+    console.log(`原始前缀匹配成功: ${codePrefix} => ${varietyPrefixToMarket[codePrefix]}`);
+    return marketIdMap[varietyPrefixToMarket[codePrefix]];
+  }
+  
+  if (varietyPrefixToMarket[lowerCodePrefix]) {
+    console.log(`小写前缀匹配成功: ${lowerCodePrefix} => ${varietyPrefixToMarket[lowerCodePrefix]}`);
+    return marketIdMap[varietyPrefixToMarket[lowerCodePrefix]];
+  }
+  
+  // 3. 如果还是没有匹配，尝试原来的前缀匹配方式
+  console.log("尝试遍历所有前缀进行匹配...");
+  for (const prefix in varietyPrefixToMarket) {
+    console.log(`检查前缀 "${prefix}"`);
+    
+    if (varietyCode.startsWith(prefix)) {
+      console.log(`原始代码以 "${prefix}" 开头，匹配到 ${varietyPrefixToMarket[prefix]}`);
+      return marketIdMap[varietyPrefixToMarket[prefix]];
     }
+    
+    if (upperVariety.startsWith(prefix)) {
+      console.log(`大写代码以 "${prefix}" 开头，匹配到 ${varietyPrefixToMarket[prefix]}`);
+      return marketIdMap[varietyPrefixToMarket[prefix]];
+    }
+    
+    if (lowerVariety.startsWith(prefix)) {
+      console.log(`小写代码以 "${prefix}" 开头，匹配到 ${varietyPrefixToMarket[prefix]}`);
+      return marketIdMap[varietyPrefixToMarket[prefix]];
+    }
+  }
+  
+  // 4. 特殊处理: 检查是否是单个字母加数字的形式 (如 "v2505")
+  if (/^[A-Za-z]\d+$/.test(varietyCode)) {
+    const singleChar = varietyCode[0].toLowerCase();
+    if (varietyPrefixToMarket[singleChar]) {
+      console.log(`单字符小写前缀匹配成功: ${singleChar} => ${varietyPrefixToMarket[singleChar]}`);
+      return marketIdMap[varietyPrefixToMarket[singleChar]];
+    }
+    
+    const upperSingleChar = varietyCode[0].toUpperCase();
+    if (varietyPrefixToMarket[upperSingleChar]) {
+      console.log(`单字符大写前缀匹配成功: ${upperSingleChar} => ${varietyPrefixToMarket[upperSingleChar]}`);
+      return marketIdMap[varietyPrefixToMarket[upperSingleChar]];
+    }
+  }
+  
+  // 5. 尝试再次遍历，但用不区分大小写的方式
+  console.log("尝试不区分大小写的匹配...");
+  for (const prefix in varietyPrefixToMarket) {
+    const lowerPrefix = prefix.toLowerCase();
+    const lowerVarCode = varietyCode.toLowerCase();
+    
+    if (lowerVarCode.startsWith(lowerPrefix)) {
+      console.log(`不区分大小写匹配成功: ${prefix} => ${varietyPrefixToMarket[prefix]}`);
+      return marketIdMap[varietyPrefixToMarket[prefix]];
+    }
+  }
+  
+  // 默认返回上期所的ID
+  console.warn(`无法确定品种"${varietyCode}"的市场ID，默认返回上期所`);
+  return marketIdMap['SHFE'];
+}
   </script>
 </body>
 
