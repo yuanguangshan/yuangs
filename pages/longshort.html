@@ -703,6 +703,41 @@
       console.warn(`无法确定品种"${varietyCode}"的市场ID，默认返回上期所`);
       return marketIdMap['SHFE'];
     }
+    
+    // 根据品种代码获取品种ID（用于升贴水页面）
+    function getVarietyIdFromVariety(varietyCode) {
+      if (!varietyCode) return '';
+      
+      // 转换为小写，因为升贴水页面的品种ID通常是小写的
+      const lowerVariety = varietyCode.toLowerCase();
+      
+      // 获取市场简称
+      let marketCode = '';
+      
+      // 先尝试直接匹配
+      if (varietyPrefixToMarket[varietyCode]) {
+        marketCode = varietyPrefixToMarket[varietyCode];
+      } else if (varietyPrefixToMarket[varietyCode.toUpperCase()]) {
+        marketCode = varietyPrefixToMarket[varietyCode.toUpperCase()];
+      } else {
+        // 如果没有直接匹配，尝试查找前缀
+        for (const prefix in varietyPrefixToMarket) {
+          if (varietyCode.startsWith(prefix) || varietyCode.toUpperCase().startsWith(prefix)) {
+            marketCode = varietyPrefixToMarket[prefix];
+            break;
+          }
+        }
+      }
+      
+      // 如果找不到市场简称，默认使用上期所
+      if (!marketCode) {
+        marketCode = 'SHFE';
+      }
+      
+      // 构建品种ID格式：市场简称_品种代码小写
+      // 例如：shfe_rb, dce_m, czce_ta
+      return `${marketCode.toLowerCase()}_${lowerVariety}`;
+    }
 
     // 初始化页面
     document.addEventListener('DOMContentLoaded', function() {
@@ -1071,6 +1106,38 @@
     // 初始化图表
     function initChart() {
       chart = echarts.init(document.getElementById('chart'));
+      
+      // 添加图表点击事件
+      chart.on('click', function(params) {
+        if (!selectedContract) return;
+        
+        // 获取点击的系列名称
+        const seriesName = params.seriesName;
+        
+        // 获取点击的品种名称
+        const varietyName = params.name;
+        
+        // 提取品种代码（移除尾部的数字）
+        let varietyCode = selectedContract.dm.replace(/\d+$/, '');
+        
+        if (seriesName === '多头持仓') {
+          // 点击多头持仓区域，跳转到升贴水页面
+          const varietyId = getVarietyIdFromVariety(varietyCode);
+          window.location.href = `future.html?variety=${encodeURIComponent(varietyId)}`;
+        } else if (seriesName === '空头持仓') {
+          // 点击空头持仓区域，跳转到东方财富网合约页面
+          // 获取市场ID
+          let marketId = marketIdMap[selectedContract.sc];
+          if (!marketId) {
+            marketId = getMarketIdFromVariety(varietyCode);
+          }
+          
+          // 构建东方财富网URL
+          const contractCode = selectedContract.dm.toLowerCase();
+          const url = `https://wap.eastmoney.com/quote/stock/${marketId}.${contractCode}.html`;
+          window.open(url, '_blank');
+        }
+      });
     }
 
     // 切换相对/绝对视图
