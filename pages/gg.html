@@ -591,6 +591,16 @@ async function fetchAllPages(scode) {
 function initChart(dates, spjData, rzjmeData) {
     const chartDom = document.getElementById('chart');
     const myChart = echarts.init(chartDom);
+    
+    // 计算价格范围以优化y轴显示
+    let minPrice = Math.min(...spjData);
+    let maxPrice = Math.max(...spjData);
+    
+    // 设置一个小缓冲区，使价格线不会贴近顶部和底部
+    const pricePadding = (maxPrice - minPrice) * 0.1;
+    const minY = Math.max(0, minPrice - pricePadding); // 避免负值
+    const maxY = maxPrice + pricePadding;
+    
     const option = {
         tooltip: {
             trigger: 'axis',
@@ -598,11 +608,17 @@ function initChart(dates, spjData, rzjmeData) {
                 type: 'cross'
             }
         },
+        grid: {
+            right: '10%',
+            left: '10%',
+            bottom: '15%'
+        },
         xAxis: {
             type: 'category',
             data: dates,
             axisLabel: {
-                rotate: 45
+                rotate: 45,
+                fontSize: 10
             }
         },
         yAxis: [
@@ -620,6 +636,8 @@ function initChart(dates, spjData, rzjmeData) {
                 type: 'value',
                 name: '收盘价',
                 position: 'right',
+                min: minY,
+                max: maxY,
                 axisLine: {
                     lineStyle: {
                         color: 'blue'
@@ -646,11 +664,18 @@ function initChart(dates, spjData, rzjmeData) {
                 lineStyle: {
                     color: 'blue',
                     width: 2
-                }
+                },
+                symbol: 'circle',
+                symbolSize: 6
             }
         ]
     };
     myChart.setOption(option);
+    
+    // 窗口大小变化时自动调整图表大小
+    window.addEventListener('resize', function() {
+        myChart.resize();
+    });
 }
 
 function calculateRollingSums(rzjmeData, period) {
