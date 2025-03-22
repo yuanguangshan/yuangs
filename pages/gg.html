@@ -37,10 +37,12 @@
         .search-container {
             position: relative;
             margin-right: 10px;
+            width: 200px;
         }
         input[type="text"] {
-            padding: 8px;
-            width: 150px;
+            padding: 8px 30px 8px 8px;
+            width: 100%;
+            box-sizing: border-box;
         }
         button {
             padding: 8px 12px;
@@ -70,6 +72,27 @@
             color: #666;
             margin-left: 10px;
         }
+        .clear-input {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: #999;
+            font-size: 16px;
+            display: none;
+        }
+        .clear-input:hover {
+            color: #333;
+        }
+        .history-item {
+            background-color: #f9f9f9;
+        }
+        .history-item .history-tag {
+            color: #888;
+            font-size: 0.8em;
+            margin-left: 5px;
+        }
     </style>
 </head>
 <body>
@@ -79,6 +102,7 @@
 <div class="input-container">
     <div class="search-container">
         <input type="text" id="stock-search" placeholder="输入股票简称或代码" />
+        <span id="clear-input" class="clear-input">✕</span>
         <div id="search-results" class="search-results"></div>
     </div>
     <button id="update-button">更新</button>
@@ -545,6 +569,31 @@ stockData.forEach(item => {
     stockNameMap[item.code] = item.name;
 });
 
+// 从本地存储加载历史记录
+function loadStockHistory() {
+    const history = localStorage.getItem('stockSearchHistory');
+    return history ? JSON.parse(history) : [];
+}
+
+// 保存历史记录到本地存储
+function saveStockHistory(stockInfo) {
+    const history = loadStockHistory();
+    
+    // 检查是否已存在，如果存在则移到最前面
+    const existingIndex = history.findIndex(item => item.code === stockInfo.code);
+    if (existingIndex !== -1) {
+        history.splice(existingIndex, 1);
+    }
+    
+    // 添加到历史记录的最前面
+    history.unshift(stockInfo);
+    
+    // 限制历史记录数量为20
+    const limitedHistory = history.slice(0, 20);
+    
+    localStorage.setItem('stockSearchHistory', JSON.stringify(limitedHistory));
+}
+
 function getQueryParams() {
     const params = new URLSearchParams(window.location.search);
     const scode = params.get('code') || '300059';
@@ -738,6 +787,12 @@ async function main(scode) {
 
     initChart(dates, spjData, rzjmeData);
     fillTable(dates, spjData, zdfData, rzjmeData, rzjme3Data, rzjme5Data, rzjme10Data, rzjmeNData);
+    
+    // 将当前股票保存到历史记录
+    saveStockHistory({
+        code: scode,
+        name: securityName || stockNameMap[scode] || scode
+    });
 }
 
 // 初始化搜索功能
@@ -745,6 +800,7 @@ function initSearchFunctionality() {
     const searchInput = document.getElementById('stock-search');
     const searchResults = document.getElementById('search-results');
     const updateButton = document.getElementById('update-button');
+    const clearInput = document.getElementById('clear-input');
     let currentStockCode = getQueryParams().scode;
     
     // 设置初始值
@@ -762,13 +818,70 @@ function initSearchFunctionality() {
         searchInput.value = currentStockCode;
     }
     
+    // 显示或隐藏清除按钮
+    function toggleClearButton() {
+        if (searchInput.value.trim()) {
+            clearInput.style.display = 'block';
+        } else {
+            clearInput.style.display = 'none';
+        }
+    }
+    
+    // 初始状态检查清除按钮
+    toggleClearButton();
+    
+    // 清除按钮点击事件
+    clearInput.addEventListener('click', function() {
+        searchInput.value = '';
+        toggleClearButton();
+        searchInput.focus();
+        showHistoryResults();
+    });
+    
+    // 显示历史记录
+    function showHistoryResults() {
+        const history = loadStockHistory();
+        searchResults.innerHTML = '';
+        
+        if (history.length > 0) {
+            searchResults.style.display = 'block';
+            history.forEach(stock => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.innerHTML = `
+                    <span>${stock.name}<span class="history-tag">（历史）</span></span>
+                    <span class="stock-code">${stock.code}</span>
+                `;
+                div.addEventListener('click', function() {
+                    searchInput.value = stock.name;
+                    toggleClearButton();
+                    searchResults.style.display = 'none';
+                    main(stock.code);
+                });
+                searchResults.appendChild(div);
+            });
+        } else {
+            searchResults.style.display = 'none';
+        }
+    }
+    
+    // 输入框获得焦点时，如果没有内容则显示历史记录
+    searchInput.addEventListener('focus', function() {
+        const query = this.value.trim();
+        if (!query) {
+            showHistoryResults();
+        }
+    });
+    
     // 搜索功能
     searchInput.addEventListener('input', function() {
         const query = this.value.trim();
         searchResults.innerHTML = '';
         
-        if (query.length < 1) {
-            searchResults.style.display = 'none';
+        toggleClearButton();
+        
+        if (!query) {
+            showHistoryResults();
             return;
         }
         
@@ -819,6 +932,7 @@ function initSearchFunctionality() {
                 `;
                 div.addEventListener('click', function() {
                     searchInput.value = stock.name;
+                    toggleClearButton();
                     searchResults.style.display = 'none';
                     main(stock.code);
                 });
@@ -831,7 +945,7 @@ function initSearchFunctionality() {
     
     // 点击外部关闭搜索结果
     document.addEventListener('click', function(e) {
-        if (e.target !== searchInput && !searchResults.contains(e.target)) {
+        if (e.target !== searchInput && !searchResults.contains(e.target) && e.target !== clearInput) {
             searchResults.style.display = 'none';
         }
     });
