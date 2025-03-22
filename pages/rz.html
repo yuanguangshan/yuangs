@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>每日融资融券数据</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 13px;
+            text-align: left;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        th, td {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+            cursor: pointer;
+        }
+        th {
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        th.sortable:hover {
+            background-color: #e0e0e0;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+        .loading {
+            text-align: center;
+            font-size: 18px;
+            margin-top: 20px;
+        }
+        .title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+            cursor: pointer;
+        }
+        .title h2 {
+            margin: 0;
+        }
+        .date-display {
+            font-size: 16px;
+            color: #666;
+        }
+        .highlight-red {
+            background-color: #f9d9d4;
+        }
+        .highlight-green {
+            background-color: #cee2d3;
+        }
+        .highlight-accelerating {
+            color: red;
+        }
+        .highlight-slowing {
+            color: green;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="title" id="title-link">
+        <h2>每日沪深融资数据</h2>
+        <div id="date" class="date-display">日期: 加载中...</div>
+    </div>
+
+    <div id="table-container" class="loading">正在加载数据...</div>
+
+    <script>
+        // 获取最近工作日
+        function getPreviousWorkdays(daysCount = 3) {
+            const today = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
+            let dates = [];
+            let currentDate = new Date(today);
+            let workdaysFound = 0;
+
+            while (workdaysFound < daysCount) {
+                currentDate.setDate(currentDate.getDate() - 1);
+                let dayOfWeek = currentDate.getDay(); // 0 = 周日, 6 = 周六
+                if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                    dates.push(currentDate.toISOString().split('T')[0]);
+                    workdaysFound++;
+                }
+            }
+            return dates;
+        }
+
+        const previousWorkdays = getPreviousWorkdays(3);
+        const apiUrl = "https://datacenter-web.eastmoney.com/api/data/v1/get";
+        const params = {
+            reportName: "RPTA_WEB_RZRQ_GGMX",
+            columns: "ALL",
+            source: "WEB",
+            pageNumber: 1,
+            pageSize: 500,
+            pageNo: 1,
+            p: 1,
+            pageNum: 1,
+            _: new Date().getTime()
+        };
+
+        // 构造URL参数
+        function constructUrl(url, params, date, page) {
+            const queryParams = { ...params, filter: `(DATE='${date}')`, pageNumber: page };
+            const queryString = Object.keys(queryParams)
+                .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(queryParams[key])}`)
+                .join('&');
+            return `${url}?${queryString}`;
+        }
+
+        // 获取数据并展示
+        async function fetchData() {
+            let allData = [];
+
+            for (let i = 0; i < previousWorkdays.length; i++) {
+                const totalPages = 8; // 假设总共有 8 页数据
+                for (let page = 1; page <= totalPages; page++) {
+                    const url = constructUrl(apiUrl, params, previousWorkdays[i], page);
+                    try {
+                        const response = await fetch(url);
+                        const data = await response.json();
+                        if (data.result && data.result.data) {
+                            allData = allData.concat(data.result.data);
+                        }
+                    } catch (error) {
+                        console.error(`Error fetching data for ${previousWorkdays[i]} (Page ${page}):`, error);
+                    }
+                }
+            }
+
+            const uniqueData = deduplicateAndSortData(allData);
+            displayData(uniqueData);
+            displayDate(previousWorkdays[0]);
+        }
+
+        // 去重并排序
+        function deduplicateAndSortData(data) {
+            const uniqueDataMap = new Map();
+            data.forEach(item => {
+                if (!uniqueDataMap.has(item.SCODE)) {
+                    uniqueDataMap.set(item.SCODE, item);
+                } else {
+                    const existingItem = uniqueDataMap.get(item.SCODE);
+                    if (item.DATE > existingItem.DATE) {
+                        uniqueDataMap.set(item.SCODE, item);
+                    }
+                }
+            });
+
+            const uniqueData = Array.from(uniqueDataMap.values());
+            return uniqueData.sort((a, b) => Math.abs(b.RZJME ?? 0) - Math.abs(a.RZJME ?? 0));
+        }
+
+        // 显示日期
+        function displayDate(dateString) {
+            const date = new Date(dateString).toLocaleDateString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            });
+            document.getElementById('date').innerText = `日期: ${date}`;
+        }
+
+        // 显示数据
+        function displayData(data) {
+            const filteredData = data.filter(item => (item.RZYE ?? 0) > 1e9);
+
+            if (filteredData.length === 0) {
+                document.getElementById('table-container').innerHTML = '没有满足条件的数据。';
+                return;
+            }
+
+            let tableHTML = `
+                <table id="data-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-column="SCODE" data-order="asc">代码</th>
+                            <th class="sortable" data-column="SECNAME" data-order="asc">名称</th>
+                            <th class="sortable" data-column="RZYE" data-order="asc">融资余额(亿)</th>
+                            <th class="sortable" data-column="RZJME" data-order="asc">净买入</th>
+                            <th class="sortable" data-column="SPJ" data-order="asc">收盘</th>
+                            <th class="sortable" data-column="ZDF" data-order="asc">涨幅 (%)</th>
+                            <th class="sortable" data-column="RZJME3D" data-order="asc">3日净买</th>
+                            <th class="sortable" data-column="RZJME5D" data-order="asc">5日净买</th>
+                            <th class="sortable" data-column="RZJME10D" data-order="asc">10日净买</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            filteredData.forEach(item => {
+                const rzBalanceChange = item.RZJME ?? 0;
+                const absChange = Math.abs(rzBalanceChange);
+
+                const isAcceleratingBuy = (item.RZJME3D ?? 0) > (item.RZJME5D ?? 0) && (item.RZJME5D ?? 0) > (item.RZJME10D ?? 0);
+                const isSlowingBuy = (item.RZJME3D ?? 0) < (item.RZJME5D ?? 0) && (item.RZJME5D ?? 0) < (item.RZJME10D ?? 0);
+
+                let rowClass = '';
+                if (absChange > 1e8) {
+                    rowClass = rzBalanceChange > 0 ? 'highlight-red' : 'highlight-green';
+                }
+
+                let fontClass = '';
+                if (isAcceleratingBuy) {
+                    fontClass = 'highlight-accelerating';
+                } else if (isSlowingBuy) {
+                    fontClass = 'highlight-slowing';
+                }
+
+                tableHTML += `
+                    <tr class="${rowClass}">
+                        <td class="${fontClass}" onclick="window.location.href='https://wealth.want.biz/pages/gg.html?code=${item.SCODE}&days=30&n=7'">${item.SCODE || 'N/A'}</td>
+                         <td><a href="https://xueqiu.com/S/${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? 'SH' : 'SZ'}${item.SCODE}">${item.SECNAME || 'N/A'}</a></td>
+                        <td>${formatToBillion(item.RZYE ?? 0)}</td>
+                        <td>${formatToBillion(rzBalanceChange)}</td>
+                        <!-- <td>${item.SPJ ?? 0}</td> -->
+                        <td><a href="https://emh5.eastmoney.com/html/?fc=${item.SCODE}${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? '01' : '02'}&color=w#/cwfx" target="_blank">${item.SPJ.toFixed(2) || 0}</a></td>
+                        <td>${(item.ZDF ?? 0).toFixed(2)}</td>
+                        <td>${formatToBillion(item.RZJME3D ?? 0)}</td>
+                        <td>${formatToBillion(item.RZJME5D ?? 0)}</td>
+                        <td>${formatToBillion(item.RZJME10D ?? 0)}</td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+
+            document.getElementById('table-container').innerHTML = tableHTML;
+
+            addSortListeners(filteredData);
+        }
+
+        // 格式化为“亿”单位
+        function formatToBillion(value) {
+            return (value / 1e8).toFixed(2);
+        }
+
+        // 添加排序功能
+        function addSortListeners(data) {
+            const headers = document.querySelectorAll('.sortable');
+            headers.forEach(header => {
+                header.addEventListener('click', () => {
+                    const column = header.getAttribute('data-column');
+                    const order = header.getAttribute('data-order');
+                    const sortedData = sortData(data, column, order);
+                    header.setAttribute('data-order', order === 'asc' ? 'desc' : 'asc');
+                    updateTable(sortedData);
+                });
+            });
+        }
+
+        // 排序数据
+        function sortData(data, column, order) {
+            return data.slice().sort((a, b) => {
+                let aValue = a[column] ?? 0;
+                let bValue = b[column] ?? 0;
+                if (!isNaN(aValue) && !isNaN(bValue)) {
+                    aValue = parseFloat(aValue);
+                    bValue = parseFloat(bValue);
+                }
+                return order === 'asc' ? aValue - bValue : bValue - aValue;
+            });
+        }
+
+        // 更新表格
+        function updateTable(data) {
+            let tableBody = '';
+            data.forEach(item => {
+                const rzBalanceChange = item.RZJME ?? 0;
+                const absChange = Math.abs(rzBalanceChange);
+
+                let rowClass = '';
+                if (absChange > 1e8) {
+                    rowClass = rzBalanceChange > 0 ? 'highlight-red' : 'highlight-green';
+                }
+
+                const isAcceleratingBuy = (item.RZJME3D ?? 0) > (item.RZJME5D ?? 0) && (item.RZJME5D ?? 0) > (item.RZJME10D ?? 0);
+                const isSlowingBuy = (item.RZJME3D ?? 0) < (item.RZJME5D ?? 0) && (item.RZJME5D ?? 0) < (item.RZJME10D ?? 0);
+
+                let fontClass = '';
+                if (isAcceleratingBuy) {
+                    fontClass = 'highlight-accelerating';
+                } else if (isSlowingBuy) {
+                    fontClass = 'highlight-slowing';
+                }
+
+                tableBody += `
+                    <tr class="${rowClass}">
+                        <td class="${fontClass}" onclick="window.location.href='https://wealth.want.biz/pages/gg.html?code=${item.SCODE}&days=30&n=7'">${item.SCODE || 'N/A'}</td>
+                        <td><a href="https://xueqiu.com/S/${item.SCODE.startsWith('6')? 'SH' : 'SZ'}${item.SCODE}">${item.SECNAME || 'N/A'}</a></td>
+                        <td>${formatToBillion(item.RZYE?? 0)}</td>
+                        <td>${formatToBillion(rzBalanceChange)}</td>
+                 
+                        <td><a href="https://emh5.eastmoney.com/html/?fc=${item.SCODE}${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? '01' : '02'}&color=w#/cwfx" target="_blank">${item.SPJ.toFixed(2) || 0}</a></td>
+                        <td>${formatToBillion(item.RZJME3D?? 0)}</td>
+                        <td>${formatToBillion(item.RZJME5D?? 0)}</td>
+                        <td>${formatToBillion(item.RZJME10D?? 0)}</td>
+                    </tr>
+                `;
+            });
+
+
+            document.querySelector('#data-table tbody').innerHTML = tableBody;
+        }
+
+        // 执行数据抓取
+        fetchData();
+
+        // 添加标题点击跳转功能
+        document.getElementById('title-link').addEventListener('click', () => {
+            const targetUrl = `https://data.eastmoney.com/rzrq/hy.html`;
+            window.location.href = targetUrl;
+        });
+    </script>
+
+</body>
+</html>
