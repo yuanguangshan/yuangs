@@ -4,9 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>每日融资融券数据</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 15px;
+        }
+        .chart-container {
+            width: 100%;
+            height: 300px;
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #fff;
+            border-radius: 5px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
         table {
             width: 100%;
@@ -27,6 +39,20 @@
         }
         th.sortable:hover {
             background-color: #e0e0e0;
+        }
+        th.sortable:after {
+            content: "↕️";
+            font-size: 10px;
+            margin-left: 5px;
+            opacity: 0.5;
+        }
+        th.sortable[data-order="asc"]:after {
+            content: "↑";
+            opacity: 1;
+        }
+        th.sortable[data-order="desc"]:after {
+            content: "↓";
+            opacity: 1;
         }
         tr:nth-child(even) {
             background-color: #f9f9f9;
@@ -65,6 +91,11 @@
         .highlight-slowing {
             color: green;
         }
+        .chart-title {
+            text-align: center;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -74,9 +105,21 @@
         <div id="date" class="date-display">日期: 加载中...</div>
     </div>
 
+    <!-- 添加图表容器 -->
+    <div class="chart-container">
+        <div class="chart-title" id="chart-title">融资净买入绝对值最高的十家公司</div>
+        <canvas id="topCompaniesChart"></canvas>
+    </div>
+
     <div id="table-container" class="loading">正在加载数据...</div>
 
     <script>
+        // 全局变量存储当前已过滤的数据和排序字段
+        let currentFilteredData = [];
+        let currentSortColumn = "RZJME";
+        let currentSortOrder = "desc";
+        let currentSortType = "number";
+
         // 获取最近工作日
         function getPreviousWorkdays(daysCount = 3) {
             const today = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
@@ -139,8 +182,12 @@
             }
 
             const uniqueData = deduplicateAndSortData(allData);
-            displayData(uniqueData);
+            const filteredData = uniqueData.filter(item => (item.RZYE ?? 0) > 1e9);
+            currentFilteredData = filteredData;
+            
+            displayData(filteredData);
             displayDate(previousWorkdays[0]);
+            createTopCompaniesChart(filteredData, currentSortColumn, currentSortType, currentSortOrder);
         }
 
         // 去重并排序
@@ -171,11 +218,139 @@
             document.getElementById('date').innerText = `日期: ${date}`;
         }
 
+        // 获取列的显示名称
+        function getColumnDisplayName(column) {
+            const columnNames = {
+                "RZJME": "融资净买入",
+                "RZYE": "融资余额",
+                "SPJ": "收盘价",
+                "ZDF": "涨幅",
+                "RZJME3D": "3日净买入",
+                "RZJME5D": "5日净买入",
+                "RZJME10D": "10日净买入"
+            };
+            return columnNames[column] || column;
+        }
+
+        // 创建顶部公司图表
+        function createTopCompaniesChart(data, sortColumn = "RZJME", sortType = "number", sortOrder = "desc") {
+            // 根据当前排序字段和排序方式对数据进行排序
+            let sortedData = sortData(data, sortColumn, sortOrder, sortType);
+            
+            // 获取前10家公司
+            const topCompanies = sortedData.slice(0, 10);
+
+            if (topCompanies.length === 0) return;
+
+            const labels = topCompanies.map(item => item.SECNAME);
+            const netBuyData = topCompanies.map(item => (item.RZJME ?? 0) / 1e8);
+            const threeDay = topCompanies.map(item => (item.RZJME3D ?? 0) / 1e8);
+            const fiveDay = topCompanies.map(item => (item.RZJME5D ?? 0) / 1e8);
+            const priceChangeData = topCompanies.map(item => item.ZDF ?? 0);
+
+            // 更新图表标题
+            const chartTitle = document.getElementById('chart-title');
+            const columnDisplayName = getColumnDisplayName(sortColumn);
+            const sortTypeText = sortType === "number" && 
+                                (sortColumn === "RZJME" || sortColumn === "RZJME3D" || 
+                                 sortColumn === "RZJME5D" || sortColumn === "RZJME10D") ? 
+                                 "绝对值" : (sortOrder === "desc" ? "降序" : "升序");
+            chartTitle.textContent = `按${columnDisplayName}${sortTypeText}排序的前十家公司`;
+
+            const ctx = document.getElementById('topCompaniesChart').getContext('2d');
+            
+            if (window.topChart) {
+                window.topChart.destroy();
+            }
+            
+            window.topChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '净买入(亿)',
+                            data: netBuyData,
+                            backgroundColor: netBuyData.map(value => value >= 0 ? 'rgba(255, 99, 132, 0.7)' : 'rgba(75, 192, 192, 0.7)'),
+                            borderColor: netBuyData.map(value => value >= 0 ? 'rgb(255, 99, 132)' : 'rgb(75, 192, 192)'),
+                            borderWidth: 1,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: '3日净买入(亿)',
+                            data: threeDay,
+                            backgroundColor: 'rgba(153, 102, 255, 0.7)',
+                            borderColor: 'rgb(153, 102, 255)',
+                            borderWidth: 1,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: '5日净买入(亿)',
+                            data: fiveDay,
+                            backgroundColor: 'rgba(255, 159, 64, 0.7)',
+                            borderColor: 'rgb(255, 159, 64)',
+                            borderWidth: 1,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: '涨幅(%)',
+                            data: priceChangeData,
+                            type: 'line',
+                            fill: false,
+                            backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                            borderColor: 'rgb(54, 162, 235)',
+                            borderWidth: 2,
+                            pointRadius: 4,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: '融资净买入(亿元)'
+                            }
+                        },
+                        y1: {
+                            position: 'right',
+                            grid: {
+                                drawOnChartArea: false
+                            },
+                            title: {
+                                display: true,
+                                text: '涨幅(%)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                autoSkip: false,
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        },
+                        legend: {
+                            position: 'top',
+                        }
+                    }
+                }
+            });
+        }
+
         // 显示数据
         function displayData(data) {
-            const filteredData = data.filter(item => (item.RZYE ?? 0) > 1e9);
-
-            if (filteredData.length === 0) {
+            if (data.length === 0) {
                 document.getElementById('table-container').innerHTML = '没有满足条件的数据。';
                 return;
             }
@@ -184,21 +359,21 @@
                 <table id="data-table">
                     <thead>
                         <tr>
-                            <th class="sortable" data-column="SCODE" data-order="asc">代码</th>
-                            <th class="sortable" data-column="SECNAME" data-order="asc">名称</th>
-                            <th class="sortable" data-column="RZYE" data-order="asc">融资余额(亿)</th>
-                            <th class="sortable" data-column="RZJME" data-order="asc">净买入</th>
-                            <th class="sortable" data-column="SPJ" data-order="asc">收盘</th>
-                            <th class="sortable" data-column="ZDF" data-order="asc">涨幅 (%)</th>
-                            <th class="sortable" data-column="RZJME3D" data-order="asc">3日净买</th>
-                            <th class="sortable" data-column="RZJME5D" data-order="asc">5日净买</th>
-                            <th class="sortable" data-column="RZJME10D" data-order="asc">10日净买</th>
+                            <th class="sortable" data-column="SCODE" data-order="asc" data-type="text">代码</th>
+                            <th class="sortable" data-column="SECNAME" data-order="asc" data-type="text">名称</th>
+                            <th class="sortable" data-column="RZYE" data-order="asc" data-type="number">融资余额(亿)</th>
+                            <th class="sortable" data-column="RZJME" data-order="asc" data-type="number">净买入</th>
+                            <th class="sortable" data-column="SPJ" data-order="asc" data-type="number">收盘</th>
+                            <th class="sortable" data-column="ZDF" data-order="asc" data-type="number">涨幅 (%)</th>
+                            <th class="sortable" data-column="RZJME3D" data-order="asc" data-type="number">3日净买</th>
+                            <th class="sortable" data-column="RZJME5D" data-order="asc" data-type="number">5日净买</th>
+                            <th class="sortable" data-column="RZJME10D" data-order="asc" data-type="number">10日净买</th>
                         </tr>
                     </thead>
                     <tbody>
             `;
 
-            filteredData.forEach(item => {
+            data.forEach(item => {
                 const rzBalanceChange = item.RZJME ?? 0;
                 const absChange = Math.abs(rzBalanceChange);
 
@@ -220,11 +395,10 @@
                 tableHTML += `
                     <tr class="${rowClass}">
                         <td class="${fontClass}" onclick="window.location.href='https://wealth.want.biz/pages/gg.html?code=${item.SCODE}&days=30&n=7'">${item.SCODE || 'N/A'}</td>
-                         <td><a href="https://xueqiu.com/S/${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? 'SH' : 'SZ'}${item.SCODE}">${item.SECNAME || 'N/A'}</a></td>
+                        <td><a href="https://xueqiu.com/S/${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? 'SH' : 'SZ'}${item.SCODE}">${item.SECNAME || 'N/A'}</a></td>
                         <td>${formatToBillion(item.RZYE ?? 0)}</td>
                         <td>${formatToBillion(rzBalanceChange)}</td>
-                        <!-- <td>${item.SPJ ?? 0}</td> -->
-                        <td><a href="https://emh5.eastmoney.com/html/?fc=${item.SCODE}${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? '01' : '02'}&color=w#/cwfx" target="_blank">${item.SPJ.toFixed(2) || 0}</a></td>
+                        <td><a href="https://emh5.eastmoney.com/html/?fc=${item.SCODE}${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? '01' : '02'}&color=w#/cwfx" target="_blank">${(item.SPJ ?? 0).toFixed(2)}</a></td>
                         <td>${(item.ZDF ?? 0).toFixed(2)}</td>
                         <td>${formatToBillion(item.RZJME3D ?? 0)}</td>
                         <td>${formatToBillion(item.RZJME5D ?? 0)}</td>
@@ -240,10 +414,10 @@
 
             document.getElementById('table-container').innerHTML = tableHTML;
 
-            addSortListeners(filteredData);
+            addSortListeners(data);
         }
 
-        // 格式化为“亿”单位
+        // 格式化为"亿"单位
         function formatToBillion(value) {
             return (value / 1e8).toFixed(2);
         }
@@ -255,23 +429,63 @@
                 header.addEventListener('click', () => {
                     const column = header.getAttribute('data-column');
                     const order = header.getAttribute('data-order');
-                    const sortedData = sortData(data, column, order);
-                    header.setAttribute('data-order', order === 'asc' ? 'desc' : 'asc');
+                    const type = header.getAttribute('data-type');
+                    
+                    // 重置所有表头的排序状态
+                    headers.forEach(h => {
+                        if (h !== header) {
+                            h.setAttribute('data-order', 'asc');
+                        }
+                    });
+                    
+                    // 更新当前点击的表头排序状态
+                    const newOrder = order === 'asc' ? 'desc' : 'asc';
+                    header.setAttribute('data-order', newOrder);
+                    
+                    // 更新全局变量
+                    currentSortColumn = column;
+                    currentSortOrder = newOrder;
+                    currentSortType = type;
+                    
+                    const sortedData = sortData(currentFilteredData, column, newOrder, type);
                     updateTable(sortedData);
+                    
+                    // 更新图表以显示新排序的前十家公司
+                    createTopCompaniesChart(currentFilteredData, column, type, newOrder);
                 });
             });
         }
 
         // 排序数据
-        function sortData(data, column, order) {
+        function sortData(data, column, order, type) {
             return data.slice().sort((a, b) => {
                 let aValue = a[column] ?? 0;
                 let bValue = b[column] ?? 0;
-                if (!isNaN(aValue) && !isNaN(bValue)) {
+                
+                if (type === 'number') {
                     aValue = parseFloat(aValue);
                     bValue = parseFloat(bValue);
+                    
+                    // 按绝对值排序的字段
+                    if ((column === 'RZJME' || column === 'RZJME3D' || column === 'RZJME5D' || column === 'RZJME10D') && order === 'desc') {
+                        return Math.abs(bValue) - Math.abs(aValue);
+                    }
+                    
+                    // 普通数值排序
+                    if (order === 'asc') {
+                        return aValue - bValue;
+                    } else {
+                        return bValue - aValue;
+                    }
                 }
-                return order === 'asc' ? aValue - bValue : bValue - aValue;
+                
+                if (type === 'text') {
+                    if (order === 'asc') {
+                        return aValue.localeCompare(bValue);
+                    } else {
+                        return bValue.localeCompare(aValue);
+                    }
+                }
             });
         }
 
@@ -300,18 +514,17 @@
                 tableBody += `
                     <tr class="${rowClass}">
                         <td class="${fontClass}" onclick="window.location.href='https://wealth.want.biz/pages/gg.html?code=${item.SCODE}&days=30&n=7'">${item.SCODE || 'N/A'}</td>
-                        <td><a href="https://xueqiu.com/S/${item.SCODE.startsWith('6')? 'SH' : 'SZ'}${item.SCODE}">${item.SECNAME || 'N/A'}</a></td>
-                        <td>${formatToBillion(item.RZYE?? 0)}</td>
+                        <td><a href="https://xueqiu.com/S/${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? 'SH' : 'SZ'}${item.SCODE}">${item.SECNAME || 'N/A'}</a></td>
+                        <td>${formatToBillion(item.RZYE ?? 0)}</td>
                         <td>${formatToBillion(rzBalanceChange)}</td>
-                 
-                        <td><a href="https://emh5.eastmoney.com/html/?fc=${item.SCODE}${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? '01' : '02'}&color=w#/cwfx" target="_blank">${item.SPJ.toFixed(2) || 0}</a></td>
-                        <td>${formatToBillion(item.RZJME3D?? 0)}</td>
-                        <td>${formatToBillion(item.RZJME5D?? 0)}</td>
-                        <td>${formatToBillion(item.RZJME10D?? 0)}</td>
+                        <td><a href="https://emh5.eastmoney.com/html/?fc=${item.SCODE}${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? '01' : '02'}&color=w#/cwfx" target="_blank">${(item.SPJ ?? 0).toFixed(2)}</a></td>
+                        <td>${(item.ZDF ?? 0).toFixed(2)}</td>
+                        <td>${formatToBillion(item.RZJME3D ?? 0)}</td>
+                        <td>${formatToBillion(item.RZJME5D ?? 0)}</td>
+                        <td>${formatToBillion(item.RZJME10D ?? 0)}</td>
                     </tr>
                 `;
             });
-
 
             document.querySelector('#data-table tbody').innerHTML = tableBody;
         }
