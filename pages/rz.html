@@ -28,6 +28,20 @@
         th.sortable:hover {
             background-color: #e0e0e0;
         }
+        th.sortable:after {
+            content: "↕️";
+            font-size: 10px;
+            margin-left: 5px;
+            opacity: 0.5;
+        }
+        th.sortable[data-order="asc"]:after {
+            content: "↑";
+            opacity: 1;
+        }
+        th.sortable[data-order="desc"]:after {
+            content: "↓";
+            opacity: 1;
+        }
         tr:nth-child(even) {
             background-color: #f9f9f9;
         }
@@ -184,15 +198,15 @@
                 <table id="data-table">
                     <thead>
                         <tr>
-                            <th class="sortable" data-column="SCODE" data-order="asc">代码</th>
-                            <th class="sortable" data-column="SECNAME" data-order="asc">名称</th>
-                            <th class="sortable" data-column="RZYE" data-order="asc">融资余额(亿)</th>
-                            <th class="sortable" data-column="RZJME" data-order="asc">净买入</th>
-                            <th class="sortable" data-column="SPJ" data-order="asc">收盘</th>
-                            <th class="sortable" data-column="ZDF" data-order="asc">涨幅 (%)</th>
-                            <th class="sortable" data-column="RZJME3D" data-order="asc">3日净买</th>
-                            <th class="sortable" data-column="RZJME5D" data-order="asc">5日净买</th>
-                            <th class="sortable" data-column="RZJME10D" data-order="asc">10日净买</th>
+                            <th class="sortable" data-column="SCODE" data-order="asc" data-type="text">代码</th>
+                            <th class="sortable" data-column="SECNAME" data-order="asc" data-type="text">名称</th>
+                            <th class="sortable" data-column="RZYE" data-order="asc" data-type="number">融资余额(亿)</th>
+                            <th class="sortable" data-column="RZJME" data-order="asc" data-type="number">净买入</th>
+                            <th class="sortable" data-column="SPJ" data-order="asc" data-type="number">收盘</th>
+                            <th class="sortable" data-column="ZDF" data-order="asc" data-type="number">涨幅 (%)</th>
+                            <th class="sortable" data-column="RZJME3D" data-order="asc" data-type="number">3日净买</th>
+                            <th class="sortable" data-column="RZJME5D" data-order="asc" data-type="number">5日净买</th>
+                            <th class="sortable" data-column="RZJME10D" data-order="asc" data-type="number">10日净买</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -220,11 +234,10 @@
                 tableHTML += `
                     <tr class="${rowClass}">
                         <td class="${fontClass}" onclick="window.location.href='https://wealth.want.biz/pages/gg.html?code=${item.SCODE}&days=30&n=7'">${item.SCODE || 'N/A'}</td>
-                         <td><a href="https://xueqiu.com/S/${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? 'SH' : 'SZ'}${item.SCODE}">${item.SECNAME || 'N/A'}</a></td>
+                        <td><a href="https://xueqiu.com/S/${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? 'SH' : 'SZ'}${item.SCODE}">${item.SECNAME || 'N/A'}</a></td>
                         <td>${formatToBillion(item.RZYE ?? 0)}</td>
                         <td>${formatToBillion(rzBalanceChange)}</td>
-                        <!-- <td>${item.SPJ ?? 0}</td> -->
-                        <td><a href="https://emh5.eastmoney.com/html/?fc=${item.SCODE}${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? '01' : '02'}&color=w#/cwfx" target="_blank">${item.SPJ.toFixed(2) || 0}</a></td>
+                        <td><a href="https://emh5.eastmoney.com/html/?fc=${item.SCODE}${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? '01' : '02'}&color=w#/cwfx" target="_blank">${(item.SPJ ?? 0).toFixed(2)}</a></td>
                         <td>${(item.ZDF ?? 0).toFixed(2)}</td>
                         <td>${formatToBillion(item.RZJME3D ?? 0)}</td>
                         <td>${formatToBillion(item.RZJME5D ?? 0)}</td>
@@ -243,7 +256,7 @@
             addSortListeners(filteredData);
         }
 
-        // 格式化为“亿”单位
+        // 格式化为"亿"单位
         function formatToBillion(value) {
             return (value / 1e8).toFixed(2);
         }
@@ -255,23 +268,59 @@
                 header.addEventListener('click', () => {
                     const column = header.getAttribute('data-column');
                     const order = header.getAttribute('data-order');
-                    const sortedData = sortData(data, column, order);
-                    header.setAttribute('data-order', order === 'asc' ? 'desc' : 'asc');
+                    const type = header.getAttribute('data-type');
+                    
+                    // 重置所有表头的排序状态
+                    headers.forEach(h => {
+                        if (h !== header) {
+                            h.setAttribute('data-order', 'asc');
+                        }
+                    });
+                    
+                    // 更新当前点击的表头排序状态
+                    const newOrder = order === 'asc' ? 'desc' : 'asc';
+                    header.setAttribute('data-order', newOrder);
+                    
+                    const sortedData = sortData(data, column, newOrder, type);
                     updateTable(sortedData);
                 });
             });
         }
 
         // 排序数据
-        function sortData(data, column, order) {
+        function sortData(data, column, order, type) {
             return data.slice().sort((a, b) => {
                 let aValue = a[column] ?? 0;
                 let bValue = b[column] ?? 0;
-                if (!isNaN(aValue) && !isNaN(bValue)) {
+                
+                if (type === 'number') {
                     aValue = parseFloat(aValue);
                     bValue = parseFloat(bValue);
+                    
+                    // 默认按绝对值排序，点击时按实际值排序
+                    if (column === 'RZJME' || column === 'RZJME3D' || column === 'RZJME5D' || column === 'RZJME10D') {
+                        if (order === 'asc') {
+                            return aValue - bValue;
+                        } else {
+                            return bValue - aValue;
+                        }
+                    }
                 }
-                return order === 'asc' ? aValue - bValue : bValue - aValue;
+                
+                if (type === 'text') {
+                    if (order === 'asc') {
+                        return aValue.localeCompare(bValue);
+                    } else {
+                        return bValue.localeCompare(aValue);
+                    }
+                }
+                
+                // 普通数值排序
+                if (order === 'asc') {
+                    return aValue - bValue;
+                } else {
+                    return bValue - aValue;
+                }
             });
         }
 
@@ -300,18 +349,17 @@
                 tableBody += `
                     <tr class="${rowClass}">
                         <td class="${fontClass}" onclick="window.location.href='https://wealth.want.biz/pages/gg.html?code=${item.SCODE}&days=30&n=7'">${item.SCODE || 'N/A'}</td>
-                        <td><a href="https://xueqiu.com/S/${item.SCODE.startsWith('6')? 'SH' : 'SZ'}${item.SCODE}">${item.SECNAME || 'N/A'}</a></td>
-                        <td>${formatToBillion(item.RZYE?? 0)}</td>
+                        <td><a href="https://xueqiu.com/S/${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? 'SH' : 'SZ'}${item.SCODE}">${item.SECNAME || 'N/A'}</a></td>
+                        <td>${formatToBillion(item.RZYE ?? 0)}</td>
                         <td>${formatToBillion(rzBalanceChange)}</td>
-                 
-                        <td><a href="https://emh5.eastmoney.com/html/?fc=${item.SCODE}${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? '01' : '02'}&color=w#/cwfx" target="_blank">${item.SPJ.toFixed(2) || 0}</a></td>
-                        <td>${formatToBillion(item.RZJME3D?? 0)}</td>
-                        <td>${formatToBillion(item.RZJME5D?? 0)}</td>
-                        <td>${formatToBillion(item.RZJME10D?? 0)}</td>
+                        <td><a href="https://emh5.eastmoney.com/html/?fc=${item.SCODE}${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? '01' : '02'}&color=w#/cwfx" target="_blank">${(item.SPJ ?? 0).toFixed(2)}</a></td>
+                        <td>${(item.ZDF ?? 0).toFixed(2)}</td>
+                        <td>${formatToBillion(item.RZJME3D ?? 0)}</td>
+                        <td>${formatToBillion(item.RZJME5D ?? 0)}</td>
+                        <td>${formatToBillion(item.RZJME10D ?? 0)}</td>
                     </tr>
                 `;
             });
-
 
             document.querySelector('#data-table tbody').innerHTML = tableBody;
         }
