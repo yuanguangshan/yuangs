@@ -2,6 +2,7 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>股票行情异动</title>
     <style>
         body {
@@ -76,15 +77,79 @@
             text-align: center;
             margin: 20px;
         }
+        /* 移动端样式 */
         @media (max-width: 768px) {
-            .filter-button {
-                padding: 6px 8px;
-                font-size: 14px;
+            body {
+                padding: 10px;
+                font-size: 16px;
+            }
+            h1 {
+                font-size: 1.5rem;
+                margin-bottom: 15px;
+            }
+            .filter-container {
+                display: none; /* 在移动端隐藏原始筛选按钮 */
+            }
+            .mobile-filter-container {
+                display: block;
+                position: relative;
+                margin: 10px 0 20px;
+                text-align: right;
+            }
+            .mobile-filter-button {
+                background-color: #007bff;
+                color: white;
+                border: none;
+                padding: 8px 12px;
+                border-radius: 4px;
+                font-size: 16px;
+                cursor: pointer;
+            }
+            .mobile-filter-dropdown {
+                display: none;
+                position: absolute;
+                right: 0;
+                top: 100%;
+                background-color: white;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                z-index: 1000;
+                max-height: 300px;
+                overflow-y: auto;
+                width: 200px;
+            }
+            .mobile-filter-dropdown.show {
+                display: block;
+            }
+            .mobile-filter-item {
+                padding: 10px 15px;
+                border-bottom: 1px solid #eee;
+                cursor: pointer;
+            }
+            .mobile-filter-item:last-child {
+                border-bottom: none;
+            }
+            .mobile-filter-item.active {
+                background-color: #f0f8ff;
+                color: #007bff;
             }
             th, td {
-                padding: 6px;
-                font-size: 14px;
+                padding: 8px 5px;
+                font-size: 15px;
             }
+            table {
+                font-size: 15px;
+            }
+            /* 优化表格在移动端的显示 */
+            .table-container {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+        }
+        /* 桌面端显示移动筛选器 */
+        .mobile-filter-container {
+            display: none;
         }
     </style>
 </head>
@@ -92,6 +157,37 @@
 
 <h1>股票行情异动</h1>
 
+<!-- 移动端筛选器 -->
+<div class="mobile-filter-container">
+  <button class="mobile-filter-button" id="mobile-filter-btn">筛选类别 ▼</button>
+  <div class="mobile-filter-dropdown" id="mobile-filter-dropdown">
+    <div class="mobile-filter-item active" data-type="all">所有</div>
+    <div class="mobile-filter-item" data-type="8201">火箭发射</div>
+    <div class="mobile-filter-item" data-type="8202">快速反弹</div>
+    <div class="mobile-filter-item" data-type="8193">大笔买入</div>
+    <div class="mobile-filter-item" data-type="4">封涨停板</div>
+    <div class="mobile-filter-item" data-type="32">打开跌停板</div>
+    <div class="mobile-filter-item" data-type="64">有大买盘</div>
+    <div class="mobile-filter-item" data-type="8207">竞价上涨</div>
+    <div class="mobile-filter-item" data-type="8209">高开5日线</div>
+    <div class="mobile-filter-item" data-type="8211">向上缺口</div>
+    <div class="mobile-filter-item" data-type="8213">60日新高</div>
+    <div class="mobile-filter-item" data-type="8215">60日大幅上涨</div>
+    <div class="mobile-filter-item" data-type="8204">加速下跌</div>
+    <div class="mobile-filter-item" data-type="8203">高台跳水</div>
+    <div class="mobile-filter-item" data-type="8194">大笔卖出</div>
+    <div class="mobile-filter-item" data-type="8">封跌停板</div>
+    <div class="mobile-filter-item" data-type="16">打开涨停板</div>
+    <div class="mobile-filter-item" data-type="128">有大卖盘</div>
+    <div class="mobile-filter-item" data-type="8208">竞价下跌</div>
+    <div class="mobile-filter-item" data-type="8210">低开5日线</div>
+    <div class="mobile-filter-item" data-type="8212">向下缺口</div>
+    <div class="mobile-filter-item" data-type="8214">60日新低</div>
+    <div class="mobile-filter-item" data-type="8216">60日大幅下跌</div>
+  </div>
+</div>
+
+<!-- 桌面端筛选器 -->
 <div class="filter-container" id="filters">
   <button class="filter-button active" data-type="all">所有</button>
   <button class="filter-button" data-type="8201">火箭发射</button>
@@ -120,6 +216,7 @@
 
 <div id="loading" class="loading">正在加载数据...</div>
 
+<div class="table-container">
 <table>
   <thead>
     <tr>
@@ -134,6 +231,7 @@
   <tbody id="stock-data">
   </tbody>
 </table>
+</div>
 
 <script>
   // 异动类型映射
@@ -174,7 +272,52 @@
 
   // 初始化页面
   document.addEventListener('DOMContentLoaded', function() {
-    // 注册过滤器点击事件
+    // 移动端筛选器下拉菜单
+    const mobileFilterBtn = document.getElementById('mobile-filter-btn');
+    const mobileFilterDropdown = document.getElementById('mobile-filter-dropdown');
+    const mobileFilterItems = document.querySelectorAll('.mobile-filter-item');
+    
+    // 点击筛选按钮显示/隐藏下拉菜单
+    if (mobileFilterBtn) {
+      mobileFilterBtn.addEventListener('click', function() {
+        mobileFilterDropdown.classList.toggle('show');
+      });
+    }
+    
+    // 点击页面其他地方关闭下拉菜单
+    document.addEventListener('click', function(event) {
+      if (!event.target.closest('.mobile-filter-container')) {
+        mobileFilterDropdown.classList.remove('show');
+      }
+    });
+    
+    // 移动端筛选项点击事件
+    mobileFilterItems.forEach(item => {
+      item.addEventListener('click', function() {
+        // 移除所有active类
+        mobileFilterItems.forEach(i => i.classList.remove('active'));
+        // 添加active类到当前项
+        this.classList.add('active');
+        // 设置当前过滤器
+        currentFilter = this.getAttribute('data-type');
+        // 更新桌面端筛选按钮状态
+        const desktopButtons = document.querySelectorAll('.filter-button');
+        desktopButtons.forEach(btn => {
+          btn.classList.remove('active');
+          if (btn.getAttribute('data-type') === currentFilter) {
+            btn.classList.add('active');
+          }
+        });
+        // 关闭下拉菜单
+        mobileFilterDropdown.classList.remove('show');
+        // 更新筛选按钮文本
+        mobileFilterBtn.textContent = '筛选: ' + (this.textContent || '所有') + ' ▼';
+        // 过滤和渲染数据
+        renderStockData();
+      });
+    });
+    
+    // 注册桌面端过滤器点击事件
     const filterButtons = document.querySelectorAll('.filter-button');
     filterButtons.forEach(button => {
       button.addEventListener('click', function() {
@@ -184,6 +327,18 @@
         this.classList.add('active');
         // 设置当前过滤器
         currentFilter = this.getAttribute('data-type');
+        // 同步移动端筛选器状态
+        const mobileItems = document.querySelectorAll('.mobile-filter-item');
+        mobileItems.forEach(item => {
+          item.classList.remove('active');
+          if (item.getAttribute('data-type') === currentFilter) {
+            item.classList.add('active');
+            // 更新筛选按钮文本
+            if (mobileFilterBtn) {
+              mobileFilterBtn.textContent = '筛选: ' + (item.textContent || '所有') + ' ▼';
+            }
+          }
+        });
         // 过滤和渲染数据
         renderStockData();
       });
