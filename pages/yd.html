@@ -253,11 +253,12 @@
 <table>
   <thead>
     <tr>
-      <th>异动类型</th>
-      <th>股票名称</th>
-      <th>股票代码</th>
-      <th class="sortable" data-sort="price">当前价/量信息</th>
-      <th class="sortable" data-sort="percent">涨跌幅</th>
+      <th>类型</th>
+      <th>名称</th>
+      <th>代码</th>
+      <th class="sortable" data-sort="price">最新</th>
+      <th class="sortable" data-sort="percent">涨幅</th>
+      <th class="sortable" data-sort="volume">成量</th>
       <th class="sortable" data-sort="time">时间</th>
     </tr>
   </thead>
@@ -321,6 +322,75 @@
     } else {
       return num.toString();
     }
+  }
+  
+  // 解析字段i，智能判断价格、涨幅和成交量
+  function parseFieldI(item) {
+    const result = {
+      price: null,
+      percent: null,
+      volume: null
+    };
+    
+    if (!item.i) return result;
+    
+    const parts = item.i.split(',');
+    
+    // 如果只有两个值，第一个是价格，第二个是涨幅
+    if (parts.length === 2) {
+      result.price = parseFloat(parts[0]) || null;
+      result.percent = parseFloat(parts[1]) || null;
+      return result;
+    }
+    
+    // 如果有三个值，需要智能判断
+    if (parts.length >= 3) {
+      const values = parts.map(p => parseFloat(p) || 0);
+      
+      // 分析每个值的特征
+      for (let i = 0; i < values.length; i++) {
+        const value = values[i];
+        
+        // 判断涨幅：通常在 -20% 到 20% 之间
+        if (value >= -0.2 && value <= 0.2 && result.percent === null) {
+          result.percent = value;
+          continue;
+        }
+        
+        // 判断价格：通常在 1-500 元之间
+        if (value >= 1 && value <= 500 && result.price === null) {
+          result.price = value;
+          continue;
+        }
+        
+        // 判断成交量：通常较大的数值
+        if (value > 500 && result.volume === null) {
+          result.volume = value;
+          continue;
+        }
+      }
+      
+      // 如果还有未识别的值，尝试进一步判断
+      if (result.price === null && values.length > 0) {
+        // 找出最可能是价格的值
+        for (let i = 0; i < values.length; i++) {
+          if (values[i] > 0 && (result.percent === null || values[i] !== result.percent) && 
+              (result.volume === null || values[i] !== result.volume)) {
+            result.price = values[i];
+            break;
+          }
+        }
+      }
+      
+      // 如果还没有找到涨幅，使用最后一个值作为涨幅
+      if (result.percent === null && values.length > 0) {
+        result.percent = values[values.length - 1];
+      }
+      
+      return result;
+    }
+    
+    return result;
   }
 
   // 初始化页面
@@ -491,12 +561,12 @@
           stockData = data.data.allstock;
           renderStockData();
         } else {
-          document.getElementById('stock-data').innerHTML = '<tr><td colspan="6">没有找到数据</td></tr>';
+          document.getElementById('stock-data').innerHTML = '<tr><td colspan="7">没有找到数据</td></tr>';
         }
       })
       .catch(error => {
         document.getElementById('loading').style.display = 'none';
-        document.getElementById('stock-data').innerHTML = `<tr><td colspan="6">获取数据失败: ${error.message}</td></tr>`;
+        document.getElementById('stock-data').innerHTML = `<tr><td colspan="7">获取数据失败: ${error.message}</td></tr>`;
         console.error('获取数据失败:', error);
       });
   }
@@ -514,25 +584,23 @@
       filteredData = filteredData.filter(item => item.t.toString() === filters.type);
     }
     
+    // 预解析数据，以便应用筛选
+    filteredData.forEach(item => {
+      item.parsedI = parseFieldI(item);
+    });
+    
     // 2. 应用涨跌幅筛选
     if (filters.percent !== 'all') {
       filteredData = filteredData.filter(item => {
-        let changePercent = 0;
-        if (item.i) {
-          const parts = item.i.split(',');
-          if (parts.length > 0) {
-            const lastPart = parts[parts.length - 1];
-            changePercent = parseFloat(lastPart);
-          }
-        }
+        const percent = item.parsedI.percent || 0;
         
         switch(filters.percent) {
-          case 'gt5': return changePercent > 0.05;
-          case 'gt3': return changePercent > 0.03;
-          case 'gt0': return changePercent > 0;
-          case 'lt0': return changePercent < 0;
-          case 'lt-3': return changePercent < -0.03;
-          case 'lt-5': return changePercent < -0.05;
+          case 'gt5': return percent > 0.05;
+          case 'gt3': return percent > 0.03;
+          case 'gt0': return percent > 0;
+          case 'lt0': return percent < 0;
+          case 'lt-3': return percent < -0.03;
+          case 'lt-5': return percent < -0.05;
           default: return true;
         }
       });
@@ -541,13 +609,7 @@
     // 3. 应用价格区间筛选
     if (filters.price !== 'all') {
       filteredData = filteredData.filter(item => {
-        let price = 0;
-        if (item.i) {
-          const parts = item.i.split(',');
-          if (parts.length > 1) {
-            price = parseFloat(parts[1] || 0);
-          }
-        }
+        const price = item.parsedI.price || 0;
         
         switch(filters.price) {
           case 'low': return price < 5;
@@ -561,7 +623,7 @@
     }
     
     if (filteredData.length === 0) {
-      tableBody.innerHTML = '<tr><td colspan="6">没有符合条件的数据</td></tr>';
+      tableBody.innerHTML = '<tr><td colspan="7">没有符合条件的数据</td></tr>';
       return;
     }
 
@@ -572,19 +634,14 @@
     filteredData.forEach(item => {
       const row = document.createElement('tr');
       
-      // 解析涨跌幅
-      let changePercent = 0;
-      if (item.i) {
-        const parts = item.i.split(',');
-        if (parts.length > 0) {
-          const lastPart = parts[parts.length - 1];
-          changePercent = parseFloat(lastPart);
-        }
-      }
+      // 使用解析后的字段值
+      const price = item.parsedI.price;
+      const percent = item.parsedI.percent;
+      const volume = item.parsedI.volume;
       
       // 格式化涨跌幅显示
-      const formattedChangePercent = (changePercent * 100).toFixed(2) + '%';
-      const changeClass = changePercent >= 0 ? 'positive' : 'negative';
+      const formattedChangePercent = percent !== null ? (percent * 100).toFixed(2) + '%' : 'N/A';
+      const changeClass = percent > 0 ? 'positive' : (percent < 0 ? 'negative' : '');
       
       // 格式化时间
       const hours = Math.floor(item.tm / 10000);
@@ -592,34 +649,17 @@
       const seconds = item.tm % 100;
       const formattedTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
       
-      // 解析价格和成交量
-      let currentPrice = '';
-      let volume = '';
-      if (item.i) {
-        const parts = item.i.split(',');
-        if (parts.length > 1) {
-          currentPrice = parts[1] || '';
-        }
-        if (parts.length > 2) {
-          volume = parts[2] || '';
-        }
-      }
-      
-      // 格式化价格/量信息显示
-      let priceVolumeInfo = currentPrice;
-      if (volume) {
-        // 格式化成交量，转换为万或亿单位
-        const formattedVolume = formatLargeNumber(volume);
-        priceVolumeInfo += ` / ${formattedVolume}`;
-      }
+      // 格式化成交量显示
+      const formattedVolume = volume ? formatLargeNumber(volume) : 'N/A';
       
       // 设置行内容
       row.innerHTML = `
         <td>${typeMap[item.t] || item.t}</td>
         <td>${item.n}</td>
         <td>${item.c}</td>
-        <td>${priceVolumeInfo}</td>
+        <td>${price !== null ? price.toFixed(2) : 'N/A'}</td>
         <td class="${changeClass}">${formattedChangePercent}</td>
+        <td>${formattedVolume}</td>
         <td>${formattedTime}</td>
       `;
       
@@ -635,17 +675,18 @@
       // 根据不同的列提取不同的值
       switch(sortConfig.column) {
         case 'price':
-          // 提取价格
-          valueA = parseFloat(a.i ? a.i.split(',')[1] || 0 : 0);
-          valueB = parseFloat(b.i ? b.i.split(',')[1] || 0 : 0);
+          valueA = a.parsedI.price || 0;
+          valueB = b.parsedI.price || 0;
           break;
         case 'percent':
-          // 提取涨跌幅
-          valueA = parseFloat(a.i ? a.i.split(',')[a.i.split(',').length - 1] || 0 : 0);
-          valueB = parseFloat(b.i ? b.i.split(',')[b.i.split(',').length - 1] || 0 : 0);
+          valueA = a.parsedI.percent || 0;
+          valueB = b.parsedI.percent || 0;
+          break;
+        case 'volume':
+          valueA = a.parsedI.volume || 0;
+          valueB = b.parsedI.volume || 0;
           break;
         case 'time':
-          // 使用时间戳
           valueA = a.tm;
           valueB = b.tm;
           break;
