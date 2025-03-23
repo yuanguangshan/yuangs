@@ -339,6 +339,34 @@
   <h3>高级筛选</h3>
   <div class="filter-row">
     <div class="filter-group">
+      <label>异动类型：</label>
+      <select id="type-filter">
+        <option value="all">全部</option>
+        <option value="8201">火箭发射</option>
+        <option value="8202">快速反弹</option>
+        <option value="8193">大笔买入</option>
+        <option value="4">封涨停板</option>
+        <option value="32">打开跌停板</option>
+        <option value="64">有大买盘</option>
+        <option value="8207">竞价上涨</option>
+        <option value="8209">高开5日线</option>
+        <option value="8211">向上缺口</option>
+        <option value="8213">60日新高</option>
+        <option value="8215">60日大幅上涨</option>
+        <option value="8204">加速下跌</option>
+        <option value="8203">高台跳水</option>
+        <option value="8194">大笔卖出</option>
+        <option value="8">封跌停板</option>
+        <option value="16">打开涨停板</option>
+        <option value="128">有大卖盘</option>
+        <option value="8208">竞价下跌</option>
+        <option value="8210">低开5日线</option>
+        <option value="8212">向下缺口</option>
+        <option value="8214">60日新低</option>
+        <option value="8216">60日大幅下跌</option>
+      </select>
+    </div>
+    <div class="filter-group">
       <label>涨跌幅范围：</label>
       <select id="percent-filter">
         <option value="all">全部</option>
@@ -422,6 +450,7 @@
   
   // 高级筛选条件
   let advancedFilters = {
+    typeFilter: 'all',
     percentFilter: 'all',
     volumeFilter: 'all',
     priceMin: null,
@@ -557,6 +586,7 @@
     });
     
     // 注册高级筛选事件
+    const typeFilter = document.getElementById('type-filter');
     const percentFilter = document.getElementById('percent-filter');
     const volumeFilter = document.getElementById('volume-filter');
     const priceMin = document.getElementById('price-min');
@@ -568,10 +598,67 @@
     if (applyFiltersBtn) {
       applyFiltersBtn.addEventListener('click', function() {
         // 获取筛选值
+        advancedFilters.typeFilter = typeFilter.value;
         advancedFilters.percentFilter = percentFilter.value;
         advancedFilters.volumeFilter = volumeFilter.value;
         advancedFilters.priceMin = priceMin.value ? parseFloat(priceMin.value) : null;
         advancedFilters.priceMax = priceMax.value ? parseFloat(priceMax.value) : null;
+        
+        // 如果选择了特定类型，同步更新currentFilter
+        if (advancedFilters.typeFilter !== 'all') {
+          currentFilter = advancedFilters.typeFilter;
+          
+          // 同步更新桌面端和移动端筛选按钮状态
+          const desktopButtons = document.querySelectorAll('.filter-button');
+          desktopButtons.forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.getAttribute('data-type') === currentFilter) {
+              btn.classList.add('active');
+            }
+          });
+          
+          const mobileItems = document.querySelectorAll('.mobile-filter-item');
+          mobileItems.forEach(item => {
+            if (!item.classList.contains('mobile-filter-header') && 
+                !item.hasAttribute('data-percent') && 
+                !item.hasAttribute('data-volume')) {
+              item.classList.remove('active');
+              if (item.getAttribute('data-type') === currentFilter) {
+                item.classList.add('active');
+                if (mobileFilterBtn) {
+                  mobileFilterBtn.textContent = '筛选: ' + (item.textContent || '所有') + ' ▼';
+                }
+              }
+            }
+          });
+        } else {
+          // 如果选择了"全部"
+          currentFilter = 'all';
+          
+          // 同步更新桌面端和移动端筛选按钮状态
+          const desktopButtons = document.querySelectorAll('.filter-button');
+          desktopButtons.forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.getAttribute('data-type') === 'all') {
+              btn.classList.add('active');
+            }
+          });
+          
+          const mobileItems = document.querySelectorAll('.mobile-filter-item');
+          mobileItems.forEach(item => {
+            if (!item.classList.contains('mobile-filter-header') && 
+                !item.hasAttribute('data-percent') && 
+                !item.hasAttribute('data-volume')) {
+              item.classList.remove('active');
+              if (item.getAttribute('data-type') === 'all') {
+                item.classList.add('active');
+                if (mobileFilterBtn) {
+                  mobileFilterBtn.textContent = '筛选: 所有 ▼';
+                }
+              }
+            }
+          });
+        }
         
         // 重新渲染数据
         renderStockData();
@@ -581,17 +668,24 @@
     // 重置筛选按钮点击事件
     if (resetFiltersBtn) {
       resetFiltersBtn.addEventListener('click', function() {
-        // 重置筛选值
+        // 重置所有筛选条件
+        typeFilter.value = 'all';
         percentFilter.value = 'all';
         volumeFilter.value = 'all';
         priceMin.value = '';
         priceMax.value = '';
         
-        // 重置筛选条件
-        advancedFilters.percentFilter = 'all';
-        advancedFilters.volumeFilter = 'all';
-        advancedFilters.priceMin = null;
-        advancedFilters.priceMax = null;
+        // 重置高级筛选条件对象
+        advancedFilters = {
+          typeFilter: 'all',
+          percentFilter: 'all',
+          volumeFilter: 'all',
+          priceMin: null,
+          priceMax: null
+        };
+        
+        // 重置当前过滤器
+        currentFilter = 'all';
         
         // 重新渲染数据
         renderStockData();
@@ -679,6 +773,12 @@
     let filteredData = currentFilter === 'all' 
       ? [...stockData] 
       : [...stockData.filter(item => item.t.toString() === currentFilter)];
+    
+    // 同步更新高级筛选中的类型筛选下拉菜单
+    const typeFilterElement = document.getElementById('type-filter');
+    if (typeFilterElement && typeFilterElement.value !== currentFilter) {
+      typeFilterElement.value = currentFilter;
+    }
     
     // 应用高级筛选条件
     // 1. 涨跌幅筛选
