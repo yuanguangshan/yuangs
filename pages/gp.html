@@ -62,6 +62,10 @@
             background-color: var(--bg-color);
             color: var(--text-color);
             transition: background-color 0.3s, color 0.3s;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
         
         /* 顶部导航栏 */
@@ -73,6 +77,7 @@
             top: 0;
             z-index: 1000;
             width: 100%;
+            flex-shrink: 0;
         }
         
         .navbar-container {
@@ -80,12 +85,13 @@
             justify-content: space-between;
             align-items: center;
             width: 100%;
-            padding: 0 5px;
+            padding: 0;
         }
         
         .navbar-left {
             display: flex;
             align-items: center;
+            flex-grow: 1;
         }
         
         .navbar-title {
@@ -126,6 +132,10 @@
         
         /* 内容区域 */
         .content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
             width: 100%;
             padding: 0;
             margin: 0;
@@ -134,14 +144,17 @@
         /* 内容框架 */
         .tab-content {
             display: none;
+            flex-grow: 1;
+            overflow: hidden;
             padding: 0;
             background-color: var(--bg-color);
             border-radius: 0;
             box-shadow: none;
+            height: 100%;
         }
         
         .tab-content.active {
-            display: block;
+            display: flex;
         }
         
         /* 主题切换按钮 */
@@ -152,7 +165,7 @@
             cursor: pointer;
             font-size: 1.2rem;
             padding: 14px 15px;
-            margin-left: auto;
+            margin: 0;
         }
         
         .theme-toggle:hover {
@@ -162,47 +175,10 @@
         /* iframe样式 */
         .content-frame {
             width: 100%;
-            height: calc(100vh - 50px);
+            height: 100%;
             border: none;
             overflow: hidden;
-        }
-        
-        /* 表格样式 */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        
-        th {
-            background-color: var(--table-header-bg);
-            color: var(--text-color);
-            font-weight: bold;
-            text-align: left;
-            padding: 12px 15px;
-            border-bottom: 2px solid var(--table-border);
-            position: sticky;
-            top: 50px;
-            z-index: 10;
-        }
-        
-        td {
-            padding: 10px 15px;
-            border-bottom: 1px solid var(--table-border);
-        }
-        
-        tr:hover {
-            background-color: var(--table-row-hover);
-        }
-        
-        /* 图表样式 */
-        .chart-container {
-            margin: 20px 0;
-            height: var(--chart-height);
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            border-radius: 5px;
-            overflow: hidden;
+            flex-grow: 1;
         }
         
         /* 响应式设计 */
@@ -240,11 +216,11 @@
     <div class="navbar">
         <div class="navbar-container">
             <div class="navbar-left">
-                <h1 class="navbar-title">金融数据分析中心</h1>
+                <h1 class="navbar-title">金融数据</h1>
                 <ul class="main-tabs">
-                    <li class="main-tab active" data-tab="rzrq-tab">个股融资</li>
-                    <li class="main-tab" data-tab="yd-tab">行情异动</li>
-                    <li class="main-tab" data-tab="rz-tab">行业融资</li>
+                    <li class="main-tab active" data-tab="rzrq-tab">个股</li>
+                    <li class="main-tab" data-tab="yd-tab">异动</li>
+                    <li class="main-tab" data-tab="rz-tab">行业</li>
                 </ul>
             </div>
             <button class="theme-toggle" id="theme-toggle">
@@ -314,10 +290,26 @@
                 const frames = document.querySelectorAll('iframe');
                 frames.forEach(frame => {
                     try {
+                        // 确保iframe已加载
+                        frame.onload = function() {
+                            if (frame.contentWindow && frame.contentWindow.document) {
+                                frame.contentWindow.document.documentElement.setAttribute('data-theme', newTheme);
+                                
+                                // 注入样式到iframe以确保图表和表格样式同步
+                                injectStyleToFrame(frame, newTheme);
+                                
+                                // 通知iframe更新图表主题
+                                if (frame.contentWindow.updateChartTheme) {
+                                    frame.contentWindow.updateChartTheme(newTheme);
+                                }
+                            }
+                        };
+                        
+                        // 如果iframe已经加载完成，直接设置主题
                         if (frame.contentWindow && frame.contentWindow.document) {
                             frame.contentWindow.document.documentElement.setAttribute('data-theme', newTheme);
+                            injectStyleToFrame(frame, newTheme);
                             
-                            // 尝试更新iframe内的图表样式
                             if (frame.contentWindow.updateChartTheme) {
                                 frame.contentWindow.updateChartTheme(newTheme);
                             }
@@ -328,175 +320,184 @@
                 });
             });
             
-            // 调整iframe高度以适应内容
-            function adjustIframeHeight() {
-                const frames = document.querySelectorAll('.content-frame');
-                const windowHeight = window.innerHeight;
-                const navbarHeight = document.querySelector('.navbar').offsetHeight;
-                
-                frames.forEach(frame => {
-                    frame.style.height = `${windowHeight - navbarHeight}px`;
-                });
+            // 向iframe注入样式
+            function injectStyleToFrame(frame, theme) {
+                try {
+                    if (!frame.contentWindow || !frame.contentWindow.document) return;
+                    
+                    // 检查是否已存在样式标签
+                    let styleTag = frame.contentWindow.document.getElementById('parent-injected-style');
+                    if (!styleTag) {
+                        styleTag = frame.contentWindow.document.createElement('style');
+                        styleTag.id = 'parent-injected-style';
+                        frame.contentWindow.document.head.appendChild(styleTag);
+                    }
+                    
+                    // 注入表格和图表样式
+                    styleTag.textContent = `
+                        :root {
+                            --bg-color: ${theme === 'dark' ? '#1e1e1e' : '#ffffff'};
+                            --text-color: ${theme === 'dark' ? '#e0e0e0' : '#333333'};
+                            --border-color: ${theme === 'dark' ? '#444444' : '#e0e0e0'};
+                            --table-header-bg: ${theme === 'dark' ? '#333333' : '#f2f2f2'};
+                            --table-border: ${theme === 'dark' ? '#444444' : '#ddd'};
+                            --table-row-hover: ${theme === 'dark' ? '#353535' : '#f5f5f5'};
+                            --chart-title-color: ${theme === 'dark' ? '#e0e0e0' : '#2c3e50'};
+                            --chart-grid-color: ${theme === 'dark' ? '#333333' : '#eaeaea'};
+                        }
+                        
+                        body {
+                            background-color: var(--bg-color);
+                            color: var(--text-color);
+                            margin: 0;
+                            padding: 0;
+                            transition: background-color 0.3s, color 0.3s;
+                        }
+                        
+                        /* 表格样式 */
+                        table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            margin: 0;
+                        }
+                        
+                        th {
+                            background-color: var(--table-header-bg);
+                            color: var(--text-color);
+                            font-weight: bold;
+                            text-align: left;
+                            padding: 12px 15px;
+                            border-bottom: 2px solid var(--table-border);
+                            position: sticky;
+                            top: 0;
+                            z-index: 10;
+                        }
+                        
+                        td {
+                            padding: 10px 15px;
+                            border-bottom: 1px solid var(--table-border);
+                        }
+                        
+                        tr:hover {
+                            background-color: var(--table-row-hover);
+                        }
+                        
+                        /* 图表容器样式 */
+                        .chart-container {
+                            height: 400px;
+                            width: 100%;
+                            overflow: hidden;
+                        }
+                    `;
+                } catch (e) {
+                    console.error('注入样式失败:', e);
+                }
             }
             
-            // 初始调整和窗口大小变化时调整
-            adjustIframeHeight();
-            window.addEventListener('resize', adjustIframeHeight);
-            
-            // 设置iframe的初始主题
-            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            // 初始加载时设置iframe高度和主题
             const frames = document.querySelectorAll('iframe');
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
             
             frames.forEach(frame => {
                 frame.addEventListener('load', function() {
                     try {
                         if (frame.contentWindow && frame.contentWindow.document) {
+                            // 设置iframe主题
                             frame.contentWindow.document.documentElement.setAttribute('data-theme', currentTheme);
+                            injectStyleToFrame(frame, currentTheme);
                             
-                            // 注入样式到iframe
-                            const styleNode = document.createElement('style');
-                            styleNode.textContent = `
-                                /* 表格样式 */
-                                table {
-                                    width: 100%;
-                                    border-collapse: collapse;
-                                    margin: 20px 0;
-                                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                                }
-                                
-                                th {
-                                    background-color: var(--table-header-bg);
-                                    color: var(--text-color);
-                                    font-weight: bold;
-                                    text-align: left;
-                                    padding: 12px 15px;
-                                    border-bottom: 2px solid var(--table-border);
-                                    position: sticky;
-                                    top: 0;
-                                    z-index: 10;
-                                }
-                                
-                                td {
-                                    padding: 10px 15px;
-                                    border-bottom: 1px solid var(--table-border);
-                                }
-                                
-                                tr:hover {
-                                    background-color: var(--table-row-hover);
-                                }
-                                
-                                /* 图表样式 */
-                                .chart-container {
-                                    margin: 20px 0;
-                                    height: var(--chart-height);
-                                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                                    border-radius: 5px;
-                                    overflow: hidden;
-                                }
-                            `;
-                            frame.contentWindow.document.head.appendChild(styleNode);
-                            
-                            // 尝试更新iframe内的图表样式
-                            if (frame.contentWindow.updateChartTheme) {
-                                frame.contentWindow.updateChartTheme(currentTheme);
+                            // 为iframe添加updateChartTheme函数
+                            if (!frame.contentWindow.updateChartTheme) {
+                                frame.contentWindow.updateChartTheme = function(theme) {
+                                    // 查找所有echarts实例
+                                    if (frame.contentWindow.echarts) {
+                                        const instances = frame.contentWindow.echarts.getInstanceByDom 
+                                            ? Object.values(frame.contentWindow.echarts.getInstanceByDom)
+                                            : [];
+                                        
+                                        instances.forEach(chart => {
+                                            if (chart && chart.setOption) {
+                                                const option = chart.getOption();
+                                                
+                                                // 更新文本颜色
+                                                if (option.textStyle) {
+                                                    option.textStyle.color = theme === 'dark' ? '#e0e0e0' : '#333333';
+                                                }
+                                                
+                                                // 更新网格线
+                                                if (option.grid) {
+                                                    const gridColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                                                    option.grid.forEach(grid => {
+                                                        if (grid) {
+                                                            grid.borderColor = gridColor;
+                                                        }
+                                                    });
+                                                }
+                                                
+                                                // 更新坐标轴
+                                                ['xAxis', 'yAxis'].forEach(axisName => {
+                                                    if (option[axisName]) {
+                                                        const textColor = theme === 'dark' ? '#e0e0e0' : '#333333';
+                                                        const lineColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)';
+                                                        
+                                                        option[axisName].forEach(axis => {
+                                                            if (axis.axisLabel) {
+                                                                axis.axisLabel.color = textColor;
+                                                            }
+                                                            if (axis.axisLine && axis.axisLine.lineStyle) {
+                                                                axis.axisLine.lineStyle.color = lineColor;
+                                                            }
+                                                            if (axis.splitLine && axis.splitLine.lineStyle) {
+                                                                axis.splitLine.lineStyle.color = lineColor;
+                                                            }
+                                                        });
+                                                    }
+                                                });
+                                                
+                                                chart.setOption(option);
+                                            }
+                                        });
+                                    }
+                                    
+                                    // 查找所有Chart.js实例
+                                    if (frame.contentWindow.Chart && frame.contentWindow.Chart.instances) {
+                                        Object.values(frame.contentWindow.Chart.instances).forEach(chart => {
+                                            if (chart && chart.update) {
+                                                const textColor = theme === 'dark' ? '#e0e0e0' : '#333333';
+                                                const gridColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                                                
+                                                if (chart.options.scales) {
+                                                    Object.values(chart.options.scales).forEach(scale => {
+                                                        if (scale.ticks) {
+                                                            scale.ticks.color = textColor;
+                                                        }
+                                                        if (scale.grid) {
+                                                            scale.grid.color = gridColor;
+                                                        }
+                                                    });
+                                                }
+                                                
+                                                if (chart.options.plugins && chart.options.plugins.legend) {
+                                                    chart.options.plugins.legend.labels.color = textColor;
+                                                }
+                                                
+                                                chart.update();
+                                            }
+                                        });
+                                    }
+                                };
                             }
                         }
                     } catch (e) {
-                        console.error('无法设置iframe样式:', e);
+                        console.error('设置iframe初始状态失败:', e);
                     }
                 });
             });
             
-            // 为iframe添加updateChartTheme函数
-            window.updateChartTheme = function(theme) {
-                // ECharts主题设置
-                const echartsTheme = {
-                    light: {
-                        backgroundColor: '#ffffff',
-                        textStyle: { color: '#333333' },
-                        title: { textStyle: { color: '#2c3e50' } },
-                        grid: { borderColor: '#eaeaea' },
-                        tooltip: {
-                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                            borderColor: '#ccc',
-                            textStyle: { color: '#333' }
-                        }
-                    },
-                    dark: {
-                        backgroundColor: '#1e1e1e',
-                        textStyle: { color: '#e0e0e0' },
-                        title: { textStyle: { color: '#e0e0e0' } },
-                        grid: { borderColor: '#333333' },
-                        tooltip: {
-                            backgroundColor: 'rgba(40, 40, 40, 0.9)',
-                            borderColor: '#555',
-                            textStyle: { color: '#e0e0e0' }
-                        }
-                    }
-                };
-                
-                // 更新所有ECharts实例
-                if (window.echarts) {
-                    const instances = window.echarts.instances || [];
-                    for (let instance of instances) {
-                        const option = instance.getOption();
-                        const themeConfig = echartsTheme[theme];
-                        
-                        // 应用主题配置
-                        option.backgroundColor = themeConfig.backgroundColor;
-                        if (option.textStyle) option.textStyle.color = themeConfig.textStyle.color;
-                        if (option.title && option.title.length > 0) {
-                            option.title.forEach(t => {
-                                t.textStyle = t.textStyle || {};
-                                t.textStyle.color = themeConfig.title.textStyle.color;
-                            });
-                        }
-                        if (option.grid && option.grid.length > 0) {
-                            option.grid.forEach(g => {
-                                g.borderColor = themeConfig.grid.borderColor;
-                            });
-                        }
-                        if (option.tooltip) {
-                            option.tooltip.backgroundColor = themeConfig.tooltip.backgroundColor;
-                            option.tooltip.borderColor = themeConfig.tooltip.borderColor;
-                            option.tooltip.textStyle = option.tooltip.textStyle || {};
-                            option.tooltip.textStyle.color = themeConfig.tooltip.textStyle.color;
-                        }
-                        
-                        instance.setOption(option);
-                    }
-                }
-                
-                // 更新Chart.js实例
-                if (window.Chart && window.Chart.instances) {
-                    for (let key in window.Chart.instances) {
-                        const chart = window.Chart.instances[key];
-                        const chartConfig = chart.config;
-                        
-                        if (theme === 'dark') {
-                            chartConfig.options.scales.x.grid.color = 'rgba(255, 255, 255, 0.1)';
-                            chartConfig.options.scales.y.grid.color = 'rgba(255, 255, 255, 0.1)';
-                            chartConfig.options.scales.x.ticks.color = '#e0e0e0';
-                            chartConfig.options.scales.y.ticks.color = '#e0e0e0';
-                            chartConfig.options.plugins.legend.labels.color = '#e0e0e0';
-                            chartConfig.options.plugins.tooltip.backgroundColor = 'rgba(40, 40, 40, 0.9)';
-                            chartConfig.options.plugins.tooltip.titleColor = '#e0e0e0';
-                            chartConfig.options.plugins.tooltip.bodyColor = '#e0e0e0';
-                        } else {
-                            chartConfig.options.scales.x.grid.color = 'rgba(0, 0, 0, 0.1)';
-                            chartConfig.options.scales.y.grid.color = 'rgba(0, 0, 0, 0.1)';
-                            chartConfig.options.scales.x.ticks.color = '#666';
-                            chartConfig.options.scales.y.ticks.color = '#666';
-                            chartConfig.options.plugins.legend.labels.color = '#333';
-                            chartConfig.options.plugins.tooltip.backgroundColor = 'rgba(255, 255, 255, 0.9)';
-                            chartConfig.options.plugins.tooltip.titleColor = '#333';
-                            chartConfig.options.plugins.tooltip.bodyColor = '#333';
-                        }
-                        
-                        chart.update();
-                    }
-                }
-            };
+            // 窗口大小变化时调整iframe大小
+            window.addEventListener('resize', function() {
+                // 由于我们使用了flex布局，这里不需要额外的大小调整代码
+            });
         });
     </script>
 </body>
