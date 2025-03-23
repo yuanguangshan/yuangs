@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>股票行情异动</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 15px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            position: sticky;
+            top: 0;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .filter-container {
+            margin: 20px 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .filter-button {
+            padding: 8px 12px;
+            margin: 5px;
+            cursor: pointer;
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            transition: all 0.3s;
+        }
+        .filter-button.active {
+            background-color: #007bff;
+            color: white;
+            border-color: #0056b3;
+        }
+        .positive {
+            color: #ff3333;
+        }
+        .negative {
+            color: #00aa00;
+        }
+        .loading {
+            text-align: center;
+            margin: 20px;
+        }
+        @media (max-width: 768px) {
+            .filter-button {
+                padding: 6px 8px;
+                font-size: 14px;
+            }
+            th, td {
+                padding: 6px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<h1>股票行情异动</h1>
+
+<div class="filter-container" id="filters">
+  <button class="filter-button active" data-type="all">所有</button>
+  <button class="filter-button" data-type="8201">火箭发射</button>
+  <button class="filter-button" data-type="8202">快速反弹</button>
+  <button class="filter-button" data-type="8193">大笔买入</button>
+  <button class="filter-button" data-type="4">封涨停板</button>
+  <button class="filter-button" data-type="32">打开跌停板</button>
+  <button class="filter-button" data-type="64">有大买盘</button>
+  <button class="filter-button" data-type="8207">竞价上涨</button>
+  <button class="filter-button" data-type="8209">高开5日线</button>
+  <button class="filter-button" data-type="8211">向上缺口</button>
+  <button class="filter-button" data-type="8213">60日新高</button>
+  <button class="filter-button" data-type="8215">60日大幅上涨</button>
+  <button class="filter-button" data-type="8204">加速下跌</button>
+  <button class="filter-button" data-type="8203">高台跳水</button>
+  <button class="filter-button" data-type="8194">大笔卖出</button>
+  <button class="filter-button" data-type="8">封跌停板</button>
+  <button class="filter-button" data-type="16">打开涨停板</button>
+  <button class="filter-button" data-type="128">有大卖盘</button>
+  <button class="filter-button" data-type="8208">竞价下跌</button>
+  <button class="filter-button" data-type="8210">低开5日线</button>
+  <button class="filter-button" data-type="8212">向下缺口</button>
+  <button class="filter-button" data-type="8214">60日新低</button>
+  <button class="filter-button" data-type="8216">60日大幅下跌</button>
+</div>
+
+<div id="loading" class="loading">正在加载数据...</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>异动类型</th>
+      <th>股票名称</th>
+      <th>股票代码</th>
+      <th>当前价</th>
+      <th>涨跌幅</th>
+      <th>时间</th>
+    </tr>
+  </thead>
+  <tbody id="stock-data">
+  </tbody>
+</table>
+
+<script>
+  // 异动类型映射
+  const typeMap = {
+    "8201": "火箭发射",
+    "8202": "快速反弹",
+    "8193": "大笔买入",
+    "4": "封涨停板",
+    "32": "打开跌停板",
+    "64": "有大买盘",
+    "8207": "竞价上涨",
+    "8209": "高开5日线",
+    "8211": "向上缺口",
+    "8213": "60日新高",
+    "8215": "60日大幅上涨",
+    "8204": "加速下跌",
+    "8203": "高台跳水",
+    "8194": "大笔卖出",
+    "8": "封跌停板",
+    "16": "打开涨停板",
+    "128": "有大卖盘",
+    "8208": "竞价下跌",
+    "8210": "低开5日线",
+    "8212": "向下缺口",
+    "8214": "60日新低",
+    "8216": "60日大幅下跌"
+  };
+
+  // 当前选中的过滤器
+  let currentFilter = 'all';
+  let stockData = [];
+
+  // 初始化页面
+  document.addEventListener('DOMContentLoaded', function() {
+    // 注册过滤器点击事件
+    const filterButtons = document.querySelectorAll('.filter-button');
+    filterButtons.forEach(button => {
+      button.addEventListener('click', function() {
+        // 移除所有active类
+        filterButtons.forEach(btn => btn.classList.remove('active'));
+        // 添加active类到当前按钮
+        this.classList.add('active');
+        // 设置当前过滤器
+        currentFilter = this.getAttribute('data-type');
+        // 过滤和渲染数据
+        renderStockData();
+      });
+    });
+
+    // 获取数据
+    fetchStockData();
+  });
+
+  // 从接口获取数据
+  function fetchStockData() {
+    const apiUrl = 'https://push2ex.eastmoney.com/getAllStockChanges?type=8201,8202,8193,4,32,64,8207,8209,8211,8213,8215,8204,8203,8194,8,16,128,8208,8210,8212,8214,8216&ut=7eea3edcaed734bea9cbfc24409ed989&pageindex=1&pagesize=6000&dpt=wzchanges';
+    
+    fetch(apiUrl)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('网络响应不正常');
+        }
+        return response.json();
+      })
+      .then(data => {
+        document.getElementById('loading').style.display = 'none';
+        if (data && data.data && data.data.allstock) {
+          stockData = data.data.allstock;
+          renderStockData();
+        } else {
+          document.getElementById('stock-data').innerHTML = '<tr><td colspan="6">没有找到数据</td></tr>';
+        }
+      })
+      .catch(error => {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('stock-data').innerHTML = `<tr><td colspan="6">获取数据失败: ${error.message}</td></tr>`;
+        console.error('获取数据失败:', error);
+      });
+  }
+
+  // 渲染股票数据
+  function renderStockData() {
+    const tableBody = document.getElementById('stock-data');
+    tableBody.innerHTML = '';
+    
+    // 根据过滤器过滤数据
+    const filteredData = currentFilter === 'all' 
+      ? stockData 
+      : stockData.filter(item => item.t.toString() === currentFilter);
+    
+    if (filteredData.length === 0) {
+      tableBody.innerHTML = '<tr><td colspan="6">没有符合条件的数据</td></tr>';
+      return;
+    }
+
+    // 按时间排序，最新的在前面
+    filteredData.sort((a, b) => b.tm - a.tm);
+
+    // 渲染数据
+    filteredData.forEach(item => {
+      const row = document.createElement('tr');
+      
+      // 解析涨跌幅
+      let changePercent = 0;
+      if (item.i) {
+        const parts = item.i.split(',');
+        if (parts.length > 0) {
+          const lastPart = parts[parts.length - 1];
+          changePercent = parseFloat(lastPart);
+        }
+      }
+      
+      // 格式化涨跌幅显示
+      const formattedChangePercent = (changePercent * 100).toFixed(2) + '%';
+      const changeClass = changePercent >= 0 ? 'positive' : 'negative';
+      
+      // 格式化时间
+      const hours = Math.floor(item.tm / 10000);
+      const minutes = Math.floor((item.tm % 10000) / 100);
+      const seconds = item.tm % 100;
+      const formattedTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      
+      // 当前价格
+      let currentPrice = '';
+      if (item.i) {
+        const parts = item.i.split(',');
+        if (parts.length > 1) {
+          currentPrice = parts[1] || '';
+        }
+      }
+      
+      // 设置行内容
+      row.innerHTML = `
+        <td>${typeMap[item.t] || item.t}</td>
+        <td>${item.n}</td>
+        <td>${item.c}</td>
+        <td>${currentPrice}</td>
+        <td class="${changeClass}">${formattedChangePercent}</td>
+        <td>${formattedTime}</td>
+      `;
+      
+      tableBody.appendChild(row);
+    });
+  }
+
+  // 设置定时刷新数据，每60秒刷新一次
+  setInterval(fetchStockData, 60000);
+</script>
+
+</body>
+</html>
