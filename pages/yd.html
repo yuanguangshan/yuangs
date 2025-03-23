@@ -134,6 +134,13 @@
                 background-color: #f0f8ff;
                 color: #007bff;
             }
+            
+            .mobile-filter-header {
+                background-color: #eaeaea;
+                font-weight: bold;
+                color: #555;
+                pointer-events: none;
+            }
             th, td {
                 padding: 8px 5px;
                 font-size: 15px;
@@ -150,6 +157,108 @@
         /* 桌面端显示移动筛选器 */
         .mobile-filter-container {
             display: none;
+        }
+        
+        /* 高级筛选样式 */
+        .advanced-filter-container {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f8f8f8;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+        
+        .advanced-filter-container h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 18px;
+        }
+        
+        .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .filter-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .filter-group label {
+            margin-right: 8px;
+            font-weight: bold;
+        }
+        
+        .filter-group select,
+        .filter-group input {
+            padding: 6px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        
+        .filter-group input {
+            width: 80px;
+        }
+        
+        .apply-filter-button,
+        .reset-filter-button {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .apply-filter-button {
+            background-color: #007bff;
+            color: white;
+        }
+        
+        .reset-filter-button {
+            background-color: #f0f0f0;
+            color: #333;
+            margin-left: 10px;
+        }
+        
+        /* 移动端高级筛选样式 */
+        @media (max-width: 768px) {
+            .advanced-filter-container {
+                padding: 10px;
+            }
+            
+            .filter-row {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+            }
+            
+            .filter-group {
+                flex-wrap: wrap;
+            }
+            
+            .filter-group label {
+                width: 100%;
+                margin-bottom: 5px;
+            }
+            
+            .filter-group select,
+            .filter-group input {
+                width: 100%;
+            }
+            
+            .apply-filter-button,
+            .reset-filter-button {
+                width: 100%;
+                margin: 5px 0;
+            }
+            
+            .reset-filter-button {
+                margin-left: 0;
+            }
         }
     </style>
 </head>
@@ -184,6 +293,17 @@
     <div class="mobile-filter-item" data-type="8212">向下缺口</div>
     <div class="mobile-filter-item" data-type="8214">60日新低</div>
     <div class="mobile-filter-item" data-type="8216">60日大幅下跌</div>
+    <div class="mobile-filter-item mobile-filter-header">涨跌幅筛选</div>
+    <div class="mobile-filter-item" data-percent="gt5">大于5%</div>
+    <div class="mobile-filter-item" data-percent="gt3">大于3%</div>
+    <div class="mobile-filter-item" data-percent="gt0">上涨</div>
+    <div class="mobile-filter-item" data-percent="lt0">下跌</div>
+    <div class="mobile-filter-item" data-percent="lt-3">小于-3%</div>
+    <div class="mobile-filter-item" data-percent="lt-5">小于-5%</div>
+    <div class="mobile-filter-item mobile-filter-header">成交量筛选</div>
+    <div class="mobile-filter-item" data-volume="large">大单</div>
+    <div class="mobile-filter-item" data-volume="medium">中单</div>
+    <div class="mobile-filter-item" data-volume="small">小单</div>
   </div>
 </div>
 
@@ -212,6 +332,42 @@
   <button class="filter-button" data-type="8212">向下缺口</button>
   <button class="filter-button" data-type="8214">60日新低</button>
   <button class="filter-button" data-type="8216">60日大幅下跌</button>
+</div>
+
+<!-- 高级筛选条件 -->
+<div class="advanced-filter-container">
+  <h3>高级筛选</h3>
+  <div class="filter-row">
+    <div class="filter-group">
+      <label>涨跌幅范围：</label>
+      <select id="percent-filter">
+        <option value="all">全部</option>
+        <option value="gt5">大于5%</option>
+        <option value="gt3">大于3%</option>
+        <option value="gt0">上涨</option>
+        <option value="lt0">下跌</option>
+        <option value="lt-3">小于-3%</option>
+        <option value="lt-5">小于-5%</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>成交量：</label>
+      <select id="volume-filter">
+        <option value="all">全部</option>
+        <option value="large">大单</option>
+        <option value="medium">中单</option>
+        <option value="small">小单</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>价格区间：</label>
+      <input type="number" id="price-min" placeholder="最低价" min="0" step="0.01">
+      <span>-</span>
+      <input type="number" id="price-max" placeholder="最高价" min="0" step="0.01">
+    </div>
+    <button id="apply-filters" class="apply-filter-button">应用筛选</button>
+    <button id="reset-filters" class="reset-filter-button">重置</button>
+  </div>
 </div>
 
 <div id="loading" class="loading">正在加载数据...</div>
@@ -264,11 +420,34 @@
   let currentFilter = 'all';
   let stockData = [];
   
+  // 高级筛选条件
+  let advancedFilters = {
+    percentFilter: 'all',
+    volumeFilter: 'all',
+    priceMin: null,
+    priceMax: null
+  };
+  
   // 排序状态
   let sortConfig = {
     column: 'time', // 默认按时间排序
     direction: 'desc' // 默认降序（最新的在前面）
   };
+  
+  // 格式化大数字，转换为万或亿单位
+  function formatLargeNumber(num) {
+    if (!num || isNaN(num)) return '0';
+    
+    num = parseFloat(num);
+    
+    if (num >= 100000000) { // 亿
+      return (num / 100000000).toFixed(2) + '亿';
+    } else if (num >= 10000) { // 万
+      return (num / 10000).toFixed(2) + '万';
+    } else {
+      return num.toString();
+    }
+  }
 
   // 初始化页面
   document.addEventListener('DOMContentLoaded', function() {
@@ -294,24 +473,57 @@
     // 移动端筛选项点击事件
     mobileFilterItems.forEach(item => {
       item.addEventListener('click', function() {
-        // 移除所有active类
-        mobileFilterItems.forEach(i => i.classList.remove('active'));
-        // 添加active类到当前项
-        this.classList.add('active');
-        // 设置当前过滤器
-        currentFilter = this.getAttribute('data-type');
-        // 更新桌面端筛选按钮状态
-        const desktopButtons = document.querySelectorAll('.filter-button');
-        desktopButtons.forEach(btn => {
-          btn.classList.remove('active');
-          if (btn.getAttribute('data-type') === currentFilter) {
-            btn.classList.add('active');
-          }
-        });
+        // 如果是筛选标题，不做任何操作
+        if (this.classList.contains('mobile-filter-header')) {
+          return;
+        }
+        
+        // 检查是否是涨跌幅或成交量筛选
+        const percentFilter = this.getAttribute('data-percent');
+        const volumeFilter = this.getAttribute('data-volume');
+        
+        if (percentFilter) {
+          // 设置涨跌幅筛选
+          advancedFilters.percentFilter = percentFilter;
+          // 同步桌面端筛选器
+          document.getElementById('percent-filter').value = percentFilter;
+          // 更新筛选按钮文本
+          mobileFilterBtn.textContent = '筛选: 涨跌幅' + this.textContent + ' ▼';
+        } else if (volumeFilter) {
+          // 设置成交量筛选
+          advancedFilters.volumeFilter = volumeFilter;
+          // 同步桌面端筛选器
+          document.getElementById('volume-filter').value = volumeFilter;
+          // 更新筛选按钮文本
+          mobileFilterBtn.textContent = '筛选: 成交量' + this.textContent + ' ▼';
+        } else {
+          // 常规类型筛选
+          // 移除所有active类
+          mobileFilterItems.forEach(i => {
+            if (!i.classList.contains('mobile-filter-header') && 
+                !i.hasAttribute('data-percent') && 
+                !i.hasAttribute('data-volume')) {
+              i.classList.remove('active');
+            }
+          });
+          // 添加active类到当前项
+          this.classList.add('active');
+          // 设置当前过滤器
+          currentFilter = this.getAttribute('data-type');
+          // 更新桌面端筛选按钮状态
+          const desktopButtons = document.querySelectorAll('.filter-button');
+          desktopButtons.forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.getAttribute('data-type') === currentFilter) {
+              btn.classList.add('active');
+            }
+          });
+          // 更新筛选按钮文本
+          mobileFilterBtn.textContent = '筛选: ' + (this.textContent || '所有') + ' ▼';
+        }
+        
         // 关闭下拉菜单
         mobileFilterDropdown.classList.remove('show');
-        // 更新筛选按钮文本
-        mobileFilterBtn.textContent = '筛选: ' + (this.textContent || '所有') + ' ▼';
         // 过滤和渲染数据
         renderStockData();
       });
@@ -343,6 +555,48 @@
         renderStockData();
       });
     });
+    
+    // 注册高级筛选事件
+    const percentFilter = document.getElementById('percent-filter');
+    const volumeFilter = document.getElementById('volume-filter');
+    const priceMin = document.getElementById('price-min');
+    const priceMax = document.getElementById('price-max');
+    const applyFiltersBtn = document.getElementById('apply-filters');
+    const resetFiltersBtn = document.getElementById('reset-filters');
+    
+    // 应用筛选按钮点击事件
+    if (applyFiltersBtn) {
+      applyFiltersBtn.addEventListener('click', function() {
+        // 获取筛选值
+        advancedFilters.percentFilter = percentFilter.value;
+        advancedFilters.volumeFilter = volumeFilter.value;
+        advancedFilters.priceMin = priceMin.value ? parseFloat(priceMin.value) : null;
+        advancedFilters.priceMax = priceMax.value ? parseFloat(priceMax.value) : null;
+        
+        // 重新渲染数据
+        renderStockData();
+      });
+    }
+    
+    // 重置筛选按钮点击事件
+    if (resetFiltersBtn) {
+      resetFiltersBtn.addEventListener('click', function() {
+        // 重置筛选值
+        percentFilter.value = 'all';
+        volumeFilter.value = 'all';
+        priceMin.value = '';
+        priceMax.value = '';
+        
+        // 重置筛选条件
+        advancedFilters.percentFilter = 'all';
+        advancedFilters.volumeFilter = 'all';
+        advancedFilters.priceMin = null;
+        advancedFilters.priceMax = null;
+        
+        // 重新渲染数据
+        renderStockData();
+      });
+    }
     
     // 注册表头排序点击事件
     const sortableHeaders = document.querySelectorAll('th.sortable');
@@ -422,9 +676,79 @@
     tableBody.innerHTML = '';
     
     // 根据过滤器过滤数据
-    const filteredData = currentFilter === 'all' 
+    let filteredData = currentFilter === 'all' 
       ? [...stockData] 
       : [...stockData.filter(item => item.t.toString() === currentFilter)];
+    
+    // 应用高级筛选条件
+    // 1. 涨跌幅筛选
+    if (advancedFilters.percentFilter !== 'all') {
+      filteredData = filteredData.filter(item => {
+        let changePercent = 0;
+        if (item.i) {
+          const parts = item.i.split(',');
+          if (parts.length > 0) {
+            const lastPart = parts[parts.length - 1];
+            changePercent = parseFloat(lastPart);
+          }
+        }
+        
+        switch(advancedFilters.percentFilter) {
+          case 'gt5': return changePercent > 0.05;
+          case 'gt3': return changePercent > 0.03;
+          case 'gt0': return changePercent > 0;
+          case 'lt0': return changePercent < 0;
+          case 'lt-3': return changePercent < -0.03;
+          case 'lt-5': return changePercent < -0.05;
+          default: return true;
+        }
+      });
+    }
+    
+    // 2. 成交量筛选
+    if (advancedFilters.volumeFilter !== 'all') {
+      filteredData = filteredData.filter(item => {
+        let volume = 0;
+        if (item.i) {
+          const parts = item.i.split(',');
+          if (parts.length > 2) {
+            volume = parseFloat(parts[2] || 0);
+          }
+        }
+        
+        switch(advancedFilters.volumeFilter) {
+          case 'large': return volume > 1000000; // 大单：大于100万
+          case 'medium': return volume >= 100000 && volume <= 1000000; // 中单：10万-100万
+          case 'small': return volume < 100000; // 小单：小于10万
+          default: return true;
+        }
+      });
+    }
+    
+    // 3. 价格区间筛选
+    if (advancedFilters.priceMin !== null || advancedFilters.priceMax !== null) {
+      filteredData = filteredData.filter(item => {
+        let price = 0;
+        if (item.i) {
+          const parts = item.i.split(',');
+          if (parts.length > 1) {
+            price = parseFloat(parts[1] || 0);
+          }
+        }
+        
+        let passMin = true, passMax = true;
+        
+        if (advancedFilters.priceMin !== null && !isNaN(advancedFilters.priceMin)) {
+          passMin = price >= advancedFilters.priceMin;
+        }
+        
+        if (advancedFilters.priceMax !== null && !isNaN(advancedFilters.priceMax)) {
+          passMax = price <= advancedFilters.priceMax;
+        }
+        
+        return passMin && passMax;
+      });
+    }
     
     if (filteredData.length === 0) {
       tableBody.innerHTML = '<tr><td colspan="6">没有符合条件的数据</td></tr>';
@@ -458,13 +782,25 @@
       const seconds = item.tm % 100;
       const formattedTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
       
-      // 当前价格
+      // 解析价格和成交量
       let currentPrice = '';
+      let volume = '';
       if (item.i) {
         const parts = item.i.split(',');
         if (parts.length > 1) {
           currentPrice = parts[1] || '';
         }
+        if (parts.length > 2) {
+          volume = parts[2] || '';
+        }
+      }
+      
+      // 格式化价格/量信息显示
+      let priceVolumeInfo = currentPrice;
+      if (volume) {
+        // 格式化成交量，转换为万或亿单位
+        const formattedVolume = formatLargeNumber(volume);
+        priceVolumeInfo += ` / ${formattedVolume}`;
       }
       
       // 设置行内容
@@ -472,7 +808,7 @@
         <td>${typeMap[item.t] || item.t}</td>
         <td>${item.n}</td>
         <td>${item.c}</td>
-        <td>${currentPrice}</td>
+        <td>${priceVolumeInfo}</td>
         <td class="${changeClass}">${formattedChangePercent}</td>
         <td>${formattedTime}</td>
       `;
