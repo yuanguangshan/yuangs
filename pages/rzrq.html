@@ -1,543 +1,1559 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>每日融资融券数据</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>股票与行业融资数据分析</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.0.2/dist/echarts.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <style>
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #333333;
+            --border-color: #dddddd;
+            --header-bg: #f4f4f4;
+            --tab-bg: #f1f1f1;
+            --tab-active-bg: #ffffff;
+            --hover-bg: #f4f4f4;
+            --history-bg: #f9f9f9;
+            --button-bg: #4a6fa5;
+            --button-text: white;
+            --chart-height: 300px;
+        }
+        
+        [data-theme="dark"] {
+            --bg-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --border-color: #444444;
+            --header-bg: #2d2d2d;
+            --tab-bg: #2a2a2a;
+            --tab-active-bg: #333333;
+            --hover-bg: #3a3a3a;
+            --history-bg: #2c2c2c;
+            --button-bg: #4a6fa5;
+            --button-text: #e0e0e0;
+        }
+        
         body {
             font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 15px;
+            padding: 20px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
         }
-        .chart-container {
+        
+        #chart {
             width: 100%;
-            height: 300px;
-            margin: 20px 0;
-            padding: 10px;
-            background-color: #fff;
+            height: var(--chart-height);
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
             border-radius: 5px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
+        
         table {
             width: 100%;
             border-collapse: collapse;
-            margin: 15px 0;
-            font-size: 13px;
-            text-align: left;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-top: 20px;
+            background-color: var(--bg-color);
         }
+        
+        table, th, td {
+            border: 1px solid var(--border-color);
+        }
+        
         th, td {
             padding: 8px;
-            border-bottom: 1px solid #ddd;
-            cursor: pointer;
-        }
-        th {
-            background-color: #f5f5f5;
-            color: #333;
-        }
-        th.sortable:hover {
-            background-color: #e0e0e0;
-        }
-        th.sortable:after {
-            content: "↕️";
-            font-size: 10px;
-            margin-left: 5px;
-            opacity: 0.5;
-        }
-        th.sortable[data-order="asc"]:after {
-            content: "↑";
-            opacity: 1;
-        }
-        th.sortable[data-order="desc"]:after {
-            content: "↓";
-            opacity: 1;
-        }
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        tr:hover {
-            background-color: #f1f1f1;
-        }
-        .loading {
             text-align: center;
-            font-size: 18px;
+        }
+        
+        th {
+            background-color: var(--header-bg);
+        }
+        
+        .input-container {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+        
+        .search-container {
+            position: relative;
+            margin-right: 10px;
+            width: 200px;
+            margin-bottom: 10px;
+        }
+        
+        input[type="text"], select, input[type="date"] {
+            padding: 8px 30px 8px 8px;
+            width: 100%;
+            box-sizing: border-box;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+        
+        button {
+            padding: 8px 12px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            background-color: var(--button-bg);
+            color: var(--button-text);
+            border: none;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            opacity: 0.9;
+        }
+        
+        .search-results {
+            position: absolute;
+            width: 300px; /* 增加宽度以容纳更多信息 */
+            max-height: 300px;
+            overflow-y: auto;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-top: none;
+            z-index: 1000;
+            display: none;
+            border-radius: 0 0 4px 4px;
+        }
+        
+        .search-results div {
+            padding: 8px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-color);
+        }
+        
+        .search-results div:hover {
+            background-color: var(--hover-bg);
+        }
+        
+        .stock-code {
+            color: #666;
+            margin-left: 10px;
+        }
+        
+        .clear-input {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: #999;
+            font-size: 16px;
+            display: none;
+        }
+        
+        .clear-input:hover {
+            color: var(--text-color);
+        }
+        
+        .history-item {
+            background-color: var(--history-bg);
+        }
+        
+        .history-item .history-tag {
+            color: #888;
+            font-size: 0.8em;
+            margin-left: 5px;
+        }
+        
+        .tab-container {
+            margin-bottom: 20px;
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .tab {
+            display: inline-block;
+            padding: 8px 16px;
+            cursor: pointer;
+            background-color: var(--tab-bg);
+            border-radius: 5px 5px 0 0;
+            margin-right: 5px;
+            transition: background-color 0.3s;
+        }
+        
+        .tab.active {
+            background-color: var(--tab-active-bg);
+            border-bottom: 2px solid var(--button-bg);
+            position: relative;
+            z-index: 1;
+        }
+        
+        .tab-content {
+            display: none;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+            background-color: var(--bg-color);
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        #industry-chart {
+            width: 100%;
+            height: 400px;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+        }
+        
+        #industry-table {
             margin-top: 20px;
         }
-        .title {
+        
+        .date-input {
+            padding: 8px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+            color: #666;
+        }
+        
+        .header-container {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .theme-toggle {
+            display: flex;
+            align-items: center;
             cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 4px;
+            background-color: var(--button-bg);
+            color: var(--button-text);
         }
-        .title h2 {
-            margin: 0;
+        
+        .theme-toggle i {
+            margin-right: 5px;
         }
-        .date-display {
-            font-size: 16px;
-            color: #666;
-        }
-        .highlight-red {
-            background-color: #f9d9d4;
-        }
-        .highlight-green {
-            background-color: #cee2d3;
-        }
-        .highlight-accelerating {
-            color: red;
-        }
-        .highlight-slowing {
-            color: green;
-        }
-        .chart-title {
-            text-align: center;
-            margin-bottom: 10px;
-            font-weight: bold;
+        
+        @media (max-width: 768px) {
+            .input-container {
+                flex-direction: column;
+            }
+            
+            .search-container {
+                width: 100%;
+                margin-right: 0;
+            }
+            
+            button {
+                width: 100%;
+                margin-right: 0;
+            }
         }
     </style>
 </head>
 <body>
 
-    <div class="title" id="title-link">
-        <h2>每日沪深融资数据</h2>
-        <div id="date" class="date-display">日期: 加载中...</div>
+<h2 id="page-title">股票与行业融资数据分析</h2>
+
+<div class="tab-container">
+    <div class="tab active" data-tab="stock-tab">个股融资</div>
+    <div class="tab" data-tab="industry-tab">行业融资</div>
+</div>
+
+<div id="stock-tab" class="tab-content active">
+    <div class="input-container">
+        <div class="search-container">
+            <input type="text" id="stock-search" placeholder="输入股票简称或代码" />
+            <span id="clear-input" class="clear-input">✕</span>
+            <div id="search-results" class="search-results"></div>
+        </div>
+        <button id="update-button">更新</button>
     </div>
 
-    <!-- 添加图表容器 -->
-    <div class="chart-container">
-        <div class="chart-title" id="chart-title">融资净买入绝对值最高的十家公司</div>
-        <canvas id="topCompaniesChart"></canvas>
+    <div id="chart"></div>
+
+    <table id="data-table">
+        <thead>
+            <tr>
+                <th>日期</th>
+                <th>收盘价</th>
+                <th>涨跌幅（%）</th>
+                <th>前日净买（亿）</th>
+                <th>三日净买</th>
+                <th>五日净买</th>
+                <th>十日净买</th>
+                <th id="customNHeader">N日净买</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<div id="industry-tab" class="tab-content">
+    <div class="input-container">
+        <input type="date" id="industry-date" class="date-input" />
+        <button id="industry-update-button">查询行业数据</button>
+        <select id="industry-sort-select">
+            <option value="MARGIN_BALANCE">按融资融券余额排序</option>
+            <option value="MARGIN_BALANCE_RATIO">按融资融券余额占比排序</option>
+            <option value="FIN_NETBUY_AMT">按融资净买入额排序</option>
+            <option value="FIN_NETBUY_RATIO">按融资净买入额占比排序</option>
+        </select>
     </div>
 
-    <div id="table-container" class="loading">正在加载数据...</div>
+    <div id="industry-chart"></div>
 
-    <script>
-        // 全局变量存储当前已过滤的数据和排序字段
-        let currentFilteredData = [];
-        let currentSortColumn = "RZJME";
-        let currentSortOrder = "desc";
-        let currentSortType = "number";
+    <table id="industry-table">
+        <thead>
+            <tr>
+                <th>行业名称</th>
+                <th>融资融券余额(亿元)</th>
+                <th>余额占比(%)</th>
+                <th>融资余额(亿元)</th>
+                <th>融资净买入额(亿元)</th>
+                <th>净买入额占比(%)</th>
+                <th>融资买入额(亿元)</th>
+                <th>融资偿还额(亿元)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td colspan="8" class="loading">请选择日期并点击查询按钮...</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
 
-        // 获取最近工作日
-        function getPreviousWorkdays(daysCount = 3) {
-            const today = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
-            let dates = [];
-            let currentDate = new Date(today);
-            let workdaysFound = 0;
+<script>
+// 股票简称和相关信息的映射数据
+const stockData = [
+    {code: "002261", abbr: "TWXX", name: "拓维信息"},
+    {code: "002415", abbr: "HKWS", name: "海康威视"},
+    {code: "513050", abbr: "ZGHL", name: "中概互联"},
+    {code: "603501", abbr: "WEGF", name: "韦尔股份"},
+    {code: "000066", abbr: "ZGCC", name: "中国长城"},
+    {code: "300458", abbr: "QZKJ", name: "全志科技"},
+    {code: "300115", abbr: "CYJM", name: "长盈精密"},
+    {code: "600418", abbr: "JHQC", name: "江淮汽车"},
+    {code: "603019", abbr: "ZKSG", name: "中科曙光"},
+    {code: "600602", abbr: "YSZL", name: "云赛智联"},
+    {code: "601166", abbr: "XYYH", name: "兴业银行"},
+    {code: "600519", abbr: "GZMT", name: "贵州茅台"},
+    {code: "600588", abbr: "YYWL", name: "用友网络"},
+    {code: "002335", abbr: "KHSJ", name: "科华数据"},
+    {code: "688008", abbr: "LQKJ", name: "澜起科技"},
+    {code: "002142", abbr: "NBYH", name: "宁波银行"},
+    {code: "600938", abbr: "ZGHY", name: "中国海油"},
+    {code: "688041", abbr: "HGXX", name: "海光信息"},
+    {code: "000426", abbr: "XYYX", name: "兴业银锡"},
+    {code: "601336", abbr: "XHBX", name: "新华保险"},
+    {code: "000100", abbr: "TCLKJ", name: "TCL科技"},
+    {code: "603259", abbr: "YMKD", name: "药明康德"},
+    {code: "300014", abbr: "YWLN", name: "亿纬锂能"},
+    {code: "600030", abbr: "ZXZQ", name: "中信证券"},
+    {code: "600482", abbr: "ZGDL", name: "中国动力"},
+    {code: "601899", abbr: "ZJKY", name: "紫金矿业"},
+    {code: "601138", abbr: "GYFL", name: "工业富联"},
+    {code: "000977", abbr: "LCXX", name: "浪潮信息"},
+    {code: "002156", abbr: "TFWD", name: "通富微电"},
+    {code: "601919", abbr: "ZYHK", name: "中远海控"},
+    {code: "600895", abbr: "ZJGK", name: "张江高科"},
+    {code: "300474", abbr: "JJW", name: "景嘉微"},
+    {code: "000938", abbr: "ZGGF", name: "紫光股份"},
+    {code: "000034", abbr: "SZSM", name: "神州数码"},
+    {code: "000002", abbr: "WKA", name: "万科A"},
+    {code: "002085", abbr: "WFAW", name: "万丰奥威"},
+    {code: "601012", abbr: "LJLN", name: "隆基绿能"},
+    {code: "159915", abbr: "CYBETF", name: "创业板ETF"},
+    {code: "600000", abbr: "PFYH", name: "浦发银行"},
+    {code: "002065", abbr: "DHRJ", name: "东华软件"},
+    {code: "688981", abbr: "ZXGJ", name: "中芯国际"},
+    {code: "601698", abbr: "ZGWT", name: "中国卫通"},
+    {code: "601360", abbr: "SLL", name: "三六零"},
+    {code: "002273", abbr: "SJGD", name: "水晶光电"},
+    {code: "601985", abbr: "ZGHD", name: "中国核电"},
+    {code: "601727", abbr: "SHDQ", name: "上海电气"},
+    {code: "601162", abbr: "TFZQ", name: "天风证券"},
+    {code: "688525", abbr: "BWCC", name: "佰维存储"},
+    {code: "600036", abbr: "ZSYH", name: "招商银行"},
+    {code: "000651", abbr: "GLDQ", name: "格力电器"},
+    {code: "159934", abbr: "HJETF", name: "黄金ETF"},
+    {code: "603986", abbr: "ZYCX", name: "兆易创新"},
+    {code: "688343", abbr: "YTLF", name: "云天励飞"},
+    {code: "600016", abbr: "MSYH", name: "民生银行"},
+    {code: "000338", abbr: "WCDL", name: "潍柴动力"},
+    {code: "600171", abbr: "SHBL", name: "上海贝岭"},
+    {code: "600498", abbr: "FHTX", name: "烽火通信"},
+    {code: "600536", abbr: "ZGRJ", name: "中国软件"},
+    {code: "601117", abbr: "ZGHX", name: "中国化学"},
+    {code: "601857", abbr: "ZGSY", name: "中国石油"},
+    {code: "300450", abbr: "XDZN", name: "先导智能"},
+    {code: "002152", abbr: "GDYT", name: "广电运通"},
+    {code: "601169", abbr: "BJYH", name: "北京银行"},
+    {code: "601688", abbr: "HTZQ", name: "华泰证券"},
+    {code: "300251", abbr: "GXCM", name: "光线传媒"},
+    {code: "600126", abbr: "HGGF", name: "杭钢股份"},
+    {code: "300364", abbr: "ZWZX", name: "中文在线"},
+    {code: "002466", abbr: "TQLY", name: "天齐锂业"},
+    {code: "002027", abbr: "FZCM", name: "分众传媒"},
+    {code: "603300", abbr: "HNHT", name: "海南华铁"},
+    {code: "002739", abbr: "WDDY", name: "万达电影"},
+    {code: "688169", abbr: "STKJ", name: "石头科技"},
+    {code: "301236", abbr: "RTDL", name: "软通动力"},
+    {code: "600143", abbr: "JFKJ", name: "金发科技"},
+    {code: "300738", abbr: "AFSJ", name: "奥飞数据"},
+    {code: "601111", abbr: "ZGGH", name: "中国国航"},
+    {code: "600489", abbr: "ZJHJ", name: "中金黄金"},
+    {code: "000625", abbr: "CAQC", name: "长安汽车"},
+    {code: "000021", abbr: "SKJ", name: "深科技"},
+    {code: "300383", abbr: "GHXW", name: "光环新网"},
+    {code: "302132", abbr: "ZHCF", name: "中航成飞"},
+    {code: "000630", abbr: "TLYS", name: "铜陵有色"},
+    {code: "600031", abbr: "SYZG", name: "三一重工"},
+    {code: "300757", abbr: "LBTK", name: "罗博特科"},
+    {code: "159941", abbr: "NZETF", name: "纳指ETF"},
+    {code: "601216", abbr: "JZJT", name: "君正集团"},
+    {code: "300015", abbr: "AEYK", name: "爱尔眼科"},
+    {code: "000776", abbr: "GFZQ", name: "广发证券"},
+    {code: "002230", abbr: "KDXF", name: "科大讯飞"},
+    {code: "600584", abbr: "CDKJ", name: "长电科技"},
+    {code: "601398", abbr: "GSYH", name: "工商银行"},
+    {code: "300638", abbr: "GHT", name: "广和通"},
+    {code: "002281", abbr: "GXKJ", name: "光迅科技"},
+    {code: "002036", abbr: "LCDZ", name: "联创电子"},
+    {code: "300346", abbr: "NDGD", name: "南大光电"},
+    {code: "601668", abbr: "ZGJZ", name: "中国建筑"},
+    {code: "300672", abbr: "GKW", name: "国科微"},
+    {code: "300803", abbr: "ZNZ", name: "指南针"},
+    {code: "300229", abbr: "TES", name: "拓尔思"},
+    {code: "300024", abbr: "JQR", name: "机器人"},
+    {code: "601108", abbr: "CTZQ", name: "财通证券"},
+    {code: "300073", abbr: "DSKJ", name: "当升科技"},
+    {code: "000818", abbr: "HJKJ", name: "航锦科技"},
+    {code: "002400", abbr: "SGJT", name: "省广集团"},
+    {code: "000568", abbr: "LZLJ", name: "泸州老窖"},
+    {code: "300657", abbr: "HXDZ", name: "弘信电子"},
+    {code: "688777", abbr: "ZKJS", name: "中控技术"},
+    {code: "601600", abbr: "ZGLY", name: "中国铝业"},
+    {code: "159920", abbr: "HSETF", name: "恒生ETF"},
+    {code: "601456", abbr: "GLMS", name: "国联民生"},
+    {code: "600100", abbr: "TFGF", name: "同方股份"},
+    {code: "600745", abbr: "WTKJ", name: "闻泰科技"},
+    {code: "000703", abbr: "HYSH", name: "恒逸石化"},
+    {code: "002465", abbr: "HGTX", name: "海格通信"},
+    {code: "601390", abbr: "ZGZT", name: "中国中铁"},
+    {code: "000661", abbr: "CCGX", name: "长春高新"},
+    {code: "601288", abbr: "NYYH", name: "农业银行"},
+    {code: "600028", abbr: "ZGSH", name: "中国石化"},
+    {code: "002709", abbr: "TCCL", name: "天赐材料"},
+    {code: "512010", abbr: "YYETF", name: "医药ETF"},
+    {code: "000009", abbr: "ZGBA", name: "中国宝安"},
+    {code: "600089", abbr: "TBDG", name: "特变电工"},
+    {code: "600352", abbr: "ZJLS", name: "浙江龙盛"},
+    {code: "002493", abbr: "RSSH", name: "荣盛石化"},
+    {code: "601099", abbr: "TPY", name: "太平洋"},
+    {code: "601555", abbr: "DWZQ", name: "东吴证券"},
+    {code: "601669", abbr: "ZGDJ", name: "中国电建"},
+    {code: "600061", abbr: "GTZB", name: "国投资本"},
+    {code: "601997", abbr: "GYYH", name: "贵阳银行"},
+    {code: "300253", abbr: "WNJK", name: "卫宁健康"},
+    {code: "002460", abbr: "GFLY", name: "赣锋锂业"},
+    {code: "300068", abbr: "NDDY", name: "南都电源"},
+    {code: "601375", abbr: "ZYZQ", name: "中原证券"},
+    {code: "600460", abbr: "SLW", name: "士兰微"},
+    {code: "600905", abbr: "SXNY", name: "三峡能源"},
+    {code: "600015", abbr: "HXYH", name: "华夏银行"},
+    {code: "512880", abbr: "ZQETF", name: "证券ETF"},
+    {code: "601658", abbr: "YCYH", name: "邮储银行"},
+    {code: "688347", abbr: "HHGS", name: "华虹公司"},
+    {code: "002456", abbr: "OFG", name: "欧菲光"},
+    {code: "600109", abbr: "GJZQ", name: "国金证券"},
+    {code: "600585", abbr: "HLSN", name: "海螺水泥"},
+    {code: "600673", abbr: "DYG", name: "东阳光"},
+    {code: "601319", abbr: "ZGRB", name: "中国人保"},
+    {code: "000988", abbr: "HGKJ", name: "华工科技"},
+    {code: "601800", abbr: "ZGJJ", name: "中国交建"},
+    {code: "510500", abbr: "ETF500", name: "500ETF"},
+    {code: "601818", abbr: "GDYH", name: "光大银行"},
+    {code: "002500", abbr: "SXZQ", name: "山西证券"},
+    {code: "688599", abbr: "THGN", name: "天合光能"},
+    {code: "600025", abbr: "HNSD", name: "华能水电"},
+    {code: "300207", abbr: "XWD", name: "欣旺达"},
+    {code: "600580", abbr: "WLDQ", name: "卧龙电驱"},
+    {code: "300316", abbr: "JSJD", name: "晶盛机电"},
+    {code: "000158", abbr: "CSBM", name: "常山北明"},
+    {code: "000333", abbr: "MDJT", name: "美的集团"},
+    {code: "000617", abbr: "ZYZB", name: "中油资本"},
+    {code: "600909", abbr: "HAZQ", name: "华安证券"},
+    {code: "601377", abbr: "XYZQ", name: "兴业证券"},
+    {code: "000157", abbr: "ZLZK", name: "中联重科"},
+    {code: "601186", abbr: "ZGTJ", name: "中国铁建"},
+    {code: "600256", abbr: "GHNY", name: "广汇能源"},
+    {code: "300782", abbr: "ZSW", name: "卓胜微"},
+    {code: "000623", abbr: "JLAD", name: "吉林敖东"},
+    {code: "002130", abbr: "WEHC", name: "沃尔核材"},
+    {code: "600009", abbr: "SHJC", name: "上海机场"},
+    {code: "002352", abbr: "SFKG", name: "顺丰控股"},
+    {code: "000166", abbr: "SWHY", name: "申万宏源"},
+    {code: "688318", abbr: "CFQS", name: "财富趋势"},
+    {code: "601066", abbr: "ZXJT", name: "中信建投"},
+    {code: "601577", abbr: "CSYH", name: "长沙银行"},
+    {code: "002312", abbr: "CFLM", name: "川发龙蟒"},
+    {code: "002185", abbr: "HTKJ", name: "华天科技"},
+    {code: "600893", abbr: "HFDL", name: "航发动力"},
+    {code: "600739", abbr: "LNCD", name: "辽宁成大"},
+    {code: "300999", abbr: "JLY", name: "金龙鱼"},
+    {code: "002340", abbr: "GLM", name: "格林美"},
+    {code: "000301", abbr: "DFSH", name: "东方盛虹"},
+    {code: "688333", abbr: "BLT", name: "铂力特"},
+    {code: "688180", abbr: "JSSW", name: "君实生物"},
+    {code: "600879", abbr: "HTDZ", name: "航天电子"},
+    {code: "600390", abbr: "WKZB", name: "五矿资本"},
+    {code: "600704", abbr: "WCZD", name: "物产中大"},
+    {code: "000750", abbr: "GHZQ", name: "国海证券"},
+    {code: "600958", abbr: "DFZQ", name: "东方证券"},
+    {code: "002544", abbr: "PTKJ", name: "普天科技"},
+    {code: "002139", abbr: "TBGF", name: "拓邦股份"},
+    {code: "002797", abbr: "DYCY", name: "第一创业"},
+    {code: "600446", abbr: "JZGF", name: "金证股份"},
+    {code: "002405", abbr: "SWTX", name: "四维图新"},
+    {code: "002129", abbr: "TCLZH", name: "TCL中环"},
+    {code: "603920", abbr: "SYDL", name: "世运电路"},
+    {code: "600196", abbr: "FXYY", name: "复星医药"},
+    {code: "300418", abbr: "KLWW", name: "昆仑万维"},
+    {code: "600570", abbr: "HSDZ", name: "恒生电子"},
+    {code: "300274", abbr: "YGDY", name: "阳光电源"},
+    {code: "600276", abbr: "HRYY", name: "恒瑞医药"},
+    {code: "002673", abbr: "XBZQ", name: "西部证券"},
+    {code: "600155", abbr: "HCYX", name: "华创云信"},
+    {code: "159949", abbr: "CYB50ETF", name: "创业板50ETF"},
+    {code: "688120", abbr: "HHQK", name: "华海清科"},
+    {code: "002714", abbr: "MYGF", name: "牧原股份"},
+    {code: "002600", abbr: "LYZZ", name: "领益智造"},
+    {code: "600875", abbr: "DFDQ", name: "东方电气"},
+    {code: "601699", abbr: "LAHN", name: "潞安环能"},
+    {code: "601988", abbr: "ZGYH", name: "中国银行"},
+    {code: "600918", abbr: "ZTZQ", name: "中泰证券"},
+    {code: "603236", abbr: "YYTX", name: "移远通信"},
+    {code: "000063", abbr: "ZXTX", name: "中兴通讯"},
+    {code: "600872", abbr: "ZJGX", name: "中炬高新"},
+    {code: "000538", abbr: "YNBY", name: "云南白药"},
+    {code: "600415", abbr: "XSPC", name: "小商品城"},
+    {code: "002252", abbr: "SHLS", name: "上海莱士"},
+    {code: "600104", abbr: "SQJT", name: "上汽集团"},
+    {code: "300896", abbr: "AMK", name: "爱美客"},
+    {code: "600690", abbr: "HEZJ", name: "海尔智家"},
+    {code: "002409", abbr: "YKKJ", name: "雅克科技"},
+    {code: "601601", abbr: "ZGTP", name: "中国太保"},
+    {code: "002001", abbr: "XHC", name: "新和成"},
+    {code: "601788", abbr: "GDZQ", name: "光大证券"},
+    {code: "300601", abbr: "KTSW", name: "康泰生物"},
+    {code: "601611", abbr: "ZGHJ", name: "中国核建"},
+    {code: "300002", abbr: "SZTY", name: "神州泰岳"},
+    {code: "300170", abbr: "HDXX", name: "汉得信息"},
+    {code: "600048", abbr: "BLFZ", name: "保利发展"},
+    {code: "002271", abbr: "DFYH", name: "东方雨虹"},
+    {code: "300142", abbr: "WSSW", name: "沃森生物"},
+    {code: "600372", abbr: "ZHJZ", name: "中航机载"},
+    {code: "000686", abbr: "DBZQ", name: "东北证券"},
+    {code: "300735", abbr: "GGKJ", name: "光弘科技"},
+    {code: "300760", abbr: "MRYL", name: "迈瑞医疗"},
+    {code: "600999", abbr: "ZSZQ", name: "招商证券"},
+    {code: "601939", abbr: "JSYH", name: "建设银行"},
+    {code: "688005", abbr: "RBKJ", name: "容百科技"},
+    {code: "688158", abbr: "YKD", name: "优刻得"},
+    {code: "601868", abbr: "ZGNJ", name: "中国能建"},
+    {code: "600157", abbr: "YTNY", name: "永泰能源"},
+    {code: "300394", abbr: "TFTX", name: "天孚通信"},
+    {code: "600219", abbr: "NSLY", name: "南山铝业"},
+    {code: "600998", abbr: "JZT", name: "九州通"},
+    {code: "300377", abbr: "YSS", name: "赢时胜"},
+    {code: "600160", abbr: "JHGF", name: "巨化股份"},
+    {code: "000792", abbr: "YHGF", name: "盐湖股份"},
+    {code: "300017", abbr: "WSKJ", name: "网宿科技"},
+    {code: "002221", abbr: "DHNY", name: "东华能源"},
+    {code: "603260", abbr: "HSGJ", name: "合盛硅业"},
+    {code: "002203", abbr: "HLGF", name: "海亮股份"},
+    {code: "603881", abbr: "SJGK", name: "数据港"},
+    {code: "601168", abbr: "XBKY", name: "西部矿业"},
+    {code: "002007", abbr: "HLSW", name: "华兰生物"},
+    {code: "601766", abbr: "ZGZC", name: "中国中车"},
+    {code: "002939", abbr: "CCZQ", name: "长城证券"},
+    {code: "600096", abbr: "YTH", name: "云天化"},
+    {code: "600161", abbr: "TTSW", name: "天坛生物"},
+    {code: "002812", abbr: "EJGF", name: "恩捷股份"},
+    {code: "600416", abbr: "XDGF", name: "湘电股份"},
+    {code: "601933", abbr: "YHCS", name: "永辉超市"},
+    {code: "300001", abbr: "TRD", name: "特锐德"},
+    {code: "300031", abbr: "BTKJ", name: "宝通科技"},
+    {code: "600705", abbr: "ZHCR", name: "中航产融"},
+    {code: "603392", abbr: "WTSW", name: "万泰生物"},
+    {code: "000917", abbr: "DGCM", name: "电广传媒"},
+    {code: "600795", abbr: "GDDL", name: "国电电力"},
+    {code: "300498", abbr: "WSGF", name: "温氏股份"},
+    {code: "159605", abbr: "ZGHLETF", name: "中概互联ETF"},
+    {code: "002131", abbr: "LOGF", name: "利欧股份"},
+    {code: "603160", abbr: "HDKJ", name: "汇顶科技"},
+    {code: "000725", abbr: "JDFA", name: "京东方A"},
+    {code: "300762", abbr: "SHHX", name: "上海瀚讯"},
+    {code: "600522", abbr: "ZTKJ", name: "中天科技"},
+    {code: "600436", abbr: "PZH", name: "片仔癀"},
+    {code: "002389", abbr: "HTCH", name: "航天彩虹"},
+    {code: "600497", abbr: "CHZG", name: "驰宏锌锗"},
+    {code: "601006", abbr: "DQTL", name: "大秦铁路"},
+    {code: "002008", abbr: "DZJG", name: "大族激光"},
+    {code: "601696", abbr: "ZYZQ", name: "中银证券"},
+    {code: "300122", abbr: "ZFSW", name: "智飞生物"},
+    {code: "002371", abbr: "BFHC", name: "北方华创"},
+    {code: "159937", abbr: "HJETFJ", name: "黄金ETF基金"},
+    {code: "600765", abbr: "ZHZJ", name: "中航重机"},
+    {code: "603993", abbr: "LYMY", name: "洛阳钼业"},
+    {code: "600346", abbr: "HLSH", name: "恒力石化"},
+    {code: "600038", abbr: "ZZGF", name: "中直股份"},
+    {code: "510900", abbr: "HGETF", name: "H股ETF"},
+    {code: "601717", abbr: "ZMJ", name: "郑煤机"},
+    {code: "300763", abbr: "JLKJ", name: "锦浪科技"},
+    {code: "300182", abbr: "JCGF", name: "捷成股份"},
+    {code: "600549", abbr: "XMWY", name: "厦门钨业"},
+    {code: "002050", abbr: "SHZK", name: "三花智控"},
+    {code: "603613", abbr: "GLGF", name: "国联股份"},
+    {code: "518880", abbr: "HJETF2", name: "黄金ETF"},
+    {code: "002555", abbr: "SQHY", name: "三七互娱"},
+    {code: "000783", abbr: "CJZQ", name: "长江证券"},
+    {code: "603358", abbr: "HDKJ", name: "华达科技"},
+    {code: "300088", abbr: "CXKJ", name: "长信科技"},
+    {code: "300699", abbr: "GWFC", name: "光威复材"},
+    {code: "300033", abbr: "THS", name: "同花顺"},
+    {code: "601888", abbr: "ZGZM", name: "中国中免"},
+    {code: "002075", abbr: "SGGF", name: "沙钢股份"},
+    {code: "601136", abbr: "SCZQ", name: "首创证券"},
+    {code: "600900", abbr: "CJDL", name: "长江电力"},
+    {code: "000768", abbr: "ZHXF", name: "中航西飞"},
+    {code: "300604", abbr: "CCKJ", name: "长川科技"},
+    {code: "601238", abbr: "GQJT", name: "广汽集团"},
+    {code: "512000", abbr: "QSETF", name: "券商ETF"},
+    {code: "002402", abbr: "HETT", name: "和而泰"},
+    {code: "601816", abbr: "JHGT", name: "京沪高铁"},
+    {code: "000878", abbr: "YNTY", name: "云南铜业"},
+    {code: "300315", abbr: "ZQKJ", name: "掌趣科技"},
+    {code: "601878", abbr: "ZSZQ", name: "浙商证券"},
+    {code: "002966", abbr: "SZYH", name: "苏州银行"},
+    {code: "600702", abbr: "SDJY", name: "舍得酒业"},
+    {code: "601233", abbr: "TKGF", name: "桐昆股份"},
+    {code: "511360", abbr: "DRETF", name: "短融ETF"},
+    {code: "002074", abbr: "GXGK", name: "国轩高科"},
+    {code: "159919", abbr: "HS300ETF", name: "沪深300ETF"},
+    {code: "000728", abbr: "GYZQ", name: "国元证券"},
+    {code: "300857", abbr: "XCSJ", name: "协创数据"},
+    {code: "601989", abbr: "ZGZG", name: "中国重工"},
+    {code: "601328", abbr: "JTYH", name: "交通银行"},
+    {code: "603799", abbr: "HYGY", name: "华友钴业"},
+    {code: "600111", abbr: "BFXT", name: "北方稀土"},
+    {code: "600118", abbr: "ZGWX", name: "中国卫星"},
+    {code: "600919", abbr: "JSYH", name: "江苏银行"},
+    {code: "688012", abbr: "ZWGS", name: "中微公司"},
+    {code: "002128", abbr: "DTNY", name: "电投能源"},
+    {code: "300724", abbr: "JJWC", name: "捷佳伟创"},
+    {code: "600886", abbr: "GTDL", name: "国投电力"},
+    {code: "002738", abbr: "ZKZY", name: "中矿资源"},
+    {code: "510300", abbr: "ETF300", name: "300ETF"},
+    {code: "600438", abbr: "TWGF", name: "通威股份"},
+    {code: "603087", abbr: "GLYY", name: "甘李药业"},
+    {code: "513100", abbr: "NZETF2", name: "纳指ETF"},
+    {code: "002304", abbr: "YHGF", name: "洋河股份"},
+    {code: "002241", abbr: "GEGF", name: "歌尔股份"},
+    {code: "600392", abbr: "SHZY", name: "盛和资源"},
+    {code: "600641", abbr: "WYQY", name: "万业企业"},
+    {code: "600362", abbr: "JXTY", name: "江西铜业"},
+    {code: "002049", abbr: "ZGGW", name: "紫光国微"},
+    {code: "600760", abbr: "ZHSF", name: "中航沈飞"},
+    {code: "300496", abbr: "ZKCD", name: "中科创达"},
+    {code: "600010", abbr: "BGGF", name: "包钢股份"},
+    {code: "600988", abbr: "CFHJ", name: "赤峰黄金"},
+    {code: "001979", abbr: "ZSSK", name: "招商蛇口"},
+    {code: "600839", abbr: "SCCH", name: "四川长虹"},
+    {code: "601058", abbr: "SLLT", name: "赛轮轮胎"},
+    {code: "300442", abbr: "RZKJ", name: "润泽科技"},
+    {code: "513090", abbr: "XKZQ", name: "香港证券"},
+    {code: "300459", abbr: "TJM", name: "汤姆猫"},
+    {code: "300113", abbr: "SWKJ", name: "顺网科技"},
+    {code: "601059", abbr: "XDZQ", name: "信达证券"},
+    {code: "002428", abbr: "YNZY", name: "云南锗业"},
+    {code: "600733", abbr: "BQLT", name: "北汽蓝谷"},
+    {code: "600487", abbr: "HTGD", name: "亨通光电"},
+    {code: "600703", abbr: "SAGD", name: "三安光电"},
+    {code: "510050", abbr: "ETF50", name: "50ETF"},
+    {code: "600699", abbr: "JSDZ", name: "均胜电子"},
+    {code: "002432", abbr: "JAYL", name: "九安医疗"},
+    {code: "688166", abbr: "BRYY", name: "博瑞医药"},
+    {code: "588200", abbr: "KCCXP", name: "科创芯片"},
+    {code: "002617", abbr: "LXKJ", name: "露笑科技"},
+    {code: "000032", abbr: "SSDA", name: "深桑达A"},
+    {code: "159792", abbr: "GGTHLWETF", name: "港股通互联网ETF"},
+    {code: "601901", abbr: "FZZQ", name: "方正证券"},
+    {code: "513130", abbr: "HSKJ", name: "恒生科技"},
+    {code: "601198", abbr: "DXZQ", name: "东兴证券"},
+    {code: "300433", abbr: "LSKJ", name: "蓝思科技"},
+    {code: "600660", abbr: "FGBL", name: "福耀玻璃"},
+    {code: "000858", abbr: "WLY", name: "五粮液"},
+    {code: "600150", abbr: "ZGCB", name: "中国船舶"},
+    {code: "300166", abbr: "DFGX", name: "东方国信"},
+    {code: "600941", abbr: "ZGYD", name: "中国移动"},
+    {code: "688036", abbr: "CYKG", name: "传音控股"},
+    {code: "600547", abbr: "SDHJ", name: "山东黄金"},
+    {code: "300296", abbr: "LYKJ", name: "利亚德"},
+    {code: "600926", abbr: "HZYH", name: "杭州银行"},
+    {code: "002625", abbr: "GQJS", name: "光启技术"},
+    {code: "002195", abbr: "YSKJ", name: "岩山科技"},
+    {code: "600309", abbr: "WHHX", name: "万华化学"},
+    {code: "002594", abbr: "BYD", name: "比亚迪"},
+    {code: "300124", abbr: "HCJS", name: "汇川技术"},
+    {code: "000887", abbr: "ZDGF", name: "中鼎股份"},
+    {code: "300083", abbr: "CSSJ", name: "创世纪"},
+    {code: "600577", abbr: "JDGF", name: "精达股份"},
+    {code: "002436", abbr: "XSKJ", name: "兴森科技"},
+    {code: "600552", abbr: "KFKJ", name: "凯盛科技"},
+    {code: "000960", abbr: "XYGF", name: "锡业股份"},
+    {code: "000831", abbr: "ZGXT", name: "中国稀土"},
+    {code: "603893", abbr: "RXWKJ", name: "瑞芯微"},
+    {code: "300085", abbr: "YZJ", name: "银之杰"},
+    {code: "300058", abbr: "LSGB", name: "蓝色光标"},
+    {code: "513330", abbr: "HSHL", name: "恒生互联"},
+    {code: "688111", abbr: "JSBG", name: "金山办公"},
+    {code: "300136", abbr: "XWTX", name: "信维通信"},
+    {code: "300502", abbr: "XYSC", name: "新易盛"},
+    {code: "600363", abbr: "LCGD", name: "联创光电"},
+    {code: "002965", abbr: "XXKJ", name: "祥鑫科技"},
+    {code: "002851", abbr: "MGMT", name: "麦格米特"},
+    {code: "601127", abbr: "SLSAUTO", name: "赛力斯"},
+    {code: "600887", abbr: "YLGF", name: "伊利股份"},
+    {code: "601995", abbr: "ZJGS", name: "中金公司"},
+    {code: "300223", abbr: "BJJZ", name: "北京君正"},
+    {code: "600986", abbr: "ZWHW", name: "浙文互联"},
+    {code: "300339", abbr: "RHRJ", name: "润和软件"},
+    {code: "300308", abbr: "ZJXC", name: "中际旭创"},
+    {code: "600050", abbr: "ZGLT", name: "中国联通"},
+    {code: "300059", abbr: "DFCF", name: "东方财富"},
+    {code: "000408", abbr: "ZGKY", name: "藏格矿业"},
+    {code: "002916", abbr: "SNDL", name: "深南电路"},
+    {code: "002463", abbr: "HDGF", name: "沪电股份"},
+    {code: "002475", abbr: "LXJM", name: "立讯精密"},
+    {code: "601689", abbr: "TPJT", name: "拓普集团"},
+    {code: "601881", abbr: "ZGYHBIZ", name: "中国银河"},
+    {code: "300750", abbr: "NDSD", name: "宁德时代"},
+    {code: "601318", abbr: "ZGPA", name: "中国平安"},
+    {code: "688256", abbr: "HWJ", name: "寒武纪"},
+    {code: "601211", abbr: "GTJA", name: "国泰君安"},
+    {code: "002155", abbr: "HNHJ", name: "湖南黄金"},
+    {code: "588000", abbr: "KC50", name: "科创50"},
+    {code: "000001", abbr: "PAYH", name: "平安银行"},
+    {code: "000997", abbr: "XDL", name: "新大陆"},
+    {code: "300353", abbr: "DTKJ", name: "东土科技"},
+    {code: "002236", abbr: "DHGF", name: "大华股份"},
+    {code: "601020", abbr: "HWKY", name: "华钰矿业"},
+    {code: "002384", abbr: "DSJM", name: "东山精密"},
+    {code: "300476", abbr: "SHKJ", name: "胜宏科技"}
+];
 
-            while (workdaysFound < daysCount) {
-                currentDate.setDate(currentDate.getDate() - 1);
-                let dayOfWeek = currentDate.getDay(); // 0 = 周日, 6 = 周六
-                if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-                    dates.push(currentDate.toISOString().split('T')[0]);
-                    workdaysFound++;
-                }
-            }
-            return dates;
-        }
+// 生成拼音简称到代码的映射
+const stockCodeMap = {};
+stockData.forEach(item => {
+    stockCodeMap[item.abbr] = item.code;
+});
 
-        const previousWorkdays = getPreviousWorkdays(3);
-        const apiUrl = "https://datacenter-web.eastmoney.com/api/data/v1/get";
-        const params = {
-            reportName: "RPTA_WEB_RZRQ_GGMX",
-            columns: "ALL",
-            source: "WEB",
-            pageNumber: 1,
-            pageSize: 500,
-            pageNo: 1,
-            p: 1,
-            pageNum: 1,
-            _: new Date().getTime()
-        };
+// 生成代码到中文名称的映射
+const stockNameMap = {};
+stockData.forEach(item => {
+    stockNameMap[item.code] = item.name;
+});
 
-        // 构造URL参数
-        function constructUrl(url, params, date, page) {
-            const queryParams = { ...params, filter: `(DATE='${date}')`, pageNumber: page };
-            const queryString = Object.keys(queryParams)
-                .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(queryParams[key])}`)
-                .join('&');
-            return `${url}?${queryString}`;
-        }
+// 从本地存储加载历史记录
+function loadStockHistory() {
+    const history = localStorage.getItem('stockSearchHistory');
+    return history ? JSON.parse(history) : [];
+}
 
-        // 获取数据并展示
-        async function fetchData() {
-            let allData = [];
+// 保存历史记录到本地存储
+function saveStockHistory(stockInfo) {
+    const history = loadStockHistory();
+    
+    // 检查是否已存在，如果存在则移到最前面
+    const existingIndex = history.findIndex(item => item.code === stockInfo.code);
+    if (existingIndex !== -1) {
+        history.splice(existingIndex, 1);
+    }
+    
+    // 添加到历史记录的最前面
+    history.unshift(stockInfo);
+    
+    // 限制历史记录数量为20
+    const limitedHistory = history.slice(0, 20);
+    
+    localStorage.setItem('stockSearchHistory', JSON.stringify(limitedHistory));
+}
 
-            for (let i = 0; i < previousWorkdays.length; i++) {
-                const totalPages = 8; // 假设总共有 8 页数据
-                for (let page = 1; page <= totalPages; page++) {
-                    const url = constructUrl(apiUrl, params, previousWorkdays[i], page);
-                    try {
-                        const response = await fetch(url);
-                        const data = await response.json();
-                        if (data.result && data.result.data) {
-                            allData = allData.concat(data.result.data);
-                        }
-                    } catch (error) {
-                        console.error(`Error fetching data for ${previousWorkdays[i]} (Page ${page}):`, error);
-                    }
-                }
-            }
+function getQueryParams() {
+    const params = new URLSearchParams(window.location.search);
+    const scode = params.get('code') || '300059';
+    const displayCount = parseInt(params.get('days')) || 30;
+    const customN = parseInt(params.get('n')) || 7;
+    return { scode, displayCount, customN };
+}
 
-            const uniqueData = deduplicateAndSortData(allData);
-            const filteredData = uniqueData.filter(item => (item.RZYE ?? 0) > 1e9);
-            currentFilteredData = filteredData;
-            
-            displayData(filteredData);
-            displayDate(previousWorkdays[0]);
-            createTopCompaniesChart(filteredData, currentSortColumn, currentSortType, currentSortOrder);
-        }
+async function fetchAllPages(scode) {
+    const url = 'https://datacenter-web.eastmoney.com/api/data/v1/get';
+    let allData = [];
+    let pageNumber = 1;
+    let totalPages = 1;
+    let securityName = '';
 
-        // 去重并排序
-        function deduplicateAndSortData(data) {
-            const uniqueDataMap = new Map();
-            data.forEach(item => {
-                if (!uniqueDataMap.has(item.SCODE)) {
-                    uniqueDataMap.set(item.SCODE, item);
-                } else {
-                    const existingItem = uniqueDataMap.get(item.SCODE);
-                    if (item.DATE > existingItem.DATE) {
-                        uniqueDataMap.set(item.SCODE, item);
-                    }
-                }
-            });
-
-            const uniqueData = Array.from(uniqueDataMap.values());
-            return uniqueData.sort((a, b) => Math.abs(b.RZJME ?? 0) - Math.abs(a.RZJME ?? 0));
-        }
-
-        // 显示日期
-        function displayDate(dateString) {
-            const date = new Date(dateString).toLocaleDateString('zh-CN', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit'
-            });
-            document.getElementById('date').innerText = `日期: ${date}`;
-        }
-
-        // 获取列的显示名称
-        function getColumnDisplayName(column) {
-            const columnNames = {
-                "RZJME": "融资净买入",
-                "RZYE": "融资余额",
-                "SPJ": "收盘价",
-                "ZDF": "涨幅",
-                "RZJME3D": "3日净买入",
-                "RZJME5D": "5日净买入",
-                "RZJME10D": "10日净买入"
-            };
-            return columnNames[column] || column;
-        }
-
-        // 创建顶部公司图表
-        function createTopCompaniesChart(data, sortColumn = "RZJME", sortType = "number", sortOrder = "desc") {
-            // 根据当前排序字段和排序方式对数据进行排序
-            let sortedData = sortData(data, sortColumn, sortOrder, sortType);
-            
-            // 获取前10家公司
-            const topCompanies = sortedData.slice(0, 10);
-
-            if (topCompanies.length === 0) return;
-
-            const labels = topCompanies.map(item => item.SECNAME);
-            const netBuyData = topCompanies.map(item => (item.RZJME ?? 0) / 1e8);
-            const threeDay = topCompanies.map(item => (item.RZJME3D ?? 0) / 1e8);
-            const fiveDay = topCompanies.map(item => (item.RZJME5D ?? 0) / 1e8);
-            const priceChangeData = topCompanies.map(item => item.ZDF ?? 0);
-
-            // 更新图表标题
-            const chartTitle = document.getElementById('chart-title');
-            const columnDisplayName = getColumnDisplayName(sortColumn);
-            const sortTypeText = sortType === "number" && 
-                                (sortColumn === "RZJME" || sortColumn === "RZJME3D" || 
-                                 sortColumn === "RZJME5D" || sortColumn === "RZJME10D") ? 
-                                 "绝对值" : (sortOrder === "desc" ? "降序" : "升序");
-            chartTitle.textContent = `按${columnDisplayName}${sortTypeText}排序的前十家公司`;
-
-            const ctx = document.getElementById('topCompaniesChart').getContext('2d');
-            
-            if (window.topChart) {
-                window.topChart.destroy();
-            }
-            
-            window.topChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: '净买入(亿)',
-                            data: netBuyData,
-                            backgroundColor: netBuyData.map(value => value >= 0 ? 'rgba(255, 99, 132, 0.7)' : 'rgba(75, 192, 192, 0.7)'),
-                            borderColor: netBuyData.map(value => value >= 0 ? 'rgb(255, 99, 132)' : 'rgb(75, 192, 192)'),
-                            borderWidth: 1,
-                            yAxisID: 'y'
-                        },
-                        {
-                            label: '3日净买入(亿)',
-                            data: threeDay,
-                            backgroundColor: 'rgba(153, 102, 255, 0.7)',
-                            borderColor: 'rgb(153, 102, 255)',
-                            borderWidth: 1,
-                            yAxisID: 'y'
-                        },
-                        {
-                            label: '5日净买入(亿)',
-                            data: fiveDay,
-                            backgroundColor: 'rgba(255, 159, 64, 0.7)',
-                            borderColor: 'rgb(255, 159, 64)',
-                            borderWidth: 1,
-                            yAxisID: 'y'
-                        },
-                        {
-                            label: '涨幅(%)',
-                            data: priceChangeData,
-                            type: 'line',
-                            fill: false,
-                            backgroundColor: 'rgba(54, 162, 235, 0.7)',
-                            borderColor: 'rgb(54, 162, 235)',
-                            borderWidth: 2,
-                            pointRadius: 4,
-                            yAxisID: 'y1'
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            position: 'left',
-                            title: {
-                                display: true,
-                                text: '融资净买入(亿元)'
-                            }
-                        },
-                        y1: {
-                            position: 'right',
-                            grid: {
-                                drawOnChartArea: false
-                            },
-                            title: {
-                                display: true,
-                                text: '涨幅(%)'
-                            }
-                        },
-                        x: {
-                            ticks: {
-                                autoSkip: false,
-                                maxRotation: 45,
-                                minRotation: 45
-                            }
-                        }
-                    },
-                    plugins: {
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false
-                        },
-                        legend: {
-                            position: 'top',
-                        }
-                    }
-                }
-            });
-        }
-
-        // 显示数据
-        function displayData(data) {
-            if (data.length === 0) {
-                document.getElementById('table-container').innerHTML = '没有满足条件的数据。';
-                return;
-            }
-
-            let tableHTML = `
-                <table id="data-table">
-                    <thead>
-                        <tr>
-                            <th class="sortable" data-column="SCODE" data-order="asc" data-type="text">代码</th>
-                            <th class="sortable" data-column="SECNAME" data-order="asc" data-type="text">名称</th>
-                            <th class="sortable" data-column="RZYE" data-order="asc" data-type="number">融资余额(亿)</th>
-                            <th class="sortable" data-column="RZJME" data-order="asc" data-type="number">净买入</th>
-                            <th class="sortable" data-column="SPJ" data-order="asc" data-type="number">收盘</th>
-                            <th class="sortable" data-column="ZDF" data-order="asc" data-type="number">涨幅 (%)</th>
-                            <th class="sortable" data-column="RZJME3D" data-order="asc" data-type="number">3日净买</th>
-                            <th class="sortable" data-column="RZJME5D" data-order="asc" data-type="number">5日净买</th>
-                            <th class="sortable" data-column="RZJME10D" data-order="asc" data-type="number">10日净买</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-
-            data.forEach(item => {
-                const rzBalanceChange = item.RZJME ?? 0;
-                const absChange = Math.abs(rzBalanceChange);
-
-                const isAcceleratingBuy = (item.RZJME3D ?? 0) > (item.RZJME5D ?? 0) && (item.RZJME5D ?? 0) > (item.RZJME10D ?? 0);
-                const isSlowingBuy = (item.RZJME3D ?? 0) < (item.RZJME5D ?? 0) && (item.RZJME5D ?? 0) < (item.RZJME10D ?? 0);
-
-                let rowClass = '';
-                if (absChange > 1e8) {
-                    rowClass = rzBalanceChange > 0 ? 'highlight-red' : 'highlight-green';
-                }
-
-                let fontClass = '';
-                if (isAcceleratingBuy) {
-                    fontClass = 'highlight-accelerating';
-                } else if (isSlowingBuy) {
-                    fontClass = 'highlight-slowing';
-                }
-
-                tableHTML += `
-                    <tr class="${rowClass}">
-                        <td class="${fontClass}" onclick="window.location.href='https://wealth.want.biz/pages/gg.html?code=${item.SCODE}&days=30&n=7'">${item.SCODE || 'N/A'}</td>
-                        <td><a href="https://xueqiu.com/S/${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? 'SH' : 'SZ'}${item.SCODE}">${item.SECNAME || 'N/A'}</a></td>
-                        <td>${formatToBillion(item.RZYE ?? 0)}</td>
-                        <td>${formatToBillion(rzBalanceChange)}</td>
-                        <td><a href="https://emh5.eastmoney.com/html/?fc=${item.SCODE}${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? '01' : '02'}&color=w#/cwfx" target="_blank">${(item.SPJ ?? 0).toFixed(2)}</a></td>
-                        <td>${(item.ZDF ?? 0).toFixed(2)}</td>
-                        <td>${formatToBillion(item.RZJME3D ?? 0)}</td>
-                        <td>${formatToBillion(item.RZJME5D ?? 0)}</td>
-                        <td>${formatToBillion(item.RZJME10D ?? 0)}</td>
-                    </tr>
-                `;
-            });
-
-            tableHTML += `
-                    </tbody>
-                </table>
-            `;
-
-            document.getElementById('table-container').innerHTML = tableHTML;
-
-            addSortListeners(data);
-        }
-
-        // 格式化为"亿"单位
-        function formatToBillion(value) {
-            return (value / 1e8).toFixed(2);
-        }
-
-        // 添加排序功能
-        function addSortListeners(data) {
-            const headers = document.querySelectorAll('.sortable');
-            headers.forEach(header => {
-                header.addEventListener('click', () => {
-                    const column = header.getAttribute('data-column');
-                    const order = header.getAttribute('data-order');
-                    const type = header.getAttribute('data-type');
-                    
-                    // 重置所有表头的排序状态
-                    headers.forEach(h => {
-                        if (h !== header) {
-                            h.setAttribute('data-order', 'asc');
-                        }
-                    });
-                    
-                    // 更新当前点击的表头排序状态
-                    const newOrder = order === 'asc' ? 'desc' : 'asc';
-                    header.setAttribute('data-order', newOrder);
-                    
-                    // 更新全局变量
-                    currentSortColumn = column;
-                    currentSortOrder = newOrder;
-                    currentSortType = type;
-                    
-                    const sortedData = sortData(currentFilteredData, column, newOrder, type);
-                    updateTable(sortedData);
-                    
-                    // 更新图表以显示新排序的前十家公司
-                    createTopCompaniesChart(currentFilteredData, column, type, newOrder);
-                });
-            });
-        }
-
-        // 排序数据
-        function sortData(data, column, order, type) {
-            return data.slice().sort((a, b) => {
-                let aValue = a[column] ?? 0;
-                let bValue = b[column] ?? 0;
-                
-                if (type === 'number') {
-                    aValue = parseFloat(aValue);
-                    bValue = parseFloat(bValue);
-                    
-                    // 按绝对值排序的字段
-                    if ((column === 'RZJME' || column === 'RZJME3D' || column === 'RZJME5D' || column === 'RZJME10D') && order === 'desc') {
-                        return Math.abs(bValue) - Math.abs(aValue);
-                    }
-                    
-                    // 普通数值排序
-                    if (order === 'asc') {
-                        return aValue - bValue;
-                    } else {
-                        return bValue - aValue;
-                    }
-                }
-                
-                if (type === 'text') {
-                    if (order === 'asc') {
-                        return aValue.localeCompare(bValue);
-                    } else {
-                        return bValue.localeCompare(aValue);
-                    }
-                }
-            });
-        }
-
-        // 更新表格
-        function updateTable(data) {
-            let tableBody = '';
-            data.forEach(item => {
-                const rzBalanceChange = item.RZJME ?? 0;
-                const absChange = Math.abs(rzBalanceChange);
-
-                let rowClass = '';
-                if (absChange > 1e8) {
-                    rowClass = rzBalanceChange > 0 ? 'highlight-red' : 'highlight-green';
-                }
-
-                const isAcceleratingBuy = (item.RZJME3D ?? 0) > (item.RZJME5D ?? 0) && (item.RZJME5D ?? 0) > (item.RZJME10D ?? 0);
-                const isSlowingBuy = (item.RZJME3D ?? 0) < (item.RZJME5D ?? 0) && (item.RZJME5D ?? 0) < (item.RZJME10D ?? 0);
-
-                let fontClass = '';
-                if (isAcceleratingBuy) {
-                    fontClass = 'highlight-accelerating';
-                } else if (isSlowingBuy) {
-                    fontClass = 'highlight-slowing';
-                }
-
-                tableBody += `
-                    <tr class="${rowClass}">
-                        <td class="${fontClass}" onclick="window.location.href='https://wealth.want.biz/pages/gg.html?code=${item.SCODE}&days=30&n=7'">${item.SCODE || 'N/A'}</td>
-                        <td><a href="https://xueqiu.com/S/${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? 'SH' : 'SZ'}${item.SCODE}">${item.SECNAME || 'N/A'}</a></td>
-                        <td>${formatToBillion(item.RZYE ?? 0)}</td>
-                        <td>${formatToBillion(rzBalanceChange)}</td>
-                        <td><a href="https://emh5.eastmoney.com/html/?fc=${item.SCODE}${item.SCODE.startsWith('6') || item.SCODE.startsWith('5')? '01' : '02'}&color=w#/cwfx" target="_blank">${(item.SPJ ?? 0).toFixed(2)}</a></td>
-                        <td>${(item.ZDF ?? 0).toFixed(2)}</td>
-                        <td>${formatToBillion(item.RZJME3D ?? 0)}</td>
-                        <td>${formatToBillion(item.RZJME5D ?? 0)}</td>
-                        <td>${formatToBillion(item.RZJME10D ?? 0)}</td>
-                    </tr>
-                `;
-            });
-
-            document.querySelector('#data-table tbody').innerHTML = tableBody;
-        }
-
-        // 执行数据抓取
-        fetchData();
-
-        // 添加标题点击跳转功能
-        document.getElementById('title-link').addEventListener('click', () => {
-            const targetUrl = `https://data.eastmoney.com/rzrq/hy.html`;
-            window.location.href = targetUrl;
+    do {
+        const params = new URLSearchParams({
+            'reportName': 'RPTA_WEB_RZRQ_GGMX',
+            'columns': 'ALL',
+            'source': 'WEB',
+            'sortColumns': 'DATE',
+            'sortTypes': '-1',
+            'pageNumber': pageNumber,
+            'pageSize': '500',
+            'filter': `(scode=${scode})`
         });
-    </script>
+
+        const response = await fetch(`${url}?${params}`);
+        const result = await response.json();
+
+        if (result.result.data.length > 0 && !securityName) {
+            securityName = result.result.data[0].SECNAME;
+        }
+
+        allData = allData.concat(result.result.data);
+        totalPages = result.result.pages;
+        pageNumber++;
+
+    } while (pageNumber <= totalPages);
+
+    return { allData, securityName };
+}
+
+// 获取行业融资数据
+async function fetchIndustryData(date) {
+    const formattedDate = date ? formatDateForAPI(date) : '2025-03-20'; // 默认日期
+    
+    const url = 'https://datacenter.eastmoney.com/securities/api/data/get';
+    const params = new URLSearchParams({
+        'type': 'RPT_MARGIN_INDUSTRYDATA',
+        'sty': 'INDUSTRY_CODE,INDUSTRY_NAME,MARGIN_BALANCE,MARGIN_BALANCE_RATIO,FIN_BALANCE,FIN_BALANCE_RATIO,LOAN_BALANCE,LOAN_BALANCE_RATIO,FIN_NETBUY_AMT,FIN_NETBUY_RATIO,FIN_BUY_AMT,FIN_REPAY_AMT,LOAN_BALANCE_VOL,LOAN_SELL_VOL,LOAN_REPAY_VOL,LOAN_NETSELL_VOL,LOAN_NETSELL_AMT',
+        'p': '1',
+        'ps': '50', // 获取更多数据
+        'sr': '-1',
+        'st': 'MARGIN_BALANCE',
+        'filter': `(TRADE_DATE='${formattedDate}')`,
+        'source': 'DataCenter',
+        'client': 'WAP',
+        'v': '06694814054757072'
+    });
+
+    try {
+        const response = await fetch(`${url}?${params}`);
+        const result = await response.json();
+        
+        if (result.success && result.result && result.result.data) {
+            return result.result.data;
+        } else {
+            throw new Error("Failed to fetch industry data");
+        }
+    } catch (error) {
+        console.error("Error fetching industry data:", error);
+        return [];
+    }
+}
+
+function formatDateForAPI(date) {
+    // 将日期转换为'YYYY-MM-DD'格式
+    return date;
+}
+
+function initChart(dates, spjData, rzjmeData) {
+    const chartDom = document.getElementById('chart');
+    const myChart = echarts.init(chartDom);
+    
+    // 计算价格范围以优化y轴显示
+    let minPrice = Math.min(...spjData);
+    let maxPrice = Math.max(...spjData);
+    
+    // 设置一个小缓冲区，使价格线不会贴近顶部和底部
+    const pricePadding = (maxPrice - minPrice) * 0.1;
+    const minY = Math.max(0, minPrice - pricePadding); // 避免负值
+    const maxY = maxPrice + pricePadding;
+    
+    const option = {
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: {
+                type: 'cross'
+            }
+        },
+        grid: {
+            right: '10%',
+            left: '10%',
+            bottom: '15%'
+        },
+        xAxis: {
+            type: 'category',
+            data: dates,
+            axisLabel: {
+                rotate: 45,
+                fontSize: 10
+            }
+        },
+        yAxis: [
+            {
+                type: 'value',
+                name: '净买额（亿）',
+                position: 'left',
+                axisLine: {
+                    lineStyle: {
+                        color: 'green'
+                    }
+                }
+            },
+            {
+                type: 'value',
+                name: '收盘价',
+                position: 'right',
+                min: minY,
+                max: maxY,
+                axisLine: {
+                    lineStyle: {
+                        color: 'blue'
+                    }
+                }
+            }
+        ],
+        series: [
+            {
+                name: '融资净买入额（亿）',
+                type: 'bar',
+                data: rzjmeData,
+                itemStyle: {
+                    color: function(params) {
+                        return params.data >= 0 ? 'red' : 'green';
+                    }
+                }
+            },
+            {
+                name: '收盘价',
+                type: 'line',
+                yAxisIndex: 1,
+                data: spjData,
+                lineStyle: {
+                    color: 'blue',
+                    width: 2
+                },
+                symbol: 'circle',
+                symbolSize: 6
+            }
+        ]
+    };
+    myChart.setOption(option);
+    
+    // 窗口大小变化时自动调整图表大小
+    window.addEventListener('resize', function() {
+        myChart.resize();
+    });
+}
+
+// 初始化行业数据图表
+function initIndustryChart(industryData, sortBy = 'MARGIN_BALANCE') {
+    const chartDom = document.getElementById('industry-chart');
+    const myChart = echarts.init(chartDom);
+    
+    // 复制并排序数据，仅取前15项，以便更好地展示
+    let sortedData = [...industryData];
+    
+    if (sortBy === 'MARGIN_BALANCE' || sortBy === 'MARGIN_BALANCE_RATIO') {
+        sortedData.sort((a, b) => b[sortBy] - a[sortBy]);
+    } else if (sortBy === 'FIN_NETBUY_AMT' || sortBy === 'FIN_NETBUY_RATIO') {
+        // 根据净买入额的绝对值大小排序
+        sortedData.sort((a, b) => Math.abs(b[sortBy]) - Math.abs(a[sortBy]));
+    }
+    
+    const topData = sortedData.slice(0, 15);
+    
+    const industryNames = topData.map(item => item.INDUSTRY_NAME);
+    
+    let seriesData = [];
+    let colorMap = {};
+    
+    if (sortBy === 'MARGIN_BALANCE') {
+        seriesData = topData.map(item => (item.MARGIN_BALANCE / 100000000).toFixed(2));
+        colorMap = topData.map(() => '#5470c6');
+    } else if (sortBy === 'MARGIN_BALANCE_RATIO') {
+        seriesData = topData.map(item => item.MARGIN_BALANCE_RATIO.toFixed(2));
+        colorMap = topData.map(() => '#5470c6');
+    } else if (sortBy === 'FIN_NETBUY_AMT') {
+        seriesData = topData.map(item => (item.FIN_NETBUY_AMT / 100000000).toFixed(2));
+        colorMap = topData.map(item => item.FIN_NETBUY_AMT >= 0 ? '#c23531' : '#3ba272');
+    } else if (sortBy === 'FIN_NETBUY_RATIO') {
+        seriesData = topData.map(item => item.FIN_NETBUY_RATIO.toFixed(2));
+        colorMap = topData.map(item => item.FIN_NETBUY_RATIO >= 0 ? '#c23531' : '#3ba272');
+    }
+    
+    const option = {
+        title: {
+            text: getChartTitle(sortBy),
+            left: 'center'
+        },
+        tooltip: {
+            trigger: 'axis',
+            formatter: function(params) {
+                const item = topData[params[0].dataIndex];
+                let html = `<div style="font-weight:bold">${item.INDUSTRY_NAME}</div>`;
+                
+                if (sortBy === 'MARGIN_BALANCE') {
+                    html += `<div>融资融券余额: ${(item.MARGIN_BALANCE / 100000000).toFixed(2)}亿元</div>`;
+                    html += `<div>余额占比: ${item.MARGIN_BALANCE_RATIO.toFixed(2)}%</div>`;
+                } else if (sortBy === 'MARGIN_BALANCE_RATIO') {
+                    html += `<div>余额占比: ${item.MARGIN_BALANCE_RATIO.toFixed(2)}%</div>`;
+                    html += `<div>融资融券余额: ${(item.MARGIN_BALANCE / 100000000).toFixed(2)}亿元</div>`;
+                } else if (sortBy === 'FIN_NETBUY_AMT') {
+                    html += `<div>融资净买入额: ${(item.FIN_NETBUY_AMT / 100000000).toFixed(2)}亿元</div>`;
+                    html += `<div>净买入额占比: ${item.FIN_NETBUY_RATIO.toFixed(2)}%</div>`;
+                } else if (sortBy === 'FIN_NETBUY_RATIO') {
+                    html += `<div>净买入额占比: ${item.FIN_NETBUY_RATIO.toFixed(2)}%</div>`;
+                    html += `<div>融资净买入额: ${(item.FIN_NETBUY_AMT / 100000000).toFixed(2)}亿元</div>`;
+                }
+                
+                return html;
+            }
+        },
+        grid: {
+            left: '3%',
+            right: '4%',
+            bottom: '10%',
+            containLabel: true
+        },
+        xAxis: {
+            type: 'value',
+            axisLabel: {
+                formatter: function(value) {
+                    if (sortBy === 'MARGIN_BALANCE' || sortBy === 'FIN_NETBUY_AMT') {
+                        return value + '亿';
+                    } else {
+                        return value + '%';
+                    }
+                }
+            }
+        },
+        yAxis: {
+            type: 'category',
+            data: industryNames,
+            axisLabel: {
+                interval: 0,
+                rotate: 0
+            }
+        },
+        series: [
+            {
+                name: getSerieName(sortBy),
+                type: 'bar',
+                data: seriesData,
+                itemStyle: {
+                    color: function(params) {
+                        return colorMap[params.dataIndex];
+                    }
+                },
+                label: {
+                    show: true,
+                    position: 'right',
+                    formatter: function(params) {
+                        if (sortBy === 'MARGIN_BALANCE' || sortBy === 'FIN_NETBUY_AMT') {
+                            return params.value + '亿';
+                        } else {
+                            return params.value + '%';
+                        }
+                    }
+                }
+            }
+        ]
+    };
+    
+    myChart.setOption(option);
+    
+    // 窗口大小变化时自动调整图表大小
+    window.addEventListener('resize', function() {
+        myChart.resize();
+    });
+}
+
+function getChartTitle(sortBy) {
+    switch(sortBy) {
+        case 'MARGIN_BALANCE':
+            return '行业融资融券余额排行(亿元)';
+        case 'MARGIN_BALANCE_RATIO':
+            return '行业融资融券余额占比排行(%)';
+        case 'FIN_NETBUY_AMT':
+            return '行业融资净买入额排行(亿元)';
+        case 'FIN_NETBUY_RATIO':
+            return '行业融资净买入额占比排行(%)';
+        default:
+            return '行业融资数据排行';
+    }
+}
+
+function getSerieName(sortBy) {
+    switch(sortBy) {
+        case 'MARGIN_BALANCE':
+            return '融资融券余额(亿元)';
+        case 'MARGIN_BALANCE_RATIO':
+            return '余额占比(%)';
+        case 'FIN_NETBUY_AMT':
+            return '融资净买入额(亿元)';
+        case 'FIN_NETBUY_RATIO':
+            return '净买入额占比(%)';
+        default:
+            return '数值';
+    }
+}
+
+function calculateRollingSums(rzjmeData, period) {
+    const rollingSums = [];
+    for (let i = 0; i < rzjmeData.length; i++) {
+        const sum = rzjmeData.slice(i, Math.min(i + period, rzjmeData.length)).reduce((acc, val) => acc + val, 0);
+        rollingSums.push(sum);
+    }
+    return rollingSums;
+}
+
+function fillTable(dates, spjData, zdfData, rzjmeData, rzjme3Data, rzjme5Data, rzjme10Data, rzjmeNData) {
+    const tableBody = document.querySelector('#data-table tbody');
+    tableBody.innerHTML = '';
+
+    for (let index = dates.length - 1; index >= 0; index--) {
+        const row = `<tr>
+            <td>${dates[index]}</td>
+            <td>${spjData[index]}</td>
+            <td>${zdfData[index].toFixed(2)}</td>
+            <td>${rzjmeData[index].toFixed(2)}</td>
+            <td>${rzjme3Data[index].toFixed(2)}</td>
+            <td>${rzjme5Data[index].toFixed(2)}</td>
+            <td>${rzjme10Data[index].toFixed(2)}</td>
+            <td>${rzjmeNData[index].toFixed(2)}</td>
+        </tr>`;
+        tableBody.innerHTML += row;
+    }
+}
+
+// 填充行业数据表格
+function fillIndustryTable(industryData) {
+    const tableBody = document.querySelector('#industry-table tbody');
+    tableBody.innerHTML = '';
+
+    if (industryData.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="8" class="loading">未找到该日期的行业数据</td></tr>';
+        return;
+    }
+
+    industryData.forEach(item => {
+        const row = `<tr>
+            <td>${item.INDUSTRY_NAME}</td>
+            <td>${(item.MARGIN_BALANCE / 100000000).toFixed(2)}</td>
+            <td>${item.MARGIN_BALANCE_RATIO.toFixed(2)}</td>
+            <td>${(item.FIN_BALANCE / 100000000).toFixed(2)}</td>
+            <td style="color:${item.FIN_NETBUY_AMT >= 0 ? 'red' : 'green'}">${(item.FIN_NETBUY_AMT / 100000000).toFixed(2)}</td>
+            <td style="color:${item.FIN_NETBUY_RATIO >= 0 ? 'red' : 'green'}">${item.FIN_NETBUY_RATIO.toFixed(2)}</td>
+            <td>${(item.FIN_BUY_AMT / 100000000).toFixed(2)}</td>
+            <td>${(item.FIN_REPAY_AMT / 100000000).toFixed(2)}</td>
+        </tr>`;
+        tableBody.innerHTML += row;
+    });
+}
+
+async function main(scode) {
+    const { displayCount, customN } = getQueryParams();
+    const { allData, securityName } = await fetchAllPages(scode);
+    allData.sort((a, b) => new Date(b.DATE) - new Date(a.DATE));
+    const slicedData = allData.slice(0, displayCount);
+
+    let dates = slicedData.map(item => item.DATE.split(' ')[0]);
+    let spjData = slicedData.map(item => parseFloat(item.SPJ));
+    let zdfData = slicedData.map(item => parseFloat(item.ZDF));
+    let rzjmeData = slicedData.map(item => parseFloat(item.RZJME) / 100000000);
+
+    let rzjme3Data = calculateRollingSums(rzjmeData, 3);
+    let rzjme5Data = calculateRollingSums(rzjmeData, 5);
+    let rzjme10Data = calculateRollingSums(rzjmeData, 10);
+    let rzjmeNData = calculateRollingSums(rzjmeData, customN);
+
+    document.getElementById('customNHeader').innerText = `${customN}日净买`;
+    const pageTitle = `${securityName}（${scode}）收盘价与融资净买入额走势图`;
+    document.title = pageTitle;
+    document.getElementById('page-title').innerText = '股票与行业融资数据分析';
+
+    dates = dates.reverse();
+    spjData = spjData.reverse();
+    zdfData = zdfData.reverse();
+    rzjmeData = rzjmeData.reverse();
+    rzjme3Data = rzjme3Data.reverse();
+    rzjme5Data = rzjme5Data.reverse();
+    rzjme10Data = rzjme10Data.reverse();
+    rzjmeNData = rzjmeNData.reverse();
+
+    initChart(dates, spjData, rzjmeData);
+    fillTable(dates, spjData, zdfData, rzjmeData, rzjme3Data, rzjme5Data, rzjme10Data, rzjmeNData);
+    
+    // 将当前股票保存到历史记录
+    saveStockHistory({
+        code: scode,
+        name: securityName || stockNameMap[scode] || scode
+    });
+}
+
+// 初始化搜索功能
+function initSearchFunctionality() {
+    const searchInput = document.getElementById('stock-search');
+    const searchResults = document.getElementById('search-results');
+    const updateButton = document.getElementById('update-button');
+    const clearInput = document.getElementById('clear-input');
+    let currentStockCode = getQueryParams().scode;
+    
+    // 设置初始值
+    let initialNameFound = false;
+    // 查找当前代码对应的拼音简称
+    for (const stock of stockData) {
+        if (stock.code === currentStockCode) {
+            searchInput.value = stock.name;
+            initialNameFound = true;
+            break;
+        }
+    }
+    
+    if (!initialNameFound) {
+        searchInput.value = currentStockCode;
+    }
+    
+    // 显示或隐藏清除按钮
+    function toggleClearButton() {
+        if (searchInput.value.trim()) {
+            clearInput.style.display = 'block';
+        } else {
+            clearInput.style.display = 'none';
+        }
+    }
+    
+    // 初始状态检查清除按钮
+    toggleClearButton();
+    
+    // 清除按钮点击事件
+    clearInput.addEventListener('click', function() {
+        searchInput.value = '';
+        toggleClearButton();
+        searchInput.focus();
+        showHistoryResults();
+    });
+    
+    // 显示历史记录
+    function showHistoryResults() {
+        const history = loadStockHistory();
+        searchResults.innerHTML = '';
+        
+        if (history.length > 0) {
+            searchResults.style.display = 'block';
+            history.forEach(stock => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.innerHTML = `
+                    <span>${stock.name}<span class="history-tag">（历史）</span></span>
+                    <span class="stock-code">${stock.code}</span>
+                `;
+                div.addEventListener('click', function() {
+                    searchInput.value = stock.name;
+                    toggleClearButton();
+                    searchResults.style.display = 'none';
+                    main(stock.code);
+                });
+                searchResults.appendChild(div);
+            });
+        } else {
+            searchResults.style.display = 'none';
+        }
+    }
+    
+    // 输入框获得焦点时，如果没有内容则显示历史记录
+    searchInput.addEventListener('focus', function() {
+        const query = this.value.trim();
+        if (!query) {
+            showHistoryResults();
+        }
+    });
+    
+    // 搜索功能
+    searchInput.addEventListener('input', function() {
+        const query = this.value.trim();
+        searchResults.innerHTML = '';
+        
+        toggleClearButton();
+        
+        if (!query) {
+            showHistoryResults();
+            return;
+        }
+        
+        let matches = [];
+        const upperQuery = query.toUpperCase();
+        
+        // 1. 按拼音首字母匹配
+        if (/^[A-Z]+$/.test(upperQuery)) {
+            for (const stock of stockData) {
+                if (stock.abbr.startsWith(upperQuery)) {
+                    matches.push(stock);
+                }
+            }
+        }
+        
+        // 2. 匹配股票名称
+        for (const stock of stockData) {
+            if (stock.name.includes(query)) {
+                // 检查是否已经添加过
+                if (!matches.some(match => match.code === stock.code)) {
+                    matches.push(stock);
+                }
+            }
+        }
+        
+        // 3. 匹配股票代码
+        if (/^\d+$/.test(query)) {
+            for (const stock of stockData) {
+                if (stock.code.includes(query)) {
+                    // 检查是否已经添加过
+                    if (!matches.some(match => match.code === stock.code)) {
+                        matches.push(stock);
+                    }
+                }
+            }
+        }
+        
+        // 限制结果数量
+        matches = matches.slice(0, 15);
+        
+        if (matches.length > 0) {
+            searchResults.style.display = 'block';
+            matches.forEach(stock => {
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <span>${stock.name}</span>
+                    <span class="stock-code">${stock.abbr} - ${stock.code}</span>
+                `;
+                div.addEventListener('click', function() {
+                    searchInput.value = stock.name;
+                    toggleClearButton();
+                    searchResults.style.display = 'none';
+                    main(stock.code);
+                });
+                searchResults.appendChild(div);
+            });
+        } else {
+            searchResults.style.display = 'none';
+        }
+    });
+    
+    // 点击外部关闭搜索结果
+    document.addEventListener('click', function(e) {
+        if (e.target !== searchInput && !searchResults.contains(e.target) && e.target !== clearInput) {
+            searchResults.style.display = 'none';
+        }
+    });
+    
+    // 按下Enter键时搜索
+    searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            const query = this.value.trim();
+            let stockCode = '';
+            const upperQuery = query.toUpperCase();
+            
+            // 遍历所有股票查找匹配
+            for (const stock of stockData) {
+                // 匹配拼音简称
+                if (stock.abbr === upperQuery) {
+                    stockCode = stock.code;
+                    break;
+                }
+                // 匹配股票名称
+                if (stock.name === query) {
+                    stockCode = stock.code;
+                    break;
+                }
+                // 匹配股票代码
+                if (stock.code === query) {
+                    stockCode = stock.code;
+                    break;
+                }
+            }
+            
+            // 如果没找到匹配但输入是6位数字，直接使用
+            if (!stockCode && /^\d{6}$/.test(query)) {
+                stockCode = query;
+            }
+            
+            if (stockCode) {
+                searchResults.style.display = 'none';
+                main(stockCode);
+            }
+        }
+    });
+    
+    // 更新按钮点击事件
+    updateButton.addEventListener('click', function() {
+        const query = searchInput.value.trim();
+        let stockCode = '';
+        const upperQuery = query.toUpperCase();
+        
+        // 遍历所有股票查找匹配
+        for (const stock of stockData) {
+            // 匹配拼音简称
+            if (stock.abbr === upperQuery) {
+                stockCode = stock.code;
+                break;
+            }
+            // 匹配股票名称
+            if (stock.name === query) {
+                stockCode = stock.code;
+                break;
+            }
+            // 匹配股票代码
+            if (stock.code === query) {
+                stockCode = stock.code;
+                break;
+            }
+        }
+        
+        // 如果没找到匹配但输入是6位数字，直接使用
+        if (!stockCode && /^\d{6}$/.test(query)) {
+            stockCode = query;
+        }
+        
+        if (stockCode) {
+            searchResults.style.display = 'none';
+            main(stockCode);
+        }
+    });
+}
+
+// 初始化行业数据查询功能
+function initIndustryFunctionality() {
+    const dateInput = document.getElementById('industry-date');
+    const updateButton = document.getElementById('industry-update-button');
+    const sortSelect = document.getElementById('industry-sort-select');
+    
+    // 设置默认日期为昨天
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    dateInput.value = yesterday.toISOString().split('T')[0];
+    
+    // 查询按钮点击事件
+    updateButton.addEventListener('click', async function() {
+        const date = dateInput.value;
+        const sortBy = sortSelect.value;
+        
+        // 显示加载状态
+        const tableBody = document.querySelector('#industry-table tbody');
+        tableBody.innerHTML = '<tr><td colspan="8" class="loading">数据加载中...</td></tr>';
+        
+        const industryData = await fetchIndustryData(date);
+        
+        // 初始化图表和表格
+        if (industryData.length > 0) {
+            initIndustryChart(industryData, sortBy);
+            fillIndustryTable(industryData);
+        } else {
+            // 如果没有数据，显示提示信息
+            tableBody.innerHTML = '<tr><td colspan="8" class="loading">该日期没有行业数据</td></tr>';
+            
+            // 清空图表
+            const chartDom = document.getElementById('industry-chart');
+            const myChart = echarts.init(chartDom);
+            myChart.clear();
+        }
+    });
+    
+    // 排序选择变更事件
+    sortSelect.addEventListener('change', async function() {
+        const date = dateInput.value;
+        const sortBy = this.value;
+        
+        // 获取当前的行业数据
+        const tableRows = document.querySelectorAll('#industry-table tbody tr');
+        if (tableRows.length > 0 && !tableRows[0].querySelector('td.loading')) {
+            const industryData = await fetchIndustryData(date);
+            if (industryData.length > 0) {
+                initIndustryChart(industryData, sortBy);
+            }
+        }
+    });
+}
+
+// 初始化标签切换功能
+function initTabFunctionality() {
+    const tabs = document.querySelectorAll('.tab');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    tabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            const tabId = this.getAttribute('data-tab');
+            
+            // 移除所有活动状态
+            tabs.forEach(t => t.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+            
+            // 设置当前标签为活动状态
+            this.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+            
+            // 如果切换到行业标签，初始化行业图表（如果已有数据）
+            if (tabId === 'industry-tab') {
+                const chartDom = document.getElementById('industry-chart');
+                if (chartDom) {
+                    const myChart = echarts.init(chartDom);
+                    myChart.resize();
+                }
+            } else if (tabId === 'stock-tab') {
+                // 如果切换到个股标签，刷新个股图表
+                const chartDom = document.getElementById('chart');
+                if (chartDom) {
+                    const myChart = echarts.init(chartDom);
+                    myChart.resize();
+                }
+            }
+        });
+    });
+}
+
+// 初始化页面
+document.addEventListener('DOMContentLoaded', function() {
+    const params = getQueryParams();
+    main(params.scode);
+    initSearchFunctionality();
+    initIndustryFunctionality();
+    initTabFunctionality();
+});
+</script>
 
 </body>
 </html>
