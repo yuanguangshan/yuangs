@@ -855,8 +855,8 @@ async function fetchAllPages(scode) {
     return { allData, securityName };
 }
 
-// 获取行业融资数据，增加回溯功能
-async function fetchIndustryData(date, retryCount = 0) {
+// 获取行业融资数据，增加回溯功能和缓存功能
+async function fetchIndustryData(date, retryCount = 0, updateDateInput = false) {
     const maxRetries = 5; // 最大回溯天数
     
     if (retryCount > maxRetries) {
@@ -884,17 +884,31 @@ async function fetchIndustryData(date, retryCount = 0) {
         const result = await response.json();
         
         if (result.success && result.result && result.result.data && result.result.data.length > 0) {
+            // 成功获取数据，保存到缓存
+            const actualDate = result.result.data[0].TRADE_DATE;
+            saveIndustryDataCache(actualDate);
+            console.log(`成功获取行业数据，：${result.result.data.length}条数据`);
+            
+            // 如果需要更新日期输入框
+            if (updateDateInput && actualDate) {
+                const dateInput = document.getElementById('industry-date');
+                if (dateInput && actualDate !== dateInput.value) {
+                    dateInput.value = actualDate;
+                }
+            }
+            
             return result.result.data;
         } else {
             // 当天无数据，回溯到前一天
             const prevDate = getPreviousDate(formattedDate);
-            return fetchIndustryData(prevDate, retryCount + 1);
+            console.log(`当天无行业数据，尝试回溯到前一天：${prevDate}`);
+            return fetchIndustryData(prevDate, retryCount + 1, updateDateInput);
         }
     } catch (error) {
         console.error("Error fetching industry data:", error);
         // 发生错误，尝试回溯到前一天
         const prevDate = getPreviousDate(formattedDate);
-        return fetchIndustryData(prevDate, retryCount + 1);
+        return fetchIndustryData(prevDate, retryCount + 1, updateDateInput);
     }
 }
 
@@ -908,6 +922,47 @@ function getPreviousDate(dateString) {
 function formatDateForAPI(date) {
     // 将日期转换为'YYYY-MM-DD'格式
     return date;
+}
+
+// 保存行业数据日期到缓存
+function saveIndustryDataCache(date) {
+    if (!date) return;
+    
+    const cacheData = {
+        date: date,
+        timestamp: new Date().getTime() // 记录缓存时间
+    };
+    
+    try {
+        localStorage.setItem('industryDataCache', JSON.stringify(cacheData));
+        console.log('Industry data date cached:', date);
+    } catch (error) {
+        console.error('Error saving industry data cache:', error);
+    }
+}
+
+// 检查行业数据缓存
+function checkIndustryDataCache() {
+    try {
+        const cacheStr = localStorage.getItem('industryDataCache');
+        if (!cacheStr) return null;
+        
+        const cacheData = JSON.parse(cacheStr);
+        const currentTime = new Date().getTime();
+        const cacheTime = cacheData.timestamp;
+        
+        // 检查缓存是否过期（5小时 = 5 * 60 * 60 * 1000 毫秒）
+        if (currentTime - cacheTime > 5 * 60 * 60 * 1000) {
+            // 缓存已过期，清除缓存
+            localStorage.removeItem('industryDataCache');
+            return null;
+        }
+        
+        return cacheData;
+    } catch (error) {
+        console.error('Error checking industry data cache:', error);
+        return null;
+    }
 }
 
 function initChart(dates, spjData, rzjmeData) {
@@ -1192,9 +1247,10 @@ function fillIndustryTable(industryData, date) {
     }
 
     // 如果找到数据，添加数据来源日期提示
-    const actualDate = industryData.length > 0 ? industryData[0].TRADE_DATE : date;
+    const actualDate = industryData.length > 0 && industryData[0].TRADE_DATE ? industryData[0].TRADE_DATE : date;
+    const formattedDate = actualDate || '无可用日期';
     const dateInfo = `<tr><td colspan="8" style="text-align: left; padding: 5px; background-color: #f9f9f9;">
-        <span style="font-style: italic; color: #666;">数据日期: ${actualDate}</span>
+        <span style="font-style: italic; color: #666;">数据日期: ${formattedDate}</span>
     </td></tr>`;
     tableBody.innerHTML = dateInfo;
 
@@ -1489,10 +1545,18 @@ function initIndustryFunctionality() {
     const updateButton = document.getElementById('industry-update-button');
     const sortSelect = document.getElementById('industry-sort-select');
     
-    // 设置默认日期为昨天
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    dateInput.value = yesterday.toISOString().split('T')[0];
+    // 检查是否有缓存的日期
+    const cachedData = checkIndustryDataCache();
+    if (cachedData && cachedData.date) {
+        // 如果有缓存，使用缓存的日期
+        dateInput.value = cachedData.date;
+        console.log('Using cached date:', cachedData.date);
+    } else {
+        // 没有缓存，设置默认日期为昨天
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        dateInput.value = yesterday.toISOString().split('T')[0];
+    }
     
     // 查询按钮点击事件
     updateButton.addEventListener('click', async function() {
@@ -1503,12 +1567,16 @@ function initIndustryFunctionality() {
         const tableBody = document.querySelector('#industry-table tbody');
         tableBody.innerHTML = '<tr><td colspan="8" class="loading">数据加载中，如当天无数据将自动回溯查找最近日期...</td></tr>';
         
-        const industryData = await fetchIndustryData(date);
+        // 获取行业数据，并允许更新日期输入框
+        const industryData = await fetchIndustryData(date, 0, true);
+        
+        // 获取可能已更新的日期值
+        const updatedDate = document.getElementById('industry-date').value;
         
         // 初始化图表和表格
         if (industryData.length > 0) {
             initIndustryChart(industryData, sortBy);
-            fillIndustryTable(industryData, date);
+            fillIndustryTable(industryData, updatedDate);
         } else {
             // 如果没有数据，显示提示信息
             tableBody.innerHTML = '<tr><td colspan="8" class="loading">无法找到行业数据，请尝试其他日期</td></tr>';
