@@ -855,8 +855,14 @@ async function fetchAllPages(scode) {
     return { allData, securityName };
 }
 
-// 获取行业融资数据
-async function fetchIndustryData(date) {
+// 获取行业融资数据，增加回溯功能
+async function fetchIndustryData(date, retryCount = 0) {
+    const maxRetries = 5; // 最大回溯天数
+    
+    if (retryCount > maxRetries) {
+        return []; // 超过最大回溯天数，返回空数组
+    }
+    
     const formattedDate = date ? formatDateForAPI(date) : '2025-03-20'; // 默认日期
     
     const url = 'https://datacenter.eastmoney.com/securities/api/data/get';
@@ -877,15 +883,26 @@ async function fetchIndustryData(date) {
         const response = await fetch(`${url}?${params}`);
         const result = await response.json();
         
-        if (result.success && result.result && result.result.data) {
+        if (result.success && result.result && result.result.data && result.result.data.length > 0) {
             return result.result.data;
         } else {
-            throw new Error("Failed to fetch industry data");
+            // 当天无数据，回溯到前一天
+            const prevDate = getPreviousDate(formattedDate);
+            return fetchIndustryData(prevDate, retryCount + 1);
         }
     } catch (error) {
         console.error("Error fetching industry data:", error);
-        return [];
+        // 发生错误，尝试回溯到前一天
+        const prevDate = getPreviousDate(formattedDate);
+        return fetchIndustryData(prevDate, retryCount + 1);
     }
+}
+
+// 获取前一天的日期
+function getPreviousDate(dateString) {
+    const date = new Date(dateString);
+    date.setDate(date.getDate() - 1);
+    return date.toISOString().split('T')[0];
 }
 
 function formatDateForAPI(date) {
@@ -1165,14 +1182,21 @@ function fillTable(dates, spjData, zdfData, rzjmeData, rzjme3Data, rzjme5Data, r
 }
 
 // 填充行业数据表格
-function fillIndustryTable(industryData) {
+function fillIndustryTable(industryData, date) {
     const tableBody = document.querySelector('#industry-table tbody');
     tableBody.innerHTML = '';
 
     if (industryData.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="8" class="loading">未找到该日期的行业数据</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="8" class="loading">未找到相关行业数据</td></tr>';
         return;
     }
+
+    // 如果找到数据，添加数据来源日期提示
+    const actualDate = industryData.length > 0 ? industryData[0].TRADE_DATE : date;
+    const dateInfo = `<tr><td colspan="8" style="text-align: left; padding: 5px; background-color: #f9f9f9;">
+        <span style="font-style: italic; color: #666;">数据日期: ${actualDate}</span>
+    </td></tr>`;
+    tableBody.innerHTML = dateInfo;
 
     industryData.forEach(item => {
         const row = `<tr>
@@ -1477,17 +1501,17 @@ function initIndustryFunctionality() {
         
         // 显示加载状态
         const tableBody = document.querySelector('#industry-table tbody');
-        tableBody.innerHTML = '<tr><td colspan="8" class="loading">数据加载中...</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="8" class="loading">数据加载中，如当天无数据将自动回溯查找最近日期...</td></tr>';
         
         const industryData = await fetchIndustryData(date);
         
         // 初始化图表和表格
         if (industryData.length > 0) {
             initIndustryChart(industryData, sortBy);
-            fillIndustryTable(industryData);
+            fillIndustryTable(industryData, date);
         } else {
             // 如果没有数据，显示提示信息
-            tableBody.innerHTML = '<tr><td colspan="8" class="loading">该日期没有行业数据</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="8" class="loading">无法找到行业数据，请尝试其他日期</td></tr>';
             
             // 清空图表
             const chartDom = document.getElementById('industry-chart');
@@ -1504,9 +1528,14 @@ function initIndustryFunctionality() {
         // 获取当前的行业数据
         const tableRows = document.querySelectorAll('#industry-table tbody tr');
         if (tableRows.length > 0 && !tableRows[0].querySelector('td.loading')) {
-            const industryData = await fetchIndustryData(date);
-            if (industryData.length > 0) {
-                initIndustryChart(industryData, sortBy);
+            // 检查是否已有数据显示
+            const hasData = tableRows.length > 1; // 第一行可能是日期信息
+            
+            if (hasData) {
+                const industryData = await fetchIndustryData(date);
+                if (industryData.length > 0) {
+                    initIndustryChart(industryData, sortBy);
+                }
             }
         }
     });
