@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -319,8 +319,6 @@
       transform: translateY(-2px);
     }
 
-
-
     /* 表格样式 */
     .table-container {
       margin: 0 12px 16px;
@@ -368,6 +366,36 @@
 
     tr:hover td {
       background-color: rgba(67, 97, 238, 0.05);
+    }
+
+    /* 为可点击的单元格增加指针样式和特殊标记 */
+    td.clickable {
+      cursor: pointer;
+      position: relative;
+    }
+
+    td.clickable:after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 1px;
+      background-color: currentColor;
+      opacity: 0.3;
+      transition: opacity var(--transition-fast);
+    }
+
+    td.clickable:hover:after {
+      opacity: 0.6;
+    }
+    
+    .position-change {
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-style: dotted;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
     }
 
     .profit {
@@ -531,22 +559,6 @@
           <tbody id="data-body">
             <!-- 数据将通过JavaScript填充 -->
           </tbody>
-          
-          <script>
-            // 添加点击事件处理程序
-            document.getElementById('data-body').addEventListener('click', function(e) {
-              if (e.target.closest('td[data-sort="netPositionChange"]')) {
-                const row = e.target.closest('tr');
-                const variety = row.dataset.variety;
-                const company = selectedInstitutionName;
-                const contract = 'ALL';
-                
-                // 构建跳转URL
-                const url = `v1/ths_trading.html?variety=${encodeURIComponent(variety)}&company=${encodeURIComponent(company)}&contract=${encodeURIComponent(contract)}`;
-                window.location.href = url;
-              }
-            });
-          </script>
         </table>
       </div>
       
@@ -721,6 +733,39 @@
       document.getElementById('3months').addEventListener('click', () => quickSelect('3months'));
       document.getElementById('6months').addEventListener('click', () => quickSelect('6months'));
       document.getElementById('year').addEventListener('click', () => quickSelect('year'));
+      
+      // 绑定表格单元格点击事件，使用事件委托
+      document.getElementById('data-body').addEventListener('click', function(event) {
+        const target = event.target;
+        const row = target.closest('tr');
+        
+        if (!row) return;
+        
+        const variety = row.getAttribute('data-variety');
+        
+        // 处理净仓变化单元格点击
+        if (target.classList.contains('position-change')) {
+          console.log('点击了净仓变化', variety, selectedInstitutionName);
+          
+          // 构建跳转URL
+          const url = `ths_trading.html?variety=${encodeURIComponent(variety)}&company=${encodeURIComponent(selectedInstitutionName)}&contract=ALL`;
+          window.location.href = url;
+        } 
+        // 处理名称单元格点击
+        else if (target.classList.contains('variety-name')) {
+          // 获取品种对应的市场ID
+          const marketId = getMarketIdFromVariety(variety);
+          window.location.href = `future.html?variety=${marketId}_${variety.toLowerCase()}&showPremium=true`;
+        }
+        // 处理净仓单元格点击
+        else if (target.classList.contains('net-position')) {
+          window.location.href = `longshort.html?variety=${variety}`;
+        }
+        // 处理盈亏单元格点击
+        else if (target.classList.contains('profit-value')) {
+          window.location.href = `profit.html?variety=${variety}`;
+        }
+      });
       
       // 获取机构列表
       fetchInstitutions();
@@ -1209,6 +1254,7 @@
       
       data.forEach(item => {
         const row = document.createElement('tr');
+        row.setAttribute('data-variety', item.variety);
         row.className = getRowClass(item, top10Items);
         
         // 品种
@@ -1220,49 +1266,42 @@
         // 名称
         const nameCell = document.createElement('td');
         nameCell.textContent = item.varietyName;
-        nameCell.className = 'variety-name';
-        nameCell.style.cursor = 'pointer';
+        nameCell.className = 'variety-name clickable';
         nameCell.title = '点击查看品种行情';
-        nameCell.addEventListener('click', function() {
-          // 获取品种对应的市场ID
-          const variety = item.variety.toLowerCase();
-          const marketId = getMarketIdFromVariety(item.variety);
-          window.location.href = `future.html?variety=${marketId}_${variety}&showPremium=true`;
-        });
         row.appendChild(nameCell);
         
         // 净仓
         const positionCell = document.createElement('td');
         positionCell.textContent = item.netPosition;
-        positionCell.className = 'net-position';
-        positionCell.style.cursor = 'pointer';
+        positionCell.className = 'net-position clickable';
         positionCell.title = '点击查看品种多空持仓';
-        positionCell.addEventListener('click', function() {
-          window.location.href = `longshort.html?variety=${item.variety}`;
-        });
         row.appendChild(positionCell);
         
-        // 变化
+        // 变化 - 这里是重点修改的部分，增加特殊类名和样式
         const changeCell = document.createElement('td');
         const change = parseInt(item.netPositionChange) || 0;
         changeCell.textContent = change > 0 ? '+' + change : change;
-        changeCell.className = change > 0 ? 'profit' : change < 0 ? 'loss' : '';
+        // 给变化单元格添加特殊类名，用于事件委托识别
+        changeCell.className = 'position-change';
+        if (change > 0) {
+          changeCell.classList.add('profit');
+        } else if (change < 0) {
+          changeCell.classList.add('loss');
+        }
+        changeCell.title = '点击查看机构建仓过程';
         row.appendChild(changeCell);
         
         // 盈亏
         const palCell = document.createElement('td');
         const pal = (item.fluctuatePal / 10000).toFixed(0);
         palCell.textContent = pal >= 0 ? '+' + pal : pal;
+        palCell.className = 'profit-value clickable';
         if (item.fluctuatePal > 0) {
-          palCell.className = 'profit';
+          palCell.classList.add('profit');
         } else if (item.fluctuatePal < 0) {
-          palCell.className = 'loss';
+          palCell.classList.add('loss');
         }
-        palCell.style.cursor = 'pointer';
         palCell.title = '点击查看品种盈亏分布';
-        palCell.addEventListener('click', function() {
-          window.location.href = `profit.html?variety=${item.variety}`;
-        });
         row.appendChild(palCell);
         
         tableBody.appendChild(row);
@@ -1426,6 +1465,7 @@
           return marketIdMap[varietyPrefixToMarket[prefix]];
         }
       }
+   
       
       // 4. 特殊处理: 单个字母加数字的形式
       if (/^[A-Za-z]\d+$/.test(varietyCode)) {
