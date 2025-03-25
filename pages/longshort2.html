@@ -1,0 +1,1858 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>期货品种龙虎榜</title>
+  <!-- 引入FontAwesome图标库 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- 引入ECharts可视化库 -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <style>
+    /* CSS变量定义 - 现代设计风格 */
+    :root {
+      /* 主色调 */
+      --primary: #4361ee;
+      --primary-light: #4895ef;
+      --secondary: #3f37c9;
+      --accent: #4cc9f0;
+      
+      /* 中性色 */
+      --dark-1: #1a1a2e;
+      --dark-2: #2c3e50;
+      --dark-3: #34495e;
+      --light-1: #ffffff;
+      --light-2: #f8fafc;
+      --light-3: #ecf0f1;
+      
+      /* 功能色 */
+      --success: #2ecc71;
+      --info: #3498db;
+      --warning: #f1c40f;
+      --danger: #e74c3c;
+      
+      /* 主题色 */
+      --bg-color: var(--light-1);
+      --bg-secondary: var(--light-2);
+      --text-color: var(--dark-2);
+      --text-secondary: #7f8c8d;
+      --border-color: var(--light-3);
+      
+      /* 图表 */
+      --chart-height: 400px;
+      --chart-title-color: var(--dark-2);
+      --chart-grid-color: var(--light-3);
+      
+      /* 动效 */
+      --transition-fast: 0.2s ease;
+      --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-fancy: 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+      
+      /* 阴影 */
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+      --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+      --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+      
+      /* 圆角 */
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+    
+    /* 暗色主题 */
+    [data-theme="dark"] {
+      --bg-color: #121212;
+      --bg-secondary: #1e1e1e;
+      --text-color: #e0e0e0;
+      --text-secondary: #a0a0a0;
+      --border-color: #333333;
+      
+      --chart-title-color: #e0e0e0;
+      --chart-grid-color: #333333;
+      
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+      --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+      --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
+      
+      --success: #4ced69;
+      --danger: #ff6b6b;
+      --warning: #ffa726;
+      --info: #74b9ff;
+    }
+
+    /* 基础样式重置 */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      width: 380px;
+      height: 100%;
+      color: var(--text-color);
+      background-color: var(--bg-color);
+      transition: background-color var(--transition-normal), color var(--transition-normal);
+      overflow-x: hidden;
+    }
+
+    .container {
+      padding: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 顶部导航栏 - 现代设计 */
+    .header {
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      color: white;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: var(--shadow-md);
+      position: relative;
+      z-index: 10;
+    }
+
+    .header-title {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      flex-grow: 1;
+      text-align: center;
+    }
+
+    .back-button {
+      position: absolute;
+      left: 15px;
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      text-decoration: none;
+      box-shadow: 0 1px 3px var(--shadow-sm);
+      transition: all 0.3s ease;
+    }
+    
+    .back-button:hover {
+      background: rgba(255, 255, 255, 0.3);
+      box-shadow: 0 2px 5px var(--shadow-md);
+    }
+
+    .back-button i {
+      margin-right: 3px;
+    }
+
+    .theme-toggle {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      color: white;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s ease;
+    }
+
+    .theme-toggle:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    /* 控制面板样式 */
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 12px;
+      gap: 8px;
+    }
+
+    .control-item {
+      display: flex;
+      align-items: center;
+    }
+
+    .date-input,
+    .contract-select {
+      font-size: 13px;
+      padding: 6px 8px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      transition: border-color var(--transition-fast);
+    }
+
+    .date-input:focus,
+    .contract-select:focus {
+      border-color: var(--primary);
+      outline: none;
+    }
+
+    .contract-select {
+      min-width: 105px;
+    }
+
+    /* 按钮样式 */
+    .btn {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition-normal);
+      border: none;
+      text-align: center;
+      font-size: 13px;
+      background-color: var(--primary);
+      color: white;
+    }
+
+    .btn:hover {
+      background-color: var(--secondary);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      padding: 0;
+    }
+
+    /* 开关样式 */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: var(--text-secondary);
+      transition: var(--transition-normal);
+      border-radius: 20px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: '';
+      height: 16px;
+      width: 16px;
+      left: 2px;
+      bottom: 2px;
+      background-color: white;
+      transition: var(--transition-normal);
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: var(--primary);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(16px);
+    }
+
+    /* 图例样式 */
+    .legend {
+      display: flex;
+      padding: 8px 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      transition: opacity var(--transition-fast);
+    }
+
+    .legend-item:hover {
+      opacity: 0.8;
+    }
+
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      margin-right: 6px;
+      border-radius: 2px;
+    }
+
+    .legend-multi {
+      background-color: var(--danger);
+    }
+
+    .legend-empty {
+      background-color: var(--success);
+    }
+
+    .legend-net {
+      background-color: var(--info);
+    }
+
+    /* 图表容器样式 */
+    .chart-container {
+      width: 100%;
+      height: 280px;
+      margin: 0 12px 16px;
+      background-color: var(--bg-color);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-md);
+      padding: 12px;
+      box-sizing: border-box;
+      position: relative;
+      transition: all var(--transition-normal);
+    }
+    
+    .chart-container:hover {
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-2px);
+    }
+
+    .chart-title {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      z-index: 9;
+      font-weight: 500;
+    }
+
+    /* 图表切换按钮 */
+    .chart-tabs {
+      display: flex;
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      z-index: 10;
+      background-color: var(--bg-secondary);
+      border-radius: var(--radius-sm);
+      padding: 2px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .chart-tab {
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+    }
+
+    .chart-tab.active {
+      background-color: var(--primary);
+      color: white;
+    }
+
+    /* 表格样式 */
+    .table-container {
+      margin: 0 12px 16px;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      box-shadow: var(--shadow-md);
+      transition: box-shadow var(--transition-normal);
+    }
+
+    .table-container:hover {
+      box-shadow: var(--shadow-lg);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      background-color: var(--bg-color);
+    }
+
+    th, td {
+      padding: 8px 6px;
+      text-align: center;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 12px;
+      transition: background-color var(--transition-fast);
+    }
+
+    th {
+      background-color: var(--bg-secondary);
+      color: var(--text-secondary);
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    tr:nth-child(even) {
+      background-color: var(--bg-secondary);
+    }
+
+    tr:hover td {
+      background-color: rgba(67, 97, 238, 0.05);
+    }
+
+    /* 设置列宽 */
+    .col-no { width: 30px; }
+    .col-name { width: 60px; }
+    .col-pos { width: 50px; }
+    .col-change { width: 40px; }
+
+    .positive {
+      color: var(--danger);
+    }
+
+    .negative {
+      color: var(--success);
+    }
+
+    /* 统计栏样式 */
+    .stats-container {
+      margin: 0 12px 16px;
+      background-color: var(--bg-color);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      box-shadow: var(--shadow-md);
+      transition: all var(--transition-normal);
+    }
+
+    .stats-container:hover {
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-2px);
+    }
+
+    .stats-title {
+      font-weight: 600;
+      margin-bottom: 12px;
+      font-size: 14px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 8px;
+      color: var(--text-color);
+    }
+
+    .stats-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .stats-item {
+      flex: 1;
+      text-align: center;
+      padding: 10px 8px;
+      background-color: var(--bg-secondary);
+      border-radius: var(--radius-sm);
+      transition: transform var(--transition-fast);
+    }
+
+    .stats-item:hover {
+      transform: translateY(-2px);
+    }
+
+    .stats-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .stats-value {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    /* 加载和错误状态 */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 0;
+      color: var(--text-secondary);
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      border-top: 3px solid var(--primary);
+      animation: spin 1s linear infinite;
+      margin-bottom: 12px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .error {
+      color: var(--danger);
+      text-align: center;
+      padding: 16px;
+      background-color: rgba(231, 76, 60, 0.1);
+      border-radius: var(--radius-md);
+      margin: 16px 12px;
+    }
+
+    .cache-warning {
+      color: var(--warning);
+      text-align: center;
+      padding: 10px;
+      background-color: rgba(241, 196, 15, 0.1);
+      border-radius: var(--radius-md);
+      margin: 8px 12px;
+      font-size: 12px;
+    }
+
+    /* 响应式调整 */
+    @media (max-width: 400px) {
+      body {
+        width: 100%;
+      }
+      
+      .col-name { width: 50px; }
+      .col-pos { width: 45px; }
+      .col-change { width: 35px; }
+      
+      .chart-container {
+        margin: 0 8px 12px;
+      }
+      
+      .stats-container, .table-container {
+        margin: 0 8px 12px;
+      }
+      
+      .controls {
+        margin: 8px;
+        gap: 4px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 顶部导航栏 -->
+    <header class="header">
+      <a href="future2.html" class="back-button">
+        <i class="fas fa-arrow-left"></i> 返回
+      </a>
+      <h1 class="header-title">期货品种龙虎榜</h1>
+      <button class="theme-toggle" id="theme-toggle" title="切换主题">
+        <i class="fas fa-moon" id="theme-icon"></i>
+      </button>
+    </header>
+    
+    <!-- 控制面板 -->
+    <div class="controls">
+      <div class="control-item">
+        <input type="date" id="date" class="date-input">
+      </div>
+      <div class="control-item">
+        <select id="contract" class="contract-select">
+          <option value="">加载中...</option>
+        </select>
+      </div>
+      <div class="control-item">
+        <button id="toggle-view" class="btn btn-icon" title="切换百分比/绝对值显示">
+          <i class="fas fa-percentage"></i>
+        </button>
+      </div>
+      <div class="control-item">
+        <label class="switch" title="聚合持仓">
+          <input type="checkbox" id="remove-number">
+          <span class="slider"></span>
+        </label>
+        <span style="margin-left: 5px; font-size: 12px;">Σ</span>
+      </div>
+    </div>
+
+    <!-- 图例说明 -->
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-color legend-multi"></div>
+        <span>多头持仓</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color legend-empty"></div>
+        <span>空头持仓</span>
+      </div>
+      <div class="legend-item" onclick="window.location.href='https://wealth.want.biz/pages/position.html'" title="查看全市场净仓">
+        <div class="legend-color legend-net"></div>
+        <span><i class="fas fa-eye"></i> 全市场净仓</span>
+      </div>
+    </div>
+
+    <!-- 加载指示器 -->
+    <div id="loading" class="loading">
+      <div class="loading-spinner"></div>
+      <div>加载数据中...</div>
+    </div>
+    
+    <!-- 错误信息 -->
+    <div id="error" class="error" style="display: none;">加载失败</div>
+    
+    <!-- 缓存警告 -->
+    <div id="cache-warning" class="cache-warning" style="display: none;">使用缓存数据</div>
+    
+    <!-- 数据展示区域 -->
+    <div id="data-container" style="display: none;">
+      <!-- 图表区域 -->
+      <div class="chart-container">
+        <div class="chart-title" id="chart-title">按净持仓排序 (多空都上榜优先)</div>
+        
+        <!-- 图表切换按钮 -->
+        <div class="chart-tabs">
+          <div class="chart-tab active" data-view="1">净持仓</div>
+          <div class="chart-tab" data-view="2">总持仓</div>
+          <div class="chart-tab" data-view="3">单边上榜</div>
+        </div>
+        
+        <div id="chart" style="width: 100%; height: 100%;"></div>
+      </div>
+
+      <!-- 数据表格 -->
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-no">排名</th>
+              <th class="col-name">多头</th>
+              <th class="col-pos">持仓</th>
+              <th class="col-change">变化</th>
+              <th class="col-name">空头</th>
+              <th class="col-pos">持仓</th>
+              <th class="col-change">变化</th>
+            </tr>
+          </thead>
+          <tbody id="data-body">
+            <!-- 数据将通过JavaScript填充 -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 统计信息区 -->
+      <div class="stats-container">
+        <div class="stats-title">多空统计汇总（前20名）</div>
+        <div class="stats-row">
+          <div class="stats-item">
+            <div class="stats-label">总体持仓</div>
+            <div id="total-positions" class="stats-value">-</div>
+          </div>
+          <div class="stats-item">
+            <div class="stats-label">多空持仓比</div>
+            <div id="position-ratio" class="stats-value">-</div>
+          </div>
+          <div class="stats-item">
+            <div class="stats-label">多空变化比</div>
+            <div id="change-ratio" class="stats-value">-</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // 全局变量
+    let contracts = [];
+    let selectedContract = null;
+    let data = null;
+    let isRelative = false;
+    let removeNumber = false;
+    let chart = null;
+    let chartInitialized = false;
+    let currentChartView = 1; // 当前图表视图: 1=净持仓, 2=总持仓, 3=单边上榜
+    let isDarkMode = false; // 是否为暗色模式
+    let userThemePreference = null; // 用户主题首选项，null表示跟随系统
+    
+    // 缓存相关变量
+    let cachedData = {}; // 用于存储缓存的数据
+    const CACHE_EXPIRY_DAYS = 1; // 缓存过期时间（天）
+    let isUsingCache = false; // 是否正在使用缓存数据
+
+    // 市场简称到市场 ID 的映射
+    const marketIdMap = {
+      'SHFE': '113', // 上海期货交易所
+      'DCE': '114',  // 大连商品交易所
+      'CZCE': '115', // 郑州商品交易所
+      'INE': '142',  // 上海国际能源交易中心
+      'CFFEX': '220', // 中金所
+      'GFEX': '225'  // 广期所
+    };
+
+    // 品种代码前缀到市场简称的映射
+    const varietyPrefixToMarket = {
+      // 上期所
+      'cu': 'SHFE', 'al': 'SHFE', 'zn': 'SHFE', 'pb': 'SHFE', 'ni': 'SHFE', 
+      'sn': 'SHFE', 'au': 'SHFE', 'ag': 'SHFE', 'rb': 'SHFE', 'wr': 'SHFE', 
+      'hc': 'SHFE', 'ss': 'SHFE', 'bu': 'SHFE', 'ru': 'SHFE', 'sp': 'SHFE',
+      'fu': 'SHFE','ao': 'SHFE', 'br': 'SHFE',
+      
+      // 大商所
+      'c': 'DCE', 'cs': 'DCE', 'a': 'DCE', 'b': 'DCE', 'm': 'DCE', 
+      'y': 'DCE', 'p': 'DCE', 'fb': 'DCE', 'bb': 'DCE', 'jd': 'DCE', 
+      'rr': 'DCE', 'l': 'DCE', 'v': 'DCE', 'pp': 'DCE', 'j': 'DCE', 
+      'jm': 'DCE', 'i': 'DCE', 'eg': 'DCE', 'eb': 'DCE', 'pg': 'DCE',
+      'lh': 'DCE', 'lg': 'DCE',
+      
+      // 郑商所
+      'WH': 'CZCE', 'PM': 'CZCE', 'RI': 'CZCE', 'JR': 'CZCE', 'LR': 'CZCE', 
+      'RS': 'CZCE', 'OI': 'CZCE', 'RM': 'CZCE', 'CF': 'CZCE', 'CY': 'CZCE', 
+      'SR': 'CZCE', 'TA': 'CZCE', 'MA': 'CZCE', 'FG': 'CZCE', 'ZC': 'CZCE', 
+      'SF': 'CZCE', 'SM': 'CZCE', 'AP': 'CZCE', 'CJ': 'CZCE', 'UR': 'CZCE',
+      'SA': 'CZCE', 'PF': 'CZCE','PK': 'CZCE','PX': 'CZCE','SH': 'CZCE',
+      'PR': 'CZCE',
+      
+      // 上海国际能源交易中心
+      'sc': 'INE', 'lu': 'INE', 'nr': 'INE', 'bc': 'INE', 'ec': 'INE',
+      
+      // 中金所
+      'IF': 'CFFEX', 'IC': 'CFFEX', 'IH': 'CFFEX', 'IM': 'CFFEX', 
+      'TF': 'CFFEX', 'T': 'CFFEX', 'TS': 'CFFEX', '2Y': 'CFFEX',
+      '5Y': 'CFFEX', '10Y': 'CFFEX', '30Y': 'CFFEX',
+      
+      // 广期所
+      'SI': 'GFEX', 'LC': 'GFEX', 'PS': 'GFEX'
+    };
+
+    // 从URL获取参数
+    function getUrlParams() {
+      const params = {};
+      const queryString = window.location.search.substring(1);
+      const pairs = queryString.split('&');
+      
+      for (const pair of pairs) {
+        if (pair) {
+          const [key, value] = pair.split('=');
+          params[key] = decodeURIComponent(value || '');
+        }
+      }
+      
+      return params;
+    }
+
+    // 根据品种代码获取市场ID
+    function getMarketIdFromVariety(varietyCode) {
+      if (!varietyCode) return marketIdMap['SHFE'];
+      
+      // 转换为大写，因为某些交易所的品种代码是大写的
+      const upperVariety = varietyCode.toUpperCase();
+      
+      // 先尝试直接匹配上大写的
+      if (varietyPrefixToMarket[upperVariety]) {
+        return marketIdMap[varietyPrefixToMarket[upperVariety]];
+      }
+      
+      // 然后尝试匹配小写的
+      if (varietyPrefixToMarket[varietyCode]) {
+        return marketIdMap[varietyPrefixToMarket[varietyCode]];
+      }
+      
+      // 如果没有直接匹配，尝试查找前缀
+      for (const prefix in varietyPrefixToMarket) {
+        if (varietyCode.startsWith(prefix) || upperVariety.startsWith(prefix)) {
+          return marketIdMap[varietyPrefixToMarket[prefix]];
+        }
+      }
+      
+      // 默认返回上期所的ID
+      console.warn(`无法确定品种"${varietyCode}"的市场ID，默认返回上期所`);
+      return marketIdMap['SHFE'];
+    }
+    
+    // 根据品种代码获取品种ID
+    function getVarietyIdFromVariety(varietyCode) {
+      if (!varietyCode) return '';
+      
+      // 转换为小写
+      const lowerVariety = varietyCode.toLowerCase();
+      
+      // 获取市场简称
+      let marketCode = '';
+      
+      // 先尝试直接匹配
+      if (varietyPrefixToMarket[varietyCode]) {
+        marketCode = varietyPrefixToMarket[varietyCode];
+      } else if (varietyPrefixToMarket[varietyCode.toUpperCase()]) {
+        marketCode = varietyPrefixToMarket[varietyCode.toUpperCase()];
+      } else {
+        // 如果没有直接匹配，尝试查找前缀
+        for (const prefix in varietyPrefixToMarket) {
+          if (varietyCode.startsWith(prefix) || varietyCode.toUpperCase().startsWith(prefix)) {
+            marketCode = varietyPrefixToMarket[prefix];
+            break;
+          }
+        }
+      }
+      
+      // 如果找不到市场简称，默认使用上期所
+      if (!marketCode) {
+        marketCode = 'SHFE';
+      }
+      
+      // 构建品种ID格式
+      return `${marketIdMap[marketCode]}_${lowerVariety}`;
+    }
+
+    // 初始化页面
+    document.addEventListener('DOMContentLoaded', function() {
+      // 检测系统颜色方案
+      detectColorScheme();
+
+      // 从localStorage加载缓存
+      loadCacheFromStorage();
+      
+      // 设置默认日期为今天
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('date').value = today;
+      
+      // 绑定事件
+      document.getElementById('date').addEventListener('change', fetchData);
+      document.getElementById('contract').addEventListener('change', onContractChange);
+      document.getElementById('toggle-view').addEventListener('click', toggleView);
+      document.getElementById('remove-number').addEventListener('change', onRemoveNumberChange);
+      document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+      
+      // 绑定图表切换按钮事件
+      document.querySelectorAll('.chart-tab').forEach(tab => {
+        tab.addEventListener('click', function() {
+          const viewId = parseInt(this.dataset.view);
+          switchChartView(viewId);
+        });
+      });
+      
+      // 获取URL参数
+      const urlParams = getUrlParams();
+      const contractParam = urlParams.contract;
+      const dmParam = urlParams.dm;
+      const scParam = urlParams.sc;
+      const varietyParam = urlParams.variety;
+      
+      // 立即获取品种列表
+      fetchContracts(contractParam, dmParam, scParam, varietyParam);
+      
+      // 窗口大小变化时重绘图表
+      window.addEventListener('resize', function() {
+        if (chart) {
+          chart.resize();
+        }
+      });
+
+      // 应用当前主题
+      applyTheme();
+    });
+
+    // 检测系统颜色方案
+    function detectColorScheme() {
+      // 检查是否有用户自定义设置
+      const savedUserPreference = localStorage.getItem('theme-preference');
+      if (savedUserPreference) {
+        userThemePreference = savedUserPreference;
+        isDarkMode = savedUserPreference === 'dark';
+        return;
+      }
+
+      // 检查系统颜色方案
+      const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      isDarkMode = prefersDarkMode;
+      
+      // 监听系统主题变化
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        // 只有在用户没有明确选择主题时才跟随系统
+        if (userThemePreference === null) {
+          isDarkMode = e.matches;
+          updateThemeIcon();
+          applyTheme();
+          
+          // 如果已经有数据且图表已初始化，重新渲染
+          if (data && chartInitialized) {
+            resetAndRenderChart();
+          }
+        }
+      });
+    }
+
+    // 更新主题图标
+    function updateThemeIcon() {
+      const themeIcon = document.getElementById('theme-icon');
+      if (isDarkMode) {
+        themeIcon.className = 'fas fa-sun';
+      } else {
+        themeIcon.className = 'fas fa-moon';
+      }
+    }
+
+    // 应用主题
+    function applyTheme() {
+      if (isDarkMode) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+      updateThemeIcon();
+    }
+
+    // 切换主题
+    function toggleTheme() {
+      isDarkMode = !isDarkMode;
+      
+      // 保存用户选择
+      userThemePreference = isDarkMode ? 'dark' : 'light';
+      localStorage.setItem('theme-preference', userThemePreference);
+      
+      // 应用主题
+      applyTheme();
+      
+      // 如果已经有数据且图表已初始化，重新渲染
+      if (data && chartInitialized) {
+        resetAndRenderChart();
+      }
+    }
+
+    // 获取品种列表
+    async function fetchContracts(contractParam, dmParam, scParam, varietyParam) {
+      showLoading(true);
+      showError(false);
+      
+      try {
+        const response = await fetch('https://q.889.ink');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        contracts = result.list;
+        
+        // 填充下拉列表
+        const selectElement = document.getElementById('contract');
+        selectElement.innerHTML = '';
+        
+        // 按名称排序
+        contracts.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+        
+        contracts.forEach(contract => {
+          const option = document.createElement('option');
+          option.value = contract.dm;
+          option.textContent = contract.name;
+          option.dataset.sc = contract.sc;
+          selectElement.appendChild(option);
+        });
+        
+        // 根据URL参数选择合约
+        let contractFound = false;
+        
+        // 1. 优先根据dm和sc参数精确匹配
+        if (dmParam && scParam) {
+          const matchedContract = contracts.find(c => c.dm === dmParam && c.sc === scParam);
+          if (matchedContract) {
+            selectedContract = matchedContract;
+            selectElement.value = selectedContract.dm;
+            contractFound = true;
+          }
+        }
+        
+        // 2. 如果没有找到，尝试根据合约参数匹配
+        if (!contractFound && contractParam) {
+          // 先尝试精确匹配dm
+          let matchedContract = contracts.find(c => c.dm === contractParam);
+          
+          // 如果没找到，尝试模糊匹配名称或代码
+          if (!matchedContract) {
+            matchedContract = contracts.find(c => 
+              (c.name && c.name.includes(contractParam)) || 
+              (c.dm && c.dm.includes(contractParam))
+            );
+          }
+          
+          if (matchedContract) {
+            selectedContract = matchedContract;
+            selectElement.value = selectedContract.dm;
+            contractFound = true;
+          }
+        }
+        
+        // 3. 如果还没找到，尝试根据品种代码匹配
+        if (!contractFound && varietyParam) {
+          // 尝试找到以varietyParam开头的合约
+          const matchedContract = contracts.find(c => 
+            c.dm.startsWith(varietyParam) || 
+            c.dm.toUpperCase().startsWith(varietyParam.toUpperCase())
+          );
+          
+          if (matchedContract) {
+            selectedContract = matchedContract;
+            selectElement.value = selectedContract.dm;
+            contractFound = true;
+          }
+        }
+        
+        // 4. 如果都没找到，使用第一个合约
+        if (!contractFound && contracts.length > 0) {
+          selectedContract = contracts[0];
+          selectElement.value = selectedContract.dm;
+        }
+        
+        // 获取数据
+        fetchData();
+        
+      } catch (error) {
+        console.error('获取品种列表失败:', error);
+        showError(true, '获取品种列表失败: ' + error.message);
+      }
+    }
+
+    // 合约下拉列表变更事件
+    function onContractChange() {
+      const selectElement = document.getElementById('contract');
+      const selectedIndex = selectElement.selectedIndex;
+      
+      if (selectedIndex >= 0) {
+        const dm = selectElement.value;
+        const sc = selectElement.options[selectedIndex].dataset.sc;
+        const name = selectElement.options[selectedIndex].textContent;
+        
+        selectedContract = { dm, sc, name };
+        fetchData();
+      }
+    }
+
+    // 获取龙虎榜数据
+    async function fetchData() {
+      if (!selectedContract) return;
+      
+      showLoading(true);
+      showError(false);
+      showData(false);
+      showCacheWarning(false);
+      isUsingCache = false;
+      
+      const dateInput = document.getElementById('date');
+      const formattedDate = dateInput.value.replace(/-/g, '');
+      
+      let contractCode = selectedContract.dm;
+      // 提取品种代码（移除尾部的数字）
+      let varietyCode = contractCode.replace(/\d+$/, '');
+      
+      // 根据开关的状态决定是否去除尾部数字
+      if (removeNumber) {
+        contractCode = varietyCode;
+      }
+      
+      // 优先使用合约中的市场代码
+      let marketId = marketIdMap[selectedContract.sc];
+      
+      // 如果没有找到市场ID，尝试根据品种代码判断
+      if (!marketId) {
+        marketId = getMarketIdFromVariety(varietyCode);
+      }
+      
+      // 构建缓存键
+      const cacheKey = `${formattedDate}_${marketId}_${contractCode}`;
+      
+      // 检查当前时间是否在数据更新时间段内（15:30-17:00）
+      const now = new Date();
+      const hours = now.getHours();
+      const minutes = now.getMinutes();
+      const isUpdateTime = (hours === 15 && minutes >= 30) || (hours === 16);
+      
+      // 检查是否有缓存数据且不在更新时间段内
+      if (cachedData[cacheKey] && !isUpdateTime) {
+        console.log(`使用缓存数据: ${cacheKey}`);
+        data = cachedData[cacheKey].data;
+        isUsingCache = true;
+        
+        // 显示数据区域和缓存警告
+        showLoading(false);
+        showData(true);
+        showCacheWarning(true, `使用缓存数据 (${new Date(cachedData[cacheKey].timestamp).toLocaleString()})`);
+        
+        // 延迟渲染图表以确保容器已完全呈现
+        setTimeout(() => {
+          // 初始化图表（如果还没初始化）
+          if (!chartInitialized) {
+            initChart();
+            chartInitialized = true;
+          }
+          
+          // 渲染数据
+          renderData();
+        }, 50);
+        
+        return;
+      }
+      
+      // 构建API URL
+      const url = `https://q.889.ink/lhb/getLongAndShortPosition?date=${formattedDate}&market=${marketId}&contract=${contractCode}`;
+      
+      console.log('请求URL:', url);
+      console.log('品种代码:', varietyCode);
+      console.log('市场ID:', marketId);
+      
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.code !== undefined && result.code !== 200 && result.code !== 10000) {
+          throw new Error(`API返回错误: ${result.code}`);
+        }
+        
+        data = result.data;
+        
+        // 保存到缓存
+        cachedData[cacheKey] = {
+          data: data,
+          timestamp: new Date().toISOString()
+        };
+        saveCacheToStorage();
+        
+        // 先显示数据区域
+        showLoading(false);
+        showData(true);
+        
+        // 延迟渲染图表以确保容器已完全呈现
+        setTimeout(() => {
+          // 初始化图表（如果还没初始化）
+          if (!chartInitialized) {
+            initChart();
+            chartInitialized = true;
+          }
+          
+          // 渲染数据
+          renderData();
+        }, 50);
+        
+      } catch (error) {
+        console.error('获取数据失败:', error);
+        
+        // 尝试从缓存获取数据
+        if (cachedData[cacheKey]) {
+          console.log(`获取数据失败，使用缓存数据: ${cacheKey}`);
+          data = cachedData[cacheKey].data;
+          isUsingCache = true;
+          
+          // 显示数据区域和缓存警告
+          showLoading(false);
+          showData(true);
+          showCacheWarning(true, `获取数据失败，使用缓存数据 (${new Date(cachedData[cacheKey].timestamp).toLocaleString()})`);
+          
+          // 延迟渲染图表以确保容器已完全呈现
+          setTimeout(() => {
+            // 初始化图表（如果还没初始化）
+            if (!chartInitialized) {
+              initChart();
+              chartInitialized = true;
+            }
+            
+            // 渲染数据
+            renderData();
+          }, 50);
+          
+          return;
+        }
+        
+        showLoading(false);
+        showError(true, '获取数据失败: ' + error.message);
+      }
+    }
+
+    // 初始化图表
+    function initChart() {
+      const chartDom = document.getElementById('chart');
+      chart = echarts.init(chartDom);
+      
+      // 添加图表点击事件
+      chart.on('click', function(params) {
+        if (!selectedContract) return;
+        
+        // 获取点击的系列名称
+        const seriesName = params.seriesName;
+        
+        // 提取品种代码（移除尾部的数字）
+        let varietyCode = selectedContract.dm.replace(/\d+$/, '');
+        
+        if (seriesName === '多头持仓') {
+          // 点击多头持仓区域，跳转到升贴水页面
+          const varietyId = getVarietyIdFromVariety(varietyCode);
+          window.location.href = `future2.html?variety=${encodeURIComponent(varietyId)}&showPremium=true`;
+        } else if (seriesName === '空头持仓') {
+          // 点击空头持仓区域，跳转到行情页面
+          const pureVariety = varietyCode.replace(/\d+$/, '');
+          window.location.href = `future2.html?variety=${encodeURIComponent(pureVariety)}`;
+        }
+      });
+    }
+
+    // 切换相对/绝对视图
+    function toggleView() {
+      isRelative = !isRelative;
+      document.getElementById('toggle-view').innerHTML = isRelative ? 
+        '<i class="fas fa-percentage"></i>' : 
+        '<i class="fas fa-chart-bar"></i>';
+      
+      if (data) {
+        renderData();
+      }
+    }
+
+    // 切换是否去除尾部数字
+    function onRemoveNumberChange() {
+      removeNumber = document.getElementById('remove-number').checked;
+      fetchData();
+    }
+
+    // 切换图表视图
+    function switchChartView(viewId) {
+      if (viewId === currentChartView) return;
+      
+      // 更新当前视图
+      currentChartView = viewId;
+      
+      // 更新标题
+      const chartTitle = document.getElementById('chart-title');
+      if (viewId === 1) {
+        chartTitle.textContent = '按净持仓排序 (多空都上榜优先)';
+      } else if (viewId === 2) {
+        chartTitle.textContent = '按总持仓排序 (前五名)';
+      } else if (viewId === 3) {
+        chartTitle.textContent = '单边上榜(按持仓排序)';
+      }
+      
+      // 更新激活的标签样式
+      document.querySelectorAll('.chart-tab').forEach(tab => {
+        const tabViewId = parseInt(tab.dataset.view);
+        if (tabViewId === viewId) {
+          tab.classList.add('active');
+        } else {
+          tab.classList.remove('active');
+        }
+      });
+      
+      // 重新渲染图表
+      if (data) {
+        resetAndRenderChart();
+      }
+    }
+
+    // 格式化百分比
+    function formatPercentage(value) {
+      if (value === null || value === undefined) return '';
+      return value.toFixed(1) + '%';
+    }
+
+    // 计算百分比
+    function calculatePercentage(value, total) {
+      if (!value || !total) return 0;
+      return (value / total) * 100;
+    }
+
+    // 格式化数值
+    function formatNumber(num) {
+      if (num >= 10000) {
+        return (num / 10000).toFixed(1) + '万';
+      }
+      return num;
+    }
+
+    // 获取变化类样式
+    function getChangeClass(change) {
+      if (!change) return '';
+      return change > 0 ? 'positive' : change < 0 ? 'negative' : '';
+    }
+
+    // 渲染数据
+    function renderData() {
+      if (!data) return;
+      
+      // 渲染表格
+      renderTable();
+      
+      // 重新渲染图表以确保正确显示
+      resetAndRenderChart();
+      
+      // 计算并显示统计信息
+      calculateAndDisplayStats();
+    }
+
+    // 计算并显示统计信息
+    function calculateAndDisplayStats() {
+      // 获取前20条数据
+      const longList = data.longInfoList || [];
+      const shortList = data.shortInfoList || [];
+      const maxCount = 20;
+      
+      // 计算多头总持仓和变化
+      let totalLongPosition = 0;
+      let totalLongChange = 0;
+      for (let i = 0; i < Math.min(longList.length, maxCount); i++) {
+        totalLongPosition += parseInt(longList[i].longNum) || 0;
+        totalLongChange += parseInt(longList[i].longChange) || 0;
+      }
+      
+      // 计算空头总持仓和变化
+      let totalShortPosition = 0;
+      let totalShortChange = 0;
+      for (let i = 0; i < Math.min(shortList.length, maxCount); i++) {
+        totalShortPosition += parseInt(shortList[i].shortNum) || 0;
+        totalShortChange += parseInt(shortList[i].shortChange) || 0;
+      }
+      
+      // 计算持仓比
+      const positionRatio = totalLongPosition / (totalShortPosition || 1);
+      
+      // 计算变化比 (需要处理分母为0的情况)
+      let changeRatio;
+      if (totalShortChange === 0) {
+        changeRatio = totalLongChange > 0 ? "∞" : totalLongChange < 0 ? "-∞" : "1.00";
+      } else {
+        changeRatio = totalLongChange / totalShortChange;
+        // 如果分子分母符号不同，确保显示正确
+        if ((totalLongChange < 0 && totalShortChange > 0) || 
+            (totalLongChange > 0 && totalShortChange < 0)) {
+          changeRatio = -Math.abs(changeRatio);
+        }
+      }
+      
+      // 更新DOM
+      document.getElementById('total-positions').innerHTML = `
+        <span class="positive">${formatNumber(totalLongPosition)}</span> / 
+        <span class="negative">${formatNumber(totalShortPosition)}</span>
+      `;
+      
+      document.getElementById('position-ratio').innerHTML = 
+        `<span class="${getChangeClass(positionRatio - 1)}">${positionRatio.toFixed(2)}</span>`;
+      
+      document.getElementById('change-ratio').innerHTML = 
+        typeof changeRatio === 'string' ? 
+        `<span>${changeRatio}</span>` : 
+        `<span class="${getChangeClass(changeRatio)}">${changeRatio.toFixed(2)}</span>`;
+    }
+
+    // 重置并渲染图表
+    function resetAndRenderChart() {
+      if (chart) {
+        // 清空图表
+        chart.clear();
+        
+        // 确保容器大小正确
+        chart.resize();
+        
+        // 延迟一小会儿再渲染，确保DOM尺寸已更新
+        setTimeout(() => renderChart(), 10);
+      }
+    }
+
+    // 渲染表格
+    function renderTable() {
+      const tableBody = document.getElementById('data-body');
+      tableBody.innerHTML = '';
+      
+      // 组合多空列表
+      const longList = data.longInfoList || [];
+      const shortList = data.shortInfoList || [];
+      const maxLength = Math.max(longList.length, shortList.length);
+      const displayCount = Math.min(maxLength, 20); // 显示前20条
+      
+      for (let i = 0; i < displayCount; i++) {
+        const long = i < longList.length ? longList[i] : null;
+        const short = i < shortList.length ? shortList[i] : null;
+        
+        const row = document.createElement('tr');
+        
+        // 序号
+        const numCell = document.createElement('td');
+        numCell.textContent = i + 1;
+        numCell.className = 'col-no';
+        row.appendChild(numCell);
+        
+        // 多头名称
+        const longNameCell = document.createElement('td');
+        longNameCell.className = 'col-name company-name';
+        longNameCell.style.cursor = 'pointer';
+        if (long) {
+          longNameCell.textContent = long.futureCompanyName.replace('(代客)', '');
+          longNameCell.dataset.company = long.futureCompanyName;
+          longNameCell.dataset.code = selectedContract ? selectedContract.dm.replace(/\d+$/, '') : '';
+          longNameCell.title = '点击查看机构持仓';
+          
+          // 添加点击事件
+          longNameCell.addEventListener('click', function() {
+            const company = this.dataset.company;
+            const code = this.dataset.code;
+            if (company && code) {
+              window.location.href = `companyholding.html?company=${encodeURIComponent(company)}&code=${encodeURIComponent(code)}`;
+            }
+          });
+        }
+        row.appendChild(longNameCell);
+        
+        // 多头持仓
+        const longPosCell = document.createElement('td');
+        longPosCell.className = 'col-pos';
+        if (long) {
+          longPosCell.textContent = isRelative
+            ? formatPercentage(calculatePercentage(long.longNum, data.totalLongPosition))
+            : formatNumber(long.longNum);
+        }
+        row.appendChild(longPosCell);
+        
+        // 多头变化
+        const longChangeCell = document.createElement('td');
+        longChangeCell.className = 'col-change';
+        if (long) {
+          longChangeCell.textContent = long.longChange > 0 ? '+' + long.longChange : long.longChange;
+          longChangeCell.classList.add(getChangeClass(long.longChange));
+        }
+        row.appendChild(longChangeCell);
+        
+        // 空头名称
+        const shortNameCell = document.createElement('td');
+        shortNameCell.className = 'col-name company-name';
+        shortNameCell.style.cursor = 'pointer';
+        if (short) {
+          shortNameCell.textContent = short.futureCompanyName.replace('(代客)', '');
+          shortNameCell.dataset.company = short.futureCompanyName;
+          shortNameCell.dataset.code = selectedContract ? selectedContract.dm.replace(/\d+$/, '') : '';
+          shortNameCell.title = '点击查看机构持仓';
+          
+          // 添加点击事件
+          shortNameCell.addEventListener('click', function() {
+            const company = this.dataset.company;
+            const code = this.dataset.code;
+            if (company && code) {
+              window.location.href = `companyholding.html?company=${encodeURIComponent(company)}&code=${encodeURIComponent(code)}`;
+            }
+          });
+        }
+        row.appendChild(shortNameCell);
+        
+        // 空头持仓
+        const shortPosCell = document.createElement('td');
+        shortPosCell.className = 'col-pos';
+        if (short) {
+          shortPosCell.textContent = isRelative
+            ? formatPercentage(calculatePercentage(short.shortNum, data.totalShortPosition))
+            : formatNumber(short.shortNum);
+        }
+        row.appendChild(shortPosCell);
+        
+        // 空头变化
+        const shortChangeCell = document.createElement('td');
+        shortChangeCell.className = 'col-change';
+        if (short) {
+          shortChangeCell.textContent = short.shortChange > 0 ? '+' + short.shortChange : short.shortChange;
+          shortChangeCell.classList.add(getChangeClass(short.shortChange));
+        }
+        row.appendChild(shortChangeCell);
+        
+        tableBody.appendChild(row);
+      }
+    }
+
+    // 渲染图表
+    function renderChart() {
+      if (!data || !data.longInfoList || !data.shortInfoList || !chart) return;
+      
+      // 创建机构映射，合并多空持仓信息
+      const companyMap = new Map();
+      
+      // 添加多头持仓信息到映射
+      data.longInfoList.forEach(item => {
+        const companyName = item.futureCompanyName.replace('(代客)', '');
+        companyMap.set(companyName, {
+          name: companyName,
+          longNum: parseInt(item.longNum) || 0,
+          shortNum: 0,
+          longChange: parseInt(item.longChange) || 0,
+          shortChange: 0,
+          hasBoth: false
+        });
+      });
+      
+      // 添加空头持仓信息到映射，并标记同时有多空持仓的机构
+      data.shortInfoList.forEach(item => {
+        const companyName = item.futureCompanyName.replace('(代客)', '');
+        if (companyMap.has(companyName)) {
+          // 已存在该机构的多头持仓，更新空头信息
+          const company = companyMap.get(companyName);
+          company.shortNum = parseInt(item.shortNum) || 0;
+          company.shortChange = parseInt(item.shortChange) || 0;
+          company.hasBoth = true;
+        } else {
+          // 新增只有空头持仓的机构
+          companyMap.set(companyName, {
+            name: companyName,
+            longNum: 0,
+            shortNum: parseInt(item.shortNum) || 0,
+            longChange: 0,
+            shortChange: parseInt(item.shortChange) || 0,
+            hasBoth: false
+          });
+        }
+      });
+      
+      // 转换为数组并计算净持仓、总持仓
+      let companiesArray = Array.from(companyMap.values()).map(company => {
+        company.netPosition = company.longNum - company.shortNum;
+        company.absNetPosition = Math.abs(company.netPosition);
+        company.totalPosition = company.longNum + company.shortNum;
+        company.singleSideValue = Math.max(company.longNum, company.shortNum);
+        company.hasSingleSide = (company.longNum > 0 && company.shortNum === 0) || 
+                               (company.longNum === 0 && company.shortNum > 0);
+        return company;
+      });
+      
+      // 根据当前视图选择显示的数据
+      let displayCompanies;
+      
+      if (currentChartView === 1) {
+        // 视图1: 按净持仓绝对值排序，优先显示多空都上榜的机构
+        const bothPositionCompanies = companiesArray.filter(company => company.hasBoth);
+        
+        if (bothPositionCompanies.length >= 5) {
+          displayCompanies = bothPositionCompanies
+            .sort((a, b) => b.absNetPosition - a.absNetPosition)
+            .slice(0, 5);
+        } else {
+          // 如果不足5家，则从所有机构中按总持仓量排序补足至5家
+          const remainingCount = 5 - bothPositionCompanies.length;
+          
+          // 先取出同时有多空持仓的机构
+          displayCompanies = [...bothPositionCompanies];
+          
+          // 从剩余机构中按总持仓量排序取前N家补足
+          const otherCompanies = companiesArray
+            .filter(company => !company.hasBoth)
+            .sort((a, b) => b.totalPosition - a.totalPosition)
+            .slice(0, remainingCount);
+          
+          // 合并两个列表
+          displayCompanies = displayCompanies.concat(otherCompanies);
+        }
+        
+        // 按净持仓绝对值排序
+        displayCompanies.sort((a, b) => b.absNetPosition - a.absNetPosition);
+        
+      } else if (currentChartView === 2) {
+        // 视图2: 按总持仓排序，显示前五名
+        displayCompanies = companiesArray
+          .sort((a, b) => b.totalPosition - a.totalPosition)
+          .slice(0, 5);
+          
+      } else if (currentChartView === 3) {
+        // 视图3: 只考虑单边上榜的机构，按多空数值大小排序
+        const singleSideCompanies = companiesArray.filter(company => company.hasSingleSide);
+        
+        displayCompanies = singleSideCompanies
+          .sort((a, b) => b.singleSideValue - a.singleSideValue)
+          .slice(0, 5);
+      }
+      
+      // 确保最多显示5家
+      displayCompanies = displayCompanies.slice(0, 5);
+      
+      // 添加一个文本标记，显示净持仓和多空状态
+      displayCompanies.forEach(company => {
+        company.netLabel = `${(company.netPosition / 10000).toFixed(1)}万`;
+        company.netPositionStatus = company.netPosition > 0 ? "多" : company.netPosition < 0 ? "空" : "平";
+      });
+      
+      // 准备X轴数据（公司名称）
+      const categories = displayCompanies.map(company => company.name);
+      
+      // 准备多空持仓数据
+      const longData = displayCompanies.map(company => company.longNum);
+      const shortData = displayCompanies.map(company => company.shortNum);
+      
+      // 净持仓标签数据
+      const netLabels = displayCompanies.map(company => ({
+        value: company.longNum > company.shortNum ? company.longNum : company.shortNum,
+        netPosition: company.netPosition,
+        label: `${company.netPositionStatus} ${company.netLabel}`
+      }));
+      
+      // 计算最大值用于设置Y轴范围
+      let maxValue = Math.max(
+        ...displayCompanies.map(company => Math.max(company.longNum, company.shortNum))
+      );
+      
+      // 将最大值向上取整到合适的刻度单位
+      const unit = 10000; // 1万单位
+      maxValue = Math.ceil(maxValue / unit) * unit;
+      
+      // 根据当前主题设置颜色
+      const textColor = isDarkMode ? '#e0e0e0' : '#333';
+      const splitLineColor = isDarkMode ? '#333' : '#e0e0e0';
+      const axisLabelColor = isDarkMode ? '#bbb' : '#666';
+      const positiveColor = isDarkMode ? '#ff6b6b' : '#e74c3c';
+      const negativeColor = isDarkMode ? '#4ced69' : '#27ae60';
+      
+      // 配置图表选项
+      const option = {
+        textStyle: {
+          color: textColor
+        },
+        grid: {
+          top: 40,
+          right: 20,
+          bottom: 20,
+          left: 40,
+          containLabel: true
+        },
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: {
+            type: 'shadow'
+          },
+          formatter: function(params) {
+            // 找到多空两个系列的数据
+            const longItem = params.find(item => item.seriesName === '多头持仓');
+            const shortItem = params.find(item => item.seriesName === '空头持仓');
+            
+            let html = `${params[0].name}<br/>`;
+            
+            if (longItem) {
+              html += `多头持仓: ${formatNumber(longItem.value)}<br/>`;
+            }
+            
+            if (shortItem) {
+              html += `空头持仓: ${formatNumber(shortItem.value)}<br/>`;
+            }
+            
+            // 如果有多空两项，计算净持仓
+            if (longItem && shortItem) {
+              const netPosition = longItem.value - shortItem.value;
+              const isPositive = netPosition > 0;
+              html += `净持仓: <span style="color:${isPositive ? positiveColor : negativeColor}">${formatNumber(netPosition)}</span>`;
+            } else if (longItem) {
+              html += `净持仓: <span style="color:${positiveColor}">${formatNumber(longItem.value)}</span>`;
+            } else if (shortItem) {
+              html += `净持仓: <span style="color:${negativeColor}">-${formatNumber(shortItem.value)}</span>`;
+            }
+            
+            return html;
+          }
+        },
+        xAxis: {
+          type: 'category',
+          data: categories,
+          axisLabel: {
+            interval: 0,
+            rotate: categories.length > 3 ? 30 : 0,
+            color: axisLabelColor,
+            fontSize: 11,
+            formatter: function(value) {
+              if (value.length > 6) {
+                return value.substring(0, 6) + '...';
+              }
+              return value;
+            }
+          },
+          axisLine: {
+            lineStyle: {
+              color: splitLineColor
+            }
+          },
+          axisTick: {
+            show: false
+          }
+        },
+        yAxis: {
+          type: 'value',
+          position: 'left',
+          axisLabel: {
+            formatter: function(value) {
+              return (value / 10000).toFixed(1) + '万';
+            },
+            color: axisLabelColor,
+            fontSize: 11
+          },
+          max: maxValue,
+          splitLine: {
+            lineStyle: {
+              color: splitLineColor,
+              type: 'dashed'
+            }
+          }
+        },
+        series: [
+          {
+            name: '多头持仓',
+            type: 'bar',
+            barWidth: '30%',
+            barGap: '0%',
+            data: longData,
+            itemStyle: {
+              color: positiveColor
+            },
+            emphasis: {
+              itemStyle: {
+                color: isDarkMode ? '#ff8a8a' : '#ff6b6b'
+              }
+            }
+          },
+          {
+            name: '空头持仓',
+            type: 'bar',
+            barWidth: '30%',
+            data: shortData,
+            itemStyle: {
+              color: negativeColor
+            },
+            emphasis: {
+              itemStyle: {
+                color: isDarkMode ? '#64ff7f' : '#2ecc71'
+              }
+            }
+          },
+          // 净持仓标签
+          {
+            name: '净持仓',
+            type: 'scatter',
+            data: netLabels.map((item, index) => ([index, item.value])),
+            symbolSize: 0,
+            label: {
+              show: true,
+              position: 'top',
+              formatter: function(params) {
+                const index = params.dataIndex;
+                const netInfo = netLabels[index];
+                return netInfo.label;
+              },
+              fontSize: 10,
+              fontWeight: 'bold',
+              color: function(params) {
+                const index = params.dataIndex;
+                const netInfo = netLabels[index];
+                return netInfo.netPosition > 0 ? positiveColor : negativeColor;
+              },
+              offset: [0, 5],
+              textBorderColor: isDarkMode ? '#1e1e1e' : '#ffffff',
+              textBorderWidth: 2,
+              textShadowBlur: 4,
+              textShadowColor: isDarkMode ? '#000' : '#fff'
+            },
+            z: 10
+          }
+        ]
+      };
+      
+      // 设置图表选项
+      chart.setOption(option);
+    }
+
+    // 显示/隐藏加载指示器
+    function showLoading(show) {
+      document.getElementById('loading').style.display = show ? 'flex' : 'none';
+    }
+
+    // 显示/隐藏错误信息
+    function showError(show, message = '加载失败') {
+      const errorElement = document.getElementById('error');
+      errorElement.style.display = show ? 'block' : 'none';
+      errorElement.textContent = message;
+    }
+
+    // 显示/隐藏数据区域
+    function showData(show) {
+      document.getElementById('data-container').style.display = show ? 'block' : 'none';
+    }
+    
+    // 显示/隐藏缓存警告
+    function showCacheWarning(show, message = '使用缓存数据') {
+      const warningElement = document.getElementById('cache-warning');
+      if (warningElement) {
+        warningElement.style.display = show ? 'block' : 'none';
+        if (message) {
+          warningElement.textContent = message;
+        }
+      }
+    }
+    
+    // 保存缓存到localStorage
+    function saveCacheToStorage() {
+      try {
+        // 清理过期缓存
+        cleanExpiredCache();
+        
+        // 保存当前缓存
+        localStorage.setItem('longshort_cache', JSON.stringify(cachedData));
+        console.log('缓存已保存到localStorage');
+      } catch (error) {
+        console.error('保存缓存失败:', error);
+      }
+    }
+    
+    // 从localStorage加载缓存
+    function loadCacheFromStorage() {
+      try {
+        const cachedString = localStorage.getItem('longshort_cache');
+        if (cachedString) {
+          cachedData = JSON.parse(cachedString);
+          console.log('从localStorage加载缓存成功');
+          
+          // 清理过期缓存
+          cleanExpiredCache();
+        }
+      } catch (error) {
+        console.error('加载缓存失败:', error);
+        cachedData = {};
+      }
+    }
+    
+    // 清理过期缓存
+    function cleanExpiredCache() {
+      const now = new Date();
+      const expiryTime = CACHE_EXPIRY_DAYS * 24 * 60 * 60 * 1000; // 转换为毫秒
+      
+      for (const key in cachedData) {
+        const cacheTime = new Date(cachedData[key].timestamp).getTime();
+        if (now.getTime() - cacheTime > expiryTime) {
+          console.log(`删除过期缓存: ${key}`);
+          delete cachedData[key];
+        }
+      }
+    }
+  </script>
+</body>
+</html>
