@@ -878,10 +878,53 @@
       
       const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
       darkModeMediaQuery.addEventListener('change', handleThemeChange);
+      
+      // 初始化时检测系统主题和本地存储
+      const savedTheme = localStorage.getItem('theme-preference');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      
+      if (savedTheme) {
+        isDarkMode = savedTheme === 'dark';
+      } else {
+        isDarkMode = systemDark;
+      }
+      
+      document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : '');
+      
+      // 监听系统主题变化
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        if (!localStorage.getItem('theme-preference')) {
+          isDarkMode = e.matches;
+          document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : '');
+          handleThemeChange();
+        }
+      });
+      
+      // 监听localStorage变化来更新主题
+      window.addEventListener('storage', (event) => {
+        if (event.key === 'theme-preference') {
+          const newPreference = event.newValue;
+          if (newPreference === 'dark' || newPreference === 'light') {
+            isDarkMode = newPreference === 'dark';
+            document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : '');
+            handleThemeChange();
+          }
+        }
+      });
     });
     
     function handleThemeChange() {
       console.log('主题变化被检测到');
+      
+      // 更新HTML元素主题类
+      document.documentElement.classList.toggle('dark-theme', isDarkMode);
+      document.documentElement.classList.toggle('light-theme', !isDarkMode);
+      
+      // 更新主题切换按钮图标
+      const themeIcon = document.getElementById('theme-icon');
+      if (themeIcon) {
+        themeIcon.textContent = isDarkMode ? '☀️' : '🌙';
+      }
       
       if (premiumChart) {
         try {
