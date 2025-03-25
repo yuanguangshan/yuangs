@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>机构建仓过程查</title>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 更新页面标题
+            function updateTitle() {
+                const company = document.getElementById('company').value.replace(/\(代客\)/g, '');
+                const variety = document.getElementById('variety').value.toUpperCase();
+                document.title = `${company}${company.endsWith('期货') ? '' : '期货'}${variety}建仓过程`;
+            }
+            
+            // 初始化时更新标题
+            updateTitle();
+            
+            // 监听输入框变化更新标题
+            document.getElementById('company').addEventListener('input', updateTitle);
+            document.getElementById('variety').addEventListener('input', updateTitle);
+        });
+    </script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: inline-block;
+            width: 80px;
+        }
+        select, input {
+            padding: 8px;
+            width: 200px;
+        }
+        button {
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .loading {
+            display: none;
+            margin: 20px 0;
+            color: #666;
+        }
+        .error {
+            color: red;
+            margin: 20px 0;
+            display: none;
+        }
+        .result-section {
+            margin-top: 30px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .stats-container {
+            display: flex;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            gap: 10px;
+        }
+        .stat-card {
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            flex: 1;
+            min-width: 200px;
+        }
+        .stat-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .price-chart {
+            margin-top: 20px;
+            height: 300px;
+            border: 1px solid #ddd;
+            padding: 10px;
+        }
+        @media (max-width: 768px) {
+            .stat-card {
+                min-width: 100%;
+            }
+            table {
+                font-size: 0.9em;
+            }
+            th, td {
+                padding: 4px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>机构建仓过程查询</h1>
+    
+    <div class="form-container">
+        <div class="form-group">
+            <label for="variety">品种:</label>
+            <input type="text" id="variety" placeholder="输入品种代码" value="MA">
+        </div>
+        
+        <div class="form-group">
+            <label for="contract">合约:</label>
+            <input type="text" id="contract" placeholder="输入合约代码或ALL查询所有合约" value="ALL">
+        </div>
+        
+        <div class="form-group">
+            <label for="company">机构:</label>
+            <input type="text" id="company" placeholder="输入机构名称" value="徽商期货">
+        </div>
+        
+        <div class="form-group">
+            <label for="date">日期:</label>
+            <input type="date" id="date" required>
+        </div>
+        
+        <button id="query-btn">查询</button>
+        <button id="parse-url-btn">解析URL数据</button>
+    </div>
+    
+    <div id="loading" class="loading">加载数据中...</div>
+    <div id="error" class="error"></div>
+    
+    <div class="result-section">
+        <h2>统计数据</h2>
+        <div class="stats-container" id="stats-container"></div>
+        
+        <h2>价格走势</h2>
+        <div id="price-chart" class="price-chart"></div>
+        
+        <h2>机构持仓列表</h2>
+        <div id="company-position-list"></div>
+        
+        <h2>盈亏明细</h2>
+        <div id="profit-detail-list"></div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.0.2/dist/echarts.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 解析URL参数
+            function getUrlParams() {
+                const params = new URLSearchParams(window.location.search);
+                return {
+                    variety: params.get('variety') || 'MA',
+                    contract: params.get('contract') || 'ALL',
+                    company: params.get('company') || '徽商期货',
+                    date: params.get('date') || formatDate(new Date())
+                };
+            }
+            
+            // 设置控件值
+            const urlParams = getUrlParams();
+            document.getElementById('variety').value = urlParams.variety;
+            document.getElementById('contract').value = urlParams.contract;
+            document.getElementById('company').value = urlParams.company;
+            document.getElementById('date').value = urlParams.date;
+            
+            // 解析URL数据按钮
+            document.getElementById('parse-url-btn').addEventListener('click', function() {
+                // 显示加载中
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('error').style.display = 'none';
+                
+                // 模拟处理JSON数据
+                const jsonData = {
+                    "code": 0,
+                    "msg": "success",
+                    "data": {
+                        // 这里会用实际的数据替换
+                        "companyPositionList": [],
+                        "closePriceList": [],
+                        "profitDetailList": []
+                    }
+                };
+                
+                // 获取URL中的数据
+                fetch('https://fupage.10jqka.com.cn/futgwapi/api/market/v1/position/getNetPositionBuildProcess/?contract=ALL&company=%E5%BE%BD%E5%95%86%E6%9C%9F%E8%B4%A7&variety=MA')
+                    .then(response => response.json())
+                    .then(data => {
+                        document.getElementById('loading').style.display = 'none';
+                        processData(data);
+                    })
+                    .catch(error => {
+                        console.error('获取数据失败:', error);
+                        document.getElementById('loading').style.display = 'none';
+                        document.getElementById('error').textContent = '获取数据失败: ' + error.message;
+                        document.getElementById('error').style.display = 'block';
+                    });
+            });
+            
+            // 查询按钮点击事件
+            document.getElementById('query-btn').addEventListener('click', function() {
+                const variety = document.getElementById('variety').value.toUpperCase();
+                const contract = document.getElementById('contract').value;
+                let company = document.getElementById('company').value;
+                // 统一机构名称格式为XX期货并去除(代客)后缀
+                company = company.replace(/\(代客\)/g, '');
+                if (!company.endsWith('期货')) {
+                    company += '期货';
+                }
+                document.getElementById('company').value = company;
+                const date = document.getElementById('date').value;
+                
+                if (!variety || !company || !date) {
+                    alert('请填写品种、机构和日期');
+                    return;
+                }
+                
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('error').style.display = 'none';
+                
+                // 编码参数
+                const encodedCompany = encodeURIComponent(company);
+                
+                fetch(`https://fupage.10jqka.com.cn/futgwapi/api/market/v1/position/getNetPositionBuildProcess/?contract=${contract || 'ALL'}&company=${encodedCompany}&variety=${variety}&date=${date}`)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('请求失败');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        document.getElementById('loading').style.display = 'none';
+                        processData(data);
+                    })
+                    .catch(error => {
+                        document.getElementById('loading').style.display = 'none';
+                        document.getElementById('error').textContent = '查询失败: ' + error.message;
+                        document.getElementById('error').style.display = 'block';
+                        console.error('查询失败:', error);
+                    });
+            });
+            
+            // 处理数据的函数
+            function processData(data) {
+                if (data.code !== 0) {
+                    document.getElementById('error').textContent = 'API请求失败: ' + (data.msg || '未知错误');
+                    document.getElementById('error').style.display = 'block';
+                    return;
+                }
+                
+                // 调试输出API返回数据
+                console.log('API返回数据:', data);
+                
+                // 显示统计数据
+                const statsContainer = document.getElementById('stats-container');
+                statsContainer.innerHTML = '';
+                
+                // 添加胜率数据
+                if (data.data.numWinMap) {
+                    const winRateCard = document.createElement('div');
+                    winRateCard.className = 'stat-card';
+                    
+                    let winRateHTML = '<div class="stat-title">持仓胜率</div>';
+                    for (const key in data.data.numWinMap) {
+                        const item = data.data.numWinMap[key];
+                        winRateHTML += `<div>${key}天: ${(parseFloat(item.indexValue) * 100).toFixed(2)}%</div>`;
+                    }
+                    
+                    winRateCard.innerHTML = winRateHTML;
+                    statsContainer.appendChild(winRateCard);
+                }
+                
+                // 添加相关系数数据
+                if (data.data.numPriceMap) {
+                    const corrCard = document.createElement('div');
+                    corrCard.className = 'stat-card';
+                    
+                    let corrHTML = '<div class="stat-title">持仓与价格相关性</div>';
+                    for (const key in data.data.numPriceMap) {
+                        const item = data.data.numPriceMap[key];
+                        corrHTML += `<div>${key}天: ${parseFloat(item.indexValue).toFixed(2)}</div>`;
+                    }
+                    
+                    corrCard.innerHTML = corrHTML;
+                    statsContainer.appendChild(corrCard);
+                }
+                
+                // 绘制价格与多空比图表
+                if (data.data.closePriceList && data.data.closePriceList.length > 0 && 
+                    data.data.companyPositionList && data.data.companyPositionList.length > 0) {
+                    
+                    const priceChart = document.getElementById('price-chart');
+                    priceChart.innerHTML = '<div id="main-chart" style="width: 100%; height: 300px;"></div>';
+                    
+                    // 准备价格数据
+                    const prices = data.data.closePriceList.map(item => parseFloat(item.indexValue));
+                    const dates = data.data.closePriceList.map(item => item.tradeDate);
+                    
+                    // 准备多空比数据
+                    const longShortRatios = [];
+                    const positionMap = {};
+                    
+                    // 按日期组织持仓数据
+                    data.data.companyPositionList.forEach(item => {
+                        positionMap[item.tradeDate] = item;
+                    });
+                    
+                    // 匹配价格日期获取多空比
+                    dates.forEach(date => {
+                        if (positionMap[date]) {
+                            const item = positionMap[date];
+                            const long = parseFloat(item.f009n) || 0;
+                            const short = parseFloat(item.f015n) || 0;
+                            longShortRatios.push(short !== 0 ? (long / short).toFixed(2) : 0);
+                        } else {
+                            longShortRatios.push(0);
+                        }
+                    });
+                    
+                    // 初始化图表
+                    const chart = echarts.init(document.getElementById('main-chart'));
+                    
+                    // 图表配置
+                    const option = {
+                        tooltip: {
+                            trigger: 'axis',
+                            axisPointer: {
+                                type: 'cross',
+                                crossStyle: {
+                                    color: '#999'
+                                }
+                            }
+                        },
+                        legend: {
+                            data: ['收盘价', '多空比']
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: dates,
+                            axisPointer: {
+                                type: 'shadow'
+                            }
+                        },
+                        yAxis: [
+                            {
+                                type: 'value',
+                                name: '价格',
+                                min: Math.min(...prices) * 0.95,
+                                max: Math.max(...prices) * 1.05,
+                                axisLabel: {
+                                    formatter: '{value}'
+                                }
+                            },
+                            {
+                                type: 'value',
+                                name: '多空比',
+                                min: 0,
+                                max: Math.max(...longShortRatios) * 1.2,
+                                axisLabel: {
+                                    formatter: '{value}'
+                                }
+                            }
+                        ],
+                        series: [
+                            {
+                                name: '收盘价',
+                                type: 'line',
+                                data: prices,
+                                smooth: true,
+                                lineStyle: {
+                                    width: 3,
+                                    color: '#5470C6'
+                                },
+                                itemStyle: {
+                                    color: '#5470C6'
+                                }
+                            },
+                            {
+                                name: '多空比',
+                                type: 'line',
+                                yAxisIndex: 1,
+                                data: longShortRatios,
+                                smooth: true,
+                                lineStyle: {
+                                    width: 3,
+                                    color: '#EE6666'
+                                },
+                                itemStyle: {
+                                    color: '#EE6666'
+                                }
+                            }
+                        ],
+                        dataZoom: [
+                            {
+                                type: 'inside',
+                                start: Math.max(0, 100 - 3000/dates.length),
+                                end: 100
+                            },
+                            {
+                                start: Math.max(0, 100 - 3000/dates.length),
+                                end: 100
+                            }
+                        ]
+                    };
+                    
+                    // 应用配置
+                    chart.setOption(option);
+                    
+                    // 响应式调整
+                    window.addEventListener('resize', function() {
+                        chart.resize();
+                    });
+                } else {
+                    document.getElementById('price-chart').innerHTML = '<p>无价格数据</p>';
+                }
+                
+                // 格式化公司持仓数据
+                if (data.data.companyPositionList && data.data.companyPositionList.length > 0) {
+                    const formattedData = data.data.companyPositionList.map(item => ({
+                        tradeDate: item.tradeDate,
+                        contract: item.contract,
+                        variety: item.variety,
+                        company: item.company,
+                        '多单持仓': item.f009n ? parseFloat(item.f009n).toLocaleString() : '',
+                        '空单持仓': item.f015n ? parseFloat(item.f015n).toLocaleString() : '',
+                        '净持仓': item.f024n ? parseFloat(item.f024n).toLocaleString() : '',
+                        '多空比': item.f009n && item.f015n && parseFloat(item.f015n) != 0 ? 
+                            (parseFloat(item.f009n) / parseFloat(item.f015n)).toFixed(2) : ''
+                    }));
+                    
+                    document.getElementById('company-position-list').innerHTML = generateTableHTML(formattedData, '机构持仓', {
+                        'tradeDate': '交易日期',
+                        'contract': '合约',
+                        'variety': '品种',
+                        'company': '机构',
+                        '多单持仓': '多单持仓',
+                        '空单持仓': '空单持仓',
+                        '净持仓': '净持仓',
+                        '多空比': '多空比'
+                    });
+                } else {
+                    document.getElementById('company-position-list').innerHTML = '<p>无机构持仓数据</p>';
+                }
+                
+                // 格式化盈亏明细数据
+                if (data.data.profitDetailList && data.data.profitDetailList.length > 0) {
+                    const profitData = data.data.profitDetailList.map(item => ({
+                        date: item.date,
+                        variety: item.variety,
+                        company: item.company,
+                        '净持仓': item.f024n ? parseFloat(item.f024n).toLocaleString() : '',
+                        '持仓变化': item.f025n ? parseFloat(item.f025n).toLocaleString() : '',
+                        '日盈亏': item.day_profit ? (parseFloat(item.day_profit) / 10000).toFixed(2) + '万' : '',
+                        '年累计盈亏': item.year_profit ? (parseFloat(item.year_profit) / 10000).toFixed(2) + '万' : ''
+                    }));
+                    
+                    document.getElementById('profit-detail-list').innerHTML = generateTableHTML(profitData, '盈亏明细', {
+                        'date': '日期',
+                        'variety': '品种',
+                        'company': '机构',
+                        '净持仓': '净持仓',
+                        '持仓变化': '持仓变化',
+                        '日盈亏': '日盈亏(万元)',
+                        '年累计盈亏': '年累计盈亏(万元)'
+                    });
+                } else {
+                    document.getElementById('profit-detail-list').innerHTML = '<p>无盈亏明细数据</p>';
+                }
+            }
+            
+            // 表格生成函数
+            function generateTableHTML(data, title, columnMapping) {
+                if (!data || data.length === 0) return `<p>无${title}数据</p>`;
+                
+                let html = `<div style="overflow-x: auto;"><table>`;
+                
+                // 表头
+                html += '<tr>';
+                for (const key in columnMapping) {
+                    html += `<th>${columnMapping[key]}</th>`;
+                }
+                html += '</tr>';
+                
+                // 表格内容
+                data.forEach(item => {
+                    html += '<tr>';
+                    for (const key in columnMapping) {
+                        html += `<td>${item[key] || ''}</td>`;
+                    }
+                    html += '</tr>';
+                });
+                
+                html += '</table></div>';
+                return html;
+            }
+            
+            // 日期格式化函数 yyyy-MM-dd
+            function formatDate(date) {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            }
+            
+            // 自动触发查询
+            document.getElementById('query-btn').click();
+        });
+    </script>
+</body>
+</html>
