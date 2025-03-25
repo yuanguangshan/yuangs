@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>期货品种持仓情况</title>
+  <!-- 引入FontAwesome图标库 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* CSS变量定义 - 现代设计风格 */
+    :root {
+      /* 主色调 */
+      --primary: #4361ee;
+      --primary-light: #4895ef;
+      --secondary: #3f37c9;
+      --accent: #4cc9f0;
+      
+      /* 中性色 */
+      --dark-1: #1a1a2e;
+      --dark-2: #2c3e50;
+      --dark-3: #34495e;
+      --light-1: #ffffff;
+      --light-2: #f8fafc;
+      --light-3: #ecf0f1;
+      
+      /* 功能色 */
+      --success: #2ecc71;
+      --info: #3498db;
+      --warning: #f1c40f;
+      --danger: #e74c3c;
+      
+      /* 主题色 */
+      --bg-color: var(--light-1);
+      --bg-secondary: var(--light-2);
+      --text-color: var(--dark-2);
+      --text-secondary: #7f8c8d;
+      --border-color: var(--light-3);
+      
+      /* 图表 */
+      --chart-height: 400px;
+      --chart-title-color: var(--dark-2);
+      --chart-grid-color: var(--light-3);
+      
+      /* 动效 */
+      --transition-fast: 0.2s ease;
+      --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-fancy: 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+      
+      /* 阴影 */
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+      --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+      --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+      
+      /* 圆角 */
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+    
+    /* 暗色主题 */
+    [data-theme="dark"] {
+      --bg-color: #121212;
+      --bg-secondary: #1e1e1e;
+      --text-color: #e0e0e0;
+      --text-secondary: #a0a0a0;
+      --border-color: #333333;
+      
+      --chart-title-color: #e0e0e0;
+      --chart-grid-color: #333333;
+      
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+      --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+      --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    /* 基础样式重置 */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      width: 380px;
+      height: 100%;
+      color: var(--text-color);
+      background-color: var(--bg-color);
+      transition: background-color var(--transition-normal), color var(--transition-normal);
+      overflow-x: hidden;
+    }
+
+    .container {
+      padding: 12px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 顶部导航栏 - 现代设计 */
+    .header {
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      color: white;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: var(--shadow-md);
+      position: relative;
+      z-index: 10;
+      border-radius: var(--radius-md);
+      margin-bottom: 12px;
+    }
+
+    .header-title {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      flex-grow: 1;
+      text-align: center;
+    }
+
+    .back-button {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      transition: all var(--transition-normal);
+      text-decoration: none;
+    }
+
+    .back-button i {
+      margin-right: 5px;
+    }
+
+    .back-button:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+    }
+
+    /* 主题切换按钮 */
+    .theme-toggle {
+      width: 30px;
+      height: 30px;
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all var(--transition-normal);
+    }
+
+    .theme-toggle:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+    }
+
+    /* 加载指示器 */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 0;
+      color: var(--text-secondary);
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      border-top: 4px solid var(--primary);
+      animation: spin 1s linear infinite;
+      margin-bottom: 12px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* 错误信息样式 */
+    .error {
+      color: var(--danger);
+      text-align: center;
+      padding: 16px;
+      background-color: rgba(231, 76, 60, 0.1);
+      border-radius: var(--radius-md);
+      margin: 16px;
+    }
+
+    /* 表格样式 */
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin-top: 10px;
+      box-shadow: var(--shadow-md);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      background-color: var(--bg-color);
+      transition: all var(--transition-normal);
+    }
+
+    table:hover {
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-2px);
+    }
+
+    th, td {
+      padding: 12px 15px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 13px;
+    }
+
+    th {
+      background-color: var(--bg-secondary);
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:nth-child(even) {
+      background-color: var(--bg-secondary);
+    }
+
+    tr:hover {
+      background-color: var(--bg-secondary);
+    }
+
+    .highlight-red {
+      color: var(--danger);
+      font-weight: 600;
+    }
+
+    .highlight-green {
+      color: var(--success);
+      font-weight: 600;
+    }
+
+    /* 显示更多按钮 */
+    .show-more {
+      text-align: center;
+      margin-top: 20px;
+      cursor: pointer;
+      color: var(--primary);
+      background-color: var(--bg-secondary);
+      padding: 10px;
+      border-radius: 20px;
+      width: 120px;
+      margin: 20px auto;
+      box-shadow: var(--shadow-sm);
+      transition: all var(--transition-normal);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .show-more:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+    }
+
+    .arrow {
+      display: inline-block;
+      margin-left: 5px;
+      transition: transform var(--transition-normal);
+    }
+
+    .arrow-up {
+      transform: rotate(180deg);
+    }
+
+    /* 刷新按钮 */
+    .refresh-btn {
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 25px;
+      cursor: pointer;
+      font-weight: 500;
+      display: block;
+      margin: 20px auto;
+      box-shadow: var(--shadow-md);
+      transition: all var(--transition-normal);
+    }
+
+    .refresh-btn:hover {
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-3px);
+    }
+
+    .refresh-btn:active {
+      transform: translateY(1px);
+      box-shadow: var(--shadow-sm);
+    }
+    
+    /* 净仓位链接样式 */
+    .net-position {
+      cursor: pointer;
+      color: var(--primary);
+      transition: color var(--transition-fast);
+    }
+    
+    .net-position:hover {
+      color: var(--primary-light);
+      text-decoration: underline;
+    }
+
+    /* 日期显示 */
+    .date-display {
+      color: var(--text-secondary);
+      text-align: center;
+      margin: 10px 0;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    /* 响应式调整 */
+    @media (max-width: 400px) {
+      body {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <a href="future2.html" class="back-button">
+        <i class="fas fa-arrow-left"></i>
+      </a>
+      <h1 class="header-title">期货多空净仓观察</h1>
+      <button class="theme-toggle" id="theme-toggle" title="切换主题">
+        <span id="theme-icon">☀️</span>
+      </button>
+    </div>
+
+    <div id="loading" class="loading">
+      <div class="loading-spinner"></div>
+      <div>加载数据中...</div>
+    </div>
+    
+    <div id="error" class="error" style="display: none;"></div>
+    
+    <div id="content" style="display: none;">
+      <h3 id="date-display" class="date-display"></h3>
+      
+      <table id="positions-table">
+        <thead>
+          <tr>
+            <th>品种</th>
+            <th>主力</th>
+            <th>净多</th>
+            <th>差异</th>
+          </tr>
+        </thead>
+        <tbody id="positions-body">
+          <!-- 数据将通过JavaScript填充 -->
+        </tbody>
+      </table>
+      
+      <div id="show-more" class="show-more">
+        显示全部
+        <span class="arrow">▼</span>
+      </div>
+    </div>
+    
+    <button id="refresh-btn" class="refresh-btn">刷新数据</button>
+  </div>
+
+  <script>
+    // 全局变量
+    let allPositions = [];
+    let showAll = false;
+    let isDarkMode = true; // 默认为暗色模式，但会根据系统设置自动调整
+    let userThemePreference = null; // 用户主题首选项，null表示跟随系统
+
+    // 初始化页面
+    document.addEventListener('DOMContentLoaded', function() {
+      // 检测系统颜色方案
+      detectColorScheme();
+
+      // 绑定刷新按钮
+      document.getElementById('refresh-btn').addEventListener('click', function() {
+        fetchPositionData();
+      });
+      
+      // 绑定显示更多按钮
+      document.getElementById('show-more').addEventListener('click', function() {
+        toggleShowAll();
+      });
+
+      // 绑定主题切换按钮
+      document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+      
+      // 初始化主题图标
+      updateThemeToggleIcon();
+      
+      // 应用当前主题
+      applyTheme();
+      
+      // 立即获取数据
+      fetchPositionData();
+    });
+
+    // 检测系统颜色方案
+    function detectColorScheme() {
+      // 检查是否有用户自定义设置
+      const savedUserPreference = localStorage.getItem('theme-preference');
+      if (savedUserPreference) {
+        userThemePreference = savedUserPreference;
+        isDarkMode = savedUserPreference === 'dark';
+        return;
+      }
+
+      // 检查系统颜色方案
+      const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      isDarkMode = prefersDarkMode;
+      
+      // 监听系统主题变化
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        // 只有在用户没有明确选择主题时才跟随系统
+        if (userThemePreference === null) {
+          isDarkMode = e.matches;
+          updateThemeToggleIcon();
+          applyTheme();
+        }
+      });
+    }
+
+    // 更新主题切换按钮图标
+    function updateThemeToggleIcon() {
+      const themeIcon = document.getElementById('theme-icon');
+      themeIcon.textContent = isDarkMode ? '☀️' : '🌙';
+      document.getElementById('theme-toggle').title = isDarkMode ? '切换到浅色模式' : '切换到深色模式';
+    }
+
+    // 应用主题到HTML元素
+    function applyTheme() {
+      if (isDarkMode) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+    }
+
+    // 手动切换主题
+    function toggleTheme() {
+      isDarkMode = !isDarkMode;
+      
+      // 保存用户选择
+      userThemePreference = isDarkMode ? 'dark' : 'light';
+      localStorage.setItem('theme-preference', userThemePreference);
+      
+      // 更新主题图标
+      updateThemeToggleIcon();
+      
+      // 应用主题
+      applyTheme();
+    }
+
+    // 格式化日期
+    function formatDate(dateString) {
+      if (!dateString) return '';
+      const year = dateString.slice(0, 4);
+      const month = dateString.slice(4, 6);
+      const day = dateString.slice(6, 8);
+      return `${year}年${month}月${day}日`;
+    }
+
+    // 获取期货品种持仓数据
+    async function fetchPositionData() {
+      const loadingElement = document.getElementById('loading');
+      const contentElement = document.getElementById('content');
+      const errorElement = document.getElementById('error');
+      
+      // 显示加载指示器
+      loadingElement.style.display = 'flex';
+      contentElement.style.display = 'none';
+      errorElement.style.display = 'none';
+      
+      try {
+        // 获取数据
+        const response = await fetchWithRetry('https://q.889.ink/lhb/varietyPosition');
+        
+        if (!response || response.code !== 10000) {
+          throw new Error(`获取数据失败，API返回错误代码: ${response?.code || '未知'}`);
+        }
+        
+        // 提取数据
+        allPositions = response.data.quoteGenralVarietyPositions;
+        const date = response.data.date;
+        
+        // 处理并显示数据
+        processPositionData(allPositions, date);
+        
+        // 显示内容
+        loadingElement.style.display = 'none';
+        contentElement.style.display = 'block';
+        
+      } catch (error) {
+        console.error('获取数据失败:', error);
+        loadingElement.style.display = 'none';
+        errorElement.textContent = error.message || '获取数据失败';
+        errorElement.style.display = 'block';
+      }
+    }
+
+    // 处理并显示持仓数据
+    function processPositionData(positions, date) {
+      if (!positions || positions.length === 0) {
+        document.getElementById('error').textContent = '没有可用的持仓数据';
+        document.getElementById('error').style.display = 'block';
+        return;
+      }
+      
+      // 更新日期显示
+      document.getElementById('date-display').textContent = formatDate(date);
+      
+      // 计算差异并排序
+      const processedPositions = positions.map(position => {
+        const netPosition = position.totalLongPosition - position.totalShortPosition;
+        return {
+          ...position,
+          netPosition: netPosition,
+          difference: ((position.totalLongPosition - position.totalShortPosition) / 
+                    (position.totalLongPosition + position.totalShortPosition)) * 100,
+          // 从主力合约代码提取品种代码
+          variety: position.mainFutcode ? position.mainFutcode.replace(/\d+$/, '') : ''
+        };
+      }).sort((a, b) => Math.abs(b.difference) - Math.abs(a.difference));
+      
+      // 显示数据
+      renderPositionsTable(processedPositions);
+    }
+
+    // 渲染持仓表格
+    function renderPositionsTable(positions) {
+      const tableBody = document.getElementById('positions-body');
+      const showMoreBtn = document.getElementById('show-more');
+      
+      // 清空表格
+      tableBody.innerHTML = '';
+      
+      // 决定显示多少行
+      const displayPositions = showAll ? positions : positions.slice(0, 10);
+      
+      // 填充表格
+      displayPositions.forEach((position, index) => {
+        const row = document.createElement('tr');
+        
+        // 创建品种单元格
+        const varietyCell = document.createElement('td');
+        varietyCell.textContent = position.varietyName || '-';
+        row.appendChild(varietyCell);
+        
+        // 创建主力合约单元格
+        const mainContractCell = document.createElement('td');
+        mainContractCell.textContent = position.mainFutcode || '-';
+        row.appendChild(mainContractCell);
+        
+        // 创建净多单元格
+        const positionCell = document.createElement('td');
+        positionCell.textContent = position.netPosition.toLocaleString();
+        positionCell.className = 'net-position';
+        positionCell.style.cursor = 'pointer';
+        positionCell.title = '点击查看品种多空持仓';
+        positionCell.addEventListener('click', function() {
+          window.location.href = `longshort2.html?variety=${position.variety}`;
+        });
+        row.appendChild(positionCell);
+        
+        // 创建差异单元格
+        const differenceClass = index < 10 ? 
+          (position.difference > 0 ? 'highlight-red' : 'highlight-green') : '';
+        const differenceCell = document.createElement('td');
+        differenceCell.textContent = position.difference.toFixed(2) + '%';
+        differenceCell.className = differenceClass;
+        row.appendChild(differenceCell);
+        
+        tableBody.appendChild(row);
+      });
+      
+      // 更新"显示更多"按钮状态
+      if (positions.length <= 10) {
+        showMoreBtn.style.display = 'none';
+      } else {
+        showMoreBtn.style.display = 'flex';
+        showMoreBtn.innerHTML = showAll ? '收起' : '显示全部';
+        const arrow = document.createElement('span');
+        arrow.className = showAll ? 'arrow arrow-up' : 'arrow';
+        arrow.textContent = '▼';
+        showMoreBtn.appendChild(arrow);
+      }
+    }
+
+    // 切换显示全部/收起
+    function toggleShowAll() {
+      showAll = !showAll;
+      renderPositionsTable(allPositions);
+    }
+
+    // 带重试的fetch请求
+    async function fetchWithRetry(url, options = {}, retries = 2) {
+      let lastError;
+      
+      for (let i = 0; i < retries; i++) {
+        try {
+          const response = await fetch(url, options);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          return await response.json();
+        } catch (error) {
+          console.warn(`请求失败(${i+1}/${retries}):`, error);
+          lastError = error;
+          // 等待一段时间再重试
+          if (i < retries - 1) {
+            await new Promise(r => setTimeout(r, 1000));
+          }
+        }
+      }
+      
+      throw lastError;
+    }
+  </script>
+</body>
+</html>

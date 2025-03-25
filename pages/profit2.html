@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>商品席位盈亏分布</title>
+  <!-- 引入FontAwesome图标库 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    /* CSS变量定义 - 现代设计风格 */
+    :root {
+      /* 主色调 */
+      --primary: #4361ee;
+      --primary-light: #4895ef;
+      --secondary: #3f37c9;
+      --accent: #4cc9f0;
+      
+      /* 中性色 */
+      --dark-1: #1a1a2e;
+      --dark-2: #2c3e50;
+      --dark-3: #34495e;
+      --light-1: #ffffff;
+      --light-2: #f8fafc;
+      --light-3: #ecf0f1;
+      
+      /* 功能色 */
+      --success: #2ecc71;
+      --info: #3498db;
+      --warning: #f1c40f;
+      --danger: #e74c3c;
+      
+      /* 主题色 */
+      --bg-color: var(--light-1);
+      --bg-secondary: var(--light-2);
+      --text-color: var(--dark-2);
+      --text-secondary: #7f8c8d;
+      --border-color: var(--light-3);
+      
+      /* 图表 */
+      --chart-height: 400px;
+      --chart-title-color: var(--dark-2);
+      --chart-grid-color: var(--light-3);
+      
+      /* 动效 */
+      --transition-fast: 0.2s ease;
+      --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-fancy: 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+      
+      /* 阴影 */
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+      --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+      --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+      
+      /* 圆角 */
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+    
+    /* 暗色主题 */
+    [data-theme="dark"] {
+      --bg-color: #121212;
+      --bg-secondary: #1e1e1e;
+      --text-color: #e0e0e0;
+      --text-secondary: #a0a0a0;
+      --border-color: #333333;
+      
+      --chart-title-color: #e0e0e0;
+      --chart-grid-color: #333333;
+      
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+      --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+      --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    /* 基础样式重置 */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      width: 380px;
+      height: 100%;
+      color: var(--text-color);
+      background-color: var(--bg-color);
+      transition: background-color var(--transition-normal), color var(--transition-normal);
+      overflow-x: hidden;
+    }
+
+    #app {
+      width: 100%;
+      margin: 0 auto;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+
+    /* 顶部导航栏 - 现代设计 */
+    .header {
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      color: white;
+      padding: 15px;
+      text-align: center;
+      margin-bottom: 15px;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-md);
+      position: relative;
+      transition: background var(--transition-normal), box-shadow var(--transition-normal);
+    }
+    
+    .title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    /* 表单组样式 */
+    .form-group {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+
+    .date-group {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+
+    /* 预设按钮组 */
+    .preset-group {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .preset-group button {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      cursor: pointer;
+      border-radius: var(--radius-md);
+      font-size: 12px;
+      transition: all var(--transition-normal);
+    }
+
+    .preset-group button:hover {
+      background-color: var(--secondary);
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+    }
+
+    /* 表单元素样式 */
+    label {
+      margin: 1px 2px;
+      font-size: 14px;
+      text-align: center;
+      color: var(--text-color);
+      transition: color var(--transition-normal);
+    }
+
+    select {
+      padding: 8px 12px;
+      font-size: 16px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      background-color: var(--bg-secondary);
+      color: var(--text-color);
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23bbb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 30px;
+      transition: background-color var(--transition-normal), border-color var(--transition-normal), color var(--transition-normal);
+    }
+
+    input[type='date'] {
+      padding: 8px;
+      font-size: 14px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      margin-left: 8px;
+      background-color: var(--bg-secondary);
+      color: var(--text-color);
+      transition: background-color var(--transition-normal), border-color var(--transition-normal), color var(--transition-normal);
+    }
+
+    /* 公司列表样式 */
+    .company-list {
+      background-color: var(--bg-color);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      box-shadow: var(--shadow-md);
+      transition: background-color var(--transition-normal), box-shadow var(--transition-normal);
+    }
+
+    .company-list:hover {
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-2px);
+    }
+
+    .company-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      position: relative;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--border-color);
+      transition: border-bottom-color var(--transition-normal);
+    }
+
+    .company-item:last-child {
+      border-bottom: none;
+    }
+
+    .company-name {
+      font-size: 16px;
+      flex: 1;
+      color: var(--primary);
+      transition: color var(--transition-normal);
+    }
+
+    .company-value {
+      font-size: 16px;
+      font-weight: bold;
+      width: 120px;
+      text-align: right;
+    }
+
+    /* 盈亏颜色 */
+    .profit {
+      color: var(--danger);
+      transition: color var(--transition-normal);
+    }
+
+    .loss {
+      color: var(--success);
+      transition: color var(--transition-normal);
+    }
+
+    /* 进度条样式 */
+    .bar {
+      position: absolute;
+      height: 8px;
+      bottom: 0;
+      left: 0;
+      border-radius: var(--radius-sm);
+      transition: background-color var(--transition-normal);
+    }
+    
+    /* 缓存数据警告样式 */
+    .cache-warning {
+      color: var(--warning);
+      text-align: center;
+      padding: 10px;
+      background-color: rgba(241, 196, 15, 0.1);
+      border-radius: var(--radius-md);
+      margin: 5px 0;
+      font-size: 12px;
+      transition: color var(--transition-normal), background-color var(--transition-normal);
+    }
+
+    /* 加载指示器样式 */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 0;
+      color: var(--text-secondary);
+      transition: color var(--transition-normal);
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      border-top: 4px solid var(--primary);
+      animation: spin 1s linear infinite;
+      margin-bottom: 12px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* 主题切换按钮 */
+    .theme-toggle {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      color: white;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all var(--transition-normal);
+    }
+
+    .theme-toggle:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+    }
+
+    /* 响应式调整 */
+    @media (max-width: 400px) {
+      body {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <div class="header">
+      <a href="future2.html" class="back-link" style="position: absolute; left: 15px; color: white; text-decoration: none;">
+        <i class="fas fa-arrow-left"></i> 返回
+      </a>
+      <h2 class="title">商品席位盈亏分布</h2>
+      <button class="theme-toggle" id="theme-toggle" title="切换主题">
+        <span id="theme-icon">☀️</span>
+      </button>
+    </div>
+
+    <div class="form-group">
+      <label for="variety">品种:</label>
+      <select id="variety"></select>
+    </div>
+
+    <div class="date-group">
+      <label for="startDate">时段:</label>
+      <input type="date" id="startDate" />
+      <label for="endDate">至</label>
+      <input type="date" id="endDate" />
+    </div>
+
+    <div class="preset-group">
+      <button onclick="setPresetTime('today')">今日</button>
+      <button onclick="setPresetTime('1w')">1周</button>
+      <button onclick="setPresetTime('1m')">1月</button>
+      <button onclick="setPresetTime('3m')">3月</button>
+      <button onclick="setPresetTime('6m')">6月</button>
+      <button onclick="setPresetTime('1y')">1年</button>
+    </div>
+
+    <div id="cache-warning" class="cache-warning" style="display: none;">使用缓存数据</div>
+    
+    <div id="loading" class="loading" style="display: none;">
+      <div class="loading-spinner"></div>
+      <div>加载数据中...</div>
+    </div>
+
+    <div class="company-list" id="companyList">
+      <!-- Company items will be inserted here -->
+    </div>
+  </div>
+
+  <script>
+    const varietyList = [];
+    let selectedVariety = '';
+    let companyPals = [];
+    let startDate = '';
+    let endDate = '';
+    let isDarkMode = true; // 默认为暗色模式，但会根据系统设置自动调整
+    let userThemePreference = null; // 用户主题首选项，null表示跟随系统
+    
+    // 缓存相关变量
+    let cachedData = {}; // 用于存储缓存的数据
+    const CACHE_EXPIRY_DAYS = 1; // 缓存过期时间（天）
+    let isUsingCache = false; // 是否正在使用缓存数据
+    
+    // 从localStorage加载缓存
+    loadCacheFromStorage();
+
+    // 初始化页面
+    document.addEventListener('DOMContentLoaded', () => {
+      // 检测系统颜色方案
+      detectColorScheme();
+      
+      // 初始化主题图标
+      updateThemeToggleIcon();
+      
+      // 应用当前主题
+      applyTheme();
+      
+      // 绑定主题切换按钮
+      document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+      
+      // 设置默认日期
+      setDefaultDates();
+      
+      // 获取URL参数
+      const urlParams = new URLSearchParams(window.location.search);
+      const varietyParam = urlParams.get('variety');
+      
+      // 绑定日期变更事件
+      document.getElementById('startDate').addEventListener('change', fetchCompanyPals);
+      document.getElementById('endDate').addEventListener('change', fetchCompanyPals);
+      
+      // 绑定品种选择事件
+      document.getElementById('variety').addEventListener('change', function() {
+        selectedVariety = this.value;
+        fetchCompanyPals();
+      });
+      
+      // 获取品种列表
+      fetchVarietyList(varietyParam);
+    });
+
+    // 检测系统颜色方案
+    function detectColorScheme() {
+      // 检查是否有用户自定义设置
+      const savedUserPreference = localStorage.getItem('theme-preference');
+      if (savedUserPreference) {
+        userThemePreference = savedUserPreference;
+        isDarkMode = savedUserPreference === 'dark';
+        return;
+      }
+
+      // 检查系统颜色方案
+      const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      isDarkMode = prefersDarkMode;
+      
+      // 监听系统主题变化
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        // 只有在用户没有明确选择主题时才跟随系统
+        if (userThemePreference === null) {
+          isDarkMode = e.matches;
+          updateThemeToggleIcon();
+          applyTheme();
+        }
+      });
+    }
+
+    // 更新主题切换按钮图标
+    function updateThemeToggleIcon() {
+      const themeIcon = document.getElementById('theme-icon');
+      themeIcon.textContent = isDarkMode ? '☀️' : '🌙';
+      document.getElementById('theme-toggle').title = isDarkMode ? '切换到浅色模式' : '切换到深色模式';
+    }
+
+    // 应用主题到HTML元素
+    function applyTheme() {
+      if (isDarkMode) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+    }
+
+    // 手动切换主题
+    function toggleTheme() {
+      isDarkMode = !isDarkMode;
+      
+      // 保存用户选择
+      userThemePreference = isDarkMode ? 'dark' : 'light';
+      localStorage.setItem('theme-preference', userThemePreference);
+      
+      // 更新主题图标
+      updateThemeToggleIcon();
+      
+      // 应用主题
+      applyTheme();
+    }
+
+    // 从localStorage加载缓存
+    function loadCacheFromStorage() {
+      try {
+        const storedCache = localStorage.getItem('companyPalsCache');
+        if (storedCache) {
+          cachedData = JSON.parse(storedCache);
+          
+          // 清理过期缓存
+          const now = new Date().getTime();
+          let hasExpired = false;
+          
+          Object.keys(cachedData).forEach(key => {
+            if (cachedData[key].timestamp && (now - cachedData[key].timestamp) > (CACHE_EXPIRY_DAYS * 24 * 60 * 60 * 1000)) {
+              delete cachedData[key];
+              hasExpired = true;
+            }
+          });
+          
+          if (hasExpired) {
+            localStorage.setItem('companyPalsCache', JSON.stringify(cachedData));
+          }
+        }
+      } catch (error) {
+        console.error('加载缓存失败:', error);
+        cachedData = {};
+      }
+    }
+
+    // 保存缓存到localStorage
+    function saveToCache(key, data) {
+      try {
+        cachedData[key] = {
+          data: data,
+          timestamp: new Date().getTime()
+        };
+        localStorage.setItem('companyPalsCache', JSON.stringify(cachedData));
+      } catch (error) {
+        console.error('保存缓存失败:', error);
+      }
+    }
+
+    // 从缓存获取数据
+    function getFromCache(key) {
+      if (cachedData[key] && cachedData[key].data) {
+        return cachedData[key];
+      }
+      return null;
+    }
+
+    // 显示缓存警告
+    function showCacheWarning(timestamp) {
+      const cacheTime = new Date(timestamp);
+      const formattedTime = `${cacheTime.getFullYear()}-${String(cacheTime.getMonth() + 1).padStart(2, '0')}-${String(cacheTime.getDate()).padStart(2, '0')} ${String(cacheTime.getHours()).padStart(2, '0')}:${String(cacheTime.getMinutes()).padStart(2, '0')}`;
+      
+      const warningElement = document.getElementById('cache-warning');
+      warningElement.textContent = `使用缓存数据 (${formattedTime})`;
+      warningElement.style.display = 'block';
+      isUsingCache = true;
+    }
+
+    // 隐藏缓存警告
+    function hideCacheWarning() {
+      document.getElementById('cache-warning').style.display = 'none';
+      isUsingCache = false;
+    }
+
+    // 是否在交易所数据更新时间段
+    function isDataUpdateTime() {
+      const now = new Date();
+      const hours = now.getHours();
+      const minutes = now.getMinutes();
+      
+      // 15:30 - 17:00 是交易所数据更新时间
+      return (hours === 15 && minutes >= 30) || (hours === 16);
+    }
+
+    // 设置默认日期
+    function setDefaultDates() {
+      const today = new Date();
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setMonth(today.getMonth() - 1);
+      
+      endDate = formatDateForInput(today);
+      startDate = formatDateForInput(oneMonthAgo);
+      
+      document.getElementById('startDate').value = startDate;
+      document.getElementById('endDate').value = endDate;
+    }
+
+    // 格式化日期为输入框格式 (YYYY-MM-DD)
+    function formatDateForInput(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    // 设置预设时间范围
+    function setPresetTime(preset) {
+      const today = new Date();
+      let startDay = new Date();
+      
+      switch (preset) {
+        case 'today':
+          // 今日
+          startDay = new Date(today);
+          break;
+        case '1w':
+          // 一周
+          startDay.setDate(today.getDate() - 7);
+          break;
+        case '1m':
+          // 一个月
+          startDay.setMonth(today.getMonth() - 1);
+          break;
+        case '3m':
+          // 三个月
+          startDay.setMonth(today.getMonth() - 3);
+          break;
+        case '6m':
+          // 六个月
+          startDay.setMonth(today.getMonth() - 6);
+          break;
+        case '1y':
+          // 一年
+          startDay.setFullYear(today.getFullYear() - 1);
+          break;
+      }
+      
+      startDate = formatDateForInput(startDay);
+      endDate = formatDateForInput(today);
+      
+      document.getElementById('startDate').value = startDate;
+      document.getElementById('endDate').value = endDate;
+      
+      fetchCompanyPals();
+    }
+
+    // 获取品种列表
+    async function fetchVarietyList(defaultVariety) {
+      try {
+        // 尝试从缓存获取品种列表
+        const cacheKey = 'varietyList';
+        const cachedVarietyList = getFromCache(cacheKey);
+        
+        if (cachedVarietyList && !isDataUpdateTime()) {
+          processVarietyList(cachedVarietyList.data, defaultVariety);
+          showCacheWarning(cachedVarietyList.timestamp);
+          return;
+        }
+        
+        // 显示加载指示器
+        document.getElementById('loading').style.display = 'flex';
+        
+        // 获取品种列表
+        const response = await axios.get('https://q.889.ink/lhb/varieties');
+        
+        if (response.data && response.data.code === 10000) {
+          const data = response.data.data;
+          
+          // 保存到缓存
+          saveToCache(cacheKey, data);
+          
+          // 处理品种列表
+          processVarietyList(data, defaultVariety);
+          
+          // 隐藏缓存警告
+          hideCacheWarning();
+        } else {
+          throw new Error('获取品种列表失败');
+        }
+        
+        // 隐藏加载指示器
+        document.getElementById('loading').style.display = 'none';
+        
+      } catch (error) {
+        console.error('获取品种列表失败:', error);
+        
+        // 尝试从缓存获取
+        const cacheKey = 'varietyList';
+        const cachedVarietyList = getFromCache(cacheKey);
+        
+        if (cachedVarietyList) {
+          processVarietyList(cachedVarietyList.data, defaultVariety);
+          showCacheWarning(cachedVarietyList.timestamp);
+        } else {
+          document.getElementById('loading').style.display = 'none';
+          document.getElementById('companyList').innerHTML = '<div style="text-align: center; padding: 20px;">获取品种列表失败，请稍后重试</div>';
+        }
+      }
+    }
+
+    // 处理品种列表
+    function processVarietyList(data, defaultVariety) {
+      if (!data || !data.varieties) return;
+      
+      const varieties = data.varieties;
+      const selectElement = document.getElementById('variety');
+      
+      // 清空选择框
+      selectElement.innerHTML = '';
+      
+      // 添加品种选项
+      varieties.forEach(variety => {
+        const option = document.createElement('option');
+        option.value = variety.variety;
+        option.textContent = `${variety.varietyName} (${variety.variety})`;
+        selectElement.appendChild(option);
+        
+        // 保存到品种列表
+        varietyList.push(variety);
+      });
+      
+      // 设置默认选中的品种
+      if (defaultVariety) {
+        selectElement.value = defaultVariety;
+        selectedVariety = defaultVariety;
+      } else if (varieties.length > 0) {
+        selectedVariety = varieties[0].variety;
+      }
+      
+      // 获取公司盈亏数据
+      fetchCompanyPals();
+    }
+
+    // 获取公司盈亏数据
+    async function fetchCompanyPals() {
+      if (!selectedVariety) return;
+      
+      try {
+        // 获取日期
+        const startDateValue = document.getElementById('startDate').value;
+        const endDateValue = document.getElementById('endDate').value;
+        
+        if (!startDateValue || !endDateValue) {
+          alert('请选择日期范围');
+          return;
+        }
+        
+        startDate = startDateValue;
+        endDate = endDateValue;
+        
+        // 构建缓存键
+        const cacheKey = `companyPals_${selectedVariety}_${startDate}_${endDate}`;
+        
+        // 尝试从缓存获取数据
+        const cachedPals = getFromCache(cacheKey);
+        
+        if (cachedPals && !isDataUpdateTime()) {
+          renderCompanyPals(cachedPals.data);
+          showCacheWarning(cachedPals.timestamp);
+          return;
+        }
+        
+        // 显示加载指示器
+        document.getElementById('loading').style.display = 'flex';
+        document.getElementById('companyList').innerHTML = '';
+        
+        // 构建请求参数
+        const params = {
+          variety: selectedVariety,
+          startDate: startDate.replace(/-/g, ''),
+          endDate: endDate.replace(/-/g, '')
+        };
+        
+        // 发送请求
+        const response = await axios.get('https://q.889.ink/lhb/companyPals', { params });
+        
+        if (response.data && response.data.code === 10000) {
+          const
