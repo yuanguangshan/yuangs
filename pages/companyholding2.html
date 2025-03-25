@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- 引入ECharts可视化库 -->
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <!-- 引入Axios请求库 -->
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
   <style>
     /* CSS变量定义 - 现代设计风格 */
@@ -39,13 +40,8 @@
       --text-secondary: #7f8c8d;
       --border-color: var(--light-3);
       
-      /* 表格 */
-      --table-header-bg: var(--bg-secondary);
-      --table-header-text: var(--text-secondary);
-      --table-row-alt: var(--bg-secondary);
-      
       /* 图表 */
-      --chart-height: 380px;
+      --chart-height: 400px;
       --chart-title-color: var(--dark-2);
       --chart-grid-color: var(--light-3);
       
@@ -63,6 +59,17 @@
       --radius-sm: 4px;
       --radius-md: 8px;
       --radius-lg: 12px;
+      
+      /* 机构盈亏页面特有 */
+      --profit-color: var(--danger);
+      --loss-color: var(--success);
+      --table-header-bg: var(--bg-secondary);
+      --table-header-text: var(--text-secondary);
+      --row-alt-bg: var(--bg-secondary);
+      --chart-title-bg: var(--border-color);
+      --header-gradient-1: var(--primary);
+      --header-gradient-2: var(--secondary);
+      --button-hover: var(--primary-light);
     }
     
     /* 暗色主题 */
@@ -73,16 +80,28 @@
       --text-secondary: #a0a0a0;
       --border-color: #333333;
       
-      --table-header-bg: #2a2a2a;
-      --table-header-text: #bbb;
-      --table-row-alt: #1a1a1a;
-      
       --chart-title-color: #e0e0e0;
       --chart-grid-color: #333333;
       
       --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
       --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
       --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
+      
+      --success: #4ced69;
+      --danger: #ff6b6b;
+      --warning: #ffa726;
+      --info: #74b9ff;
+      
+      /* 机构盈亏页面特有 */
+      --profit-color: #ff7675;
+      --loss-color: #4ced69;
+      --table-header-bg: #2a2a2a;
+      --table-header-text: #bbb;
+      --row-alt-bg: #1a1a1a;
+      --chart-title-bg: #333;
+      --header-gradient-1: #614385;
+      --header-gradient-2: #516395;
+      --button-hover: #7654a8;
     }
 
     /* 基础样式重置 */
@@ -105,296 +124,66 @@
       transition: background-color var(--transition-normal), color var(--transition-normal);
       overflow-x: hidden;
       font-size: 14px;
-      line-height: 1.2;
+      line-height: 1.4;
     }
 
-    #app {
-      padding: 12px;
-      box-sizing: border-box;
+    .container {
+      padding: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
     }
 
     /* 顶部导航栏 - 现代设计 */
     .header {
-      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      background: linear-gradient(135deg, var(--header-gradient-1), var(--header-gradient-2));
       color: white;
       padding: 15px;
-      text-align: center;
-      margin-bottom: 15px;
-      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
       box-shadow: var(--shadow-md);
       position: relative;
-      transition: background var(--transition-normal), box-shadow var(--transition-normal);
+      z-index: 10;
+      margin-bottom: 12px;
+      border-radius: var(--radius-sm);
     }
 
-    .title {
-      margin: 0;
+    .header-title {
       font-size: 18px;
       font-weight: 600;
       letter-spacing: 0.5px;
+      text-align: center;
     }
 
-    .back-link {
+    .back-button {
       position: absolute;
       left: 15px;
       color: white;
       text-decoration: none;
       display: flex;
       align-items: center;
-      transition: opacity var(--transition-fast);
-    }
-
-    .back-link:hover {
-      opacity: 0.8;
-    }
-
-    /* 表单容器 */
-    .form-container {
-      display: flex;
-      flex-wrap: wrap;
-      margin: 8px 8px;
-      align-items: center;
-      justify-content: space-between; /* 左右分开布局 */
-    }
-
-    .form-filters {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-    }
-
-    .form-group {
-      display: flex;
-      align-items: center;
-      margin: 0;
-      flex-shrink: 0;
-    }
-
-    label {
-      width: 60px; /* 稍微减小标签宽度 */
-      margin-right: 8px;
-      text-align: right;
-      font-size: 12px;
-      color: var(--text-color);
-      transition: color var(--transition-normal);
-    }
-
-    select,
-    input {
-      padding: 6px 10px; /* 稍微减小内边距 */
-      background-color: var(--bg-secondary);
-      color: var(--text-color);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-sm);
       font-size: 14px;
-      appearance: none;
-      -webkit-appearance: none;
-      -moz-appearance: none;
-      transition: background-color var(--transition-normal), color var(--transition-normal), border-color var(--transition-normal);
+      transition: transform var(--transition-fast);
     }
 
-    select {
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23bbb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 10px center;
-      padding-right: 30px;
+    .back-button:hover {
+      transform: translateX(-3px);
     }
 
-    /* 图表容器 */
-    .chart-container {
-      width: 100%;
-      height: var(--chart-height);
-      margin: 20px 0;
-      position: relative;
-      overflow: visible;
-      visibility: visible !important;
-      display: block !important;
-      background-color: var(--bg-color);
-      border-radius: var(--radius-md);
-      box-shadow: var(--shadow-md);
-      padding: 12px;
-      box-sizing: border-box;
-      transition: all var(--transition-normal);
+    .back-button i {
+      margin-right: 4px;
     }
 
-    .chart-container:hover {
-      box-shadow: var(--shadow-lg);
-      transform: translateY(-2px);
-    }
-
-    #chart {
-      width: 100%;
-      height: 100%;
-      visibility: visible !important;
-      display: block !important;
-    }
-
-    /* 快速选择按钮组 */
-    .form-group.quick-select {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex-wrap: wrap;
-      justify-content: flex-end; /* 靠右对齐 */
-    }
-
-    .quick-select button {
-      background-color: var(--primary);
-      color: white;
-      border: none;
-      padding: 6px 12px; /* 调整按钮大小 */
-      border-radius: var(--radius-md);
-      cursor: pointer;
-      font-size: 12px;
-      transition: all var(--transition-normal);
-      min-width: 50px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .quick-select button:hover {
-      background-color: var(--secondary);
-      box-shadow: var(--shadow-md);
-      transform: translateY(-2px);
-    }
-
-    /* 表格样式 */
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 15px 0;
-      table-layout: fixed;
-      background-color: var(--bg-color);
-      border-radius: var(--radius-md);
-      box-shadow: var(--shadow-md);
-      transition: all var(--transition-normal);
-      overflow: hidden;
-    }
-
-    table:hover {
-      box-shadow: var(--shadow-lg);
-      transform: translateY(-2px);
-    }
-
-    th,
-    td {
-      padding: 10px;
-      text-align: left;
-      font-size: 13px;
-      border-bottom: 1px solid var(--border-color);
-      transition: border-color var(--transition-normal);
-    }
-
-    th {
-      background-color: var(--table-header-bg);
-      color: var(--table-header-text);
-      font-weight: 600;
-      cursor: pointer;
-      position: relative;
-      transition: background-color var(--transition-normal), color var(--transition-normal);
-    }
-
-    th:hover {
-      background-color: var(--primary);
-      color: white;
-    }
-
-    tr:nth-child(even) {
-      background-color: var(--table-row-alt);
-      transition: background-color var(--transition-normal);
-    }
-
-    /* 盈亏颜色 */
-    .profit {
-      color: var(--danger);
-      transition: color var(--transition-normal);
-    }
-
-    .loss {
-      color: var(--success);
-      transition: color var(--transition-normal);
-    }
-
-    /* 显示更多按钮 */
-    .show-more {
-      display: block;
-      margin: 15px auto;
-      padding: 8px 20px;
-      background: linear-gradient(135deg, var(--primary), var(--secondary));
-      color: white;
-      border: none;
-      border-radius: var(--radius-md);
-      cursor: pointer;
-      transition: all var(--transition-normal);
-      box-shadow: var(--shadow-md);
-    }
-
-    .show-more:hover {
-      box-shadow: var(--shadow-lg);
-      transform: translateY(-3px);
-    }
-
-    /* 加载指示器 */
-    .loading {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 200px;
-      color: var(--text-secondary);
-      transition: color var(--transition-normal);
-    }
-
-    .loading-spinner {
-      width: 40px;
-      height: 40px;
-      border: 4px solid rgba(0, 0, 0, 0.1);
-      border-radius: 50%;
-      border-top: 4px solid var(--primary);
-      animation: spin 1s linear infinite;
-      margin-bottom: 12px;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    /* 图表标题 */
-    .chart-title {
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--text-color);
-      text-align: center;
-      margin-bottom: 8px;
-      border-bottom: 1px solid var(--border-color);
-      padding-bottom: 8px;
-      transition: color var(--transition-normal), border-color var(--transition-normal);
-    }
-
-    /* 缓存数据警告样式 */
-    .cache-warning {
-      color: var(--warning);
-      text-align: center;
-      padding: 10px;
-      background-color: rgba(241, 196, 15, 0.1);
-      border-radius: var(--radius-md);
-      margin: 5px 0;
-      font-size: 12px;
-      transition: color var(--transition-normal), background-color var(--transition-normal);
-    }
-
-    /* 主题切换按钮 */
     .theme-toggle {
       position: absolute;
-      top: 15px;
+      top: 10px;
       right: 15px;
       background: rgba(255, 255, 255, 0.2);
       border: none;
       color: white;
-      width: 24px;
-      height: 24px;
+      width: 26px;
+      height: 26px;
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -406,47 +195,296 @@
 
     .theme-toggle:hover {
       background: rgba(255, 255, 255, 0.3);
+    }
+
+    /* 控制面板样式 */
+    .form-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin: 0 12px 12px;
+    }
+
+    .form-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .form-group {
+      display: flex;
+      align-items: center;
+    }
+
+    .form-group label {
+      margin-right: 8px;
+      width: auto;
+      font-size: 13px;
+      color: var(--text-color);
+      text-align: left;
+    }
+
+    select,
+    input[type="date"] {
+      padding: 6px 10px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-size: 13px;
+      transition: border-color var(--transition-fast);
+    }
+
+    select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237f8c8d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 30px;
+    }
+
+    select:focus,
+    input[type="date"]:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .date-group {
+      display: flex;
+      align-items: center;
+      margin-right: 12px;
+    }
+
+    .date-group input {
+      width: 110px;
+    }
+
+    .quick-select {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: start;
+      margin-top: 5px;
+    }
+
+    .btn {
+      padding: 6px 12px;
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all var(--transition-normal);
+    }
+
+    .btn:hover {
+      background-color: var(--button-hover);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-sm {
+      padding: 5px 10px;
+      font-size: 12px;
+    }
+
+    .btn-outline {
+      background-color: transparent;
+      border: 1px solid var(--primary);
+      color: var(--primary);
+    }
+
+    .btn-outline:hover {
+      background-color: var(--primary);
+      color: white;
+    }
+
+    /* 图表容器样式 */
+    .chart-container {
+      margin: 0 12px 16px;
+      height: 300px;
+      background-color: var(--bg-color);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+      transition: box-shadow var(--transition-normal), transform var(--transition-normal);
+      padding: 15px 12px;
+    }
+
+    .chart-container:hover {
+      box-shadow: var(--shadow-lg);
       transform: translateY(-2px);
     }
 
+    .chart-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-color);
+      text-align: center;
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--chart-title-bg);
+      padding-bottom: 8px;
+    }
+
+    /* 表格样式 */
+    .table-container {
+      margin: 0 12px 16px;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      box-shadow: var(--shadow-md);
+      transition: box-shadow var(--transition-normal), transform var(--transition-normal);
+    }
+
+    .table-container:hover {
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-2px);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: var(--bg-color);
+    }
+
+    th, td {
+      padding: 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 13px;
+    }
+
+    th {
+      background-color: var(--table-header-bg);
+      color: var(--table-header-text);
+      font-weight: 600;
+      cursor: pointer;
+      position: relative;
+      transition: background-color var(--transition-fast);
+    }
+
+    th:hover {
+      background-color: var(--primary);
+      color: white;
+    }
+
+    tr:nth-child(even) {
+      background-color: var(--row-alt-bg);
+    }
+
+    tr:hover td {
+      background-color: rgba(67, 97, 238, 0.05);
+    }
+
+    .profit {
+      color: var(--profit-color);
+    }
+
+    .loss {
+      color: var(--loss-color);
+    }
+
+    /* 加载指示器样式 */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 0;
+      color: var(--text-secondary);
+    }
+
+    .loading-spinner {
+      width: 30px;
+      height: 30px;
+      border: 3px solid rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      border-top: 3px solid var(--primary);
+      animation: spin 1s linear infinite;
+      margin-bottom: 12px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* 缓存警告样式 */
+    .cache-warning {
+      color: var(--warning);
+      text-align: center;
+      padding: 10px;
+      background-color: rgba(241, 196, 15, 0.1);
+      border-radius: var(--radius-md);
+      margin: 0 12px 12px;
+      font-size: 12px;
+    }
+
+    /* 显示更多按钮 */
+    .show-more {
+      display: block;
+      margin: 12px auto;
+      padding: 8px 20px;
+      background: linear-gradient(135deg, var(--header-gradient-1), var(--header-gradient-2));
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all var(--transition-normal);
+      box-shadow: var(--shadow-sm);
+      font-size: 14px;
+    }
+
+    .show-more:hover {
+      background: linear-gradient(135deg, var(--button-hover), var(--header-gradient-2));
+      box-shadow: var(--shadow-md);
+      transform: translateY(-3px);
+    }
+
     /* 响应式调整 */
-    @media (max-width: 768px) {
-      .form-container {
-        flex-direction: column;
-        align-items: stretch;
-      }
-
-      .form-filters, .form-group.quick-select {
+    @media (max-width: 400px) {
+      body {
         width: 100%;
-        justify-content: center;
-        margin-bottom: 10px;
       }
-
-      .form-group {
-        margin-bottom: 8px;
+      
+      .form-container, .chart-container, .table-container, .cache-warning {
+        margin-left: 8px;
+        margin-right: 8px;
       }
-
-      label {
-        width: 50px;
+      
+      .date-group input {
+        width: 100px;
+      }
+      
+      .quick-select {
+        justify-content: space-between;
+      }
+      
+      th, td {
+        padding: 8px 6px;
+        font-size: 12px;
       }
     }
   </style>
 </head>
-
 <body>
-  <div id="app">
-    <div class="header">
-      <a href="future2.html" class="back-link">
+  <div class="container">
+    <!-- 顶部导航栏 -->
+    <header class="header">
+      <a href="javascript:history.back()" class="back-button">
         <i class="fas fa-arrow-left"></i> 返回
       </a>
-      <h2 class="title">机构持仓盈亏一览</h2>
+      <h1 class="header-title">机构持仓盈亏一览</h1>
       <button class="theme-toggle" id="theme-toggle" title="切换主题">
-        <span id="theme-icon">☀️</span>
+        <i class="fas fa-moon" id="theme-icon"></i>
       </button>
-    </div>
-
+    </header>
+    
+    <!-- 控制面板 -->
     <div class="form-container">
-      <!-- 左侧：筛选器表单 -->
+      <!-- 筛选器表单 -->
       <div class="form-filters">
         <div class="form-group">
           <label for="institution">机构:</label>
@@ -454,58 +492,68 @@
             <option value="">加载中...</option>
           </select>
         </div>
-
+        
         <div class="form-group">
           <label for="startDate">日期:</label>
-          <input type="date" id="startDate" style="width: 120px;">
-          <span style="padding:0 5px">至</span>
-          <input type="date" id="endDate" style="width: 120px;">
+          <div class="date-group">
+            <input type="date" id="startDate">
+            <span style="margin: 0 4px;">至</span>
+            <input type="date" id="endDate">
+          </div>
         </div>
       </div>
-
-      <!-- 右侧：快捷选项 -->
-      <div class="form-group quick-select">
-        <button id="today">今日</button>
-        <button id="week">1周</button>
-        <button id="month">1月</button>
-        <button id="3months">季度</button>
-        <button id="6months">半年</button>
-        <button id="year">年度</button>
+      
+      <!-- 快捷选项 -->
+      <div class="quick-select">
+        <button class="btn btn-sm" id="today">今日</button>
+        <button class="btn btn-sm" id="week">1周</button>
+        <button class="btn btn-sm" id="month">1月</button>
+        <button class="btn btn-sm" id="3months">季度</button>
+        <button class="btn btn-sm" id="6months">半年</button>
+        <button class="btn btn-sm" id="year">年度</button>
       </div>
     </div>
-
+    
+    <!-- 缓存警告 -->
     <div id="cache-warning" class="cache-warning" style="display: none;">使用缓存数据</div>
-
+    
+    <!-- 数据展示区域 -->
     <div id="data-container" style="display: none;">
+      <!-- 图表区域 -->
       <div id="chart-container" class="chart-container">
         <div class="chart-title">盈亏情况</div>
         <div id="chart" style="width: 100%; height: 100%;"></div>
       </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th data-sort="variety">品种</th>
-            <th data-sort="varietyName">名称</th>
-            <th data-sort="netPosition">净仓</th>
-            <th data-sort="netPositionChange">变化</th>
-            <th data-sort="fluctuatePal">盈亏</th>
-          </tr>
-        </thead>
-        <tbody id="data-body">
-          <!-- 数据将通过JavaScript填充 -->
-        </tbody>
-      </table>
-
+      
+      <!-- 数据表格 -->
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th data-sort="variety">品种</th>
+              <th data-sort="varietyName">名称</th>
+              <th data-sort="netPosition">净仓</th>
+              <th data-sort="netPositionChange">变化</th>
+              <th data-sort="fluctuatePal">盈亏</th>
+            </tr>
+          </thead>
+          <tbody id="data-body">
+            <!-- 数据将通过JavaScript填充 -->
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- 显示更多按钮 -->
       <button id="show-more" class="show-more" style="display: none;">显示全部</button>
     </div>
-
+    
+    <!-- 加载指示器 -->
     <div id="loading" class="loading">
       <div class="loading-spinner"></div>
       <div>加载数据中...</div>
     </div>
   </div>
-
+  
   <script>
     // 全局变量
     let institutions = [];
@@ -518,47 +566,147 @@
     let sortOrder = 'desc';
     let showAll = false;
     let chart = null;
-    let chartInitialized = false;
-    let isDarkMode = true; // 默认为暗色模式，但会根据系统设置自动调整
-    let userThemePreference = null; // 用户主题首选项，null表示跟随系统
+    let isDarkMode = false;
+    let userThemePreference = null;
     
     // 缓存相关变量
-    let cachedData = {}; // 用于存储缓存的数据
-    const CACHE_EXPIRY_DAYS = 1; // 缓存过期时间（天）
-    let isUsingCache = false; // 是否正在使用缓存数据
+    let cachedData = {};
+    const CACHE_EXPIRY_DAYS = 1;
+    let isUsingCache = false;
     
-    //在交易所数据更新时间段（15:30-17:00）强制获取最新数据
-    //网络请求失败时自动使用缓存数据
-    // 从localStorage加载缓存
-    loadCacheFromStorage();
+    // 优先机构列表
+    const priorityInstitutions = [
+      '东方财富',
+      '徽商期货',
+      '永安期货',
+      '国泰君安',
+      '中信期货',
+      '中粮期货',
+      '五矿期货',
+      '金瑞期货',
+      '浙商期货',
+      '东证期货',
+      '摩根大通',
+      '中财期货',
+      '中金财富',
+      '华安期货',
+      '银河期货',
+      '华泰期货',
+      '广发期货',
+      '国投安信',
+      '中信建投',
+      '中泰期货',
+      '方正中期',
+      '海通期货',
+      '光大期货',
+      '南华期货',
+      '申银万国',
+      '乾坤期货',
+      '国信期货',
+      '宏源期货',
+      '国贸期货',
+      '一德期货',
+      '东吴期货',
+      '新湖期货',
+      '平安期货',
+      '瑞达期货',
+      '兴证期货',
+      '海证期货',
+      '宝城期货',
+      '招商期货',
+      '国富期货',
+      '创元期货',
+      '东海期货',
+      '华闻期货',
+      '物产中大',
+      '建信期货',
+      '国元期货',
+      '中辉期货',
+      '弘业期货',
+      '国联期货',
+      '大地期货',
+      '国海良时',
+      '兴业期货'
+    ];
+    
+    // 市场简称到市场ID的映射
+    const marketIdMap = {
+      'SHFE': '113', // 上海期货交易所
+      'DCE': '114',  // 大连商品交易所
+      'CZCE': '115', // 郑州商品交易所
+      'INE': '142',  // 上海国际能源交易中心
+      'CFFEX': '220', // 中金所
+      'GFEX': '225'  // 广期所
+    };
+
+    // 品种代码前缀到市场简称的映射
+    const varietyPrefixToMarket = {
+      // 上期所
+      'cu': 'SHFE', 'al': 'SHFE', 'zn': 'SHFE', 'pb': 'SHFE', 'ni': 'SHFE', 
+      'sn': 'SHFE', 'au': 'SHFE', 'ag': 'SHFE', 'rb': 'SHFE', 'wr': 'SHFE', 
+      'hc': 'SHFE', 'ss': 'SHFE', 'bu': 'SHFE', 'ru': 'SHFE', 'sp': 'SHFE',
+      'fu': 'SHFE','ao': 'SHFE', 'br': 'SHFE',
+      
+      // 大商所
+      'c': 'DCE', 'cs': 'DCE', 'a': 'DCE', 'b': 'DCE', 'm': 'DCE', 
+      'y': 'DCE', 'p': 'DCE', 'fb': 'DCE', 'bb': 'DCE', 'jd': 'DCE', 
+      'rr': 'DCE', 'l': 'DCE', 'v': 'DCE', 'pp': 'DCE', 'j': 'DCE', 
+      'jm': 'DCE', 'i': 'DCE', 'eg': 'DCE', 'eb': 'DCE', 'pg': 'DCE',
+      'lh': 'DCE', 'lg': 'DCE',
+      
+      // 郑商所
+      'WH': 'CZCE', 'PM': 'CZCE', 'RI': 'CZCE', 'JR': 'CZCE', 'LR': 'CZCE', 
+      'RS': 'CZCE', 'OI': 'CZCE', 'RM': 'CZCE', 'CF': 'CZCE', 'CY': 'CZCE', 
+      'SR': 'CZCE', 'TA': 'CZCE', 'MA': 'CZCE', 'FG': 'CZCE', 'ZC': 'CZCE', 
+      'SF': 'CZCE', 'SM': 'CZCE', 'AP': 'CZCE', 'CJ': 'CZCE', 'UR': 'CZCE',
+      'SA': 'CZCE', 'PF': 'CZCE','PK': 'CZCE','PX': 'CZCE','SH': 'CZCE',
+      'PR': 'CZCE',
+      
+      // 上海国际能源交易中心
+      'sc': 'INE', 'lu': 'INE', 'nr': 'INE', 'bc': 'INE', 'ec': 'INE',
+      
+      // 中金所
+      'IF': 'CFFEX', 'IC': 'CFFEX', 'IH': 'CFFEX', 'IM': 'CFFEX', 
+      'TF': 'CFFEX', 'T': 'CFFEX', 'TS': 'CFFEX', '2Y': 'CFFEX',
+      '5Y': 'CFFEX', '10Y': 'CFFEX', '30Y': 'CFFEX',
+      
+      // 广期所
+      'SI': 'GFEX', 'LC': 'GFEX', 'PS': 'GFEX'
+    };
     
     // 初始化页面
-    document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('DOMContentLoaded', function() {
       // 检测系统颜色方案
       detectColorScheme();
       
+      // 应用当前主题
+      applyTheme();
+      
       // 设置默认日期
       setDefaultDates();
-
+      
+      // 从localStorage加载缓存
+      loadCacheFromStorage();
+      
       // 获取URL参数
       const urlParams = getUrlParams();
-      const companyCode = urlParams.code; // 品种代码
-      const companyName = urlParams.company; // 机构名称
-
+      const companyCode = urlParams.code;
+      const companyName = urlParams.company;
+      
       // 绑定事件
       document.getElementById('institution').addEventListener('change', onInstitutionChange);
       document.getElementById('startDate').addEventListener('change', fetchInstitutionData);
       document.getElementById('endDate').addEventListener('change', fetchInstitutionData);
       document.getElementById('show-more').addEventListener('click', toggleShowAll);
       document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
-
+      
       // 绑定排序事件
       document.querySelectorAll('th[data-sort]').forEach(th => {
-        th.addEventListener('click', function () {
+        th.addEventListener('click', function() {
           sortBy(this.dataset.sort);
         });
       });
-
+      
       // 绑定快速选择按钮
       document.getElementById('today').addEventListener('click', () => quickSelect('today'));
       document.getElementById('week').addEventListener('click', () => quickSelect('week'));
@@ -566,18 +714,12 @@
       document.getElementById('3months').addEventListener('click', () => quickSelect('3months'));
       document.getElementById('6months').addEventListener('click', () => quickSelect('6months'));
       document.getElementById('year').addEventListener('click', () => quickSelect('year'));
-
-      // 初始化主题图标
-      updateThemeToggleIcon();
       
-      // 应用当前主题
-      applyTheme();
-
       // 获取机构列表
       fetchInstitutions();
-
+      
       // 监听窗口大小变化
-      window.addEventListener('resize', function () {
+      window.addEventListener('resize', function() {
         if (chart) {
           chart.resize();
         }
@@ -593,7 +735,7 @@
         isDarkMode = savedUserPreference === 'dark';
         return;
       }
-
+      
       // 检查系统颜色方案
       const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
       isDarkMode = prefersDarkMode;
@@ -603,29 +745,37 @@
         // 只有在用户没有明确选择主题时才跟随系统
         if (userThemePreference === null) {
           isDarkMode = e.matches;
-          updateThemeToggleIcon();
           applyTheme();
+          
+          // 如果已经有数据且图表已初始化，重新渲染
+          if (institutionData && institutionData.length > 0 && chart) {
+            renderData();
+          }
         }
       });
     }
-
-    // 更新主题切换按钮图标
-    function updateThemeToggleIcon() {
-      const themeIcon = document.getElementById('theme-icon');
-      themeIcon.textContent = isDarkMode ? '☀️' : '🌙';
-      document.getElementById('theme-toggle').title = isDarkMode ? '切换到浅色模式' : '切换到深色模式';
-    }
-
-    // 应用主题到HTML元素
+    
+    // 应用主题
     function applyTheme() {
       if (isDarkMode) {
         document.documentElement.setAttribute('data-theme', 'dark');
       } else {
         document.documentElement.removeAttribute('data-theme');
       }
+      updateThemeIcon();
     }
-
-    // 手动切换主题
+    
+    // 更新主题图标
+    function updateThemeIcon() {
+      const themeIcon = document.getElementById('theme-icon');
+      if (isDarkMode) {
+        themeIcon.className = 'fas fa-sun';
+      } else {
+        themeIcon.className = 'fas fa-moon';
+      }
+    }
+    
+    // 切换主题
     function toggleTheme() {
       isDarkMode = !isDarkMode;
       
@@ -633,131 +783,728 @@
       userThemePreference = isDarkMode ? 'dark' : 'light';
       localStorage.setItem('theme-preference', userThemePreference);
       
-      // 更新主题图标
-      updateThemeToggleIcon();
-      
       // 应用主题
       applyTheme();
       
-      // 如果图表已初始化，更新图表主题
-      if (chartInitialized && chart) {
-        updateChartTheme();
+      // 如果已经有数据且图表已初始化，重新渲染
+      if (institutionData && institutionData.length > 0 && chart) {
+        renderData();
       }
     }
-
-    // 设置默认日期
-    function setDefaultDates() {
-      const today = new Date();
-      const oneMonthAgo = new Date();
-      oneMonthAgo.setMonth(today.getMonth() - 1);
-      
-      endDate = formatDateForInput(today);
-      startDate = formatDateForInput(oneMonthAgo);
-      
-      document.getElementById('startDate').value = startDate;
-      document.getElementById('endDate').value = endDate;
-    }
-
-    // 格式化日期为输入框格式 (YYYY-MM-DD)
-    function formatDateForInput(date) {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-
-    // 获取URL参数
+    
+    // 从URL获取参数
     function getUrlParams() {
       const params = {};
       const queryString = window.location.search.substring(1);
       const pairs = queryString.split('&');
       
-      for (let i = 0; i < pairs.length; i++) {
-        const pair = pairs[i].split('=');
-        if (pair[0]) {
-          params[decodeURIComponent(pair[0])] = decodeURIComponent(pair[1] || '');
+      for (const pair of pairs) {
+        if (pair) {
+          const [key, value] = pair.split('=');
+          params[key] = decodeURIComponent(value || '');
         }
       }
       
       return params;
     }
-
+    
+    // 设置默认日期
+    function setDefaultDates() {
+      const today = new Date();
+      const endDateElement = document.getElementById('endDate');
+      endDateElement.value = today.toISOString().split('T')[0];
+      endDate = endDateElement.value;
+      
+      const oneMonthAgo = new Date(today);
+      oneMonthAgo.setMonth(today.getMonth() - 1);
+      const startDateElement = document.getElementById('startDate');
+      startDateElement.value = oneMonthAgo.toISOString().split('T')[0];
+      startDate = startDateElement.value;
+    }
+    
+    // 格式化机构名称
+    function formatInstitutionName(name) {
+      if (!name) return '';
+      return name.replace(/\(代客\)$/, '');
+    }
+    
+    // 获取机构列表
+    async function fetchInstitutions() {
+      showLoading(true);
+      
+      try {
+        // 检查是否有缓存的机构列表
+        const cacheKey = 'institutions_list';
+        if (cachedData[cacheKey]) {
+          console.log('使用缓存的机构列表');
+          institutions = cachedData[cacheKey].data;
+          populateInstitutionDropdown();
+          return;
+        }
+        
+        const response = await axios.get('https://q.889.ink/lhb/getChoiceOrg');
+        
+        // 处理并排序机构列表
+        institutions = response.data.data
+          .flatMap(group => group.orgList)
+          .sort((a, b) => {
+            const aPriority = priorityInstitutions.indexOf(a.ownerOrgNameAbbr);
+            const bPriority = priorityInstitutions.indexOf(b.ownerOrgNameAbbr);
+            
+            // 如果两家机构都在优先列表中，按优先级排序
+            if (aPriority !== -1 && bPriority !== -1) {
+              return aPriority - bPriority;
+            }
+            
+            // 如果只有一家在优先列表中，它优先
+            if (aPriority !== -1) return -1;
+            if (bPriority !== -1) return 1;
+            
+            // 如果都不在优先列表中，按字母排序
+            return a.ownerOrgNameAbbr.localeCompare(b.ownerOrgNameAbbr, 'zh-CN');
+          });
+        
+        // 保存到缓存
+        cachedData[cacheKey] = {
+          data: institutions,
+          timestamp: new Date().toISOString()
+        };
+        saveCacheToStorage();
+        
+        populateInstitutionDropdown();
+        
+      } catch (error) {
+        console.error('获取机构列表失败:', error);
+        
+        // 尝试从缓存获取机构列表
+        const cacheKey = 'institutions_list';
+        if (cachedData[cacheKey]) {
+          console.log('获取机构列表失败，使用缓存数据');
+          institutions = cachedData[cacheKey].data;
+          populateInstitutionDropdown();
+        } else {
+          showLoading(false);
+          const loadingElement = document.getElementById('loading');
+          loadingElement.innerHTML = `<div>获取机构列表失败: ${error.message || '网络错误'}</div><div>请稍后重试</div>`;
+        }
+      }
+    }
+    
+    // 填充机构下拉列表
+    function populateInstitutionDropdown() {
+      const selectElement = document.getElementById('institution');
+      selectElement.innerHTML = '';
+      
+      institutions.forEach(org => {
+        const option = document.createElement('option');
+        option.value = org.orgCode;
+        option.textContent = formatInstitutionName(org.ownerOrgNameAbbr);
+        selectElement.appendChild(option);
+      });
+      
+      // 获取URL参数
+      const urlParams = getUrlParams();
+      const companyCode = urlParams.code;
+      const companyName = urlParams.company;
+      
+      // 根据URL参数选择机构
+      let institutionFound = false;
+      
+      if (companyName) {
+        const matchedInstitution = institutions.find(org => 
+          org.ownerOrgNameAbbr === companyName || 
+          formatInstitutionName(org.ownerOrgNameAbbr) === companyName
+        );
+        
+        if (matchedInstitution) {
+          selectedInstitution = matchedInstitution.orgCode;
+          selectedInstitutionName = matchedInstitution.ownerOrgNameAbbr;
+          selectElement.value = matchedInstitution.orgCode;
+          institutionFound = true;
+        }
+      }
+      
+      // 如果没有找到匹配的机构，使用默认机构
+      if (!institutionFound) {
+        const defaultInstitution = institutions.find(org => 
+          org.ownerOrgNameAbbr === '东方财富(代客)' || org.ownerOrgNameAbbr === '东方财富'
+        );
+        
+        if (defaultInstitution) {
+          selectedInstitution = defaultInstitution.orgCode;
+          selectedInstitutionName = defaultInstitution.ownerOrgNameAbbr;
+          selectElement.value = defaultInstitution.orgCode;
+        } else if (institutions.length > 0) {
+          selectedInstitution = institutions[0].orgCode;
+          selectedInstitutionName = institutions[0].ownerOrgNameAbbr;
+          selectElement.value = institutions[0].orgCode;
+        }
+      }
+      
+      // 获取机构数据
+      fetchInstitutionData();
+    }
+    
+    // 机构下拉列表变更事件
+    function onInstitutionChange() {
+      const selectElement = document.getElementById('institution');
+      selectedInstitution = selectElement.value;
+      
+      const selectedOption = selectElement.options[selectElement.selectedIndex];
+      selectedInstitutionName = selectedOption.textContent;
+      
+      fetchInstitutionData();
+    }
+    
+    // 获取机构持仓盈亏数据
+    async function fetchInstitutionData() {
+      if (!selectedInstitution || !startDate || !endDate) return;
+      
+      showLoading(true);
+      showData(false);
+      showCacheWarning(false);
+      isUsingCache = false;
+      
+      try {
+        // 构建缓存键
+        const cacheKey = `${selectedInstitution}_${startDate.replace(/-/g, '')}_${endDate.replace(/-/g, '')}`;
+        
+        // 检查当前时间是否在数据更新时间段内（15:30-17:00）
+        const now = new Date();
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+        const isUpdateTime = (hours === 15 && minutes >= 30) || (hours === 16);
+        
+        // 检查是否有缓存数据且不在更新时间段内
+        if (cachedData[cacheKey] && !isUpdateTime) {
+          console.log(`使用缓存数据: ${cacheKey}`);
+          institutionData = cachedData[cacheKey].data;
+          isUsingCache = true;
+          
+          // 显示数据区域和缓存警告
+          showLoading(false);
+          showData(true);
+          showCacheWarning(true, `使用缓存数据 (${new Date(cachedData[cacheKey].timestamp).toLocaleString()})`);
+          
+          // 延迟渲染图表以确保容器已完全呈现
+          setTimeout(() => {
+            initOrUpdateChart();
+            renderData();
+          }, 50);
+          
+          return;
+        }
+        
+        const response = await axios.get('https://q.889.ink/lhb/getVarietyPayGraphData', {
+          params: {
+            startDate: startDate.replace(/-/g, ''),
+            endDate: endDate.replace(/-/g, ''),
+            companyCode: selectedInstitution,
+            initFlag: 0
+          }
+        });
+        
+        institutionData = response.data.data.companyPals || [];
+        
+        // 保存到缓存
+        cachedData[cacheKey] = {
+          data: institutionData,
+          timestamp: new Date().toISOString()
+        };
+        saveCacheToStorage();
+        
+        // 重置显示状态
+        showAll = false;
+        
+        // 先显示容器，确保图表容器尺寸正确
+        showData(true);
+        
+        // 在确保数据容器可见之后初始化图表
+        setTimeout(() => {
+          initOrUpdateChart();
+          
+          // 渲染数据
+          renderData();
+          
+          // 隐藏加载中
+          showLoading(false);
+        }, 50);
+        
+      } catch (error) {
+        console.error('获取机构数据失败:', error);
+        
+        // 尝试从缓存获取数据
+        const cacheKey = `${selectedInstitution}_${startDate.replace(/-/g, '')}_${endDate.replace(/-/g, '')}`;
+        if (cachedData[cacheKey]) {
+          console.log(`获取数据失败，使用缓存数据: ${cacheKey}`);
+          institutionData = cachedData[cacheKey].data;
+          isUsingCache = true;
+          
+          // 显示数据区域和缓存警告
+          showLoading(false);
+          showData(true);
+          showCacheWarning(true, `获取数据失败，使用缓存数据 (${new Date(cachedData[cacheKey].timestamp).toLocaleString()})`);
+          
+          // 延迟渲染图表以确保容器已完全呈现
+          setTimeout(() => {
+            initOrUpdateChart();
+            renderData();
+          }, 50);
+          
+          return;
+        }
+        
+        // 如果没有缓存数据，显示错误信息
+        const loadingElement = document.getElementById('loading');
+        loadingElement.innerHTML = `<div>加载失败: ${error.message || '网络错误'}</div><div>请稍后重试</div>`;
+        showLoading(true);
+      }
+    }
+    
+    // 初始化或更新图表
+    function initOrUpdateChart() {
+      const chartDom = document.getElementById('chart');
+      
+      // 如果图表已经初始化，先销毁
+      if (chart) {
+        chart.dispose();
+      }
+      
+      // 重新初始化图表
+      chart = echarts.init(chartDom);
+    }
+    
+    // 排序函数
+    function sortBy(key) {
+      if (sortKey === key) {
+        sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortKey = key;
+        sortOrder = 'desc';
+      }
+      
+      renderData();
+    }
+    
+    // 切换显示全部
+    function toggleShowAll() {
+      showAll = !showAll;
+      renderData();
+    }
+    
+    // 获取行样式类
+    function getRowClass(item, top10Items) {
+      if (top10Items.some(topItem => topItem.variety === item.variety)) {
+        return item.fluctuatePal > 0 ? 'profit' : 'loss';
+      }
+      return '';
+    }
+    
+    // 快速选择日期
+    function quickSelect(period) {
+      const endDateValue = document.getElementById('endDate').value;
+      const today = new Date(endDateValue);
+      let newStartDate;
+      
+      switch (period) {
+        case 'today':
+          newStartDate = new Date(today);
+          break;
+        case 'week':
+          newStartDate = new Date(today);
+          newStartDate.setDate(newStartDate.getDate() - 7);
+          break;
+        case 'month':
+          newStartDate = new Date(today);
+          newStartDate.setMonth(newStartDate.getMonth() - 1);
+          break;
+        case '3months':
+          newStartDate = new Date(today);
+          newStartDate.setMonth(newStartDate.getMonth() - 3);
+          break;
+        case '6months':
+          newStartDate = new Date(today);
+          newStartDate.setMonth(newStartDate.getMonth() - 6);
+          break;
+        case 'year':
+          newStartDate = new Date(today);
+          newStartDate.setFullYear(newStartDate.getFullYear() - 1);
+          break;
+        default:
+          newStartDate = today;
+      }
+      
+      startDate = newStartDate.toISOString().split('T')[0];
+      document.getElementById('startDate').value = startDate;
+      
+      fetchInstitutionData();
+    }
+    
+    // 渲染数据
+    function renderData() {
+      if (!institutionData || institutionData.length === 0) return;
+      
+      // 排序数据
+      const sortedData = [...institutionData].sort((a, b) => {
+        let aValue = a[sortKey];
+        let bValue = b[sortKey];
+        
+        if (sortKey === 'fluctuatePal') {
+          aValue = Math.abs(aValue);
+          bValue = Math.abs(bValue);
+        }
+        
+        if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+        return 0;
+      });
+      
+      // 获取前6项（按盈亏绝对值排序）用于图表
+      const top10ByAbsPal = [...institutionData]
+        .sort((a, b) => Math.abs(b.fluctuatePal) - Math.abs(a.fluctuatePal))
+        .slice(0, 6);
+      
+      // 确定显示数据
+      const displayedData = showAll ? sortedData : sortedData.slice(0, 10);
+      
+      // 渲染表格
+      renderTable(displayedData, top10ByAbsPal);
+      
+      // 渲染图表
+      renderChart(top10ByAbsPal);
+      
+      // 显示/隐藏"显示全部"按钮
+      const showMoreButton = document.getElementById('show-more');
+      if (sortedData.length > 10) {
+        showMoreButton.style.display = 'block';
+        showMoreButton.textContent = showAll ? '隐藏' : '显示全部';
+      } else {
+        showMoreButton.style.display = 'none';
+      }
+    }
+    
+    // 渲染表格
+    function renderTable(data, top10Items) {
+      const tableBody = document.getElementById('data-body');
+      tableBody.innerHTML = '';
+      
+      if (data.length === 0) {
+        const emptyRow = document.createElement('tr');
+        const emptyCell = document.createElement('td');
+        emptyCell.colSpan = 5;
+        emptyCell.textContent = '暂无数据';
+        emptyCell.style.textAlign = 'center';
+        emptyCell.style.padding = '20px';
+        emptyRow.appendChild(emptyCell);
+        tableBody.appendChild(emptyRow);
+        return;
+      }
+      
+      data.forEach(item => {
+        const row = document.createElement('tr');
+        row.className = getRowClass(item, top10Items);
+        
+        // 品种
+        const varietyCell = document.createElement('td');
+        varietyCell.textContent = item.variety;
+        varietyCell.className = 'variety-code';
+        row.appendChild(varietyCell);
+        
+        // 名称
+        const nameCell = document.createElement('td');
+        nameCell.textContent = item.varietyName;
+        nameCell.className = 'variety-name';
+        nameCell.style.cursor = 'pointer';
+        nameCell.title = '点击查看品种行情';
+        nameCell.addEventListener('click', function() {
+          // 获取品种对应的市场ID
+          const variety = item.variety.toLowerCase();
+          const marketId = getMarketIdFromVariety(item.variety);
+          window.location.href = `future2.html?variety=${marketId}_${variety}&showPremium=true`;
+        });
+        row.appendChild(nameCell);
+        
+        // 净仓
+        const positionCell = document.createElement('td');
+        positionCell.textContent = item.netPosition;
+        positionCell.className = 'net-position';
+        positionCell.style.cursor = 'pointer';
+        positionCell.title = '点击查看品种多空持仓';
+        positionCell.addEventListener('click', function() {
+          window.location.href = `longshort2.html?variety=${item.variety}`;
+        });
+        row.appendChild(positionCell);
+        
+        // 变化
+        const changeCell = document.createElement('td');
+        const change = parseInt(item.netPositionChange) || 0;
+        changeCell.textContent = change > 0 ? '+' + change : change;
+        changeCell.className = change > 0 ? 'profit' : change < 0 ? 'loss' : '';
+        row.appendChild(changeCell);
+        
+        // 盈亏
+        const palCell = document.createElement('td');
+        const pal = (item.fluctuatePal / 10000).toFixed(0);
+        palCell.textContent = pal >= 0 ? '+' + pal : pal;
+        if (item.fluctuatePal > 0) {
+          palCell.className = 'profit';
+        } else if (item.fluctuatePal < 0) {
+          palCell.className = 'loss';
+        }
+        palCell.style.cursor = 'pointer';
+        palCell.title = '点击查看品种盈亏分布';
+        palCell.addEventListener('click', function() {
+          window.location.href = `profit2.html?variety=${item.variety}`;
+        });
+        row.appendChild(palCell);
+        
+        tableBody.appendChild(row);
+      });
+    }
+    
+    // 渲染图表
+    function renderChart(data) {
+      if (!chart || !data || data.length === 0) return;
+      
+      // 先确保图表正确大小
+      chart.resize();
+      
+      const option = {
+        backgroundColor: 'transparent',
+        title: {
+          text: `${formatInstitutionName(selectedInstitutionName)}盈亏`,
+          left: 'center',
+          top: 0,
+          textStyle: {
+            color: isDarkMode ? '#e0e0e0' : '#333',
+            fontSize: 16,
+            fontWeight: 'bold'
+          }
+        },
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: {
+            type: 'shadow'
+          },
+          formatter: function(params) {
+            const data = params[0];
+            return `${data.name}<br/>盈亏: ${data.value >= 0 ? '+' : ''}${data.value} 亿元`;
+          }
+        },
+        grid: {
+          top: 50,
+          left: '3%',
+          right: '5%',
+          bottom: 0,
+          containLabel: true
+        },
+        xAxis: {
+          type: 'category',
+          data: data.map(item => item.varietyName),
+          axisLabel: {
+            interval: 0,
+            rotate: 30,
+            color: isDarkMode ? '#bbb' : '#666',
+            fontSize: 12,
+            fontWeight: isDarkMode ? 'bold' : 'normal'
+          },
+          axisLine: {
+            lineStyle: {
+              color: isDarkMode ? '#555' : '#ccc'
+            }
+          }
+        },
+        yAxis: {
+          type: 'value',
+          axisLabel: {
+            formatter: function(value) {
+              return value.toFixed(2);
+            },
+            color: isDarkMode ? '#bbb' : '#666'
+          },
+          splitLine: {
+            lineStyle: {
+              color: isDarkMode ? '#333' : '#eee',
+              type: 'dashed'
+            }
+          }
+        },
+        series: [{
+          name: '盈亏',
+          type: 'bar',
+          data: data.map(item => ({
+            value: (item.fluctuatePal / 100000000).toFixed(2),
+            itemStyle: {
+              color: item.fluctuatePal > 0 ? 
+                (isDarkMode ? '#ff7675' : '#e74c3c') : 
+                (isDarkMode ? '#4ced69' : '#27ae60')
+            }
+          })),
+          label: {
+            show: true,
+            position: 'top',
+            formatter: function(params) {
+              return params.value > 0 ? `+${params.value}` : params.value;
+            },
+            color: isDarkMode ? '#e0e0e0' : '#333',
+            fontWeight: 'bold'
+          },
+          barWidth: '50%',
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowColor: isDarkMode ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.3)'
+            }
+          }
+        }]
+      };
+      
+      chart.setOption(option);
+      
+      // 再次调整大小确保显示正确
+      setTimeout(() => {
+        chart.resize();
+      }, 100);
+    }
+    
+    // 根据品种代码获取市场ID
+    function getMarketIdFromVariety(varietyCode) {
+      if (!varietyCode) {
+        console.warn('品种代码为空，默认返回上期所ID');
+        return marketIdMap['SHFE'];
+      }
+      
+      // 转换为大写和小写，便于不同情况的匹配
+      const upperVariety = varietyCode.toUpperCase();
+      const lowerVariety = varietyCode.toLowerCase();
+      
+      // 提取品种代码前缀（字母部分）
+      const codePrefixMatch = varietyCode.match(/^[A-Za-z]+/);
+      const codePrefix = codePrefixMatch ? codePrefixMatch[0] : varietyCode;
+      
+      const upperCodePrefix = upperVariety.match(/^[A-Z]+/) ? upperVariety.match(/^[A-Z]+/)[0] : upperVariety;
+      const lowerCodePrefix = lowerVariety.match(/^[a-z]+/) ? lowerVariety.match(/^[a-z]+/)[0] : lowerVariety;
+      
+      // 1. 先尝试完整匹配
+      if (varietyPrefixToMarket[upperVariety]) {
+        return marketIdMap[varietyPrefixToMarket[upperVariety]];
+      }
+      
+      if (varietyPrefixToMarket[varietyCode]) {
+        return marketIdMap[varietyPrefixToMarket[varietyCode]];
+      }
+      
+      if (varietyPrefixToMarket[lowerVariety]) {
+        return marketIdMap[varietyPrefixToMarket[lowerVariety]];
+      }
+      
+      // 2. 然后尝试匹配提取的字母前缀
+      if (varietyPrefixToMarket[upperCodePrefix]) {
+        return marketIdMap[varietyPrefixToMarket[upperCodePrefix]];
+      }
+      
+      if (varietyPrefixToMarket[codePrefix]) {
+        return marketIdMap[varietyPrefixToMarket[codePrefix]];
+      }
+      
+      if (varietyPrefixToMarket[lowerCodePrefix]) {
+        return marketIdMap[varietyPrefixToMarket[lowerCodePrefix]];
+      }
+      
+      // 3. 如果还是没有匹配，尝试遍历所有前缀
+      for (const prefix in varietyPrefixToMarket) {
+        if (varietyCode.startsWith(prefix) || 
+            upperVariety.startsWith(prefix) || 
+            lowerVariety.startsWith(prefix)) {
+          return marketIdMap[varietyPrefixToMarket[prefix]];
+        }
+      }
+      
+      // 4. 特殊处理: 单个字母加数字的形式
+      if (/^[A-Za-z]\d+$/.test(varietyCode)) {
+        const singleChar = varietyCode[0].toLowerCase();
+        if (varietyPrefixToMarket[singleChar]) {
+          return marketIdMap[varietyPrefixToMarket[singleChar]];
+        }
+        
+        const upperSingleChar = varietyCode[0].toUpperCase();
+        if (varietyPrefixToMarket[upperSingleChar]) {
+          return marketIdMap[varietyPrefixToMarket[upperSingleChar]];
+        }
+      }
+      
+      // 默认返回上期所的ID
+      console.warn(`无法确定品种"${varietyCode}"的市场ID，默认返回上期所`);
+      return marketIdMap['SHFE'];
+    }
+    
+    // 显示/隐藏加载指示器
+    function showLoading(show) {
+      document.getElementById('loading').style.display = show ? 'flex' : 'none';
+    }
+    
+    // 显示/隐藏数据区域
+    function showData(show) {
+      document.getElementById('data-container').style.display = show ? 'block' : 'none';
+    }
+    
+    // 显示/隐藏缓存警告
+    function showCacheWarning(show, message = '使用缓存数据') {
+      const warningElement = document.getElementById('cache-warning');
+      if (warningElement) {
+        warningElement.style.display = show ? 'block' : 'none';
+        if (message) {
+          warningElement.textContent = message;
+        }
+      }
+    }
+    
+    // 保存缓存到localStorage
+    function saveCacheToStorage() {
+      try {
+        // 清理过期缓存
+        cleanExpiredCache();
+        
+        // 保存当前缓存
+        localStorage.setItem('institution_cache', JSON.stringify(cachedData));
+        console.log('缓存已保存到localStorage');
+      } catch (error) {
+        console.error('保存缓存失败:', error);
+      }
+    }
+    
     // 从localStorage加载缓存
     function loadCacheFromStorage() {
       try {
-        const storedCache = localStorage.getItem('institutionDataCache');
-        if (storedCache) {
-          cachedData = JSON.parse(storedCache);
+        const cachedString = localStorage.getItem('institution_cache');
+        if (cachedString) {
+          cachedData = JSON.parse(cachedString);
+          console.log('从localStorage加载缓存成功');
           
           // 清理过期缓存
-          const now = new Date().getTime();
-          let hasExpired = false;
-          
-          Object.keys(cachedData).forEach(key => {
-            if (cachedData[key].timestamp && (now - cachedData[key].timestamp) > (CACHE_EXPIRY_DAYS * 24 * 60 * 60 * 1000)) {
-              delete cachedData[key];
-              hasExpired = true;
-            }
-          });
-          
-          if (hasExpired) {
-            localStorage.setItem('institutionDataCache', JSON.stringify(cachedData));
-          }
+          cleanExpiredCache();
         }
       } catch (error) {
         console.error('加载缓存失败:', error);
         cachedData = {};
       }
     }
-
-    // 保存缓存到localStorage
-    function saveToCache(key, data) {
-      try {
-        cachedData[key] = {
-          data: data,
-          timestamp: new Date().getTime()
-        };
-        localStorage.setItem('institutionDataCache', JSON.stringify(cachedData));
-      } catch (error) {
-        console.error('保存缓存失败:', error);
-      }
-    }
-
-    // 从缓存获取数据
-    function getFromCache(key) {
-      if (cachedData[key] && cachedData[key].data) {
-        return cachedData[key];
-      }
-      return null;
-    }
-
-    // 显示缓存警告
-    function showCacheWarning(timestamp) {
-      const cacheTime = new Date(timestamp);
-      const formattedTime = `${cacheTime.getFullYear()}-${String(cacheTime.getMonth() + 1).padStart(2, '0')}-${String(cacheTime.getDate()).padStart(2, '0')} ${String(cacheTime.getHours()).padStart(2, '0')}:${String(cacheTime.getMinutes()).padStart(2, '0')}`;
-      
-      const warningElement = document.getElementById('cache-warning');
-      warningElement.textContent = `使用缓存数据 (${formattedTime})`;
-      warningElement.style.display = 'block';
-      isUsingCache = true;
-    }
-
-    // 隐藏缓存警告
-    function hideCacheWarning() {
-      document.getElementById('cache-warning').style.display = 'none';
-      isUsingCache = false;
-    }
-
-    // 是否在交易所数据更新时间段
-    function isDataUpdateTime() {
+    
+    // 清理过期缓存
+    function cleanExpiredCache() {
       const now = new Date();
-      const hours = now.getHours();
-      const minutes = now.getMinutes();
+      const expiryTime = CACHE_EXPIRY_DAYS * 24 * 60 * 60 * 1000; // 转换为毫秒
       
-      // 15:30 - 17:00 是交易所数据更新时间
-      return (hours === 15 && minutes >= 30) || (hours === 16);
+      for (const key in cachedData) {
+        if (cachedData[key] && cachedData[key].timestamp) {
+          const cacheTime = new Date(cachedData[key].timestamp).getTime();
+          if (now.getTime() - cacheTime > expiryTime) {
+            console.log(`删除过期缓存: ${key}`);
+            delete cachedData[key];
+          }
+        }
+      }
     }
-
-    // 获取机构列表
-    async function fetchInstitutions() {
-      try
+  </script>
+</body>
+</html>
