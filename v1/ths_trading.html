@@ -702,6 +702,7 @@
                 </div>
                 <div class="card-body" id="profit-body">
                     <div id="profit-detail-list"></div>
+                    <div id="profit-chart" class="price-chart"></div>
                 </div>
             </div>
         </div>
@@ -1401,124 +1402,211 @@
                         '日盈亏': '日盈亏(万元)',
                         '年累计盈亏': '年累计盈亏(万元)'
                     });
+                    
+                    // 净持仓与年累计盈亏对比图
+                    const profitChartElement = document.getElementById('profit-chart');
+                    
+                    // 确认元素存在并添加一个容器用于图表
+                    if (profitChartElement) {
+                        profitChartElement.innerHTML = '<div id="profit-chart-container" style="width: 100%; height: 100%;"></div>';
+                        
+                        // 准备图表数据
+                        const chartData = data.data.profitDetailList.map(item => ({
+                            date: item.date,
+                            netPosition: item.f024n ? parseInt(item.f024n) : 0,
+                            yearProfit: item.year_profit ? parseFloat(item.year_profit) / 10000 : 0
+                        }));
+                        
+                        // 初始化图表
+                        const chartDom = document.getElementById('profit-chart-container');
+                        if (chartDom) {
+                            const chart = echarts.init(chartDom);
+                            
+                            chart.setOption({
+                                backgroundColor: isDarkMode ? '#1e1e1e' : undefined,
+                                textStyle: {
+                                    color: isDarkMode ? '#e0e0e0' : undefined
+                                },
+                                title: {
+                                    text: '净持仓与年累计盈亏对比',
+                                    left: 'center',
+                                    textStyle: {
+                                        fontSize: 16,
+                                        fontWeight: 'normal',
+                                        color: isDarkMode ? '#e0e0e0' : undefined
+                                    },
+                                    top: 10
+                                },
+                                tooltip: {
+                                    trigger: 'axis',
+                                    axisPointer: {
+                                        type: 'cross',
+                                        crossStyle: {
+                                            color: '#999'
+                                        }
+                                    },
+                                    formatter: function(params) {
+                                        let tooltip = `<div style="font-weight:bold;margin-bottom:8px;">${params[0].axisValue}</div>`;
+                                        
+                                        params.forEach(param => {
+                                            const color = param.color;
+                                            const marker = `<span style="display:inline-block;margin-right:5px;border-radius:50%;width:10px;height:10px;background-color:${color};"></span>`;
+                                            
+                                            let valueText = param.value ? param.value.toLocaleString() : '无数据';
+                                            
+                                            tooltip += `<div style="margin:5px 0">${marker}${param.seriesName}: ${valueText}</div>`;
+                                        });
+                                        
+                                        return tooltip;
+                                    },
+                                    backgroundColor: isDarkMode ? 'rgba(50, 50, 50, 0.9)' : 'rgba(255, 255, 255, 0.95)',
+                                    borderColor: isDarkMode ? '#444' : '#ddd',
+                                    textStyle: {
+                                        color: isDarkMode ? '#e0e0e0' : '#333',
+                                        fontSize: 13
+                                    }
+                                },
+                                legend: {
+                                    data: ['净持仓', '年累计盈亏(万元)'],
+                                    top: 40,
+                                    textStyle: {
+                                        color: isDarkMode ? '#e0e0e0' : '#333'
+                                    }
+                                },
+                                grid: {
+                                    left: '3%',
+                                    right: '4%',
+                                    bottom: '10%',
+                                    top: '90px',
+                                    containLabel: true
+                                },
+                                xAxis: {
+                                    type: 'category',
+                                    data: chartData.map(item => item.date),
+                                    axisLine: {
+                                        lineStyle: {
+                                            color: isDarkMode ? '#555' : '#999'
+                                        }
+                                    },
+                                    axisLabel: {
+                                        formatter: function(value) {
+                                            return value.substring(5); // 只显示月-日
+                                        },
+                                        color: isDarkMode ? '#e0e0e0' : undefined,
+                                        fontSize: 11
+                                    }
+                                },
+                                yAxis: [
+                                    {
+                                        type: 'value',
+                                        name: '净持仓',
+                                        position: 'left',
+                                        axisLine: {
+                                            lineStyle: {
+                                                color: '#91CC75'
+                                            }
+                                        },
+                                        axisLabel: {
+                                            formatter: function(value) {
+                                                if (Math.abs(value) >= 10000) {
+                                                    return (value / 10000).toFixed(1) + '万';
+                                                }
+                                                return value;
+                                            },
+                                            color: isDarkMode ? '#e0e0e0' : undefined
+                                        },
+                                        splitLine: {
+                                            lineStyle: {
+                                                type: 'dashed',
+                                                color: isDarkMode ? '#333' : '#eee'
+                                            }
+                                        }
+                                    },
+                                    {
+                                        type: 'value',
+                                        name: '年累计盈亏(万元)',
+                                        position: 'right',
+                                        axisLine: {
+                                            lineStyle: {
+                                                color: '#5470C6'
+                                            }
+                                        },
+                                        axisLabel: {
+                                            formatter: '{value}',
+                                            color: isDarkMode ? '#e0e0e0' : undefined
+                                        },
+                                        splitLine: {
+                                            show: false
+                                        }
+                                    }
+                                ],
+                                series: [
+                                    {
+                                        name: '净持仓',
+                                        type: 'bar',
+                                        data: chartData.map(item => item.netPosition),
+                                        yAxisIndex: 0,
+                                        itemStyle: {
+                                            color: function(params) {
+                                                return params.value >= 0 ? '#91CC75' : '#EE6666';
+                                            }
+                                        },
+                                        barWidth: '60%',
+                                        z: 2
+                                    },
+                                    {
+                                        name: '年累计盈亏(万元)',
+                                        type: 'line',
+                                        data: chartData.map(item => item.yearProfit),
+                                        yAxisIndex: 1,
+                                        smooth: true,
+                                        lineStyle: {
+                                            width: 3,
+                                            color: '#5470C6'
+                                        },
+                                        itemStyle: {
+                                            color: '#5470C6'
+                                        },
+                                        z: 5,
+                                        showSymbol: false,
+                                        emphasis: {
+                                            scale: true,
+                                            focus: 'series'
+                                        }
+                                    }
+                                ],
+                                dataZoom: [
+                                    {
+                                        type: 'inside',
+                                        start: 0,
+                                        end: 100
+                                    },
+                                    {
+                                        start: 0,
+                                        end: 100,
+                                        bottom: 10,
+                                        textStyle: {
+                                            color: isDarkMode ? '#e0e0e0' : undefined
+                                        },
+                                        borderColor: isDarkMode ? '#444' : undefined,
+                                        backgroundColor: isDarkMode ? '#333' : undefined,
+                                        fillerColor: isDarkMode ? 'rgba(144, 197, 237, 0.2)' : undefined,
+                                        handleStyle: {
+                                            color: isDarkMode ? '#666' : undefined
+                                        }
+                                    }
+                                ]
+                            });
+                            
+                            // 窗口大小变化时调整图表
+                            window.addEventListener('resize', function() {
+                                chart.resize();
+                            });
+                        }
+                    }
                 } else {
                     document.getElementById('profit-detail-list').innerHTML = '<div class="empty-state">暂无盈亏明细数据</div>';
-                }
-                
-                // 生成净持仓与年累计盈亏对比图
-                if (data.data.profitDetailList && data.data.profitDetailList.length > 0) {
-                    const chartData = data.data.profitDetailList.map(item => ({
-                        date: item.date,
-                        netPosition: item.f024n ? parseInt(item.f024n) : 0,
-                        yearProfit: item.year_profit ? parseFloat(item.year_profit) / 10000 : 0
-                    }));
-                    
-                    const chart = echarts.init(document.getElementById('profit-chart'));
-                    chart.setOption({
-                        title: {
-                            text: '净持仓与年累计盈亏对比',
-                            left: 'center',
-                            textStyle: {
-                                color: isDarkMode ? '#e0e0e0' : '#333'
-                            }
-                        },
-                        tooltip: {
-                            trigger: 'axis',
-                            axisPointer: {
-                                type: 'cross',
-                                crossStyle: {
-                                    color: '#999'
-                                }
-                            }
-                        },
-                        legend: {
-                            data: ['净持仓', '年累计盈亏(万元)'],
-                            top: 30,
-                            textStyle: {
-                                color: isDarkMode ? '#e0e0e0' : '#333'
-                            }
-                        },
-                        grid: {
-                            left: '3%',
-                            right: '4%',
-                            bottom: '3%',
-                            top: 80,
-                            containLabel: true
-                        },
-                        xAxis: {
-                            type: 'category',
-                            data: chartData.map(item => item.date),
-                            axisLine: {
-                                lineStyle: {
-                                    color: isDarkMode ? '#555' : '#999'
-                                }
-                            },
-                            axisLabel: {
-                                color: isDarkMode ? '#e0e0e0' : '#333',
-                                fontSize: 11,
-                                interval: 'auto',
-                                rotate: 0
-                            }
-                        },
-                        yAxis: [
-                            {
-                                type: 'value',
-                                name: '年累计盈亏(万元)',
-                                position: 'left',
-                                axisLine: {
-                                    lineStyle: {
-                                        color: '#91CC75'
-                                    }
-                                },
-                                axisLabel: {
-                                    formatter: '{value}'
-                                }
-                            },
-                            {
-                                type: 'value',
-                                name: '净持仓',
-                                position: 'right',
-                                axisLine: {
-                                    lineStyle: {
-                                        color: '#EE6666'
-                                    }
-                                },
-                                axisLabel: {
-                                    formatter: '{value}'
-                                }
-                            }
-                        ],
-                        series: [
-                            {
-                                name: '净持仓',
-                                type: 'bar',
-                                yAxisIndex: 1,
-                                data: chartData.map(item => item.netPosition),
-                                itemStyle: {
-                                    color: function(params) {
-                                        return params.value >= 0 ? '#91CC75' : '#EE6666';
-                                    }
-                                }
-                            },
-                            {
-                                name: '年累计盈亏(万元)',
-                                type: 'line',
-                                smooth: true,
-                                data: chartData.map(item => item.yearProfit),
-                                lineStyle: {
-                                    width: 2,
-                                    color: '#5470C6'
-                                },
-                                itemStyle: {
-                                    color: '#5470C6'
-                                }
-                            }
-                        ]
-                    });
-                    
-                    window.addEventListener('resize', function() {
-                        chart.resize();
-                    });
+                    document.getElementById('profit-chart').innerHTML = '<div class="empty-state">暂无盈亏图表数据</div>';
                 }
             }
             
@@ -1735,11 +1823,24 @@
                 if (chartInstance) {
                     chartInstance.resize();
                 }
+                
+                // 获取所有echarts实例并调整大小
+                const charts = document.querySelectorAll('.price-chart');
+                charts.forEach(chart => {
+                    const instance = echarts.getInstanceByDom(chart.querySelector('div'));
+                    if (instance) {
+                        instance.resize();
+                    }
+                });
             }
             
             // 当卡片展开折叠时调整图表大小
             document.getElementById('chart-header').addEventListener('click', function() {
                 // 给图表一点时间展开后再调整大小
+                setTimeout(resizeChart, 300);
+            });
+            
+            document.getElementById('profit-header').addEventListener('click', function() {
                 setTimeout(resizeChart, 300);
             });
             
