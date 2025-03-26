@@ -290,39 +290,47 @@
         }
         
         .stats-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
+            overflow-x: auto;
             margin-bottom: 20px;
         }
         
-        .stat-card {
-            background-color: var(--card-bg);
-            border-radius: 8px;
-            padding: 15px;
-            box-shadow: var(--shadow-sm);
-            transition: background-color var(--transition-normal);
+        .stats-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            min-width: 600px;
         }
         
-        .stat-title {
+        .stats-table th, 
+        .stats-table td {
+            padding: 12px 15px;
+            text-align: center;
+            border: 1px solid var(--border-color);
+            transition: border-color var(--transition-normal);
+        }
+        
+        .stats-table th {
+            background-color: var(--card-header-bg);
             font-weight: 700;
-            font-size: 0.9rem;
-            margin-bottom: 10px;
             color: var(--text-color);
+            transition: background-color var(--transition-normal);
+            position: sticky;
+            top: 0;
         }
         
-        .stat-value {
-            color: var(--text-color);
-            margin-bottom: 5px;
-            font-size: 0.9rem;
+        .stats-table tr:hover {
+            background-color: rgba(236, 240, 241, 0.1);
         }
         
-        .positive {
-            color: var(--positive-color);
+        .stats-table .header-cell {
+            background-color: var(--primary);
+            color: white;
+            font-weight: bold;
         }
         
-        .negative {
-            color: var(--negative-color);
+        .stats-table .subheader-cell {
+            background-color: var(--card-header-bg);
+            font-weight: bold;
         }
         
         .price-chart {
@@ -376,6 +384,19 @@
             margin: 0 0 20px;
             font-size: 12px;
             display: none;
+        }
+        
+        /* 指标表格样式 */
+        .metric-cell {
+            font-weight: 500;
+        }
+        
+        .positive {
+            color: var(--positive-color);
+        }
+        
+        .negative {
+            color: var(--negative-color);
         }
         
         @media (max-width: 768px) {
@@ -464,7 +485,25 @@
                     <h2 class="card-title">统计指标</h2>
                 </div>
                 <div class="card-body">
-                    <div class="stats-container" id="stats-container"></div>
+                    <div class="stats-container">
+                        <table class="stats-table" id="stats-table">
+                            <thead>
+                                <tr>
+                                    <th rowspan="2" class="header-cell">指标类型</th>
+                                    <th colspan="4" class="header-cell">时间周期</th>
+                                </tr>
+                                <tr>
+                                    <th class="subheader-cell">1天</th>
+                                    <th class="subheader-cell">3天</th>
+                                    <th class="subheader-cell">5天</th>
+                                    <th class="subheader-cell">10天</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stats-body">
+                                <!-- 数据将通过JavaScript动态填充 -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
             
@@ -754,77 +793,8 @@
                     return;
                 }
                 
-                // 显示统计数据
-                const statsContainer = document.getElementById('stats-container');
-                statsContainer.innerHTML = '';
-                
-                // 添加胜率数据
-                if (data.data.numWinMap) {
-                    const winRateCard = document.createElement('div');
-                    winRateCard.className = 'stat-card';
-                    
-                    let winRateHTML = '<div class="stat-title">持仓胜率</div>';
-                    for (const key in data.data.numWinMap) {
-                        const item = data.data.numWinMap[key];
-                        const winRate = (parseFloat(item.indexValue) * 100).toFixed(2);
-                        const colorClass = winRate >= 50 ? 'positive' : 'negative';
-                        winRateHTML += `<div class="stat-value ${colorClass}">${key}天: ${winRate}%</div>`;
-                    }
-                    
-                    winRateCard.innerHTML = winRateHTML;
-                    statsContainer.appendChild(winRateCard);
-                }
-                
-                // 添加相关系数数据
-                if (data.data.numPriceMap) {
-                    const corrCard = document.createElement('div');
-                    corrCard.className = 'stat-card';
-                    
-                    let corrHTML = '<div class="stat-title">持仓与价格相关性</div>';
-                    for (const key in data.data.numPriceMap) {
-                        const item = data.data.numPriceMap[key];
-                        const corrValue = parseFloat(item.indexValue).toFixed(2);
-                        const colorClass = corrValue > 0 ? 'positive' : (corrValue < 0 ? 'negative' : '');
-                        corrHTML += `<div class="stat-value ${colorClass}">${key}天: ${corrValue}</div>`;
-                    }
-                    
-                    corrCard.innerHTML = corrHTML;
-                    statsContainer.appendChild(corrCard);
-                }
-                
-                // 添加净持仓变化胜率
-                if (data.data.changeWinMap) {
-                    const changeWinCard = document.createElement('div');
-                    changeWinCard.className = 'stat-card';
-                    
-                    let changeWinHTML = '<div class="stat-title">持仓变化胜率</div>';
-                    for (const key in data.data.changeWinMap) {
-                        const item = data.data.changeWinMap[key];
-                        const winRate = (parseFloat(item.indexValue) * 100).toFixed(2);
-                        const colorClass = winRate >= 50 ? 'positive' : 'negative';
-                        changeWinHTML += `<div class="stat-value ${colorClass}">${key}天: ${winRate}%</div>`;
-                    }
-                    
-                    changeWinCard.innerHTML = changeWinHTML;
-                    statsContainer.appendChild(changeWinCard);
-                }
-                
-                // 添加持仓变化与价格相关性
-                if (data.data.changePriceMap) {
-                    const changeCorrCard = document.createElement('div');
-                    changeCorrCard.className = 'stat-card';
-                    
-                    let changeCorrHTML = '<div class="stat-title">持仓变化与价格相关性</div>';
-                    for (const key in data.data.changePriceMap) {
-                        const item = data.data.changePriceMap[key];
-                        const corrValue = parseFloat(item.indexValue).toFixed(2);
-                        const colorClass = corrValue > 0 ? 'positive' : (corrValue < 0 ? 'negative' : '');
-                        changeCorrHTML += `<div class="stat-value ${colorClass}">${key}天: ${corrValue}</div>`;
-                    }
-                    
-                    changeCorrCard.innerHTML = changeCorrHTML;
-                    statsContainer.appendChild(changeCorrCard);
-                }
+                // 更新统计指标表格
+                updateStatsTable(data.data);
                 
                 // 绘制价格与多空比图表
                 if (data.data.closePriceList && data.data.closePriceList.length > 0 && 
@@ -1184,6 +1154,83 @@
                 } else {
                     document.getElementById('profit-detail-list').innerHTML = '<div class="empty-state">暂无盈亏明细数据</div>';
                 }
+            }
+            
+            // 更新统计指标表格
+            function updateStatsTable(data) {
+                const statsBody = document.getElementById('stats-body');
+                statsBody.innerHTML = '';
+                
+                // 添加持仓胜率数据
+                if (data.numWinMap) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="metric-cell">持仓胜率</td>
+                        ${generateMetricCells(data.numWinMap, true)}
+                    `;
+                    statsBody.appendChild(row);
+                }
+                
+                // 添加持仓与价格相关性数据
+                if (data.numPriceMap) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="metric-cell">持仓与价格相关性</td>
+                        ${generateMetricCells(data.numPriceMap, false)}
+                    `;
+                    statsBody.appendChild(row);
+                }
+                
+                // 添加持仓变化胜率数据
+                if (data.changeWinMap) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="metric-cell">持仓变化胜率</td>
+                        ${generateMetricCells(data.changeWinMap, true)}
+                    `;
+                    statsBody.appendChild(row);
+                }
+                
+                // 添加持仓变化与价格相关性数据
+                if (data.changePriceMap) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="metric-cell">持仓变化与价格相关性</td>
+                        ${generateMetricCells(data.changePriceMap, false)}
+                    `;
+                    statsBody.appendChild(row);
+                }
+            }
+            
+            // 生成指标单元格
+            function generateMetricCells(dataMap, isPercentage) {
+                const periods = ['1', '3', '5', '10'];
+                let cells = '';
+                
+                periods.forEach(period => {
+                    if (dataMap[period]) {
+                        let value = parseFloat(dataMap[period].indexValue);
+                        if (isPercentage) {
+                            value = (value * 100).toFixed(2) + '%';
+                        } else {
+                            value = value.toFixed(2);
+                        }
+                        
+                        // 确定颜色类
+                        let colorClass = '';
+                        if (isPercentage) {
+                            colorClass = value >= 50 ? 'positive' : 'negative';
+                        } else {
+                            colorClass = value > 0 ? 'positive' : (value < 0 ? 'negative' : '');
+                        }
+                        
+                        cells += `<td class="${colorClass}">${value}</td>`;
+                    } else {
+                        cells += '<td>-</td>';
+                    }
+                });
+                
+                return cells;
             }
             
             // 表格生成函数
