@@ -289,21 +289,15 @@
             border-radius: 4px;
         }
         
-        .stats-container {
-            overflow-x: auto;
-            margin-bottom: 20px;
-        }
-        
         .stats-table {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 20px;
-            min-width: 600px;
+            font-size: 0.9rem;
         }
         
-        .stats-table th, 
-        .stats-table td {
-            padding: 12px 15px;
+        .stats-table th, .stats-table td {
+            padding: 10px;
             text-align: center;
             border: 1px solid var(--border-color);
             transition: border-color var(--transition-normal);
@@ -311,26 +305,13 @@
         
         .stats-table th {
             background-color: var(--card-header-bg);
-            font-weight: 700;
+            font-weight: 600;
             color: var(--text-color);
             transition: background-color var(--transition-normal);
-            position: sticky;
-            top: 0;
         }
         
-        .stats-table tr:hover {
-            background-color: rgba(236, 240, 241, 0.1);
-        }
-        
-        .stats-table .header-cell {
-            background-color: var(--primary);
-            color: white;
-            font-weight: bold;
-        }
-        
-        .stats-table .subheader-cell {
-            background-color: var(--card-header-bg);
-            font-weight: bold;
+        .stats-table th:first-child {
+            text-align: left;
         }
         
         .price-chart {
@@ -386,17 +367,20 @@
             display: none;
         }
         
-        /* 指标表格样式 */
-        .metric-cell {
-            font-weight: 500;
-        }
-        
         .positive {
             color: var(--positive-color);
+            font-weight: 500;
         }
         
         .negative {
             color: var(--negative-color);
+            font-weight: 500;
+        }
+        
+        .query-params-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            grid-gap: 15px;
         }
         
         @media (max-width: 768px) {
@@ -423,6 +407,10 @@
                 width: 30px;
                 height: 30px;
             }
+            
+            .query-params-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -442,7 +430,7 @@
                 <h2 class="card-title">查询参数</h2>
             </div>
             <div class="card-body">
-                <div class="form-container">
+                <div class="query-params-grid">
                     <div class="form-group">
                         <label for="variety">品种代码:</label>
                         <input type="text" id="variety" placeholder="例如: MA" value="MA">
@@ -485,25 +473,7 @@
                     <h2 class="card-title">统计指标</h2>
                 </div>
                 <div class="card-body">
-                    <div class="stats-container">
-                        <table class="stats-table" id="stats-table">
-                            <thead>
-                                <tr>
-                                    <th rowspan="2" class="header-cell">指标类型</th>
-                                    <th colspan="4" class="header-cell">时间周期</th>
-                                </tr>
-                                <tr>
-                                    <th class="subheader-cell">1天</th>
-                                    <th class="subheader-cell">3天</th>
-                                    <th class="subheader-cell">5天</th>
-                                    <th class="subheader-cell">10天</th>
-                                </tr>
-                            </thead>
-                            <tbody id="stats-body">
-                                <!-- 数据将通过JavaScript动态填充 -->
-                            </tbody>
-                        </table>
-                    </div>
+                    <div id="stats-table-container"></div>
                 </div>
             </div>
             
@@ -793,8 +763,8 @@
                     return;
                 }
                 
-                // 更新统计指标表格
-                updateStatsTable(data.data);
+                // 生成统计指标表格
+                generateStatsTable(data);
                 
                 // 绘制价格与多空比图表
                 if (data.data.closePriceList && data.data.closePriceList.length > 0 && 
@@ -1156,81 +1126,104 @@
                 }
             }
             
-            // 更新统计指标表格
-            function updateStatsTable(data) {
-                const statsBody = document.getElementById('stats-body');
-                statsBody.innerHTML = '';
+            // 生成统计指标表格
+            function generateStatsTable(data) {
+                const statsTableContainer = document.getElementById('stats-table-container');
                 
-                // 添加持仓胜率数据
-                if (data.numWinMap) {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td class="metric-cell">持仓胜率</td>
-                        ${generateMetricCells(data.numWinMap, true)}
-                    `;
-                    statsBody.appendChild(row);
+                // 定义周期
+                const periods = ['5', '10', '20', '30'];
+                
+                // 检查是否有统计数据
+                const hasWinRate = data.data.numWinMap && Object.keys(data.data.numWinMap).length > 0;
+                const hasPriceCorr = data.data.numPriceMap && Object.keys(data.data.numPriceMap).length > 0;
+                const hasChangeWinRate = data.data.changeWinMap && Object.keys(data.data.changeWinMap).length > 0;
+                const hasChangeCorr = data.data.changePriceMap && Object.keys(data.data.changePriceMap).length > 0;
+                
+                if (!hasWinRate && !hasPriceCorr && !hasChangeWinRate && !hasChangeCorr) {
+                    statsTableContainer.innerHTML = '<div class="empty-state">暂无统计指标数据</div>';
+                    return;
                 }
                 
-                // 添加持仓与价格相关性数据
-                if (data.numPriceMap) {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td class="metric-cell">持仓与价格相关性</td>
-                        ${generateMetricCells(data.numPriceMap, false)}
-                    `;
-                    statsBody.appendChild(row);
-                }
+                // 创建表格
+                let tableHTML = '<table class="stats-table">';
                 
-                // 添加持仓变化胜率数据
-                if (data.changeWinMap) {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td class="metric-cell">持仓变化胜率</td>
-                        ${generateMetricCells(data.changeWinMap, true)}
-                    `;
-                    statsBody.appendChild(row);
-                }
-                
-                // 添加持仓变化与价格相关性数据
-                if (data.changePriceMap) {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td class="metric-cell">持仓变化与价格相关性</td>
-                        ${generateMetricCells(data.changePriceMap, false)}
-                    `;
-                    statsBody.appendChild(row);
-                }
-            }
-            
-            // 生成指标单元格
-            function generateMetricCells(dataMap, isPercentage) {
-                const periods = ['1', '3', '5', '10'];
-                let cells = '';
-                
+                // 表头
+                tableHTML += '<thead><tr><th>统计指标</th>';
                 periods.forEach(period => {
-                    if (dataMap[period]) {
-                        let value = parseFloat(dataMap[period].indexValue);
-                        if (isPercentage) {
-                            value = (value * 100).toFixed(2) + '%';
-                        } else {
-                            value = value.toFixed(2);
-                        }
-                        
-                        // 确定颜色类
-                        let colorClass = '';
-                        if (isPercentage) {
-                            colorClass = value >= 50 ? 'positive' : 'negative';
-                        } else {
-                            colorClass = value > 0 ? 'positive' : (value < 0 ? 'negative' : '');
-                        }
-                        
-                        cells += `<td class="${colorClass}">${value}</td>`;
-                    } else {
-                        cells += '<td>-</td>';
-                    }
+                    tableHTML += `<th>${period}天</th>`;
                 });
+                tableHTML += '</tr></thead>';
                 
-                return cells;
+                // 表格内容
+                tableHTML += '<tbody>';
+                
+                // 1. 持仓胜率
+                if (hasWinRate) {
+                    tableHTML += '<tr><td>持仓胜率</td>';
+                    periods.forEach(period => {
+                        const item = data.data.numWinMap[period];
+                        if (item) {
+                            const winRate = (parseFloat(item.indexValue) * 100).toFixed(2);
+                            const colorClass = winRate >= 50 ? 'positive' : 'negative';
+                            tableHTML += `<td class="${colorClass}">${winRate}%</td>`;
+                        } else {
+                            tableHTML += '<td>-</td>';
+                        }
+                    });
+                    tableHTML += '</tr>';
+                }
+                
+                // 2. 持仓与价格相关性
+                if (hasPriceCorr) {
+                    tableHTML += '<tr><td>持仓价格相关性</td>';
+                    periods.forEach(period => {
+                        const item = data.data.numPriceMap[period];
+                        if (item) {
+                            const corrValue = parseFloat(item.indexValue).toFixed(2);
+                            const colorClass = corrValue > 0 ? 'positive' : (corrValue < 0 ? 'negative' : '');
+                            tableHTML += `<td class="${colorClass}">${corrValue}</td>`;
+                        } else {
+                            tableHTML += '<td>-</td>';
+                        }
+                    });
+                    tableHTML += '</tr>';
+                }
+                
+                // 3. 持仓变化胜率
+                if (hasChangeWinRate) {
+                    tableHTML += '<tr><td>持仓变化胜率</td>';
+                    periods.forEach(period => {
+                        const item = data.data.changeWinMap[period];
+                        if (item) {
+                            const winRate = (parseFloat(item.indexValue) * 100).toFixed(2);
+                            const colorClass = winRate >= 50 ? 'positive' : 'negative';
+                            tableHTML += `<td class="${colorClass}">${winRate}%</td>`;
+                        } else {
+                            tableHTML += '<td>-</td>';
+                        }
+                    });
+                    tableHTML += '</tr>';
+                }
+                
+                // 4. 持仓变化与价格相关性
+                if (hasChangeCorr) {
+                    tableHTML += '<tr><td>变化价格相关性</td>';
+                    periods.forEach(period => {
+                        const item = data.data.changePriceMap[period];
+                        if (item) {
+                            const corrValue = parseFloat(item.indexValue).toFixed(2);
+                            const colorClass = corrValue > 0 ? 'positive' : (corrValue < 0 ? 'negative' : '');
+                            tableHTML += `<td class="${colorClass}">${corrValue}</td>`;
+                        } else {
+                            tableHTML += '<td>-</td>';
+                        }
+                    });
+                    tableHTML += '</tr>';
+                }
+                
+                tableHTML += '</tbody></table>';
+                
+                statsTableContainer.innerHTML = tableHTML;
             }
             
             // 表格生成函数
@@ -1334,6 +1327,11 @@
                         }
                     }
                 }
+            }
+            
+            // 初始化日期为今天
+            if (!document.getElementById('date').value) {
+                document.getElementById('date').value = formatDate(new Date());
             }
             
             // 自动触发查询
