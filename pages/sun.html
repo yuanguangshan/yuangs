@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>动态太阳系</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #000;
+            background-image: radial-gradient(ellipse at center, 
+                rgba(255, 255, 255, 0.1) 0%, 
+                rgba(255, 255, 255, 0) 70%),
+                /* Add some subtle stars */
+                radial-gradient(circle at 10% 20%, rgba(255,255,255,0.3) 1px, transparent 2px),
+                radial-gradient(circle at 80% 30%, rgba(255,255,255,0.3) 1px, transparent 2px),
+                radial-gradient(circle at 30% 70%, rgba(255,255,255,0.2) 1px, transparent 2px),
+                radial-gradient(circle at 90% 85%, rgba(255,255,255,0.3) 1px, transparent 2px),
+                radial-gradient(circle at 50% 50%, rgba(255,255,255,0.2) 0px, transparent 1px);
+            background-size: cover, 1px 1px, 1px 1px, 1px 1px, 1px 1px, 1px 1px; /* Cover for gradient, small size for stars */
+            overflow: hidden; /* Hide scrollbars */
+        }
+
+        .solar-system {
+            position: relative;
+            /* Use vmin for responsive scaling based on smaller viewport dimension */
+            width: 80vmin; 
+            height: 80vmin;
+            /* border: 1px solid red; /* For debugging layout */
+        }
+
+        .sun {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10vmin;
+            height: 10vmin;
+            background-color: #ffcc00;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 3vmin #ffcc00, 
+                        0 0 6vmin #ffaa00, 
+                        0 0 10vmin #ff8800,
+                        0 0 15vmin #ff4400; /* Glowing effect */
+            z-index: 10; /* Sun on top */
+        }
+
+        .orbit {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.15); /* Subtle orbit path */
+            border-radius: 50%;
+            transform-origin: center center; /* Rotate around the center */
+            animation: orbit-rotation infinite linear; 
+            /* animation-play-state: paused; /* Uncomment to pause initially */
+        }
+
+        .planet {
+            position: absolute;
+            top: 50%; /* Vertically center relative to orbit div's height */
+            left: 0;  /* Start at the 'left' edge of the orbit div */
+            border-radius: 50%;
+            transform: translateY(-50%); /* Adjust vertical centering */
+            /* Apply counter-rotation to prevent the planet image from spinning with the orbit */
+            /* animation: counter-rotation infinite linear; */ /* See note below */
+        }
+        
+        /* --- Specific Planet Orbits --- */
+        /* Sizes increase outwards, durations increase (slower orbit) */
+
+        .mercury-orbit {
+            width: 18vmin; height: 18vmin; margin-left: -9vmin; margin-top: -9vmin;
+            animation-duration: 8.8s; /* Scaled approx period */
+        }
+        .mercury {
+            width: 1vmin; height: 1vmin; background-color: #aaa;
+            /* animation-duration: 8.8s; */
+        }
+
+        .venus-orbit {
+            width: 28vmin; height: 28vmin; margin-left: -14vmin; margin-top: -14vmin;
+            animation-duration: 22.5s;
+        }
+        .venus {
+            width: 1.8vmin; height: 1.8vmin; background-color: #e6d3a8;
+            /* animation-duration: 22.5s; */
+        }
+
+        .earth-orbit {
+            width: 40vmin; height: 40vmin; margin-left: -20vmin; margin-top: -20vmin;
+            animation-duration: 36.5s; /* Easy reference: 1 year = 36.5s */
+        }
+        .earth {
+            width: 2vmin; height: 2vmin; background-color: #6fa8dc;
+            /* animation-duration: 36.5s; */
+        }
+        /* Add a simple moon for Earth */
+        .earth .moon-orbit { 
+            position: absolute;
+            top:50%; left:50%;
+            width: 5vmin; height: 5vmin; /* Moon orbit relative to Earth */
+            margin-left:-2.5vmin; margin-top:-2.5vmin;
+            border: none; /* Hide moon orbit line */
+            animation-duration: 2.7s; /* Moon's orbital period */
+        }
+         .earth .moon {
+            width: 0.5vmin; height: 0.5vmin; background-color: #ccc;
+            /* No counter-rotation needed for moon if it's just a dot */
+         }
+
+
+        .mars-orbit {
+            width: 55vmin; height: 55vmin; margin-left: -27.5vmin; margin-top: -27.5vmin;
+            animation-duration: 68.7s;
+        }
+        .mars {
+            width: 1.5vmin; height: 1.5vmin; background-color: #c1440e;
+            /* animation-duration: 68.7s; */
+        }
+
+        /* Jupiter, Saturn, etc. would be further out with longer durations */
+        /* Example for Jupiter - might start overlapping others depending on scale */
+         .jupiter-orbit {
+             width: 75vmin; height: 75vmin; margin-left: -37.5vmin; margin-top: -37.5vmin;
+             animation-duration: 120s; /* Significantly longer, adjust as needed for visual speed */
+         }
+         .jupiter {
+             width: 4vmin; height: 4vmin; background-color: #d8caae;
+             /* animation-duration: 120s; */
+         }
+        /* Add more planets (Saturn, Uranus, Neptune) similarly */
+        /* Adjust vmin sizes and animation durations accordingly */
+
+
+        /* --- Animations --- */
+        @keyframes orbit-rotation {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
+        }
+
+        /* 
+         * Optional Counter-Rotation: 
+         * If you want planets to NOT spin madly with their orbit, apply this.
+         * You'd uncomment the 'animation: counter-rotation...' line for each .planet
+         * and ensure the animation-duration matches its orbit's duration.
+         * NOTE: This can sometimes be visually subtle or complex to get right with scaling.
+         * For simplicity in this example, it's commented out. If planets were textured images,
+         * this would be more important.
+        */
+        /*
+        @keyframes counter-rotation {
+            from { transform: translateY(-50%) rotate(0deg); }
+            to   { transform: translateY(-50%) rotate(-360deg); }
+        } 
+        */
+
+        /* Simple label */
+        .planet-label {
+            position: absolute;
+            bottom: 100%; /* Position above the planet */
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 1.2vmin;
+            white-space: nowrap;
+            display: none; /* Hide initially */
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 0.2vmin 0.5vmin;
+            border-radius: 3px;
+        }
+
+        /* Show label on hover (optional JS could make this better) */
+        .planet:hover .planet-label {
+            display: block;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="solar-system">
+        <div class="sun"></div>
+
+        <div class="orbit mercury-orbit">
+            <div class="planet mercury">
+                <span class="planet-label">水星</span>
+            </div>
+        </div>
+
+        <div class="orbit venus-orbit">
+            <div class="planet venus">
+                <span class="planet-label">金星</span>
+            </div>
+        </div>
+
+        <div class="orbit earth-orbit">
+            <div class="planet earth">
+                 <span class="planet-label">地球</span>
+                 <!-- Earth's Moon -->
+                 <div class="orbit moon-orbit">
+                     <div class="planet moon"></div>
+                 </div>
+            </div>
+        </div>
+
+        <div class="orbit mars-orbit">
+            <div class="planet mars">
+                 <span class="planet-label">火星</span>
+            </div>
+        </div>
+
+         <div class="orbit jupiter-orbit">
+             <div class="planet jupiter">
+                 <span class="planet-label">木星</span>
+             </div>
+         </div>
+
+        <!-- Add Saturn, Uranus, Neptune orbits and planets here -->
+        <!-- Remember to adjust sizes (vmin) and animation-duration -->
+
+    </div>
+
+    <script>
+        // Optional JavaScript for future enhancements:
+        // - Pause/Play button
+        // - Speed control
+        // - Click on planet for info
+        // - More accurate physics (though much more complex)
+
+        // Example: Pause/Resume on click anywhere
+        /*
+        const solarSystem = document.querySelector('.solar-system');
+        let isPaused = false;
+        document.body.addEventListener('click', () => {
+            const orbits = document.querySelectorAll('.orbit');
+            isPaused = !isPaused;
+            orbits.forEach(orbit => {
+                orbit.style.animationPlayState = isPaused ? 'paused' : 'running';
+            });
+            // Also pause/resume counter-rotation if you uncommented it
+            const planets = document.querySelectorAll('.planet');
+             planets.forEach(planet => {
+                 // Check if the counter-rotation animation is applied
+                 // This part needs refinement if counter-rotation is used
+                 // planet.style.animationPlayState = isPaused ? 'paused' : 'running';
+             });
+        });
+        */
+        console.log("太阳系模拟已加载。");
+
+    </script>
+
+</body>
+</html>
