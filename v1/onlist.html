@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>期货公司龙虎榜数据</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.0.0"></script>
+    <style>
+        body {
+            font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f7fa;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        #datePicker {
+            padding: 8px 12px;
+            border: 1px solid #dcdfe6;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #409eff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #337ecc;
+        }
+        .chart-container {
+            margin-bottom: 30px;
+            height: 400px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        th {
+            background-color: #f2f6fc;
+            color: #606266;
+            font-weight: bold;
+        }
+        tr:hover {
+            background-color: #f5f7fa;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .pagination button {
+            margin: 0 5px;
+            background-color: #f4f4f5;
+            color: #606266;
+        }
+        .pagination button:hover, .pagination button.active {
+            background-color: #409eff;
+            color: white;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 18px;
+            color: #909399;
+        }
+        .error {
+            color: #f56c6c;
+            text-align: center;
+            padding: 20px;
+        }
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            #datePicker {
+                margin-bottom: 10px;
+                width: 100%;
+            }
+            button {
+                width: 100%;
+            }
+            th, td {
+                padding: 8px 10px;
+                font-size: 14px;
+            }
+        }
+        .date-info {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 18px;
+            color: #606266;
+        }
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #909399;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>期货公司龙虎榜数据</h1>
+        
+        <div class="controls">
+            <div>
+                <label for="datePicker">选择日期：</label>
+                <input type="date" id="datePicker">
+            </div>
+            <button id="queryBtn">查询</button>
+        </div>
+        
+        <div class="date-info" id="dateInfo"></div>
+        
+        <div class="chart-container">
+            <canvas id="companyChart"></canvas>
+        </div>
+        
+        <div id="tableContainer">
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th>排名</th>
+                        <th>期货公司</th>
+                        <th>上榜次数</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <!-- 数据将在这里动态加载 -->
+                </tbody>
+            </table>
+            
+            <div class="pagination" id="pagination">
+                <!-- 分页按钮将在这里动态加载 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let myChart = null;
+        let allData = [];
+        const itemsPerPage = 20;
+        let currentPage = 1;
+        
+        // 初始化页面
+        document.addEventListener('DOMContentLoaded', function() {
+            // 设置日期选择器默认为当天
+            const today = new Date();
+            const defaultDate = formatDateForInput(today);
+            document.getElementById('datePicker').value = defaultDate;
+            
+            // 添加按钮点击事件
+            document.getElementById('queryBtn').addEventListener('click', loadData);
+            
+            // 首次加载数据
+            loadData();
+        });
+        
+        // 加载数据
+        function loadData() {
+            const dateInput = document.getElementById('datePicker').value;
+            const formattedDate = dateInput.replace(/-/g, '');
+            
+            // 显示加载中
+            document.getElementById('tableBody').innerHTML = '<tr><td colspan="3" class="loading">数据加载中...</td></tr>';
+            
+            // 清除图表
+            if (myChart) {
+                myChart.destroy();
+            }
+            
+            // 获取数据
+            fetch(`https://data.want.biz/lhb/${formattedDate}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('网络请求失败');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data && data.data && data.data.length > 0) {
+                        // 处理数据并显示
+                        processData(data);
+                    } else {
+                        // 没有数据
+                        document.getElementById('tableBody').innerHTML = '<tr><td colspan="3" class="no-data">该日期没有数据</td></tr>';
+                        document.getElementById('dateInfo').textContent = `${formatDisplayDate(dateInput)} 数据不存在`;
+                        document.getElementById('pagination').innerHTML = '';
+                        
+                        // 清除图表
+                        const ctx = document.getElementById('companyChart').getContext('2d');
+                        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    document.getElementById('tableBody').innerHTML = `<tr><td colspan="3" class="error">数据加载失败: ${error.message}</td></tr>`;
+                });
+        }
+        
+        // 处理并显示数据
+        function processData(responseData) {
+            // 提取并处理数据
+            allData = responseData.data.map(item => {
+                return {
+                    ...item,
+                    // 移除公司名称中的"(代客)"
+                    cleanName: item.futureCompanyName.replace(/\(\u4ee3\u5ba2\)$/, '')
+                };
+            });
+            
+            // 更新日期信息
+            const displayDate = formatDateFromString(responseData.date);
+            document.getElementById('dateInfo').textContent = `${displayDate} 龙虎榜数据`;
+            
+            // 渲染图表
+            renderChart(allData.slice(0, 10));
+            
+            // 渲染表格第一页
+            currentPage = 1;
+            renderTable();
+        }
+        
+        // 渲染图表
+        function renderChart(topData) {
+            const ctx = document.getElementById('companyChart').getContext('2d');
+            
+            // 提取前10名公司数据
+            const labels = topData.map(item => item.cleanName);
+            const values = topData.map(item => item.onlist);
+            
+            // 创建图表
+            myChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '上榜次数',
+                        data: values,
+                        backgroundColor: 'rgba(64, 158, 255, 0.7)',
+                        borderColor: 'rgba(64, 158, 255, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: '前十名期货公司上榜统计',
+                            font: {
+                                size: 16
+                            }
+                        },
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                            titleFont: {
+                                size: 14
+                            },
+                            bodyFont: {
+                                size: 14
+                            },
+                            callbacks: {
+                                label: function(context) {
+                                    return `上榜次数: ${context.raw}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: '上榜次数'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 渲染表格和分页
+        function renderTable() {
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, allData.length);
+            const currentPageData = allData.slice(startIndex, endIndex);
+            
+            // 清空表格
+            const tableBody = document.getElementById('tableBody');
+            tableBody.innerHTML = '';
+            
+            // 添加数据行
+            currentPageData.forEach((item, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${startIndex + index + 1}</td>
+                    <td>${item.cleanName}</td>
+                    <td>${item.onlist}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+            
+            // 渲染分页
+            renderPagination();
+        }
+        
+        // 渲染分页控件
+        function renderPagination() {
+            const totalPages = Math.ceil(allData.length / itemsPerPage);
+            const paginationElement = document.getElementById('pagination');
+            paginationElement.innerHTML = '';
+            
+            // 如果只有一页，不显示分页
+            if (totalPages <= 1) {
+                return;
+            }
+            
+            // 添加上一页按钮
+            const prevButton = document.createElement('button');
+            prevButton.innerHTML = '上一页';
+            prevButton.disabled = currentPage === 1;
+            prevButton.addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    renderTable();
+                }
+            });
+            paginationElement.appendChild(prevButton);
+            
+            // 添加页码按钮
+            const maxVisiblePages = 5; // 最多显示的页码数
+            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+            
+            // 调整起始页，确保显示足够的页码
+            if (endPage - startPage + 1 < maxVisiblePages) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                const pageButton = document.createElement('button');
+                pageButton.innerHTML = i;
+                pageButton.classList.toggle('active', i === currentPage);
+                pageButton.addEventListener('click', () => {
+                    currentPage = i;
+                    renderTable();
+                });
+                paginationElement.appendChild(pageButton);
+            }
+            
+            // 添加下一页按钮
+            const nextButton = document.createElement('button');
+            nextButton.innerHTML = '下一页';
+            nextButton.disabled = currentPage === totalPages;
+            nextButton.addEventListener('click', () => {
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    renderTable();
+                }
+            });
+            paginationElement.appendChild(nextButton);
+        }
+        
+        // 格式化日期为input value格式 (YYYY-MM-DD)
+        function formatDateForInput(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+        
+        // 从YYYYMMDD格式的字符串转换为显示格式 (YYYY年MM月DD日)
+        function formatDateFromString(dateStr) {
+            if (!dateStr || dateStr.length !== 8) return '';
+            
+            const year = dateStr.substring(0, 4);
+            const month = dateStr.substring(4, 6);
+            const day = dateStr.substring(6, 8);
+            
+            return `${year}年${month}月${day}日`;
+        }
+        
+        // 格式化显示日期 (YYYY-MM-DD -> YYYY年MM月DD日)
+        function formatDisplayDate(dateStr) {
+            if (!dateStr) return '';
+            
+            const parts = dateStr.split('-');
+            if (parts.length !== 3) return dateStr;
+            
+            return `${parts[0]}年${parts[1]}月${parts[2]}日`;
+        }
+    </script>
+</body>
+</html>
