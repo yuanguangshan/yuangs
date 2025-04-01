@@ -989,6 +989,47 @@
 
     // 交易所映射表
     const EXCHANGE_MAP = { 'SHFE': 113, 'DCE': 114, 'CZCE': 115, 'GFEX': 225, 'INE': 142, 'CFFEX': 220 };
+    
+    // 预定义的交易所和品种的直接映射（用于URL参数直接跳转）
+    const DIRECT_VARIETY_MAP = {// 上期所
+      'cu': '113_cu', 'al': '113_al', 'zn': '113_zn', 'pb': '113_pb', 'ni': '113_ni', 
+      'sn': '113_sn', 'au': '113_au', 'ag': '113_ag', 'rb': '113_rb', 'wr': '113_wr', 
+      'hc': '113_hc', 'ss': '113_ss', 'bu': '113_bu', 'ru': '113_ru', 'sp': '113_sp',
+      'fu': '113_fu','ao': '113_ao', 'br': '113_br',
+      
+      // 大商所
+      'c': '114_c', 'cs': '114_cs', 'a': '114_a', 'b': '114_b', 'm': '114_m', 
+      'y': '114_y', 'p': '114_p', 'fb': '114_fb', 'bb': '114_bb', 'jd': '114_jd', 
+      'rr': '114_rr', 'l': '114_l', 'v': '114_v', 'pp': '114_pp', 'j': '114_j', 
+      'jm': '114_jm', 'i': '114_i', 'eg': '114_eg', 'eb': '114_eb', 'pg': '114_pg',
+      'lh': '114_lh', 'lg': '114_lg',
+      
+      // 郑商所
+      'wh': '115_wh', 'pm': '115_pm', 'ri': '115_ri', 'jr': '115_jr', 'lr': '115_lr', 
+      'rs': '115_rs', 'oi': '115_oi', 'rm': '115_rm', 'cf': '115_cf', 'cy': '115_cy', 
+      'sr': '115_sr', 'ta': '115_ta', 'ma': '115_ma', 'fg': '115_fg', 'zc': '115_zc', 
+      'sf': '115_sf', 'sm': '115_sm', 'ap': '115_ap', 'cj': '115_cj', 'ur': '115_ur',
+      'sa': '115_sa', 'pf': '115_pf','pk': '115_pk','px': '115_px','sh': '115_sh',
+      'pr': '115_pr',
+      
+      // 上海国际能源交易中心
+      'sc': '142_sc', 'lu': '142_lu', 'nr': '142_nr', 'bc': '142_bc', 'ec': '142_ec',
+      
+      // 中金所
+      'if': '220_if', 'ic': '220_ic', 'ih': '220_ih', 'im': '220_im', 
+      'tf': '220_tf', 't': '220_t', 'ts': '220_ts', '2y': '220_2y',
+      '5y': '220_5y', '10y': '220_10y', '30y': '220_30y',
+      
+      // 广期所
+      'si': '225_si', 'lc': '225_lc', 'ps': '225'
+    };
+    
+
+    // 逆向映射，由 msgid 得到品种代码
+    const REVERSE_VARIETY_MAP = {};
+    Object.entries(DIRECT_VARIETY_MAP).forEach(([code, msgid]) => {
+        REVERSE_VARIETY_MAP[msgid] = code;
+    });
 
     // DOM 元素引用
     const loadingIndicator = document.getElementById('loading');
@@ -1142,19 +1183,106 @@
         }
 
         // 处理 URL 参数，用于直接跳转到品种详情
+        processUrlParameters();
+    }
+    
+    // 处理 URL 参数，获取品种和显示升贴水选项
+    function processUrlParameters() {
         const urlParams = new URLSearchParams(window.location.search);
-        const varietyParam = urlParams.get('variety'); // 期望是 msgid 格式
+        const varietyParam = urlParams.get('variety'); // 期望是 msgid 或品种代码格式
         const showPremiumParam = urlParams.get('showPremium');
 
-        // 保存品种参数和升贴水参数供 fetchData 成功后使用
         if (varietyParam) {
-            window.urlVarietyParam = varietyParam;
+            // 先使用预定义的映射尝试直接匹配
+            let targetVarietyId = DIRECT_VARIETY_MAP[varietyParam.toLowerCase()];
+            
+            // 如果已经是 msgid 格式 (例如 113_ag)，则直接使用
+            if (!targetVarietyId && varietyParam.includes('_')) {
+                targetVarietyId = varietyParam;
+            }
+            
+            window.urlVarietyParam = targetVarietyId || varietyParam;
             window.urlShowPremium = showPremiumParam === 'true';
-            // 先显示概览，等待数据加载完成后再跳转
-            showOverview();
+            console.log(`URL 参数解析: 品种=${window.urlVarietyParam}, 显示升贴水=${window.urlShowPremium}`);
+            
+            // 如果能够立即识别品种ID，可以直接跳转到该品种的合约页面，而不需要先获取概览数据
+            if (targetVarietyId) {
+                currentVariety = targetVarietyId;
+                console.log(`直接通过URL参数跳转到品种: ${targetVarietyId}`);
+                
+                // 显示加载指示器
+                showLoadingProgress();
+                
+                // 隐藏概览，显示合约选择器
+                overviewSection.style.display = 'none';
+                contractSelectorSection.style.display = 'block';
+                
+                // 更新下拉框（临时更新，后续会通过fetchData完全更新）
+                updateVarietySelectWithDirectMode(targetVarietyId);
+                
+                // 直接获取该品种的合约数据，不需要等待概览数据
+                fetchVarietyContracts(targetVarietyId).then(() => {
+                    // 合约数据获取成功后，更新UI并显示内容
+                    contentElement.style.display = 'block';
+                    loadingIndicator.style.display = 'none';
+                    
+                    // 同时在后台获取概览数据，以更新整体市场状态
+                    fetchData();
+                }).catch(error => {
+                    console.error("直接加载合约数据失败:", error);
+                    showErrorMessage(`加载 ${targetVarietyId} 品种合约数据失败: ${error.message}`);
+                    loadingIndicator.style.display = 'none';
+                    
+                    // 失败回退到概览模式
+                    showOverview();
+                    fetchData();
+                });
+                
+                return; // 直接返回，避免执行默认的fetchData
+            } else {
+                // 无法立即识别，需要等待数据加载后再尝试
+                console.log("无法立即识别品种ID，将在数据加载后尝试解析");
+                showOverview();
+            }
         } else {
             showOverview(); // 默认显示概览
         }
+        
+        // 默认流程：获取概览数据
+        fetchData();
+    }
+    
+    // 添加临时更新下拉框的函数，仅用于直接模式
+    function updateVarietySelectWithDirectMode(varietyId) {
+        if (!varietySelect) return;
+        
+        varietySelect.innerHTML = '<option value="">--- 请选择品种 ---</option>';
+        
+        // 提取品种代码
+        const [exchange, code] = varietyId.split('_');
+        const varietyCode = code ? code.toUpperCase() : '';
+        
+        // 查找品种中文名（从预定义映射中尝试获取）
+        let varietyName = "";
+        for(const [key, value] of Object.entries(DIRECT_VARIETY_MAP)) {
+            if(value === varietyId) {
+                varietyName = key.toUpperCase();
+                break;
+            }
+        }
+        
+        // 如果找不到名称，就用代码代替
+        const displayName = varietyName || varietyCode;
+        
+        // 添加临时选项
+        const option = document.createElement('option');
+        option.value = varietyId;
+        option.textContent = `${displayName} (${varietyCode})`;
+        varietySelect.appendChild(option);
+        varietySelect.value = varietyId;
+        
+        // 更新标题
+        updateVarietyTitle(varietyId);
     }
 
     // --- ECharts 加载检查 ---
@@ -1251,11 +1379,20 @@
             // 处理 URL 跳转 - 使用保存的 URL 品种参数和升贴水参数
             const urlVarietyParam = window.urlVarietyParam;
             const urlShowPremium = window.urlShowPremium;
+            
             if (urlVarietyParam && overviewSection.style.display !== 'none') {
                 // 确保 varietyParam 是 msgid 格式
-                let targetVarietyId = varietyIdMap[urlVarietyParam];
-                if (!targetVarietyId && urlVarietyParam.includes('_')) {
-                    targetVarietyId = urlVarietyParam;
+                let targetVarietyId = urlVarietyParam;
+                
+                // 如果不是 msgid 格式，尝试从映射表查找
+                if (!urlVarietyParam.includes('_')) {
+                    // 优先尝试从预定义直接映射中查找
+                    targetVarietyId = DIRECT_VARIETY_MAP[urlVarietyParam.toLowerCase()];
+                    
+                    // 如果直接映射中没有，再尝试从动态构建的映射表中查找
+                    if (!targetVarietyId) {
+                        targetVarietyId = varietyIdMap[urlVarietyParam.toLowerCase()];
+                    }
                 }
                 
                 if (targetVarietyId) {
@@ -1265,6 +1402,7 @@
                     showContractSelector(targetVarietyId); // 显示合约选择器并加载数据
                 } else {
                     console.warn(`URL 参数中的品种 ${urlVarietyParam} 无法映射到有效的 msgid`);
+                    showErrorMessage(`无法识别品种 "${urlVarietyParam}"，返回市场概览`);
                     showOverview(); // 跳转失败，显示概览
                 }
             } else if (contractSelectorSection.style.display === 'block' && currentVariety) {
@@ -1298,11 +1436,20 @@
                 // 处理 URL 跳转 - 这里也要使用保存的品种参数和升贴水参数
                 const urlVarietyParam = window.urlVarietyParam;
                 const urlShowPremium = window.urlShowPremium;
+                
                 if (urlVarietyParam && overviewSection.style.display !== 'none') {
                     // 确保 varietyParam 是 msgid 格式
-                    let targetVarietyId = varietyIdMap[urlVarietyParam];
-                    if (!targetVarietyId && urlVarietyParam.includes('_')) {
-                        targetVarietyId = urlVarietyParam;
+                    let targetVarietyId = urlVarietyParam;
+                    
+                    // 如果不是 msgid 格式，尝试从映射表查找
+                    if (!urlVarietyParam.includes('_')) {
+                        // 优先尝试从预定义直接映射中查找
+                        targetVarietyId = DIRECT_VARIETY_MAP[urlVarietyParam.toLowerCase()];
+                        
+                        // 如果直接映射中没有，再尝试从动态构建的映射表中查找
+                        if (!targetVarietyId) {
+                            targetVarietyId = varietyIdMap[urlVarietyParam.toLowerCase()];
+                        }
                     }
                     
                     if (targetVarietyId) {
@@ -1310,6 +1457,9 @@
                         varietySelect.value = targetVarietyId; // 设置下拉框选中
                         console.log(`URL 参数跳转到品种(使用缓存): ${targetVarietyId}, 显示升贴水: ${urlShowPremium}`);
                         showContractSelector(targetVarietyId); // 显示合约选择器并加载数据
+                    } else {
+                        console.warn(`URL 参数中的品种 ${urlVarietyParam} 无法映射到有效的 msgid（缓存模式）`);
+                        showErrorMessage(`无法识别品种 "${urlVarietyParam}"，返回市场概览`);
                     }
                 } else if (contractSelectorSection.style.display === 'block' && currentVariety) {
                     // 如果原本要显示合约选择器，也尝试用缓存加载
@@ -2240,9 +2390,14 @@
     }
 
     function buildVarietyIdMap() {
-      varietyIdMap = {};
+      varietyIdMap = {}; // 先清空现有映射
+      
+      // 优先添加预定义的映射
+      Object.assign(varietyIdMap, DIRECT_VARIETY_MAP);
+      
       if (!futuresData || futuresData.length === 0) return;
 
+      // 再从数据动态构建额外的映射
       futuresData.forEach(item => {
         if (!item.uid || !item.name) return;
         const [exchange, code] = item.uid.split('|');
@@ -2256,23 +2411,34 @@
         if (variety) varietyIdMap[variety.toLowerCase()] = msgid; // 小写字母代码 -> msgid
         if (item.code) varietyIdMap[item.code.toLowerCase()] = msgid; // 有时 item.code 是小写品种代码
       });
-      // console.log('品种ID映射表已构建:', varietyIdMap);
+      console.log('品种ID映射表已构建，包含预定义映射和动态映射');
     }
 
     function getVarietyIdFromName(name) {
         if (!name) return '';
-        const varietyName = extractVarietyCode(name); // 中文名
+        
+        // 优先尝试从预定义的直接映射中查找
+        const varietyCode = name.match(/^[A-Za-z]+/); // 提取开头的字母
+        if (varietyCode) {
+            const code = varietyCode[0].toLowerCase();
+            const directId = DIRECT_VARIETY_MAP[code];
+            if (directId) return directId;
+        }
+        
+        // 然后尝试中文名
+        const varietyName = extractVarietyCode(name); // 提取中文名
         if (varietyIdMap[varietyName]) {
             return varietyIdMap[varietyName];
         }
-        // 如果中文名找不到，尝试用可能的字母代码找
-        const possibleCode = name.match(/^[A-Za-z]+/); // 提取开头的字母
-        if (possibleCode && varietyIdMap[possibleCode[0].toLowerCase()]) {
-            return varietyIdMap[possibleCode[0].toLowerCase()];
+        
+        // 再尝试使用可能的字母代码
+        if (varietyCode && varietyIdMap[varietyCode[0].toLowerCase()]) {
+            return varietyIdMap[varietyCode[0].toLowerCase()];
         }
-         // 最终回退，尝试直接用提取的中文名（不推荐，但作为最后手段）
-         // console.warn(`无法从名称 "${name}" 映射到 msgid`);
-        return varietyIdMap[varietyName] || null; // 返回 null 表示未找到
+        
+        // 最终回退，直接返回null表示未找到
+        console.warn(`无法从名称 "${name}" 映射到 msgid`);
+        return null;
     }
 
 
@@ -2348,7 +2514,7 @@
             avgUpChange: '0.00', avgDownChange: '0.00',
             lastUpdated: lastUpdateTime ? lastUpdateTime.toLocaleString('zh-CN', { hour12: false }) : '-'
         };
-        if (!data || data.length === 0) return result;
+        if (!data || data.length === 0)if (!data || data.length === 0) return result;
 
         try {
             let totalUpChange = 0;
