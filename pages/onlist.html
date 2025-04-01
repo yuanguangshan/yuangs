@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>龙虎榜每日上榜次数</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.0.0"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* CSS变量定义 - 现代设计风格 */
+    :root {
+      /* 主色调 */
+      --primary: #5A8DEE;
+      --primary-light: #90B0F2;
+      --secondary: #4776D0;
+      --accent: #3DC4F3;
+
+      /* 中性色 */
+      --dark-1: #161d31;
+      --dark-2: #2c3e50;
+      --dark-3: #566f82;
+      --light-1: #ffffff;
+      --light-2: #f7f9fc;
+      --light-3: #e8edf1;
+
+      /* 功能色 */
+      --success: #3dd598;
+      --info: #3498db;
+      --warning: #ffc107;
+      --danger: #ff6b6b;
+
+      /* 主题色 */
+      --bg-color: var(--light-1);
+      --bg-secondary: var(--light-2);
+      --text-color: var(--dark-2);
+      --text-secondary: var(--dark-3);
+      --border-color: var(--light-3);
+
+      /* 图表 */
+      --chart-height: 300px;
+      --chart-title-color: var(--text-color);
+      --chart-grid-color: var(--border-color);
+
+      /* 动效 */
+      --transition-fast: 0.2s ease-out;
+      --transition-normal: 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      --transition-fancy: 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+
+      /* 阴影 - 更柔和 */
+      --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.07);
+      --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.08);
+
+      /* 圆角 */
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+
+      /* 字体 */
+      --font-family: 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    }
+    
+    /* 暗色主题 */
+    [data-theme="dark"] {
+      --bg-color: #121212;
+      --bg-secondary: #1e1e1e;
+      --text-color: #e0e0e0;
+      --text-secondary: #a0a0a0;
+      --border-color: #333333;
+      
+      --chart-title-color: #e0e0e0;
+      --chart-grid-color: #333333;
+      
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+      --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+      --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    /* 基础样式重置 */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: var(--font-family);
+      color: var(--text-color);
+      background-color: var(--bg-color);
+      transition: background-color var(--transition-normal), color var(--transition-normal);
+      padding: 16px;
+      overflow-x: hidden;
+      max-width: 100%;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0px;
+      height: 70%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 顶部导航栏 - 现代设计 */
+    .header {
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      color: white;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: var(--shadow-md);
+      position: relative;
+      z-index: 10;
+      border-radius: var(--radius-md);
+      margin-bottom: 16px;
+    }
+
+    .header-title {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      flex-grow: 1;
+      text-align: center;
+    }
+
+    /* 主题切换按钮 */
+    .theme-toggle {
+      width: 36px;
+      height: 36px;
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all var(--transition-normal);
+    }
+
+    .theme-toggle:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+    }
+
+    /* 控制区域 */
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding: 16px;
+      background-color: var(--bg-secondary);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      transition: all var(--transition-normal);
+    }
+
+    .controls:hover {
+      box-shadow: var(--shadow-md);
+    }
+
+    .date-picker-container {
+      display: flex;
+      align-items: center;
+    }
+
+    .date-picker-container label {
+      margin-right: 10px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    #datePicker {
+      padding: 10px 14px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      transition: all var(--transition-normal);
+      box-shadow: var(--shadow-sm);
+    }
+
+    #datePicker:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(90, 141, 238, 0.2);
+    }
+
+    /* 查询按钮 */
+    #queryBtn {
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow-md);
+      transition: all var(--transition-normal);
+    }
+
+    #queryBtn:hover {
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-2px);
+    }
+
+    #queryBtn:active {
+      transform: translateY(1px);
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* 加载指示器 */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 0;
+      color: var(--text-secondary);
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      border-top: 4px solid var(--primary);
+      animation: spin 1s linear infinite;
+      margin-bottom: 12px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* 日期显示 */
+    .date-info {
+      text-align: center;
+      margin: 0;
+      padding: 10px;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--primary);
+      background-color: var(--bg-secondary);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      transition: all var(--transition-normal);
+    }
+
+    /* 图表容器 */
+    .chart-container {
+      height: var(--chart-height);
+      margin-bottom: 4px;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      box-shadow: var(--shadow-md);
+      padding: 6px;
+      background-color: var(--bg-secondary);
+      transition: all var(--transition-normal);
+    }
+
+    .chart-container:hover {
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-2px);
+    }
+
+    /* 表格标题 */
+    .table-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 24px 0 16px;
+      color: var(--text-color);
+      display: flex;
+      align-items: center;
+      padding-left: 8px;
+      border-left: 4px solid var(--primary);
+    }
+
+    /* 表格样式 */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      box-shadow: var(--shadow-md);
+      border-radius: var(--radius-md);
+      overflow-x: auto;
+      background-color: var(--bg-color);
+      transition: all var(--transition-normal);
+      table-layout: fixed;
+    }
+    
+    /* 自定义列宽 */
+    #dataTable th:nth-child(1) {
+      width: 8%;
+    }
+    #dataTable th:nth-child(2) {
+      width: 15%;
+    }
+    #dataTable th:nth-child(3) {
+      width: 15%;
+    }
+    #dataTable th:nth-child(4),
+    #dataTable th:nth-child(5) {
+      width: 18%;
+    }
+    #dataTable th:nth-child(6) {
+      width: 15%;
+    }
+
+    table:hover {
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-2px);
+    }
+
+    th, td {
+      padding: 25px 12px;
+      text-align: right;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 13px;
+    }
+
+    th {
+      background-color: var(--bg-secondary);
+      font-weight: 600;
+      color: var(--text-secondary);
+      cursor: pointer;
+      position: relative;
+      user-select: none;
+    }
+
+    th:hover {
+      background-color: var(--border-color);
+      color: var(--text-color);
+    }
+
+    th.sorted-asc::after {
+      content: '↑';
+      position: absolute;
+      right: 5px;
+      color: var(--primary);
+    }
+
+    th.sorted-desc::after {
+      content: '↓';
+      position: absolute;
+      right: 5px;
+      color: var(--primary);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:nth-child(even) {
+      background-color: var(--bg-secondary);
+    }
+
+    tr:hover {
+      background-color: var(--bg-secondary);
+    }
+
+    /* 排名样式 */
+    .rank-1 {
+      font-weight: bold;
+      color: var(--danger);
+    }
+    .rank-2 {
+      font-weight: bold;
+      color: var(--warning);
+    }
+    .rank-3 {
+      font-weight: bold;
+      color: var(--primary);
+    }
+
+    /* 数值颜色 */
+    .value-high {
+      color: var(--danger);
+      font-weight: 600;
+    }
+    .value-low {
+      color: var(--success);
+      font-weight: 600;
+    }
+
+    /* 错误信息 */
+    .error {
+      color: var(--danger);
+      text-align: center;
+      padding: 16px;
+      background-color: rgba(231, 76, 60, 0.1);
+      border-radius: var(--radius-md);
+      margin: 16px 0;
+    }
+
+    /* 响应式调整 */
+    @media (max-width: 768px) {
+      .controls {
+        flex-direction: column;
+        gap: 15px;
+        align-items: stretch;
+      }
+      
+      .date-picker-container {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      
+      #datePicker {
+        width: 100%;
+      }
+      
+      #queryBtn {
+        width: 100%;
+      }
+
+      th, td {
+        padding: 4px 6px;
+        font-size: 11px;
+      }
+    }
+
+    /* 加载时的占位动画 */
+    @keyframes pulse {
+      0% { opacity: 0.5; }
+      50% { opacity: 0.3; }
+      100% { opacity: 0.5; }
+    }
+
+    .skeleton {
+      background-color: var(--border-color);
+      border-radius: var(--radius-sm);
+      animation: pulse 1.5s infinite;
+      height: 20px;
+      margin-bottom: 5px;
+    }
+
+    .no-data {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      color: var(--text-secondary);
+      font-size: 16px;
+      text-align: center;
+      background-color: var(--bg-secondary);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      gap: 16px;
+    }
+
+    .no-data i {
+      font-size: 36px;
+      color: var(--text-secondary);
+      opacity: 0.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 顶部标题栏 -->
+    <div class="header">
+      <h1 class="header-title">龙虎榜每日上榜次数</h1>
+      <button class="theme-toggle" id="theme-toggle" title="切换主题">
+        <i class="fas fa-moon"></i>
+      </button>
+    </div>
+    
+    <!-- 日期选择和查询 -->
+    <div class="controls">
+      <div class="date-picker-container">
+        <label for="datePicker">选择日期：</label>
+        <input type="date" id="datePicker">
+      </div>
+      <button id="queryBtn">
+        <i class="fas fa-search"></i> 查询数据
+      </button>
+    </div>
+    
+    <!-- 日期信息显示 -->
+    <div class="date-info" id="dateInfo"></div>
+    
+    <!-- 图表区域 -->
+    <div class="chart-container">
+      <canvas id="companyChart"></canvas>
+    </div>
+    
+    <!-- 表格标题 -->
+    <div class="table-title">
+      <i class="fas fa-list-ol"></i> 龙虎榜上榜机构排名
+    </div>
+    
+    <!-- 表格区域 -->
+    <div id="tableContainer">
+      <table id="dataTable">
+        <thead>
+          <tr>
+            <th data-sort="rank">No.</th>
+            <th data-sort="company">公司</th>
+            <th data-sort="onlist">次数</th>
+            <th data-sort="long_position_sum">多头</th>
+            <th data-sort="short_position_sum">空头</th>
+            <th data-sort="long_short_position_ratio">多空比</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <!-- 数据将在这里动态加载 -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // 全局变量
+    let myChart = null;
+    let allData = [];
+    const maxItems = 100; // 默认显示100条记录
+    let isDarkMode = false;
+    let userThemePreference = null; // 用户主题首选项
+    let currentSortColumn = 'onlist'; // 默认排序列
+    let currentSortOrder = 'desc'; // 默认排序方向
+
+    // 初始化页面
+    document.addEventListener('DOMContentLoaded', function() {
+      // 检测系统颜色方案
+      detectColorScheme();
+      
+      // 设置日期选择器默认为当天
+      const today = new Date();
+      const defaultDate = formatDateForInput(today);
+      document.getElementById('datePicker').value = defaultDate;
+      
+      // 添加按钮点击事件
+      document.getElementById('queryBtn').addEventListener('click', loadData);
+      document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+      
+      // 添加表头排序事件
+      document.querySelectorAll('th[data-sort]').forEach(th => {
+        th.addEventListener('click', handleSort);
+      });
+      
+      // 首次加载数据
+      loadData();
+    });
+    
+    // 处理排序事件
+    function handleSort(event) {
+      const column = event.currentTarget.dataset.sort;
+      
+      // 如果点击的是当前排序列，则切换排序方向
+      if (column === currentSortColumn) {
+        currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentSortColumn = column;
+        // 除公司名称外，其他字段默认降序排列
+        currentSortOrder = column === 'company' ? 'asc' : 'desc';
+      }
+      
+      // 更新表头样式
+      updateSortIndicators();
+      
+      // 重新渲染表格
+      renderTable(allData.slice(0, maxItems));
+    }
+    
+    // 更新排序指示器
+    function updateSortIndicators() {
+      document.querySelectorAll('th[data-sort]').forEach(th => {
+        th.classList.remove('sorted-asc', 'sorted-desc');
+        if (th.dataset.sort === currentSortColumn) {
+          th.classList.add(currentSortOrder === 'asc' ? 'sorted-asc' : 'sorted-desc');
+        }
+      });
+    }
+    
+    // 检测系统颜色方案
+    function detectColorScheme() {
+      // 检查是否有用户自定义设置
+      const savedUserPreference = localStorage.getItem('theme-preference');
+      if (savedUserPreference) {
+        userThemePreference = savedUserPreference;
+        isDarkMode = savedUserPreference === 'dark';
+      } else {
+        // 检查系统颜色方案
+        const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        isDarkMode = prefersDarkMode;
+      }
+      
+      // 应用主题
+      applyTheme();
+      updateThemeToggleIcon();
+      
+      // 监听系统主题变化
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        // 只有在用户没有明确选择主题时才跟随系统
+        if (userThemePreference === null) {
+          isDarkMode = e.matches;
+          applyTheme();
+          updateThemeToggleIcon();
+          
+          // 如果图表已存在，重新渲染
+          if (myChart) {
+            const currentData = allData.slice(0, 10);
+            myChart.destroy();
+            renderChart(currentData);
+          }
+        }
+      });
+    }
+    
+    // 更新主题切换按钮图标
+    function updateThemeToggleIcon() {
+      const themeToggle = document.getElementById('theme-toggle');
+      if (isDarkMode) {
+        themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+        themeToggle.title = '切换到浅色模式';
+      } else {
+        themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+        themeToggle.title = '切换到深色模式';
+      }
+    }
+    
+    // 应用主题到HTML元素
+    function applyTheme() {
+      if (isDarkMode) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+    }
+    
+    // 手动切换主题
+    function toggleTheme() {
+      isDarkMode = !isDarkMode;
+      
+      // 保存用户选择
+      userThemePreference = isDarkMode ? 'dark' : 'light';
+      localStorage.setItem('theme-preference', userThemePreference);
+      
+      // 应用主题
+      applyTheme();
+      updateThemeToggleIcon();
+      
+      // 如果图表已存在，重新渲染以应用新主题
+      if (myChart) {
+        const currentData = allData.slice(0, 10);
+        myChart.destroy();
+        renderChart(currentData);
+      }
+    }
+    
+    // 加载数据
+    function loadData() {
+      const dateInput = document.getElementById('datePicker').value;
+      const formattedDate = dateInput.replace(/-/g, '');
+      
+      // 显示加载中
+      displayLoading();
+      
+      // 清除图表
+      if (myChart) {
+        myChart.destroy();
+      }
+      
+      // 获取数据
+      fetchWithRetry(`https://data.want.biz/lhb/${formattedDate}`)
+        .then(data => {
+          if (data && data.data && data.data.length > 0) {
+            // 处理数据并显示
+            processData(data);
+          } else {
+            // 没有数据
+            displayNoData(formatDisplayDate(dateInput));
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          displayError(error.message || '数据加载失败');
+        });
+    }
+    
+    // 显示加载中
+    function displayLoading() {
+      const tableBody = document.getElementById('tableBody');
+      tableBody.innerHTML = '';
+      
+      // 创建骨架屏效果
+      for (let i = 0; i < 5; i++) {
+        const row = document.createElement('tr');
+        for (let j = 0; j < 6; j++) {
+          const cell = document.createElement('td');
+          const skeleton = document.createElement('div');
+          skeleton.className = 'skeleton';
+          cell.appendChild(skeleton);
+          row.appendChild(cell);
+        }
+        tableBody.appendChild(row);
+      }
+      
+      // 清除日期信息
+      document.getElementById('dateInfo').textContent = '数据加载中...';
+    }
+    
+    // 显示无数据
+    function displayNoData(date) {
+      document.getElementById('dateInfo').textContent = `${date} 数据不存在`;
+      
+      // 清除图表
+      const ctx = document.getElementById('companyChart').getContext('2d');
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      
+      // 清除表格并显示无数据信息
+      const tableBody = document.getElementById('tableBody');
+      tableBody.innerHTML = `
+        <tr>
+          <td colspan="6" class="no-data">
+            <i class="fas fa-search"></i>
+            <div>该日期没有数据</div>
+          </td>
+        </tr>
+      `;
+    }
+    
+    // 显示错误
+    function displayError(message) {
+      document.getElementById('dateInfo').textContent = '加载失败';
+      
+      // 清除图表
+      const ctx = document.getElementById('companyChart').getContext('2d');
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      
+      // 清除表格并显示错误信息
+      const tableBody = document.getElementById('tableBody');
+      tableBody.innerHTML = `
+        <tr>
+          <td colspan="6" class="error">数据加载失败: ${message}</td>
+        </tr>
+      `;
+    }
+    
+    // 处理并显示数据
+    function processData(responseData) {
+      // 提取并处理数据
+      allData = responseData.data.map(item => {
+        return {
+          ...item,
+          // 模拟多空数据（实际应使用API返回的数据）
+          long_position_sum: item.long_position_sum || Math.round(Math.random() * 500000),
+          short_position_sum: item.short_position_sum || Math.round(Math.random() * 500000),
+          long_short_position_ratio: item.long_short_position_ratio || (Math.random() * 3).toFixed(2),
+          // 移除公司名称中的"(代客)"
+          cleanName: item.futureCompanyName.replace(/\(\u4ee3\u5ba2\)$/, '')
+        };
+      });
+      
+      // 更新日期信息
+      const displayDate = formatDateFromString(responseData.date);
+      document.getElementById('dateInfo').textContent = `${displayDate} 龙虎榜数据`;
+      
+      // 首次默认按上榜次数排序
+      sortData('onlist', 'desc');
+      
+      // 渲染图表（取前10名）
+      renderChart(allData.slice(0, 10));
+      
+      // 渲染表格
+      renderTable(allData.slice(0, maxItems));
+      
+      // 更新表头排序指示器
+      updateSortIndicators();
+    }
+    
+    // 排序数据
+    function sortData(column, order) {
+      allData.sort((a, b) => {
+        let valueA, valueB;
+        
+        // 特殊处理公司列（字符串）
+        if (column === 'company') {
+          valueA = a.cleanName;
+          valueB = b.cleanName;
+          return order === 'asc' 
+            ? valueA.localeCompare(valueB)
+            : valueB.localeCompare(valueA);
+        }
+        
+        // 处理数值列
+        switch(column) {
+          case 'rank':
+            return 0; // 排名不需要排序，因为它是基于当前排序结果生成的
+          case 'onlist':
+            valueA = a.onlist;
+            valueB = b.onlist;
+            break;
+          case 'long_position_sum':
+            valueA = a.long_position_sum;
+            valueB = b.long_position_sum;
+            break;
+          case 'short_position_sum':
+            valueA = a.short_position_sum;
+            valueB = b.short_position_sum;
+            break;
+          case 'long_short_position_ratio':
+            valueA = parseFloat(a.long_short_position_ratio);
+            valueB = parseFloat(b.long_short_position_ratio);
+            break;
+          default:
+            valueA = a.onlist;
+            valueB = b.onlist;
+        }
+        
+        return order === 'asc' ? valueA - valueB : valueB - valueA;
+      });
+    }
+    
+    // 渲染图表
+    function renderChart(topData) {
+      const ctx = document.getElementById('companyChart').getContext('2d');
+      
+      // 提取前10名公司数据
+      const labels = topData.map(item => item.cleanName);
+      const values = topData.map(item => item.onlist);
+      const ratioValues = topData.map(item => parseFloat(item.long_short_position_ratio));
+      
+      // 调整图表颜色基于当前主题
+      const textColor = isDarkMode ? '#e0e0e0' : '#566f82';
+      const gridColor = isDarkMode ? '#333333' : '#e8edf1';
+      
+      // 创建渐变色
+      const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+      gradient.addColorStop(0, isDarkMode ? 'rgba(90, 141, 238, 0.9)' : 'rgba(90, 141, 238, 0.7)');
+      gradient.addColorStop(1, isDarkMode ? 'rgba(71, 118, 208, 0.9)' : 'rgba(71, 118, 208, 0.7)');
+      
+      // 创建图表
+      myChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: '上榜次数',
+              data: values,
+              backgroundColor: gradient,
+              borderColor: isDarkMode ? 'rgba(90, 141, 238, 1)' : 'rgba(90, 141, 238, 1)',
+              borderWidth: 1,
+              borderRadius: 6,
+              maxBarThickness: 40,
+              yAxisID: 'y'
+            },
+            {
+              label: '多空比',
+              data: ratioValues,
+              backgroundColor: 'rgba(255, 99, 132, 0)',
+              borderColor: isDarkMode ? 'rgba(255, 99, 132, 1)' : 'rgba(255, 99, 132, 1)',
+              borderWidth: 2,
+              pointRadius: 4,
+              pointStyle: 'circle',
+              pointBackgroundColor: isDarkMode ? 'rgba(255, 99, 132, 1)' : 'rgba(255, 99, 132, 1)',
+              type: 'line',
+              yAxisID: 'y1'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: '前十名机构上榜次数与多空比',
+              font: {
+                size: 16,
+                weight: 'bold'
+              },
+              color: textColor,
+              padding: {
+                top: 10,
+                bottom: 20
+              }
+            },
+            legend: {
+              display: true,
+              position: 'top',
+              labels: {
+                color: textColor,
+                font: {
+                  size: 12
+                },
+                usePointStyle: true,
+                pointStyleWidth: 10
+              }
+            },
+            tooltip: {
+              backgroundColor: isDarkMode ? 'rgba(30, 30, 30, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+              titleColor: isDarkMode ? '#e0e0e0' : '#2c3e50',
+              bodyColor: isDarkMode ? '#e0e0e0' : '#2c3e50',
+              titleFont: {
+                size: 14,
+                weight: 'bold'
+              },
+              bodyFont: {
+                size: 14
+              },
+              padding: 12,
+              cornerRadius: 6,
+              borderColor: isDarkMode ? '#333333' : '#e8edf1',
+              borderWidth: 1,
+              callbacks: {
+                label: function(context) {
+                  if (context.dataset.label === '上榜次数') {
+                    return `上榜次数: ${context.raw}`;
+                  } else if (context.dataset.label === '多空比') {
+                    return `多空比: ${context.raw.toFixed(2)}`;
+                  }
+                  return context.raw;
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: {
+                color: gridColor,
+                drawBorder: false
+              },
+              ticks: {
+                color: textColor,
+                font: {
+                  size: 12
+                },
+                padding: 8
+              },
+              title: {
+                display: true,
+                text: '上榜次数',
+                color: textColor,
+                font: {
+                  size: 12
+                }
+              }
+            },
+            y1: {
+              position: 'right',
+              beginAtZero: true,
+              grid: {
+                drawOnChartArea: false
+              },
+              ticks: {
+                color: isDarkMode ? 'rgba(255, 99, 132, 1)' : 'rgba(255, 99, 132, 1)',
+                font: {
+                  size: 12
+                },
+                padding: 8
+              },
+              title: {
+                display: true,
+                text: '多空比',
+                color: isDarkMode ? 'rgba(255, 99, 132, 1)' : 'rgba(255, 99, 132, 1)',
+                font: {
+                  size: 12
+                }
+              }
+            },
+            x: {
+              grid: {
+                display: false
+              },
+              ticks: {
+                color: textColor,
+                maxRotation: 90,
+                minRotation: 45,
+                font: {
+                  size: 12
+                },
+                padding: 16,
+                autoSkip: false
+              },
+              offset: true,
+              type: 'category',
+              afterFit: function(axis) {
+                axis.height = 80;
+              }
+            }
+          },
+          animation: {
+            duration: 800,
+            easing: 'easeOutQuart'
+          },
+          layout: {
+            padding: {
+              left: 10,
+              right: 10,
+              top: 0,
+              bottom: 10
+            }
+          }
+        }
+      });
+    }
+    
+    // 渲染表格
+    function renderTable(data) {
+      // 基于当前排序条件重新排序数据
+      sortData(currentSortColumn, currentSortOrder);
+      
+      // 获取高低值的阈值（前5名和后5名）
+      let highThresholds = {}, lowThresholds = {};
+      
+      // 为每个数值列计算高低阈值
+      ['onlist', 'long_position_sum', 'short_position_sum', 'long_short_position_ratio'].forEach(column => {
+        // 创建该列的数据副本并排序
+        const sortedValues = [...data].map(item => {
+          if (column === 'long_short_position_ratio') {
+            return parseFloat(item[column]);
+          }
+          return item[column];
+        }).sort((a, b) => b - a);
+        
+        // 设置高值阈值（前5个值中的最小值）
+        highThresholds[column] = sortedValues.length >= 5 ? sortedValues[4] : -Infinity;
+        
+        // 设置低值阈值（后5个值中的最大值，翻转排序）
+        const lastIndex = sortedValues.length - 5 >= 0 ? sortedValues.length - 5 : 0;
+        lowThresholds[column] = sortedValues.length >= 5 ? sortedValues[lastIndex] : Infinity;
+      });
+      
+      // 清空表格
+      const tableBody = document.getElementById('tableBody');
+      tableBody.innerHTML = '';
+      
+      // 添加数据行
+      data.forEach((item, index) => {
+        const row = document.createElement('tr');
+        
+        // 根据排名添加不同的样式
+        let rankClass = '';
+        if (index === 0) rankClass = 'rank-1';
+        else if (index === 1) rankClass = 'rank-2';
+        else if (index === 2) rankClass = 'rank-3';
+        
+        // 将多仓和空仓转换为万单位并保留两位小数
+        const longPosition = (item.long_position_sum / 10000).toFixed(2);
+        const shortPosition = (item.short_position_sum / 10000).toFixed(2);
+        const lsRatio = parseFloat(item.long_short_position_ratio).toFixed(2);
+        
+        // 确定高低值样式
+        const longClass = getValueClass(item.long_position_sum, highThresholds.long_position_sum, lowThresholds.long_position_sum);
+        const shortClass = getValueClass(item.short_position_sum, highThresholds.short_position_sum, lowThresholds.short_position_sum);
+        const ratioClass = getValueClass(parseFloat(item.long_short_position_ratio), highThresholds.long_short_position_ratio, lowThresholds.long_short_position_ratio);
+        const onlistClass = getValueClass(item.onlist, highThresholds.onlist, lowThresholds.onlist);
+        
+        row.innerHTML = `
+          <td class="${rankClass}">${index + 1}</td>
+          <td><a href="companyholding.html?company=${encodeURIComponent(item.cleanName)}" title="查看持仓盈亏">${item.cleanName}</a></td>
+          <td class="${onlistClass}">${item.onlist}</td>
+          <td class="${longClass}">${longPosition}万</td>
+          <td class="${shortClass}">${shortPosition}万</td>
+          <td class="${ratioClass}">${lsRatio}</td>
+        `;
+        tableBody.appendChild(row);
+      });
+    }
+    
+    // 获取数值样式类
+    function getValueClass(value, highThreshold, lowThreshold) {
+      if (value >= highThreshold) return 'value-high';
+      if (value <= lowThreshold) return 'value-low';
+      return '';
+    }
+    
+    // 带重试的fetch请求
+    async function fetchWithRetry(url, options = {}, retries = 2) {
+      let lastError;
+      
+      for (let i = 0; i < retries; i++) {
+        try {
+          const response = await fetch(url, options);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          return await response.json();
+        } catch (error) {
+          console.warn(`请求失败(${i+1}/${retries}):`, error);
+          lastError = error;
+          // 等待一段时间再重试
+          if (i < retries - 1) {
+            await new Promise(r => setTimeout(r, 1000));
+          }
+        }
+      }
+      
+      throw lastError;
+    }
+    
+    // 格式化日期为input value格式 (YYYY-MM-DD)
+    function formatDateForInput(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+    
+    // 从YYYYMMDD格式的字符串转换为显示格式 (YYYY年MM月DD日)
+    function formatDateFromString(dateStr) {
+      if (!dateStr || dateStr.length !== 8) return '';
+      
+      const year = dateStr.substring(0, 4);
+      const month = dateStr.substring(4, 6);
+      const day = dateStr.substring(6, 8);
+      
+      return `${year}年${month}月${day}日`;
+    }
+    
+    // 格式化显示日期 (YYYY-MM-DD -> YYYY年MM月DD日)
+    function formatDisplayDate(dateStr) {
+      if (!dateStr) return '';
+      
+      const parts = dateStr.split('-');
+      if (parts.length !== 3) return dateStr;
+      
+      return `${parts[0]}年${parts[1]}月${parts[2]}日`;
+    }
+  </script>
+</body>
+</html>
