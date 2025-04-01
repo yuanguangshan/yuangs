@@ -1146,9 +1146,10 @@
         const varietyParam = urlParams.get('variety'); // 期望是 msgid 格式
         const showPremiumParam = urlParams.get('showPremium');
 
-        if (varietyParam && showPremiumParam === 'true') {
-            // 需要延迟执行，等待 futuresData 加载后才能正确设置下拉框
-            // 在 fetchData 成功后处理
+        // 保存品种参数和升贴水参数供 fetchData 成功后使用
+        if (varietyParam) {
+            window.urlVarietyParam = varietyParam;
+            window.urlShowPremium = showPremiumParam === 'true';
         } else {
             showOverview(); // 默认显示概览
         }
@@ -1245,24 +1246,23 @@
             updateSummary(analysisResults);
             updateVarietySelect(currentVariety); // 更新下拉列表，并尝试选中 currentVariety
 
-             // 处理 URL 跳转
-            const urlParams = new URLSearchParams(window.location.search);
-            const varietyParam = urlParams.get('variety');
-            const showPremiumParam = urlParams.get('showPremium');
-            if (varietyParam && showPremiumParam === 'true' && overviewSection.style.display !== 'none') {
-                 // 确保 varietyParam 是 msgid 格式
-                let targetVarietyId = varietyIdMap[varietyParam];
-                if (!targetVarietyId && varietyParam.includes('_')) {
-                    targetVarietyId = varietyParam;
+            // 处理 URL 跳转 - 使用保存的 URL 品种参数和升贴水参数
+            const urlVarietyParam = window.urlVarietyParam;
+            const urlShowPremium = window.urlShowPremium;
+            if (urlVarietyParam && overviewSection.style.display !== 'none') {
+                // 确保 varietyParam 是 msgid 格式
+                let targetVarietyId = varietyIdMap[urlVarietyParam];
+                if (!targetVarietyId && urlVarietyParam.includes('_')) {
+                    targetVarietyId = urlVarietyParam;
                 }
                 
                 if (targetVarietyId) {
                     currentVariety = targetVarietyId;
                     varietySelect.value = targetVarietyId; // 设置下拉框选中
-                    console.log(`URL 参数跳转到品种: ${targetVarietyId}`);
+                    console.log(`URL 参数跳转到品种: ${targetVarietyId}, 显示升贴水: ${urlShowPremium}`);
                     showContractSelector(targetVarietyId); // 显示合约选择器并加载数据
                 } else {
-                    console.warn(`URL 参数中的品种 ${varietyParam} 无法映射到有效的 msgid`);
+                    console.warn(`URL 参数中的品种 ${urlVarietyParam} 无法映射到有效的 msgid`);
                     showOverview(); // 跳转失败，显示概览
                 }
             } else if (contractSelectorSection.style.display === 'block' && currentVariety) {
@@ -1293,9 +1293,25 @@
                 createCacheWarning(`概览数据更新失败 (${error.message})，当前显示的是缓存数据。`, cacheWarningContainer);
                 contentElement.style.display = 'block'; // 确保内容区域可见
 
-                // 如果原本要显示合约选择器，也尝试用缓存加载
-                if (contractSelectorSection.style.display === 'block' && currentVariety) {
-                    fetchVarietyContracts(currentVariety); // 会尝试使用合约缓存
+                // 处理 URL 跳转 - 这里也要使用保存的品种参数和升贴水参数
+                const urlVarietyParam = window.urlVarietyParam;
+                const urlShowPremium = window.urlShowPremium;
+                if (urlVarietyParam && overviewSection.style.display !== 'none') {
+                    // 确保 varietyParam 是 msgid 格式
+                    let targetVarietyId = varietyIdMap[urlVarietyParam];
+                    if (!targetVarietyId && urlVarietyParam.includes('_')) {
+                        targetVarietyId = urlVarietyParam;
+                    }
+                    
+                    if (targetVarietyId) {
+                        currentVariety = targetVarietyId;
+                        varietySelect.value = targetVarietyId; // 设置下拉框选中
+                        console.log(`URL 参数跳转到品种(使用缓存): ${targetVarietyId}, 显示升贴水: ${urlShowPremium}`);
+                        showContractSelector(targetVarietyId); // 显示合约选择器并加载数据
+                    }
+                } else if (contractSelectorSection.style.display === 'block' && currentVariety) {
+                    // 如果原本要显示合约选择器，也尝试用缓存加载
+                    fetchVarietyContracts(currentVariety);
                 }
 
             } else {
