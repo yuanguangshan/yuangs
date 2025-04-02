@@ -1546,34 +1546,47 @@ Make calculator, Enter. "./calculator." And let me increase my terminal window s
 So the Instagram Reels aren't that long. But if you keep doubling it again and again, this is called exponentiation, which will make you quite wealthy quite quickly because, notice, we're already in the thousands of dollars by just saying yes and yes and yes. 
 所以 Instagram Reels 并不长。但是如果你一次又一次地翻倍，这就叫做指数增长，这会让你很快变得非常富有，因为，注意，我们只通过说“是的”和“是的”就变成了几千美元。
 
-It's an interesting societal question as to what dollar amount you would keep the money and no longer double it and pass it on. But for now, we'll just keep doubling it because this is just getting bigger and bigger, seemingly infinitely large And the C program-- but, oh, my god, apparently the Instagram Reels cut off the meme too short because eventually it goes negative and then 0. What's actually going on here?   
+It's an interesting societal question as to what dollar amount you would keep the money and no longer double it and pass it on. But for now, we'll just keep doubling it because this is just getting bigger and bigger, seemingly infinitely large And the C program-- but, oh, my god, apparently the Instagram Reels cut off the meme too short because eventually it goes negative and then 0. What's actually going on here? 
+这是一个有趣的社会问题，即你会保留多少钱不再翻倍并传递出去。但现在，我们只会继续翻倍，因为这东西似乎越来越大，无限大。至于 C 程序——但是，哦，我的天，显然 Instagram Reels 把梗剪得太短了，因为最终它会变成负数然后是 0。这里到底发生了什么？
 
-The code is actually correct. But we're bumping up against a different kind of problem. Any instinct for what is actually going wrong here? It's not doubling forever. Yeah.   
+The code is actually correct. But we're bumping up against a different kind of problem. Any instinct for what is actually going wrong here? It's not doubling forever. Yeah. 
+代码实际上是正确的。但我们遇到了不同类型的问题。有什么直觉能告诉我们这里到底出了什么问题吗？它并不是永远翻倍。是的。
 
-AUDIENCE: There's not enough bits to store.   
+AUDIENCE: There's not enough bits to store. 
+观众：存储的位数不够。
 
-DAVID J. MALAN: Yeah, there's not enough bits to store bigger and bigger numbers. Recall, with 32 bits, which happens to be how big most ints are, you can count as high as 4 billion if you start at 0 or roughly as high as 2 billion if you want to handle negative numbers as well, negative 2 billion to positive 2 billion.   
+DAVID J. MALAN: Yeah, there's not enough bits to store bigger and bigger numbers. Recall, with 32 bits, which happens to be how big most ints are, you can count as high as 4 billion if you start at 0 or roughly as high as 2 billion if you want to handle negative numbers as well, negative 2 billion to positive 2 billion. 
+大卫·J·马尔兰：是的，存储更大的数字位数不够。回想一下，32 位，恰好是大多数整型变量的大小，如果你从 0 开始计数，可以数到 40 亿，如果你想同时处理负数，大约可以数到 20 亿，从负 20 亿到正 20 亿。
 
-So eventually, once I get to $2 billion, or $1 billion, it goes negative. And then it just goes to 0 altogether. This is because of something called integer overflow, whereby if you only have a finite number of bits and you keep incrementing them, incrementing them, incrementing them, eventually you can't just carry the 1 because there's no 33rd bit.   
+So eventually, once I get to $2 billion, or $1 billion, it goes negative. And then it just goes to 0 altogether. This is because of something called integer overflow, whereby if you only have a finite number of bits and you keep incrementing them, incrementing them, incrementing them, eventually you can't just carry the 1 because there's no 33rd bit. 
+所以，一旦我数到 20 亿或 10 亿，它就会变成负数。然后它就变成 0 了。这是因为一个叫做整数溢出的东西，如果你只有有限位数，并且一直增加它们，增加它们，增加它们，最终你不能简单地进位，因为没有第 33 位。
 
-So all of the other bits wrap around from ones to zeros. And it looks like all 32 of your bits are 0 because the 33rd bit was supposed to be the 1, but it's not there. They don't have enough memory.   
+So all of the other bits wrap around from ones to zeros. And it looks like all 32 of your bits are 0 because the 33rd bit was supposed to be the 1, but it's not there. They don't have enough memory. 
+所以所有的其他位都是从 1 绕回到 0。看起来你的 32 位都是 0，因为第 33 位应该是 1，但并没有。它们的内存不够。
 
-So this is a fundamental problem with computers whereby if you count high enough, things will just start to break, at least if you're using C or C++ or certain other languages that don't anticipate this. And there's a very real implication of this.   
+So this is a fundamental problem with computers whereby if you count high enough, things will just start to break, at least if you're using C or C++ or certain other languages that don't anticipate this. And there's a very real implication of this. 
+这就是计算机的一个基本问题，如果你计数足够高，事情就会开始出错，至少如果你使用的是 C 或 C++或某些其他没有预料到这种情况的语言。这有一个非常实际的含义。
 
-So here's a photograph of something we'll look at more in time to come of memory inside of your computer or phone or any electronic device. Suffice it to say, there's only a finite amount of memory. And if you're only using 32 bits then, or heck even three bits, you will eventually overflow. We used three bits last week.   
+So here's a photograph of something we'll look at more in time to come of memory inside of your computer or phone or any electronic device. Suffice it to say, there's only a finite amount of memory. And if you're only using 32 bits then, or heck even three bits, you will eventually overflow. We used three bits last week. 
+这里有一张照片，我们将来会更多地讨论它，是电脑、手机或任何电子设备中的内存。简单来说，内存是有限的。如果你只使用 32 位，或者甚至只使用 3 位，你最终会溢出。我们上周使用了 3 位。
 
-So here's an example. In binary, if you're only using three bits, per the white digits here-- I've put in gray the fourth just to show you what carry we might want to have-- here's 0, 1, 2, 3, 4, 5, 4, 7, just like last week. And just like last week, someone said, how do we get to 8? We need another bit.   
+So here's an example. In binary, if you're only using three bits, per the white digits here-- I've put in gray the fourth just to show you what carry we might want to have-- here's 0, 1, 2, 3, 4, 5, 4, 7, just like last week. And just like last week, someone said, how do we get to 8? We need another bit. 
+这里有一个例子。在二进制中，如果你只使用三个位，就像这里白色数字所示——我把它涂成灰色，只是为了显示我们可能想要的进位——这里是 0，1，2，3，4，5，4，7，就像上周一样。就像上周一样，有人说，我们怎么到达 8？我们需要另一个位。
 
-But if that bit is grayed out because it doesn't exist, we've just overflowed this tiny integer and gotten back to 0, just like my money went to $0 instead. So how do we actually avoid that? One way to do this is this.   
+But if that bit is grayed out because it doesn't exist, we've just overflowed this tiny integer and gotten back to 0, just like my money went to $0 instead. So how do we actually avoid that? One way to do this is this. 
+但是如果那个部分因为不存在而变灰，我们就已经溢出了这个小整数，又回到了 0，就像我的钱变成了 0 美元一样。那么我们到底该如何避免这种情况呢？有一种方法就是这样做。
 
-Let me hit Control-C to break out of the program. Or I could just type "no." Let me shrink my terminal window and clear it here. I could actually do this.   
+Let me hit Control-C to break out of the program. Or I could just type "no." Let me shrink my terminal window and clear it here. I could actually do this. 
+让我按 Ctrl+C 来中断程序。或者我可以直接输入“no”。让我缩小我的终端窗口并在这里清除。我实际上可以这样做。
 
 It turns out that ints use 32 bits typically. But there's another data type that was on the slide before called long, which is a longer version of an int, which is 64 bits, which is crazy big. There's not that many dollars in the world. But it's still finite, even though I can't pronounce a number that big. 
 实际上，整型通常使用 32 位。但之前幻灯片上提到过另一种数据类型，叫做长整型，它是整型的长版本，是 64 位，这太疯狂了。世界上没有那么多美元。但它仍然是有限的，尽管我无法说出那么大的数字。
 
-But if we change all of our ints to longs and we change our placeholder from percent i to percent li, for long int, I can actually count higher and higher. So case in point, let me actually go back to my terminal-- make calculator, Enter. Make it larger again-- "./calculator."   
+But if we change all of our ints to longs and we change our placeholder from percent i to percent li, for long int, I can actually count higher and higher. So case in point, let me actually go back to my terminal-- make calculator, Enter. Make it larger again-- "./calculator." 
+但如果我们把所有的整型都改为长整型，并将占位符从“percent i”改为“percent li”（长整型），我实际上可以数得更高。所以以这个为例，让我回到我的终端——运行计算器，输入。再次放大——"./calculator."
 
-And I'm just going to keep saying yes but faster this time. The sequence is exactly the same. But recall that once we got into the billions, it started to wrap to negative and then 0. This is a lot of money now. Longs are indeed longer. And I could do this probably all day long.   
+And I'm just going to keep saying yes but faster this time. The sequence is exactly the same. But recall that once we got into the billions, it started to wrap to negative and then 0. This is a lot of money now. Longs are indeed longer. And I could do this probably all day long. 
+我会继续快速地说“是”，但这次更快。序列完全相同。但回想一下，当我们达到数十亿时，它开始变为负数然后是 0。现在这是一大笔钱。长整型确实更长。我可能整天都能这样做。
 
 Oh, interesting. I shouldn't have said that. Can't do this all day long because eventually a long, too, will overflow. [WHISPERS] I just didn't think it was going to happen that fast. So a long, too, will overflow because we'll need a 65th bit, but the computer has not allocated it. So that, too, becomes an issue of overflow. 
 哦，有趣。我不应该那么说。不可能整天都这样做，因为最终也会溢出。[低语]我只是没想到会发生得那么快。所以，也会溢出，因为我们需要第 65 位，但电脑没有分配它。所以，这也变成了溢出的问题。
@@ -1581,78 +1594,111 @@ Oh, interesting. I shouldn't have said that. Can't do this all day long because 
 To read an excerpt, these are very real world issues. And in fact, here's a photograph of a Boeing 787 years ago that actually had issues beyond the most recent issues with Boeing airplanes, whereby after 248 days, the Boeing 787, years ago, can lose all of its electrical power due to the generator control units simultaneously going into failsafe mode, whatever that means. 
 阅读摘录时，这些问题都是非常真实的世界问题。事实上，这里有一张几年前波音 787 的照片，实际上它的问题超出了波音飞机最近的问题，因为在 248 天后，几年前的那架波音 787 由于发电机控制单元同时进入安全模式，无论这意味着什么，可以失去所有电力。
 
-But if you dig into this, it turns out that there was a software counter in these airplanes years ago that would overflow after 248 days of continuous power. 248 days, why? Well, Boeing was using a 32-bit integer. And they were using it to count tenths of seconds.   
+But if you dig into this, it turns out that there was a software counter in these airplanes years ago that would overflow after 248 days of continuous power. 248 days, why? Well, Boeing was using a 32-bit integer. And they were using it to count tenths of seconds. 
+但如果你深入研究，会发现这些飞机多年前就有一个软件计数器，连续供电 248 天后会溢出。248 天，为什么？因为波音使用的是 32 位整数。他们用这个整数来计算十分之一秒。
 
-And it turns out, if you do the math, after 248 days, you have used too many tenths such that you overflow the size of a 32-bit integer. The plane would essentially have this integer, this tiny, stupid little variable, overflow. But generally speaking, when your numbers suddenly go negative or 0, bad things happen. The plane could literally lose its power mid-flight or on the ground. And if you can believe it, anyone want to guess what Boeing's workaround was till they fixed the actual software?   
+And it turns out, if you do the math, after 248 days, you have used too many tenths such that you overflow the size of a 32-bit integer. The plane would essentially have this integer, this tiny, stupid little variable, overflow. But generally speaking, when your numbers suddenly go negative or 0, bad things happen. The plane could literally lose its power mid-flight or on the ground. And if you can believe it, anyone want to guess what Boeing's workaround was till they fixed the actual software? 
+结果，如果你做一下数学计算，248 天后，你使用的十分之一太多，以至于 32 位整数的容量溢出了。飞机本质上会有这样一个整数，这个微不足道的小变量，溢出。但一般来说，当你的数字突然变成负数或 0 时，会发生不好的事情。飞机可能会在飞行中或在地面上失去动力。而且，如果你能相信的话，有人猜猜波音在修复实际软件之前采取了什么解决方案吗？
 
 AUDIENCE: [INAUDIBLE]   观众：[听不清]
 
-What's that?   
+What's that?   那是什么？
 
-AUDIENCE: [? It's for ?] [INAUDIBLE].   
+AUDIENCE: [? It's for ?] [INAUDIBLE]. 
+AUDIENCE: [? 是为了？] [听不清]。
 
-DAVID J. MALAN: Not even-- reboot the plane. They were told, every few days, certainly every 248 days, turn the power off, turn it back on, which, stupidly, is what all of us have been told for years with our Macs and PCs and phones. Why? Because sometimes, because of bugs and software, computers get into funky states, which is a colloquial way of saying some programmer made a mistake and some counter overflowed or some condition wasn't handled and just weird, unexpected things happen.   
+DAVID J. MALAN: Not even-- reboot the plane. They were told, every few days, certainly every 248 days, turn the power off, turn it back on, which, stupidly, is what all of us have been told for years with our Macs and PCs and phones. Why? Because sometimes, because of bugs and software, computers get into funky states, which is a colloquial way of saying some programmer made a mistake and some counter overflowed or some condition wasn't handled and just weird, unexpected things happen. 
+大卫·J·马兰：甚至——重新启动飞机。他们被告知，每隔几天，当然每隔 248 天，关掉电源，再打开，这愚蠢地是我们多年来用我们的 Mac 和 PC 以及手机所被告知的。为什么？因为有时，由于错误和软件，计算机会进入奇怪的状态，这是一种口语化的说法，意思是某个程序员犯了错误，某个计数器溢出，或者某个条件没有被处理，发生了奇怪、意外的事情。
 
-So rebooting just resets all of your variables back to their original values and gives you more time, more runway in this case, no pun intended. There are others. In fact, one of the most famous ones from the 1980s was the original Pac-Man game-- only had support for 255 levels. Why? They were using 8 bits. Recall that 8 bits gives you 256. But if you start counting at 0, you can only go to 255.   
+So rebooting just resets all of your variables back to their original values and gives you more time, more runway in this case, no pun intended. There are others. In fact, one of the most famous ones from the 1980s was the original Pac-Man game-- only had support for 255 levels. Why? They were using 8 bits. Recall that 8 bits gives you 256. But if you start counting at 0, you can only go to 255. 
+因此重新启动只是将所有变量重置为它们的原始值，并给你更多的时间，在这个例子中，更多的时间，没有别的意思。实际上，1980 年代最著名的一个例子是原始的《吃豆人》游戏——只支持 255 个级别。为什么？他们使用了 8 位。回想一下，8 位给你 256。但如果从 0 开始计数，你只能到 255。
 
-So the crazy kids who were so good at Pac-Man that they got to level 256, the makers of Pac-Man did not anticipate that anyone was going to win that many levels. And just weird stuff happened on the screen. All of the fruit started overwriting everything because they didn't have enough memory allocated to the level, nor did they have a condition that says, if level equals equals 255, "you win." There was just nothing handling that corner case, so to speak.   
+So the crazy kids who were so good at Pac-Man that they got to level 256, the makers of Pac-Man did not anticipate that anyone was going to win that many levels. And just weird stuff happened on the screen. All of the fruit started overwriting everything because they didn't have enough memory allocated to the level, nor did they have a condition that says, if level equals equals 255, "you win." There was just nothing handling that corner case, so to speak. 
+所以那些疯狂的孩子，他们玩《吃豆人》玩得很好，能到达 256 级，但《吃豆人》的制作者没有预料到有人能赢这么多关卡。屏幕上发生了奇怪的事情。所有的水果开始覆盖一切，因为它们没有为关卡分配足够的内存，也没有一个条件说，如果关卡等于 255，“你赢了”。换句话说，没有任何东西处理这个特殊情况。
 
-So these things abound even these days. Thankfully, in some languages, there are better solutions where you can use big integers. And you'll just use 64, maybe 128, maybe 256 bits. But you need to use a language or a library that allows you to grow and shrink the amount of memory being used. And many, if not most languages, do not do that for us.   
+So these things abound even these days. Thankfully, in some languages, there are better solutions where you can use big integers. And you'll just use 64, maybe 128, maybe 256 bits. But you need to use a language or a library that allows you to grow and shrink the amount of memory being used. And many, if not most languages, do not do that for us. 
+所以这些事情现在仍然存在。幸运的是，在某些语言中，有更好的解决方案，你可以使用大整数。你可能会用 64 位，也许 128 位，也许 256 位。但你需要使用一个允许你增加和减少使用内存的语言或库。而且，如果不是大多数语言，很多语言都不为我们做这件事。
 
-So there's a few final problems to see that we've been taking for granted thus far. And they also involve numbers and memory. So let's go back into our calculator. Let's throw away all of this meme code here. And instead, let's go ahead and do something simple again.   
+So there's a few final problems to see that we've been taking for granted thus far. And they also involve numbers and memory. So let's go back into our calculator. Let's throw away all of this meme code here. And instead, let's go ahead and do something simple again. 
+所以，我们之前一直认为理所当然的几个最终问题。它们也涉及到数字和内存。让我们回到我们的计算器。让我们扔掉这里的所有这些模因代码。然后，让我们再次做一些简单的事情。
 
-int x equals get_int. And prompt the user for a variable x. int y equals get_int, prompt the user for a variable y. And this time, instead of addition, instead of doubling, let's do division. So printf, quote, unquote, percent i backslash n. And then plug in x divided by y. So you use a single forward slash for division.   
+int x equals get_int. And prompt the user for a variable x. int y equals get_int, prompt the user for a variable y. And this time, instead of addition, instead of doubling, let's do division. So printf, quote, unquote, percent i backslash n. And then plug in x divided by y. So you use a single forward slash for division. 
+int x 等于 get_int。然后提示用户输入变量 x。int y 等于 get_int，提示用户输入变量 y。这次，我们不做加法，也不做乘法，来做除法。所以 printf，引号，反引号，百分号 i 反斜杠 n。然后输入 x 除以 y。所以你用单个正斜杠来做除法。
 
-Let me go ahead and, make calculator down here, "./calculator." And let's go ahead and do 1 divided by 3, which should, in fact, be-- it's not really 0. It's like 0.333. Let's try this again. How about "./calculator" 3 divided by 2? Should be 1.5. Nope, computer thinks it's 1. Well, what's happening here?   
+Let me go ahead and, make calculator down here, "./calculator." And let's go ahead and do 1 divided by 3, which should, in fact, be-- it's not really 0. It's like 0.333. Let's try this again. How about "./calculator" 3 divided by 2? Should be 1.5. Nope, computer thinks it's 1. Well, what's happening here? 
+让我先在这里创建一个计算器，"./calculator。" 然后我们来计算 1 除以 3，实际上应该是——它不是 0。它像是 0.333。我们再试一次。试试 "./calculator" 3 除以 2？应该是 1.5。不，电脑认为是 1。这里发生了什么？
 
-Well, it turns out, when you're using integers in a program, you are vulnerable to what's called truncation. An integer plus an integer gives you an integer. An integer divided by an integer, funny enough, gives you an integer.   
+Well, it turns out, when you're using integers in a program, you are vulnerable to what's called truncation. An integer plus an integer gives you an integer. An integer divided by an integer, funny enough, gives you an integer. 
+好吧，结果是，当你使用整数在程序中时，你容易受到所谓的截断的影响。整数加整数得到整数。有趣的是，整数除以整数也得到整数。
 
-So even if the answer is supposed to be 0.333 or 1.5, everything in the world of integers throws away the decimal point onward. And you only get the integer part of the value. So it's not even rounding. It's truncating everything after the decimal.   
+So even if the answer is supposed to be 0.333 or 1.5, everything in the world of integers throws away the decimal point onward. And you only get the integer part of the value. So it's not even rounding. It's truncating everything after the decimal. 
+即使答案应该是 0.333 或 1.5，整数世界的所有东西都会丢弃小数点后的部分。你只能得到值的整数部分。所以这甚至不是四舍五入。它是截断小数点后的所有内容。
 
-So this program is just not correct. But there are solutions potentially. For instance, if I go back into my code here and I use a different format code we haven't used yet-- we had s for string, i for int. There's also f for float. And a float was like a real number, something with a decimal point in it by definition. We just haven't used it yet.   
+So this program is just not correct. But there are solutions potentially. For instance, if I go back into my code here and I use a different format code we haven't used yet-- we had s for string, i for int. There's also f for float. And a float was like a real number, something with a decimal point in it by definition. We just haven't used it yet. 
+所以这个程序是不正确的。但可能有解决方案。例如，如果我回到我的代码这里，并使用我们还没有使用过的不同格式代码——我们有了 s 用于字符串，i 用于整数。还有一个 f 用于浮点数。浮点数就像一个真正的数字，按照定义，它有一个小数点。我们只是还没有使用它。
 
-I could tell the computer to print this as a float. So let me do make calculator again. And now, hm, it's specifying type double. There's an error here. The problem is that I can't just tell the computer to format this number as a float. I need to convert the number, x divided by y, to a float. And I can do this in a couple of ways.   
+I could tell the computer to print this as a float. So let me do make calculator again. And now, hm, it's specifying type double. There's an error here. The problem is that I can't just tell the computer to format this number as a float. I need to convert the number, x divided by y, to a float. And I can do this in a couple of ways. 
+我可以告诉计算机将其打印为浮点数。所以让我再次制作计算器。现在，嗯，它指定了类型 double。这里有一个错误。问题是我不能只是告诉计算机将这个数字格式化为浮点数。我需要将数字 x 除以 y 转换为浮点数。我可以这样做几种方式。
 
-One, I could literally change all of this to floats and just avoid the problem altogether. Use float, use get_float, use percent f, and I'm done. But if I want to use ints for whatever reason-- because I want the user to type in integers, but I want to show them real numbers with decimal points for correct math-- I can do what's called casting a value.   
+One, I could literally change all of this to floats and just avoid the problem altogether. Use float, use get_float, use percent f, and I'm done. But if I want to use ints for whatever reason-- because I want the user to type in integers, but I want to show them real numbers with decimal points for correct math-- I can do what's called casting a value. 
+一，我可以把所有这些都改成浮点数，从而完全避免这个问题。使用浮点数，使用 get_float，使用百分号 f，然后我就完成了。但如果出于某种原因我想使用整数——因为我想让用户输入整数，但我想向他们展示带有小数点的实数来进行正确的数学运算——我可以进行所谓的类型转换。
 
-I can, in parentheses-- which is a weird new use of parentheses-- I can say, hey, computer, please treat the following integer as a float instead, thereby avoiding truncation. Do not truncate for me. So if I now run make calculator again, "./calculator," and type in, for instance, 1 for x, 3 for y, now I get an actual floating point value. I'm formatting it as such. And I'm telling the computer to actually arithmetically calculate it as such as well.   
+I can, in parentheses-- which is a weird new use of parentheses-- I can say, hey, computer, please treat the following integer as a float instead, thereby avoiding truncation. Do not truncate for me. So if I now run make calculator again, "./calculator," and type in, for instance, 1 for x, 3 for y, now I get an actual floating point value. I'm formatting it as such. And I'm telling the computer to actually arithmetically calculate it as such as well. 
+我可以在括号里——这是一种奇怪的括号新用法——对计算机说，嘿，请将下面的整数当作浮点数处理，从而避免截断。不要为我截断。所以，如果我现在再次运行 make calculator，输入“./calculator”，然后输入，比如 x 为 1，y 为 3，现在我会得到一个实际的浮点数值。我正在这样格式化它。并且我正在告诉计算机实际上这样进行算术计算。
 
-But here, too, I'm kind of cheating you of a reality. It turns out-- let me clear this screen here. And it turns out that there are fancy ways in printf to tell it how many digits to show you, how many significant digits. And the syntax is very weird. I have to look it up constantly.   
+But here, too, I'm kind of cheating you of a reality. It turns out-- let me clear this screen here. And it turns out that there are fancy ways in printf to tell it how many digits to show you, how many significant digits. And the syntax is very weird. I have to look it up constantly. 
+但在这里，我也有点在欺骗你。结果是——让我先清屏。结果是 printf 中有一些花哨的方法可以告诉它显示多少位数字，显示多少有效数字。语法非常奇怪，我不得不经常查阅。
 
-But instead of just saying percent f, you literally put some numbers in between there. And you say point 5. And that will say-- it's weird syntax-- hey, printf, format this to five digits instead.   
+But instead of just saying percent f, you literally put some numbers in between there. And you say point 5. And that will say-- it's weird syntax-- hey, printf, format this to five digits instead. 
+但是，你并不是简单地写上“%f”，而是在中间插入一些数字。你说“0.5”。这看起来有点奇怪的语法——嘿，printf，格式化成五位数字。
 
-So let me go ahead and do make calculator again, "./calculator." And let's do 1 divided by 3. And indeed, I get five significant digits there. But suppose I get a little crazy and I want 50 significant digits. Well, according to grade school, I should just see more 3's. But watch this.   
+So let me go ahead and do make calculator again, "./calculator." And let's do 1 divided by 3. And indeed, I get five significant digits there. But suppose I get a little crazy and I want 50 significant digits. Well, according to grade school, I should just see more 3's. But watch this. 
+让我先来做一下计算器，"./calculator"。然后我们来计算 1 除以 3。确实，我得到了五位有效数字。但是，如果我有点疯狂，想要 50 位有效数字呢？按照小学的知识，我应该看到更多的 3。但是看看这个。
 
-Make calculator, "./calculator." And it turns out that whoever taught you grade-school math was kind of telling you some white lies because if you really do it with a powerful Mac or PC or phone, one third is actually 0.3333333334326744079-- [SIGHS] who's right? Mr. and Mrs. So-and-so from grade school or the internet?   
+Make calculator, "./calculator." And it turns out that whoever taught you grade-school math was kind of telling you some white lies because if you really do it with a powerful Mac or PC or phone, one third is actually 0.3333333334326744079-- [SIGHS] who's right? Mr. and Mrs. So-and-so from grade school or the internet? 
+做一下计算器，"./calculator"。结果发现，教你的小学数学老师可能是在说一些善意的谎言，因为如果你真的在强大的 Mac 或 PC 或手机上这样做，三分之一实际上是 0.3333333334326744079——[叹息]谁是对的？小学的某某先生和某某女士，还是互联网？
 
-What's going on here? What explains this? It all comes down somehow to [? weak ?] zeros and ones. Why is this floating point number imprecise, so to speak? What's the intuition? Yeah.   
+What's going on here? What explains this? It all comes down somehow to [? weak ?] zeros and ones. Why is this floating point number imprecise, so to speak? What's the intuition? Yeah. 
+这里发生了什么？是什么解释了这一切？这一切似乎都归结于[？弱？]零和一。为什么这个浮点数在某种程度上是不精确的？直觉是什么？是的。
 
-AUDIENCE: Is this similar to what happened earlier where there was an overflow?   
+AUDIENCE: Is this similar to what happened earlier where there was an overflow? 
+观众：这与之前发生过的溢出情况相似吗？
 
-DAVID J. MALAN: Yeah, similar in spirit. Just as ints only use 32 bits, floats also use only 32 bits. If you want more, just as int has long, floats have something called "double." So I could avoid some of the problem by switching to double. But that's still going to be finite.   
+DAVID J. MALAN: Yeah, similar in spirit. Just as ints only use 32 bits, floats also use only 32 bits. If you want more, just as int has long, floats have something called "double." So I could avoid some of the problem by switching to double. But that's still going to be finite. 
+大卫·J·马尔安：是的，在精神上相似。就像 int 只使用 32 位一样，float 也只使用 32 位。如果你想用更多的位数，就像 int 有 long 一样，float 有“double”这种类型。所以我可以通过切换到 double 来避免一些问题。但这仍然是有限的。
 
-And if you think about this intuitively, if you're using a finite number of bits, be it 32 or 64, you can only represent literally so many patterns and thus so many floating point values, so many real numbers. But how many real numbers are there in the world? Literally infinitely many, is the challenge of real numbers. You can just keep adding numbers after the digit.   
+And if you think about this intuitively, if you're using a finite number of bits, be it 32 or 64, you can only represent literally so many patterns and thus so many floating point values, so many real numbers. But how many real numbers are there in the world? Literally infinitely many, is the challenge of real numbers. You can just keep adding numbers after the digit. 
+如果你从直观上考虑这个问题，如果你使用有限数量的位，无论是 32 位还是 64 位，你只能表示有限数量的模式，因此有限数量的浮点值，有限数量的实数。但世界上有多少个实数呢？实际上有无限多个，这就是实数的挑战。你可以不断地在数字后面添加数字。
 
-So how could a computer, Mac, PC, or otherwise, possibly represent every floating point value super precisely if there's not enough patterns to represent every number in the world? Moreover, the way that computers use to represent numbers sometimes do not allow them to represent numbers so precisely. We can get more significant digits maybe, but not 100% perfection or precision.   
+So how could a computer, Mac, PC, or otherwise, possibly represent every floating point value super precisely if there's not enough patterns to represent every number in the world? Moreover, the way that computers use to represent numbers sometimes do not allow them to represent numbers so precisely. We can get more significant digits maybe, but not 100% perfection or precision. 
+那么一台计算机，无论是 Mac、PC 还是其他类型的，怎么可能以超级精确的方式表示每一个浮点值，如果世界上没有足够的模式来表示每一个数字呢？此外，计算机用来表示数字的方式有时不允许它们以非常精确的方式表示数字。我们可能可以得到更多的有效数字，但不是 100%的完美或精确。
 
-So floating point precision, too, is a fundamental problem with computers today. And unless, again, you're using a specialized language or library that understands, for scientific computing, the implications of overflow or imprecision, your code will have mistakes, much like Boeing discovered, much like Pac-Man discovered as well.   
+So floating point precision, too, is a fundamental problem with computers today. And unless, again, you're using a specialized language or library that understands, for scientific computing, the implications of overflow or imprecision, your code will have mistakes, much like Boeing discovered, much like Pac-Man discovered as well. 
+浮点精度问题也是当今计算机的一个基本问题。除非，再次强调，你使用的是理解科学计算中溢出或不精确含义的专用语言或库，否则你的代码将会有错误，就像波音公司发现的那样，就像吃豆人游戏也发现了。
 
-And in fact, just to end on a gloom-and-doom note, it turns out there's another problem like this on the horizon already. So back in my day, everyone was really worried about the Y2K problem, the Year 2000 problem. Why? Because for decades, when computers were invented, most systems were using just two digits-- independent of bits-- two digits to represent years.   
+And in fact, just to end on a gloom-and-doom note, it turns out there's another problem like this on the horizon already. So back in my day, everyone was really worried about the Y2K problem, the Year 2000 problem. Why? Because for decades, when computers were invented, most systems were using just two digits-- independent of bits-- two digits to represent years. 
+事实上，为了结束这个悲观的前景，实际上已经有一个类似的问题在眼前。在我那个年代，每个人都非常担心 Y2K 问题，即 2000 年问题。为什么？因为几十年来，当计算机被发明时，大多数系统都只使用两位数字——与位无关——用两位数字来表示年份。
 
-Why? Computers came out a few decades ago. Who'd think that a computer is still going to be running decades later? Turns out they were, especially in government and corporations and the like. But if you're only using two digits to represent years and the millennium comes around and it's 1999 about to roll over, about to roll over, what comes after 1999?   
+Why? Computers came out a few decades ago. Who'd think that a computer is still going to be running decades later? Turns out they were, especially in government and corporations and the like. But if you're only using two digits to represent years and the millennium comes around and it's 1999 about to roll over, about to roll over, what comes after 1999? 
+为什么？几十年前计算机问世。谁会想到计算机还能运行几十年？结果证明它们确实如此，尤其是在政府和企业等机构中。但如果你只使用两位数字来表示年份，当千年之交到来，1999 年即将翻篇，1999 年之后是什么？
 
-Well, if you're only using two digits, ideally 2000. But if you're only using two digits, the year 0 comes after the year 1999. And the whole world, truly-- you can look it up nowadays on Wikipedia-- was freaking out because there was so much old software in the world that could have had this mistake. And who knows? Planes falling out of the sky, computers rebooting, freezing. No one really knew because this was an unhandled situation in code.   
+Well, if you're only using two digits, ideally 2000. But if you're only using two digits, the year 0 comes after the year 1999. And the whole world, truly-- you can look it up nowadays on Wikipedia-- was freaking out because there was so much old software in the world that could have had this mistake. And who knows? Planes falling out of the sky, computers rebooting, freezing. No one really knew because this was an unhandled situation in code. 
+好吧，如果你只使用两位数字，理想情况下是 2000 年。但如果你只使用两位数字，那么在 1999 年之后就是公元 0 年。全世界——你可以在现在的维基百科上查到——当时真的非常恐慌，因为世界上有那么多旧软件可能存在这个错误。而且谁知道呢？飞机从天而降，电脑重启，冻结。没有人真正知道，因为这在代码中是一个未处理的情况。
 
-So thankfully, the world actually got its act together. The world did not end in the year 2000. And most systems were updated in time without crazy horror stories. But we're going to have this happen again because it turns out just a few years from now, at this point, computers for years have been using 32-bit integers to keep track of time in the sense of what time of day it is.   
+So thankfully, the world actually got its act together. The world did not end in the year 2000. And most systems were updated in time without crazy horror stories. But we're going to have this happen again because it turns out just a few years from now, at this point, computers for years have been using 32-bit integers to keep track of time in the sense of what time of day it is. 
+幸运的是，全世界实际上齐心协力。公元 2000 年世界并没有结束。而且大多数系统都及时更新了，没有出现疯狂的恐怖故事。但这种情况还会再次发生，因为事实证明，就在几年后，从那时起，计算机多年来一直使用 32 位整数来记录时间，即一天中的什么时间。
 
-And the point in time they decided years ago was, like, hey everyone, let's just keep track of how many seconds have passed since January 1, 1970. And we can relatively compute time any time thereafter.   
+And the point in time they decided years ago was, like, hey everyone, let's just keep track of how many seconds have passed since January 1, 1970. And we can relatively compute time any time thereafter. 
+他们多年前决定的时间点是，嘿，大家，让我们来记录从 1970 年 1 月 1 日以来过去了多少秒。然后我们可以相对计算之后的任何时间。
 
-So that's great. That gives us a lot of decades' worth. But 32 bits eventually maxes out at, like, 4 billion positive, or 2 billion if you want negative and positive. And it turns out, if you count the number of seconds between 1970 on up, on the day January 19, 2038, the world might again end because all of these clocks are going to overflow. And we're going to end up in the year 0 or negative something.   
+So that's great. That gives us a lot of decades' worth. But 32 bits eventually maxes out at, like, 4 billion positive, or 2 billion if you want negative and positive. And it turns out, if you count the number of seconds between 1970 on up, on the day January 19, 2038, the world might again end because all of these clocks are going to overflow. And we're going to end up in the year 0 or negative something. 
+那真是太好了。这给我们带来了几十年的价值。但是 32 位最终会达到大约 40 亿个正数，如果你要考虑正负数，则是 20 亿。而且，如果你计算从 1970 年到 2038 年 1 月 19 日之间的秒数，世界可能再次终结，因为所有的时钟都将溢出。我们最终会进入公元 0 年或负数。
 
-Now, what's the solution there? I mean, my god, it's the exact same thing. Stop using so few bits. Use more bits. But bits and memory and computers used to be expensive. Nowadays, storage is so much more available. But among the things we'll discuss then is how you can throw both hardware and software at this problem. But for now, maybe set a Google Calendar reminder for January 19, 2038. And hopefully we'll see you next week.   
+Now, what's the solution there? I mean, my god, it's the exact same thing. Stop using so few bits. Use more bits. But bits and memory and computers used to be expensive. Nowadays, storage is so much more available. But among the things we'll discuss then is how you can throw both hardware and software at this problem. But for now, maybe set a Google Calendar reminder for January 19, 2038. And hopefully we'll see you next week. 
+那么，解决方案是什么？我的天哪，这正是同一件事。停止使用这么少的位。使用更多的位。但是，比特、内存和计算机曾经很昂贵。如今，存储空间变得如此丰富。但我们将讨论的事情之一是如何同时使用硬件和软件解决这个问题。但就目前而言，也许可以为 2038 年 1 月 19 日设置一个谷歌日历提醒。希望我们下周能再见到你。
 
 [APPLAUSE]   [掌声]
 
-[CLASSICAL MUSIC]   
+[CLASSICAL MUSIC]   [古典音乐]
 
   查看源代码
