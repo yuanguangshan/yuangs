@@ -172,6 +172,7 @@
     .date-picker-container {
       display: flex;
       align-items: center;
+      gap: 12px;
     }
 
     .date-picker-container label {
@@ -180,7 +181,7 @@
       color: var(--text-secondary);
     }
 
-    #datePicker {
+    #datePicker, #compareDatePicker {
       padding: 10px 14px;
       border: 1px solid var(--border-color);
       border-radius: var(--radius-md);
@@ -191,7 +192,7 @@
       box-shadow: var(--shadow-sm);
     }
 
-    #datePicker:focus {
+    #datePicker:focus, #compareDatePicker:focus {
       outline: none;
       border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(90, 141, 238, 0.2);
@@ -460,6 +461,31 @@
     .toggle-comparison:hover {
       background-color: rgba(90, 141, 238, 0.1);
     }
+    
+    /* 全局展开/折叠按钮 */
+    .toggle-all-btn {
+      background: none;
+      border: 1px solid var(--primary);
+      color: var(--primary);
+      padding: 6px 12px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all var(--transition-normal);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: 12px;
+    }
+    
+    .toggle-all-btn:hover {
+      background-color: rgba(90, 141, 238, 0.1);
+      transform: translateY(-1px);
+    }
+    
+    .toggle-all-btn i {
+      font-size: 10px;
+    }
 
     /* 错误信息 */
     .error {
@@ -485,7 +511,7 @@
         gap: 10px;
       }
       
-      #datePicker {
+      #datePicker, #compareDatePicker {
         width: 100%;
       }
       
@@ -534,6 +560,35 @@
       color: var(--text-secondary);
       opacity: 0.5;
     }
+    
+    /* 比较日期部分 */
+    .compare-section {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-left: 20px;
+    }
+    
+    .compare-label {
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-weight: 500;
+    }
+    
+    .table-header-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    
+    .compare-info {
+      font-size: 14px;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
   </style>
 </head>
 <body>
@@ -551,6 +606,11 @@
       <div class="date-picker-container">
         <label for="datePicker">选择日期：</label>
         <input type="date" id="datePicker">
+        
+        <div class="compare-section">
+          <label for="compareDatePicker" class="compare-label">对比日期：</label>
+          <input type="date" id="compareDatePicker">
+        </div>
       </div>
       <button id="queryBtn">
         <i class="fas fa-search"></i> 查询数据
@@ -565,9 +625,19 @@
       <canvas id="companyChart"></canvas>
     </div>
     
-    <!-- 表格标题 -->
-    <div class="table-title">
-      <i class="fas fa-list-ol"></i> 龙虎榜上榜机构排名
+    <!-- 表格标题和操作 -->
+    <div class="table-header-actions">
+      <div class="table-title">
+        <i class="fas fa-list-ol"></i> 龙虎榜上榜机构排名
+      </div>
+      
+      <div class="compare-info" id="compareInfo">
+        <!-- 将在JS中动态填充对比日期信息 -->
+      </div>
+      
+      <button id="toggleAllBtn" class="toggle-all-btn" style="display: none;">
+        <i class="fas fa-chevron-down"></i> 显示所有对比数据
+      </button>
     </div>
     
     <!-- 表格区域 -->
@@ -594,13 +664,15 @@
     // 全局变量
     let myChart = null;
     let allData = [];
-    let prevDayData = []; // 上一交易日数据
+    let compareData = []; // 对比日期数据
     const maxItems = 100; // 默认显示100条记录
     let isDarkMode = false;
     let userThemePreference = null; // 用户主题首选项
     let currentSortColumn = 'onlist'; // 默认排序列
     let currentSortOrder = 'desc'; // 默认排序方向
-    let expandedRows = new Set(); // 跟踪展开的行
+    let allRowsExpanded = false; // 是否全部展开
+    let hasCompareData = false; // 是否有对比数据
+    let compareDate = ''; // 对比日期
 
     // 初始化页面
     document.addEventListener('DOMContentLoaded', function() {
@@ -612,9 +684,16 @@
       const defaultDate = formatDateForInput(today);
       document.getElementById('datePicker').value = defaultDate;
       
+      // 设置对比日期默认为前一天
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const prevDate = getPreviousWorkingDay(defaultDate); // 获取上一个工作日
+      document.getElementById('compareDatePicker').value = prevDate;
+      
       // 添加按钮点击事件
       document.getElementById('queryBtn').addEventListener('click', loadData);
       document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+      document.getElementById('toggleAllBtn').addEventListener('click', toggleAllRows);
       
       // 添加表头排序事件
       document.querySelectorAll('th[data-sort]').forEach(th => {
@@ -734,7 +813,12 @@
     // 加载数据
     function loadData() {
       const dateInput = document.getElementById('datePicker').value;
+      const compareDateInput = document.getElementById('compareDatePicker').value;
       const formattedDate = dateInput.replace(/-/g, '');
+      const formattedCompareDate = compareDateInput.replace(/-/g, '');
+      
+      // 保存对比日期
+      compareDate = compareDateInput;
       
       // 显示加载中
       displayLoading();
@@ -744,26 +828,25 @@
         myChart.destroy();
       }
       
-      // 清空展开行记录
-      expandedRows.clear();
+      // 隐藏全部展开/折叠按钮
+      document.getElementById('toggleAllBtn').style.display = 'none';
+      
+      // 重置全部展开状态
+      allRowsExpanded = false;
       
       // 获取当前日期数据
       fetchWithRetry(`https://data.want.biz/lhb/${formattedDate}`)
         .then(data => {
           if (data && data.data && data.data.length > 0) {
-            // 获取上一交易日数据
-            const prevDate = getPreviousWorkingDay(dateInput);
-            const prevFormattedDate = prevDate.replace(/-/g, '');
-            
             // 先处理当前数据
             processData(data);
             
-            // 然后获取上一交易日数据
-            fetchWithRetry(`https://data.want.biz/lhb/${prevFormattedDate}`)
-              .then(prevData => {
-                if (prevData && prevData.data && prevData.data.length > 0) {
-                  // 保存上一交易日数据
-                  prevDayData = prevData.data.map(item => {
+            // 然后获取对比日期数据
+            fetchWithRetry(`https://data.want.biz/lhb/${formattedCompareDate}`)
+              .then(compareDataResponse => {
+                if (compareDataResponse && compareDataResponse.data && compareDataResponse.data.length > 0) {
+                  // 保存对比日期数据
+                  compareData = compareDataResponse.data.map(item => {
                     return {
                       ...item,
                       // 模拟多空数据（实际应使用API返回的数据）
@@ -775,28 +858,96 @@
                     };
                   });
                   
+                  hasCompareData = true;
+                  
+                  // 显示全部展开/折叠按钮
+                  document.getElementById('toggleAllBtn').style.display = 'flex';
+                  
+                  // 更新对比日期信息
+                  updateCompareInfo(compareDataResponse.date, data.date);
+                  
                   // 重新渲染表格，包含对比数据
                   renderTable(allData.slice(0, maxItems));
                 } else {
-                  console.warn('上一交易日数据不存在');
+                  console.warn('对比日期数据不存在');
+                  hasCompareData = false;
+                  document.getElementById('compareInfo').innerHTML = `<i class="fas fa-exclamation-circle"></i> ${formatDateFromString(formattedCompareDate)} 无数据`;
+                  
                   // 仍然渲染表格，但没有对比数据
                   renderTable(allData.slice(0, maxItems));
                 }
               })
               .catch(error => {
-                console.error('获取上一交易日数据失败:', error);
+                console.error('获取对比日期数据失败:', error);
+                hasCompareData = false;
+                document.getElementById('compareInfo').innerHTML = `<i class="fas fa-exclamation-circle"></i> 对比数据加载失败`;
+                
                 // 仍然渲染表格，但没有对比数据
                 renderTable(allData.slice(0, maxItems));
               });
           } else {
             // 没有数据
             displayNoData(formatDisplayDate(dateInput));
+            hasCompareData = false;
           }
         })
         .catch(error => {
           console.error('Error:', error);
           displayError(error.message || '数据加载失败');
+          hasCompareData = false;
         });
+    }
+    
+    // 更新对比日期信息
+    function updateCompareInfo(compareDate, currentDate) {
+      const compareInfo = document.getElementById('compareInfo');
+      
+      if (compareDate && currentDate) {
+        const formattedCompareDate = formatDateFromString(compareDate);
+        const formattedCurrentDate = formatDateFromString(currentDate);
+        
+        compareInfo.innerHTML = `<i class="fas fa-exchange-alt"></i> 对比: ${formattedCompareDate} vs ${formattedCurrentDate}`;
+      } else {
+        compareInfo.innerHTML = '';
+      }
+    }
+    
+    // 全部展开或折叠行
+    function toggleAllRows() {
+      const toggleAllBtn = document.getElementById('toggleAllBtn');
+      allRowsExpanded = !allRowsExpanded;
+      
+      // 更新按钮文本和图标
+      if (allRowsExpanded) {
+        toggleAllBtn.innerHTML = '<i class="fas fa-chevron-up"></i> 隐藏所有对比数据';
+      } else {
+        toggleAllBtn.innerHTML = '<i class="fas fa-chevron-down"></i> 显示所有对比数据';
+      }
+      
+      // 获取所有对比行
+      const comparisonRows = document.querySelectorAll('.comparison-row');
+      
+      // 获取所有展开/折叠按钮
+      const toggleButtons = document.querySelectorAll('.toggle-comparison');
+      
+      // 依据展开状态设置所有行
+      comparisonRows.forEach(row => {
+        if (allRowsExpanded) {
+          row.classList.add('expanded');
+        } else {
+          row.classList.remove('expanded');
+        }
+      });
+      
+      // 更新所有按钮图标
+      toggleButtons.forEach(button => {
+        const icon = button.querySelector('i');
+        if (allRowsExpanded) {
+          icon.className = 'fas fa-chevron-up';
+        } else {
+          icon.className = 'fas fa-chevron-down';
+        }
+      });
     }
     
     // 获取上一个工作日
@@ -835,11 +986,13 @@
       
       // 清除日期信息
       document.getElementById('dateInfo').textContent = '数据加载中...';
+      document.getElementById('compareInfo').innerHTML = '';
     }
     
     // 显示无数据
     function displayNoData(date) {
       document.getElementById('dateInfo').textContent = `${date} 数据不存在`;
+      document.getElementById('compareInfo').innerHTML = '';
       
       // 清除图表
       const ctx = document.getElementById('companyChart').getContext('2d');
@@ -860,6 +1013,7 @@
     // 显示错误
     function displayError(message) {
       document.getElementById('dateInfo').textContent = '加载失败';
+      document.getElementById('compareInfo').innerHTML = '';
       
       // 清除图表
       const ctx = document.getElementById('companyChart').getContext('2d');
@@ -1189,9 +1343,9 @@
         const onlistClass = getValueClass(item.onlist, highThresholds.onlist, lowThresholds.onlist);
         
         // 添加展开/折叠按钮
-        const toggleButton = prevDayData.length > 0 ? 
-          `<button class="toggle-comparison" data-company="${item.cleanName}" title="显示与上一交易日对比">
-            <i class="fas fa-chevron-down"></i>
+        const toggleButton = hasCompareData ? 
+          `<button class="toggle-comparison" data-company="${item.cleanName}" title="显示与对比日期的数据">
+            <i class="fas ${allRowsExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}"></i>
           </button>` : '';
         
         row.innerHTML = `
@@ -1204,31 +1358,31 @@
         `;
         tableBody.appendChild(row);
         
-        // 如果有上一交易日数据，添加对比数据行
-        if (prevDayData.length > 0) {
+        // 如果有对比日期数据，添加对比数据行
+        if (hasCompareData) {
           // 创建对比数据行
           const comparisonRow = document.createElement('tr');
           comparisonRow.className = 'comparison-row';
           comparisonRow.dataset.company = item.cleanName;
           
-          // 如果该行之前是展开的，保持展开状态
-          if (expandedRows.has(item.cleanName)) {
+          // 如果全部展开，则展开该行
+          if (allRowsExpanded) {
             comparisonRow.classList.add('expanded');
           }
           
-          // 查找上一交易日的对应数据
-          const prevItem = prevDayData.find(prev => prev.cleanName === item.cleanName);
+          // 查找对比日期的对应数据
+          const compareItem = compareData.find(prev => prev.cleanName === item.cleanName);
           
-          if (prevItem) {
+          if (compareItem) {
             // 计算变化
-            const onlistChange = item.onlist - prevItem.onlist;
-            const longChange = ((item.long_position_sum - prevItem.long_position_sum) / prevItem.long_position_sum * 100).toFixed(2);
-            const shortChange = ((item.short_position_sum - prevItem.short_position_sum) / prevItem.short_position_sum * 100).toFixed(2);
-            const ratioChange = (parseFloat(item.long_short_position_ratio) - parseFloat(prevItem.long_short_position_ratio)).toFixed(2);
+            const onlistChange = item.onlist - compareItem.onlist;
+            const longChange = ((item.long_position_sum - compareItem.long_position_sum) / compareItem.long_position_sum * 100).toFixed(2);
+            const shortChange = ((item.short_position_sum - compareItem.short_position_sum) / compareItem.short_position_sum * 100).toFixed(2);
+            const ratioChange = (parseFloat(item.long_short_position_ratio) - parseFloat(compareItem.long_short_position_ratio)).toFixed(2);
             
             // 计算排名变化
-            const prevRank = getPrevRank(prevItem.cleanName, prevDayData);
-            const rankChange = prevRank - (index + 1);
+            const compareRank = getPrevRank(compareItem.cleanName, compareData);
+            const rankChange = compareRank - (index + 1);
             
             // 生成变化指标HTML
             const onlistChangeHTML = getChangeHTML(onlistChange, '');
@@ -1239,17 +1393,17 @@
             
             comparisonRow.innerHTML = `
               <td>${rankChangeHTML}</td>
-              <td>较上日</td>
+              <td>较对比日</td>
               <td>${onlistChangeHTML}</td>
               <td>${longChangeHTML}</td>
               <td>${shortChangeHTML}</td>
               <td>${ratioChangeHTML}</td>
             `;
           } else {
-            // 如果上一交易日没有该公司数据
+            // 如果对比日期没有该公司数据
             comparisonRow.innerHTML = `
               <td><span class="change-neutral">新</span></td>
-              <td colspan="5">上一交易日无数据</td>
+              <td colspan="5">对比日期无数据</td>
             `;
           }
           
@@ -1257,10 +1411,12 @@
         }
       });
       
-      // 添加展开/折叠按钮事件
-      if (prevDayData.length > 0) {
+      // 添加展开/折叠单行按钮事件
+      if (hasCompareData) {
         document.querySelectorAll('.toggle-comparison').forEach(button => {
-          button.addEventListener('click', function() {
+          button.addEventListener('click', function(event) {
+            event.stopPropagation(); // 阻止事件冒泡
+            
             const company = this.dataset.company;
             const comparisonRow = document.querySelector(`.comparison-row[data-company="${company}"]`);
             
@@ -1272,10 +1428,8 @@
               const icon = this.querySelector('i');
               if (comparisonRow.classList.contains('expanded')) {
                 icon.className = 'fas fa-chevron-up';
-                expandedRows.add(company);
               } else {
                 icon.className = 'fas fa-chevron-down';
-                expandedRows.delete(company);
               }
             }
           });
@@ -1283,10 +1437,10 @@
       }
     }
     
-    // 获取上一交易日排名
-    function getPrevRank(companyName, prevData) {
+    // 获取对比日期排名
+    function getPrevRank(companyName, data) {
       // 按上榜次数排序
-      const sortedData = [...prevData].sort((a, b) => b.onlist - a.onlist);
+      const sortedData = [...data].sort((a, b) => b.onlist - a.onlist);
       const index = sortedData.findIndex(item => item.cleanName === companyName);
       return index !== -1 ? index + 1 : 0;
     }
