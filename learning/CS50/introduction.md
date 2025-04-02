@@ -1,3 +1,6 @@
+https://cdn.cs50.net/2024/fall/lectures/0/lang/en/lecture0.txt
+
+
 [⚠  ⚠MUSIC PLAYING] DAVID MALAN: All right. This is CS50, Harvard University's Introduction to the Intellectual Enterprises of Computer Science and the Art of Programming. My name is David Malan, and I actually took this class myself some years ago, but I almost didn't. It was my first year in college and my roommates and I were living in Matthews Hall, for those familiar. 
 音乐播放] 大卫·马兰：好的。这是哈佛大学 CS50 课程，计算机科学智力企业入门及编程艺术。我叫大卫·马兰，我实际上几年前也上过这门课，但差点没去。那是我大学的第一年，我和室友住在马修斯堂，对熟悉的人来说。
 

@@ -1,4 +1,6 @@
-[⚠  ⚠MUSIC PLAYING] DAVID J. MALAN: All right. This is CS50. This is week one, because of course, last week was week zero. And this is the week where we'll actually start programming in a much more traditional way, that programming language we promised called C. 
+https://cdn.cs50.net/2024/fall/lectures//lang/en/lecture1.txt
+
+[⚠  ⚠MUSIC PLAYING] DAVID J. MALAN: All right. This is CS50. This is week one, because of course, last week was week zero. And this is th1e week where we'll actually start programming in a much more traditional way, that programming language we promised called C. 
 音乐播放] 大卫·J·马尔兰：好的。这是 CS50。这是第一周，因为当然，上周是零周。而这将是我们将以更传统的方式开始编程的一周，我们承诺的编程语言叫做 C。
 
 Of course, we started with this. And hopefully by now, with problem set 1, you've had a little bit of fun, even if you've played with it before. And the goals of Scratch, beyond making things feel very accessible and user friendly is really to elucidate some of the fundamental concepts that we'll see again today, and really every week subsequently, like functions and conditionals and loops and variables and so much more. 
