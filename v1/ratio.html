@@ -65,6 +65,30 @@
             color: #999; /* Grey out N/A values */
             font-style: italic;
         }
+        
+        /* 添加排序表头样式 */
+        th.sortable {
+            cursor: pointer;
+            position: relative;
+            padding-right: 20px;
+        }
+        
+        th.sortable:after {
+            content: '⇅';
+            position: absolute;
+            right: 5px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+        
+        th.sortable.asc:after {
+            content: '↑';
+            color: white;
+        }
+        
+        th.sortable.desc:after {
+            content: '↓';
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -77,13 +101,14 @@
     <table id="resultsTable" style="display: none;">
         <thead>
             <tr>
-                <th>合约名称 (代码)</th>
-                <th>交易系数 (成交额/成交量)</th>
-                <th>资金系数 (沉淀资金/持仓量)</th>
-                <th>成交额 (cje)</th>
-                <th>成交量 (vol)</th>
-                <th>沉淀资金 (cdzj)</th>
-                <th>持仓量 (ccl)</th>
+                <th class="sortable" data-sort="name">合约名称 (代码)</th>
+                <th class="sortable" data-sort="tradeRatio">交易系数 (成交额/成交量)</th>
+                <th class="sortable" data-sort="capitalRatio">资金系数 (沉淀资金/持仓量)</th>
+                <th class="sortable" data-sort="marginRate">推断保证金率 (资金系数/交易系数)</th>
+                <th class="sortable" data-sort="cje">成交额 (cje)</th>
+                <th class="sortable" data-sort="vol">成交量 (vol)</th>
+                <th class="sortable" data-sort="cdzj">沉淀资金 (cdzj)</th>
+                <th class="sortable" data-sort="ccl">持仓量 (ccl)</th>
             </tr>
         </thead>
         <tbody id="tableBody">
@@ -97,6 +122,105 @@
         const errorElement = document.getElementById('error');
         const resultsTable = document.getElementById('resultsTable');
         const tableBody = document.getElementById('tableBody');
+        
+        // 存储所有计算后的数据
+        let allCalculatedData = [];
+        // 当前排序状态
+        let currentSort = {
+            column: null,
+            direction: 'asc'
+        };
+
+        // 排序函数
+        function sortData(column, direction) {
+            currentSort.column = column;
+            currentSort.direction = direction;
+            
+            return [...allCalculatedData].sort((a, b) => {
+                let valueA = a[column];
+                let valueB = b[column];
+                
+                // 处理特殊情况：N/A 值和百分比
+                if (valueA === 'N/A') return 1;
+                if (valueB === 'N/A') return -1;
+                
+                // 处理百分比值
+                if (typeof valueA === 'string' && valueA.endsWith('%')) {
+                    valueA = parseFloat(valueA);
+                }
+                if (typeof valueB === 'string' && valueB.endsWith('%')) {
+                    valueB = parseFloat(valueB);
+                }
+                
+                // 处理数字格式化的字符串
+                if (typeof valueA === 'string' && valueA.includes(',')) {
+                    valueA = parseFloat(valueA.replace(/,/g, ''));
+                }
+                if (typeof valueB === 'string' && valueB.includes(',')) {
+                    valueB = parseFloat(valueB.replace(/,/g, ''));
+                }
+                
+                // 名称列特殊处理
+                if (column === 'name') {
+                    return direction === 'asc' 
+                        ? valueA.localeCompare(valueB, 'zh-CN')
+                        : valueB.localeCompare(valueA, 'zh-CN');
+                }
+                
+                // 数值比较
+                return direction === 'asc' ? valueA - valueB : valueB - valueA;
+            });
+        }
+        
+        // 更新表格显示
+        function updateTable(sortedData) {
+            tableBody.innerHTML = '';
+            
+            sortedData.forEach(item => {
+                const row = tableBody.insertRow();
+
+                row.insertCell().textContent = `${item.name} (${item.code})`;
+
+                const tradeRatioCell = row.insertCell();
+                tradeRatioCell.textContent = item.tradeRatio;
+                tradeRatioCell.className = item.tradeRatio === 'N/A' ? 'na-cell number-cell' : 'highlight number-cell';
+
+                const capitalRatioCell = row.insertCell();
+                capitalRatioCell.textContent = item.capitalRatio;
+                capitalRatioCell.className = item.capitalRatio === 'N/A' ? 'na-cell number-cell' : 'highlight number-cell';
+                
+                const marginRateCell = row.insertCell();
+                marginRateCell.textContent = item.marginRate;
+                marginRateCell.className = item.marginRate === 'N/A' ? 'na-cell number-cell' : 'highlight number-cell';
+
+                const cjeCell = row.insertCell();
+                cjeCell.textContent = item.cje;
+                cjeCell.className = 'number-cell';
+
+                const volCell = row.insertCell();
+                volCell.textContent = item.vol;
+                volCell.className = 'number-cell';
+
+                const cdzjCell = row.insertCell();
+                cdzjCell.textContent = item.cdzj;
+                cdzjCell.className = 'number-cell';
+
+                const cclCell = row.insertCell();
+                cclCell.textContent = item.ccl;
+                cclCell.className = 'number-cell';
+            });
+        }
+        
+        // 设置表头排序状态
+        function updateSortHeaders(column, direction) {
+            const headers = document.querySelectorAll('th.sortable');
+            headers.forEach(header => {
+                header.classList.remove('asc', 'desc');
+                if (header.dataset.sort === column) {
+                    header.classList.add(direction);
+                }
+            });
+        }
 
         async function fetchDataAndCalculate() {
             loadingElement.style.display = 'block';
@@ -115,7 +239,7 @@
                     throw new Error('API返回的数据格式不正确或列表为空');
                 }
 
-                const calculatedData = data.list.map(contract => {
+                allCalculatedData = data.list.map(contract => {
                     // Ensure values are numbers and handle potential null/undefined/non-numeric values
                     const cje = parseFloat(contract.cje);
                     const vol = parseFloat(contract.vol);
@@ -126,6 +250,7 @@
 
                     let tradeRatio = 'N/A';
                     let capitalRatio = 'N/A';
+                    let marginRate = 'N/A';
 
                     // Calculate trade ratio (交易系数)
                     if (!isNaN(cje) && !isNaN(vol) && vol !== 0) {
@@ -136,12 +261,22 @@
                     if (!isNaN(cdzj) && !isNaN(ccl) && ccl !== 0) {
                         capitalRatio = (cdzj / ccl).toFixed(4); // Format to 4 decimal places
                     }
+                    
+                    // 计算推断保证金率 (资金系数/交易系数)
+                    if (tradeRatio !== 'N/A' && capitalRatio !== 'N/A') {
+                        const tradeVal = parseFloat(tradeRatio);
+                        const capitalVal = parseFloat(capitalRatio);
+                        if (tradeVal !== 0) {
+                            marginRate = ((capitalVal / tradeVal) * 100).toFixed(2) + '%';
+                        }
+                    }
 
                     return {
                         name: name,
                         code: code,
                         tradeRatio: tradeRatio,
                         capitalRatio: capitalRatio,
+                        marginRate: marginRate,
                         cje: isNaN(cje) ? 'N/A' : cje.toLocaleString('zh-CN'), // Format large numbers
                         vol: isNaN(vol) ? 'N/A' : vol.toLocaleString('zh-CN'),
                         cdzj: isNaN(cdzj) ? 'N/A' : cdzj.toLocaleString('zh-CN'),
@@ -149,37 +284,11 @@
                     };
                 });
 
-                // Populate the table
-                calculatedData.forEach(item => {
-                    const row = tableBody.insertRow();
-
-                    row.insertCell().textContent = `${item.name} (${item.code})`;
-
-                    const tradeRatioCell = row.insertCell();
-                    tradeRatioCell.textContent = item.tradeRatio;
-                    tradeRatioCell.className = item.tradeRatio === 'N/A' ? 'na-cell number-cell' : 'highlight number-cell';
-
-                    const capitalRatioCell = row.insertCell();
-                    capitalRatioCell.textContent = item.capitalRatio;
-                    capitalRatioCell.className = item.capitalRatio === 'N/A' ? 'na-cell number-cell' : 'highlight number-cell';
-
-                    const cjeCell = row.insertCell();
-                    cjeCell.textContent = item.cje;
-                    cjeCell.className = 'number-cell';
-
-                    const volCell = row.insertCell();
-                    volCell.textContent = item.vol;
-                    volCell.className = 'number-cell';
-
-                    const cdzjCell = row.insertCell();
-                    cdzjCell.textContent = item.cdzj;
-                    cdzjCell.className = 'number-cell';
-
-                    const cclCell = row.insertCell();
-                    cclCell.textContent = item.ccl;
-                    cclCell.className = 'number-cell';
-                });
-
+                // 默认按交易系数降序排序
+                const sortedData = sortData('tradeRatio', 'desc');
+                updateTable(sortedData);
+                updateSortHeaders('tradeRatio', 'desc');
+                
                 resultsTable.style.display = 'table'; // Show table after loading data
 
             } catch (err) {
@@ -191,8 +300,32 @@
             }
         }
 
-        // Fetch data when the page loads
-        document.addEventListener('DOMContentLoaded', fetchDataAndCalculate);
+        // 添加表头点击排序事件
+        document.addEventListener('DOMContentLoaded', function() {
+            // 获取所有可排序的表头
+            const sortableHeaders = document.querySelectorAll('th.sortable');
+            
+            // 为每个表头添加点击事件
+            sortableHeaders.forEach(header => {
+                header.addEventListener('click', function() {
+                    const column = this.dataset.sort;
+                    let direction = 'asc';
+                    
+                    // 如果已经是升序，则切换为降序
+                    if (currentSort.column === column && currentSort.direction === 'asc') {
+                        direction = 'desc';
+                    }
+                    
+                    // 排序数据并更新表格
+                    const sortedData = sortData(column, direction);
+                    updateTable(sortedData);
+                    updateSortHeaders(column, direction);
+                });
+            });
+            
+            // 加载数据
+            fetchDataAndCalculate();
+        });
     </script>
 
 </body>
