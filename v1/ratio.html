@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>期货合约系数计算</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+        }
+        #resultsTable {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        #resultsTable th, #resultsTable td {
+            border: 1px solid #ddd;
+            padding: 10px 12px;
+            text-align: left;
+        }
+        #resultsTable th {
+            background-color: #4A90E2; /* 主色 */
+            color: white;
+            font-weight: bold;
+        }
+        #resultsTable tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        #resultsTable tr:hover {
+            background-color: #e9e9e9;
+        }
+        #loading, #error {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 1.1em;
+            display: none; /* Initially hidden */
+        }
+        #loading {
+            color: #4A90E2;
+        }
+        #error {
+            color: #dc3545; /* Danger color */
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .number-cell {
+            text-align: right; /* Align numbers to the right */
+        }
+        .highlight {
+            font-weight: bold;
+            color: #4A90E2; /* Highlight color */
+        }
+        .na-cell {
+            color: #999; /* Grey out N/A values */
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>期货合约交易与资金系数</h1>
+
+    <div id="loading">正在加载数据...</div>
+    <div id="error"></div>
+
+    <table id="resultsTable" style="display: none;">
+        <thead>
+            <tr>
+                <th>合约名称 (代码)</th>
+                <th>交易系数 (成交额/成交量)</th>
+                <th>资金系数 (沉淀资金/持仓量)</th>
+                <th>成交额 (cje)</th>
+                <th>成交量 (vol)</th>
+                <th>沉淀资金 (cdzj)</th>
+                <th>持仓量 (ccl)</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            <!-- Data will be inserted here by JavaScript -->
+        </tbody>
+    </table>
+
+    <script>
+        const apiUrl = 'https://q.want.biz/';
+        const loadingElement = document.getElementById('loading');
+        const errorElement = document.getElementById('error');
+        const resultsTable = document.getElementById('resultsTable');
+        const tableBody = document.getElementById('tableBody');
+
+        async function fetchDataAndCalculate() {
+            loadingElement.style.display = 'block';
+            errorElement.style.display = 'none';
+            resultsTable.style.display = 'none';
+            tableBody.innerHTML = ''; // Clear previous results
+
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) {
+                    throw new Error(`HTTP错误! 状态: ${response.status}`);
+                }
+                const data = await response.json();
+
+                if (!data || !Array.isArray(data.list) || data.list.length === 0) {
+                    throw new Error('API返回的数据格式不正确或列表为空');
+                }
+
+                const calculatedData = data.list.map(contract => {
+                    // Ensure values are numbers and handle potential null/undefined/non-numeric values
+                    const cje = parseFloat(contract.cje);
+                    const vol = parseFloat(contract.vol);
+                    const cdzj = parseFloat(contract.cdzj);
+                    const ccl = parseFloat(contract.ccl);
+                    const name = contract.name || '未知名称';
+                    const code = contract.dm || contract.uid || '未知代码'; // Use dm or uid as fallback
+
+                    let tradeRatio = 'N/A';
+                    let capitalRatio = 'N/A';
+
+                    // Calculate trade ratio (交易系数)
+                    if (!isNaN(cje) && !isNaN(vol) && vol !== 0) {
+                        tradeRatio = (cje / vol).toFixed(4); // Format to 4 decimal places
+                    }
+
+                    // Calculate capital ratio (资金系数)
+                    if (!isNaN(cdzj) && !isNaN(ccl) && ccl !== 0) {
+                        capitalRatio = (cdzj / ccl).toFixed(4); // Format to 4 decimal places
+                    }
+
+                    return {
+                        name: name,
+                        code: code,
+                        tradeRatio: tradeRatio,
+                        capitalRatio: capitalRatio,
+                        cje: isNaN(cje) ? 'N/A' : cje.toLocaleString('zh-CN'), // Format large numbers
+                        vol: isNaN(vol) ? 'N/A' : vol.toLocaleString('zh-CN'),
+                        cdzj: isNaN(cdzj) ? 'N/A' : cdzj.toLocaleString('zh-CN'),
+                        ccl: isNaN(ccl) ? 'N/A' : ccl.toLocaleString('zh-CN')
+                    };
+                });
+
+                // Populate the table
+                calculatedData.forEach(item => {
+                    const row = tableBody.insertRow();
+
+                    row.insertCell().textContent = `${item.name} (${item.code})`;
+
+                    const tradeRatioCell = row.insertCell();
+                    tradeRatioCell.textContent = item.tradeRatio;
+                    tradeRatioCell.className = item.tradeRatio === 'N/A' ? 'na-cell number-cell' : 'highlight number-cell';
+
+                    const capitalRatioCell = row.insertCell();
+                    capitalRatioCell.textContent = item.capitalRatio;
+                    capitalRatioCell.className = item.capitalRatio === 'N/A' ? 'na-cell number-cell' : 'highlight number-cell';
+
+                    const cjeCell = row.insertCell();
+                    cjeCell.textContent = item.cje;
+                    cjeCell.className = 'number-cell';
+
+                    const volCell = row.insertCell();
+                    volCell.textContent = item.vol;
+                    volCell.className = 'number-cell';
+
+                    const cdzjCell = row.insertCell();
+                    cdzjCell.textContent = item.cdzj;
+                    cdzjCell.className = 'number-cell';
+
+                    const cclCell = row.insertCell();
+                    cclCell.textContent = item.ccl;
+                    cclCell.className = 'number-cell';
+                });
+
+                resultsTable.style.display = 'table'; // Show table after loading data
+
+            } catch (err) {
+                console.error('获取或处理数据时出错:', err);
+                errorElement.textContent = `错误: ${err.message}. 请稍后重试或检查API接口。`;
+                errorElement.style.display = 'block';
+            } finally {
+                loadingElement.style.display = 'none';
+            }
+        }
+
+        // Fetch data when the page loads
+        document.addEventListener('DOMContentLoaded', fetchDataAndCalculate);
+    </script>
+
+</body>
+</html>
