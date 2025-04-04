@@ -13,12 +13,13 @@
         }
         h1 {
             text-align: center;
+            margin-top: 20px;
             color: #2c3e50;
         }
         #resultsTable {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
+            margin-top: 30px;
             background-color: #fff;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
@@ -89,10 +90,16 @@
             content: '↓';
             color: white;
         }
+        
+        .highlight-top {
+            font-weight: bold;
+            color: #ff0000;
+        }
     </style>
 </head>
 <body>
 
+    <div style="position: absolute; top: 40px; right: 20px; color: #666; font-size: 0.9em;" id="updateTime"></div>
     <h1>期货合约交易与资金系数</h1>
 
     <div id="loading">正在加载数据...</div>
@@ -101,7 +108,8 @@
     <table id="resultsTable" style="display: none;">
         <thead>
             <tr>
-                <th class="sortable" data-sort="name">合约名称 (代码)</th>
+                <th class="sortable" data-sort="name">合约名称</th>
+                <th class="sortable" data-sort="code">代码</th>
                 <th class="sortable" data-sort="tradeRatio">交易系数 (成交额/成交量)</th>
                 <th class="sortable" data-sort="capitalRatio">资金系数 (沉淀资金/持仓量)</th>
                 <th class="sortable" data-sort="marginRate">推断保证金率 (资金系数/交易系数)</th>
@@ -133,6 +141,10 @@
 
         // 排序函数
         function sortData(column, direction) {
+            // 重置排序方向如果点击了不同的列
+            if (currentSort.column !== column) {
+                direction = 'asc';
+            }
             currentSort.column = column;
             currentSort.direction = direction;
             
@@ -153,11 +165,19 @@
                 }
                 
                 // 处理数字格式化的字符串
-                if (typeof valueA === 'string' && valueA.includes(',')) {
-                    valueA = parseFloat(valueA.replace(/,/g, ''));
+                if (typeof valueA === 'string') {
+                    if (valueA.includes(',')) {
+                        valueA = parseFloat(valueA.replace(/,/g, ''));
+                    } else if (valueA.endsWith('亿')) {
+                        valueA = parseFloat(valueA.replace('亿', '')) * 100000000;
+                    }
                 }
-                if (typeof valueB === 'string' && valueB.includes(',')) {
-                    valueB = parseFloat(valueB.replace(/,/g, ''));
+                if (typeof valueB === 'string') {
+                    if (valueB.includes(',')) {
+                        valueB = parseFloat(valueB.replace(/,/g, ''));
+                    } else if (valueB.endsWith('亿')) {
+                        valueB = parseFloat(valueB.replace('亿', '')) * 100000000;
+                    }
                 }
                 
                 // 名称列特殊处理
@@ -176,10 +196,24 @@
         function updateTable(sortedData) {
             tableBody.innerHTML = '';
             
+            // 获取成交额和沉淀资金前五名
+            const cjeTop5 = [...allCalculatedData]
+                .filter(item => item.cje !== 'N/A')
+                .sort((a, b) => parseFloat(b.cje) - parseFloat(a.cje))
+                .slice(0, 5)
+                .map(item => item.code);
+                
+            const cdzjTop5 = [...allCalculatedData]
+                .filter(item => item.cdzj !== 'N/A')
+                .sort((a, b) => parseFloat(b.cdzj) - parseFloat(a.cdzj))
+                .slice(0, 5)
+                .map(item => item.code);
+            
             sortedData.forEach(item => {
                 const row = tableBody.insertRow();
 
-                row.insertCell().textContent = `${item.name} (${item.code})`;
+                row.insertCell().textContent = item.name;
+                row.insertCell().textContent = item.code;
 
                 const tradeRatioCell = row.insertCell();
                 tradeRatioCell.textContent = item.tradeRatio;
@@ -195,7 +229,7 @@
 
                 const cjeCell = row.insertCell();
                 cjeCell.textContent = item.cje;
-                cjeCell.className = 'number-cell';
+                cjeCell.className = cjeTop5.includes(item.code) ? 'number-cell highlight-top' : 'number-cell';
 
                 const volCell = row.insertCell();
                 volCell.textContent = item.vol;
@@ -203,7 +237,7 @@
 
                 const cdzjCell = row.insertCell();
                 cdzjCell.textContent = item.cdzj;
-                cdzjCell.className = 'number-cell';
+                cdzjCell.className = cdzjTop5.includes(item.code) ? 'number-cell highlight-top' : 'number-cell';
 
                 const cclCell = row.insertCell();
                 cclCell.textContent = item.ccl;
@@ -234,9 +268,22 @@
                     throw new Error(`HTTP错误! 状态: ${response.status}`);
                 }
                 const data = await response.json();
+                console.log('API响应数据:', data); // 添加调试日志
 
                 if (!data || !Array.isArray(data.list) || data.list.length === 0) {
                     throw new Error('API返回的数据格式不正确或列表为空');
+                }
+
+                // 显示更新时间
+                const updateTimeElement = document.getElementById('updateTime');
+                if (data.list[0].utime) {
+                    console.log('utime值:', data.list[0].utime); // 添加调试日志
+                    const date = new Date(data.list[0].utime * 1000);
+                    updateTimeElement.textContent = `更新时间: ${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`;
+                    console.log('格式化时间:', updateTimeElement.textContent); // 添加调试日志
+                } else {
+                    console.warn('API响应中没有utime字段');
+                    updateTimeElement.textContent = '更新时间: 未知';
                 }
 
                 allCalculatedData = data.list.map(contract => {
@@ -254,12 +301,12 @@
 
                     // Calculate trade ratio (交易系数)
                     if (!isNaN(cje) && !isNaN(vol) && vol !== 0) {
-                        tradeRatio = (cje / vol).toFixed(4); // Format to 4 decimal places
+                        tradeRatio = Math.round(cje / vol).toString(); // 只保留整数
                     }
 
                     // Calculate capital ratio (资金系数)
                     if (!isNaN(cdzj) && !isNaN(ccl) && ccl !== 0) {
-                        capitalRatio = (cdzj / ccl).toFixed(4); // Format to 4 decimal places
+                        capitalRatio = Math.round(cdzj / ccl).toString(); // 只保留整数
                     }
                     
                     // 计算推断保证金率 (资金系数/交易系数)
@@ -277,13 +324,20 @@
                         tradeRatio: tradeRatio,
                         capitalRatio: capitalRatio,
                         marginRate: marginRate,
-                        cje: isNaN(cje) ? 'N/A' : cje.toLocaleString('zh-CN'), // Format large numbers
+                        cje: isNaN(cje) ? 'N/A' : (cje / 100000000).toFixed(2) + '亿', // 以亿为单位显示
                         vol: isNaN(vol) ? 'N/A' : vol.toLocaleString('zh-CN'),
-                        cdzj: isNaN(cdzj) ? 'N/A' : cdzj.toLocaleString('zh-CN'),
+                        cdzj: isNaN(cdzj) ? 'N/A' : (cdzj / 100000000).toFixed(2) + '亿', // 以亿为单位显示
                         ccl: isNaN(ccl) ? 'N/A' : ccl.toLocaleString('zh-CN')
                     };
                 });
 
+                // 添加代码排序功能
+                allCalculatedData.forEach(item => {
+                    if (!item.hasOwnProperty('code')) {
+                        item.code = '';
+                    }
+                });
+                
                 // 默认按交易系数降序排序
                 const sortedData = sortData('tradeRatio', 'desc');
                 updateTable(sortedData);
