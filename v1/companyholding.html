@@ -308,6 +308,25 @@
       color: white;
     }
 
+    /* 维度按钮样式 */
+    .dimension-buttons {
+      display: flex;
+      gap: 5px;
+    }
+
+    .dimension-btn {
+      background-color: var(--bg-secondary);
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+      transition: all 0.2s ease;
+    }
+
+    .dimension-btn.active {
+      background-color: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
     /* 图表容器样式 */
     .chart-container {
       margin: 0 12px 16px;
@@ -375,7 +394,7 @@
     }
 
     /* 为可点击的单元格增加指针样式和特殊标记 */
-    td.clickable .position-change {
+    td.clickable {
       cursor: pointer;
       position: relative;
     }
@@ -534,6 +553,16 @@
         <button class="btn btn-sm" id="6months">半年</button>
         <button class="btn btn-sm" id="year">年度</button>
       </div>
+      
+      <!-- 维度切换 -->
+      <div class="dimension-container" style="margin-top: 10px; display: flex; gap: 8px;">
+        <label style="font-size: 13px; margin-right: 5px;">数据维度:</label>
+        <div class="dimension-buttons">
+          <button class="btn btn-sm dimension-btn active" data-dimension="quantity">数量</button>
+          <button class="btn btn-sm dimension-btn" data-dimension="trading">持仓额</button>
+          <button class="btn btn-sm dimension-btn" data-dimension="capital">保证金</button>
+        </div>
+      </div>
     </div>
     
     <!-- 缓存警告 -->
@@ -594,6 +623,39 @@
     let cachedData = {};
     const CACHE_EXPIRY_DAYS = 1;
     let isUsingCache = false;
+    
+    // 维度相关变量
+    let currentDimension = 'quantity'; // 默认为数量维度
+    let contractRatios = {}; // 存储合约系数
+    let isLoadingRatios = false; // 是否正在加载系数数据
+    
+    // 默认比率估算值 - 用于不同品种
+    const defaultRatios = {
+      // 股指期货
+      IF: { trading: 1000000, capital: 1100000 },
+      IC: { trading: 1000000, capital: 1100000 },
+      IH: { trading: 1000000, capital: 1100000 },
+      IM: { trading: 1000000, capital: 1100000 },
+      // 国债期货
+      T: { trading: 100000, capital: 110000 },
+      TF: { trading: 100000, capital: 110000 },
+      TS: { trading: 100000, capital: 110000 },
+      // 贵金属
+      au: { trading: 400000, capital: 440000 },
+      ag: { trading: 15000, capital: 16500 },
+      // 有色金属
+      cu: { trading: 50000, capital: 55000 },
+      al: { trading: 50000, capital: 55000 },
+      zn: { trading: 50000, capital: 55000 },
+      pb: { trading: 50000, capital: 55000 },
+      ni: { trading: 50000, capital: 55000 },
+      sn: { trading: 50000, capital: 55000 },
+      // 原油相关
+      sc: { trading: 70000, capital: 77000 },
+      lu: { trading: 40000, capital: 44000 },
+      // 默认值
+      DEFAULT: { trading: 10000, capital: 11000 }
+    };
     
     // 优先机构列表
     const priorityInstitutions = [
@@ -695,6 +757,121 @@
       'SI': 'GFEX', 'LC': 'GFEX', 'PS': 'GFEX'
     };
     
+    // 获取合约的交易和资金系数
+    async function fetchContractRatios() {
+      if (isLoadingRatios) return;
+      
+      isLoadingRatios = true;
+      
+      try {
+        // 获取系数数据
+        const response = await fetch('https://q.want.biz/');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        // 处理每个合约的系数
+        result.list.forEach(contract => {
+          // 计算交易系数 (cje/vol)
+          const tradingRatio = contract.vol !== 0 ? contract.cje / contract.vol : 1;
+          
+          // 计算资金系数 (cdzj/ccl)
+          const capitalRatio = contract.ccl !== 0 ? contract.cdzj / contract.ccl : 1;
+          
+          // 提取品种名称（去掉数字部分）
+          const varietyName = contract.dm.replace(/\d+/g, '').toUpperCase();
+          
+          // 存储系数数据
+          if (!contractRatios[varietyName]) {
+            contractRatios[varietyName] = {
+              trading: tradingRatio,
+              capital: capitalRatio
+            };
+          } else {
+            // 已经有数据则取平均值
+            contractRatios[varietyName].trading = (contractRatios[varietyName].trading + tradingRatio) / 2;
+            contractRatios[varietyName].capital = (contractRatios[varietyName].capital + capitalRatio) / 2;
+          }
+        });
+        
+        console.log('系数数据获取成功', contractRatios);
+      } catch (error) {
+        console.error('获取系数数据失败:', error);
+        // 使用默认估算值
+        for (const variety in defaultRatios) {
+          contractRatios[variety] = {
+            trading: defaultRatios[variety].trading,
+            capital: defaultRatios[variety].capital
+          };
+        }
+      } finally {
+        isLoadingRatios = false;
+      }
+    }
+    
+    // 获取当前维度的系数
+    function getRatioForVariety(variety) {
+      if (!variety) return 1;
+      
+      // 提取品种代码（移除尾部的数字）
+      const varietyCode = variety.replace(/\d+$/, '').toUpperCase();
+      
+      // 根据当前维度返回相应的系数
+      switch (currentDimension) {
+        case 'trading':
+          // 先检查合约特定的比率
+          if (contractRatios[varietyCode] && contractRatios[varietyCode].trading) {
+            return contractRatios[varietyCode].trading;
+          }
+          // 然后尝试默认比率
+          if (defaultRatios[varietyCode]) {
+            return defaultRatios[varietyCode].trading;
+          }
+          // 最后使用通用默认比率
+          return defaultRatios.DEFAULT.trading;
+          
+        case 'capital':
+          // 先检查合约特定的比率
+          if (contractRatios[varietyCode] && contractRatios[varietyCode].capital) {
+            return contractRatios[varietyCode].capital;
+          }
+          // 然后尝试默认比率
+          if (defaultRatios[varietyCode]) {
+            return defaultRatios[varietyCode].capital;
+          }
+          // 最后使用通用默认比率
+          return defaultRatios.DEFAULT.capital;
+          
+        case 'quantity':
+        default:
+          return 1; // 数量维度不需要应用系数
+      }
+    }
+    
+    // 切换数据维度
+    function switchDimension(dimension) {
+      if (dimension === currentDimension) return;
+      
+      // 更新当前维度
+      currentDimension = dimension;
+      
+      // 更新维度按钮样式
+      document.querySelectorAll('.dimension-btn').forEach(btn => {
+        if (btn.dataset.dimension === dimension) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+      
+      // 重新渲染数据
+      if (institutionData && institutionData.length > 0) {
+        renderData();
+      }
+    }
+    
     // 初始化页面
     document.addEventListener('DOMContentLoaded', function() {
       // 检测系统颜色方案
@@ -735,6 +912,17 @@
       document.getElementById('3months').addEventListener('click', () => quickSelect('3months'));
       document.getElementById('6months').addEventListener('click', () => quickSelect('6months'));
       document.getElementById('year').addEventListener('click', () => quickSelect('year'));
+      
+      // 绑定维度切换按钮事件
+      document.querySelectorAll('.dimension-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const dimension = this.dataset.dimension;
+          switchDimension(dimension);
+        });
+      });
+      
+      // 获取合约系数
+      fetchContractRatios();
       
       // 绑定表格单元格点击事件，使用事件委托
       document.getElementById('data-body').addEventListener('click', function(event) {
@@ -1073,6 +1261,11 @@
         // 先显示容器，确保图表容器尺寸正确
         showData(true);
         
+        // 确保我们有合约系数数据
+        if (Object.keys(contractRatios).length === 0) {
+          await fetchContractRatios();
+        }
+        
         // 在确保数据容器可见之后初始化图表
         setTimeout(() => {
           initOrUpdateChart();
@@ -1194,18 +1387,63 @@
       fetchInstitutionData();
     }
     
+    // 格式化数值
+    function formatNumber(num, useRatio = false, variety = null) {
+      // 确保num是数字类型
+      const numberValue = Number(num);
+      if (isNaN(numberValue)) return '0';
+      
+      // 应用比率
+      let formattedValue = numberValue;
+      if (useRatio && variety) {
+        const ratio = getRatioForVariety(variety);
+        formattedValue = numberValue * ratio;
+      }
+      
+      // 数值格式化
+      if (Math.abs(formattedValue) >= 100000000) { // 亿
+        return (formattedValue / 100000000).toFixed(2) + '亿';
+      } else if (Math.abs(formattedValue) >= 10000) { // 万
+        return (formattedValue / 10000).toFixed(0) + '万';
+      } else {
+        return formattedValue.toLocaleString(); // 小于1万直接显示，使用千分位分隔
+      }
+    }
+    
     // 渲染数据
     function renderData() {
       if (!institutionData || institutionData.length === 0) return;
       
-      // 排序数据
-      const sortedData = [...institutionData].sort((a, b) => {
-        let aValue = a[sortKey];
-        let bValue = b[sortKey];
+      // 根据当前维度调整排序逻辑
+      const shouldAdjustValues = currentDimension !== 'quantity';
+      
+      // 创建应用了比率的数据用于排序
+      const dataForSorting = institutionData.map(item => {
+        const ratio = shouldAdjustValues ? getRatioForVariety(item.variety) : 1;
         
-        if (sortKey === 'fluctuatePal') {
-          aValue = Math.abs(aValue);
-          bValue = Math.abs(bValue);
+        return {
+          ...item,
+          adjustedNetPosition: item.netPosition * ratio,
+          adjustedNetPositionChange: item.netPositionChange * ratio
+        };
+      });
+      
+      // 排序数据 - 考虑当前维度
+      const sortedData = [...dataForSorting].sort((a, b) => {
+        let aValue, bValue;
+        
+        if (sortKey === 'netPosition') {
+          aValue = shouldAdjustValues ? Math.abs(a.adjustedNetPosition) : Math.abs(a.netPosition);
+          bValue = shouldAdjustValues ? Math.abs(b.adjustedNetPosition) : Math.abs(b.netPosition);
+        } else if (sortKey === 'netPositionChange') {
+          aValue = shouldAdjustValues ? Math.abs(a.adjustedNetPositionChange) : Math.abs(a.netPositionChange);
+          bValue = shouldAdjustValues ? Math.abs(b.adjustedNetPositionChange) : Math.abs(b.netPositionChange);
+        } else if (sortKey === 'fluctuatePal') {
+          aValue = Math.abs(a.fluctuatePal);
+          bValue = Math.abs(b.fluctuatePal);
+        } else {
+          aValue = a[sortKey];
+          bValue = b[sortKey];
         }
         
         if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
@@ -1254,6 +1492,8 @@
         return;
       }
       
+      const applyRatio = currentDimension !== 'quantity';
+      
       data.forEach(item => {
         const row = document.createElement('tr');
         row.setAttribute('data-variety', item.variety);
@@ -1272,19 +1512,19 @@
         nameCell.title = '点击查看品种行情';
         row.appendChild(nameCell);
         
-        // 净仓
+        // 净仓 - 应用维度比率
         const positionCell = document.createElement('td');
-        positionCell.textContent = item.netPosition;
+        positionCell.textContent = formatNumber(item.netPosition, applyRatio, item.variety);
         positionCell.className = 'net-position clickable';
         positionCell.title = '点击查看品种多空持仓';
         row.appendChild(positionCell);
         
-        // 变化 - 这里是重点修改的部分，增加特殊类名和样式
+        // 变化 - 应用维度比率
         const changeCell = document.createElement('td');
         const change = parseInt(item.netPositionChange) || 0;
-        changeCell.textContent = change > 0 ? '+' + change : change;
-        // 给变化单元格添加特殊类名，用于事件委托识别
-        changeCell.className = 'position-change';
+        const formattedChange = formatNumber(change, applyRatio, item.variety);
+        changeCell.textContent = change > 0 ? '+' + formattedChange : formattedChange;
+        changeCell.className = 'position-change clickable';
         if (change > 0) {
           changeCell.classList.add('profit');
         } else if (change < 0) {
@@ -1293,10 +1533,10 @@
         changeCell.title = '点击查看机构建仓过程';
         row.appendChild(changeCell);
         
-        // 盈亏
+        // 盈亏 - 不应用维度比率，保持原样
         const palCell = document.createElement('td');
         const pal = (item.fluctuatePal / 10000).toFixed(0);
-        palCell.textContent = pal >= 0 ? '+' + pal : pal;
+        palCell.textContent = item.fluctuatePal >= 0 ? '+' + pal : pal;
         palCell.className = 'profit-value clickable';
         if (item.fluctuatePal > 0) {
           palCell.classList.add('profit');
@@ -1317,10 +1557,25 @@
       // 先确保图表正确大小
       chart.resize();
       
+      // 获取维度标题
+      let dimensionTitle = '';
+      
+      switch (currentDimension) {
+        case 'quantity':
+          dimensionTitle = '数量';
+          break;
+        case 'trading':
+          dimensionTitle = '持仓额';
+          break;
+        case 'capital':
+          dimensionTitle = '保证金';
+          break;
+      }
+      
       const option = {
         backgroundColor: 'transparent',
         title: {
-          text: `${formatInstitutionName(selectedInstitutionName)}盈亏`,
+          text: `${formatInstitutionName(selectedInstitutionName)}持仓盈亏 (${dimensionTitle}维度)`,
           left: 'center',
           top: 0,
           textStyle: {
@@ -1336,7 +1591,23 @@
           },
           formatter: function(params) {
             const data = params[0];
-            return `${data.name}<br/>盈亏: ${data.value >= 0 ? '+' : ''}${data.value} 亿元`;
+            const item = data.data.originalData;
+            const applyRatio = currentDimension !== 'quantity';
+            
+            let tooltipText = `${data.name}<br/>盈亏: ${data.value >= 0 ? '+' : ''}${data.value} 亿元`;
+            
+            if (item) {
+              // 格式化净仓和变化
+              const formattedPosition = formatNumber(item.netPosition, applyRatio, item.variety);
+              const change = parseInt(item.netPositionChange) || 0;
+              const formattedChange = formatNumber(change, applyRatio, item.variety);
+              const signedChange = change > 0 ? '+' + formattedChange : formattedChange;
+              
+              tooltipText += `<br/>净仓: ${formattedPosition}`;
+              tooltipText += `<br/>变化: ${signedChange}`;
+            }
+            
+            return tooltipText;
           }
         },
         grid: {
@@ -1364,6 +1635,10 @@
         },
         yAxis: {
           type: 'value',
+          name: '亿元',
+          nameTextStyle: {
+            color: isDarkMode ? '#bbb' : '#666'
+          },
           axisLabel: {
             formatter: function(value) {
               return value.toFixed(2);
@@ -1382,6 +1657,7 @@
           type: 'bar',
           data: data.map(item => ({
             value: (item.fluctuatePal / 100000000).toFixed(2),
+            originalData: item,
             itemStyle: {
               color: item.fluctuatePal > 0 ? 
                 (isDarkMode ? '#ff7675' : '#e74c3c') : 
