@@ -521,6 +521,10 @@
       font-size: 12px;
     }
 
+    th.sortable {
+      cursor: pointer;
+    }
+
     tr:nth-child(even) {
       background-color: var(--bg-color);
     }
@@ -784,11 +788,11 @@
             <tr>
               <th class="col-no">排名</th>
               <th class="col-name">多头</th>
-              <th class="col-pos">持仓</th>
-              <th class="col-change">变化</th>
+              <th class="col-pos sortable" data-type="pos" data-side="long">持仓</th>
+              <th class="col-change sortable" data-type="change" data-side="long">变化</th>
               <th class="col-name">空头</th>
-              <th class="col-pos">持仓</th>
-              <th class="col-change">变化</th>
+              <th class="col-pos sortable" data-type="pos" data-side="short">持仓</th>
+              <th class="col-change sortable" data-type="change" data-side="short">变化</th>
             </tr>
           </thead>
           <tbody id="data-body">
@@ -868,6 +872,10 @@
     let currentChartView = 1; // 当前图表视图: 1=净持仓, 2=总持仓, 3=单边上榜
     let isDarkMode = false; // 是否为暗色模式
     let userThemePreference = null; // 用户主题首选项，null表示跟随系统
+    
+    // 排序相关变量
+    let currentSortColumn = null; // 当前排序的列
+    let currentSortType = 'none'; // 排序类型：none, desc, abs-desc, asc
     
     // 缓存相关变量
     let cachedData = {}; // 用于存储缓存的数据
@@ -1025,6 +1033,15 @@
         });
       });
       
+      // 绑定表格排序事件
+      document.querySelectorAll('th.sortable').forEach(th => {
+        th.addEventListener('click', function() {
+          const type = this.dataset.type;
+          const side = this.dataset.side;
+          toggleSort(type, side);
+        });
+      });
+      
       // 获取URL参数
       const urlParams = getUrlParams();
       const contractParam = urlParams.contract;
@@ -1176,19 +1193,18 @@
         }
         
         // 3. 如果还没找到，尝试根据品种代码匹配
-// 精确匹配品种代码（去掉合约月份）
-if (!contractFound && varietyParam) {
-  const matchedContract = contracts.find(c => {
-    const code = c.dm.replace(/\d+$/, '').toUpperCase(); // 去掉数字
-    return code === varietyParam.toUpperCase();
-  });
+        if (!contractFound && varietyParam) {
+          const matchedContract = contracts.find(c => {
+            const code = c.dm.replace(/\d+$/, '').toUpperCase(); // 去掉数字
+            return code === varietyParam.toUpperCase();
+          });
 
-  if (matchedContract) {
-    selectedContract = matchedContract;
-    selectElement.value = selectedContract.dm;
-    contractFound = true;
-  }
-}
+          if (matchedContract) {
+            selectedContract = matchedContract;
+            selectElement.value = selectedContract.dm;
+            contractFound = true;
+          }
+        }
         
         // 4. 如果都没找到，使用第一个合约
         if (!contractFound && contracts.length > 0) {
@@ -1270,6 +1286,9 @@ if (!contractFound && varietyParam) {
         showData(true);
         showCacheWarning(true, `使用缓存数据 (${new Date(cachedData[cacheKey].timestamp).toLocaleString()})`);
         
+        // 重置排序状态
+        resetSortState();
+        
         // 延迟渲染图表以确保容器已完全呈现
         setTimeout(() => {
           // 初始化图表（如果还没初始化）
@@ -1313,6 +1332,9 @@ if (!contractFound && varietyParam) {
         };
         saveCacheToStorage();
         
+        // 重置排序状态
+        resetSortState();
+        
         // 先显示数据区域
         showLoading(false);
         showData(true);
@@ -1343,6 +1365,9 @@ if (!contractFound && varietyParam) {
           showData(true);
           showCacheWarning(true, `获取数据失败，使用缓存数据 (${new Date(cachedData[cacheKey].timestamp).toLocaleString()})`);
           
+          // 重置排序状态
+          resetSortState();
+          
           // 延迟渲染图表以确保容器已完全呈现
           setTimeout(() => {
             // 初始化图表（如果还没初始化）
@@ -1361,6 +1386,12 @@ if (!contractFound && varietyParam) {
         showLoading(false);
         showError(true, '获取数据失败: ' + error.message);
       }
+    }
+
+    // 重置排序状态
+    function resetSortState() {
+      currentSortColumn = null;
+      currentSortType = 'none';
     }
 
     // 初始化图表
@@ -1414,6 +1445,31 @@ if (!contractFound && varietyParam) {
     function onRemoveNumberChange() {
       removeNumber = document.getElementById('remove-number').checked;
       fetchData();
+    }
+
+    // 切换排序方式
+    function toggleSort(type, side) {
+      const columnId = `${type}-${side}`;
+      
+      if (currentSortColumn === columnId) {
+        // 当前列已经在排序，切换排序方式
+        if (currentSortType === 'none') {
+          currentSortType = 'desc';
+        } else if (currentSortType === 'desc') {
+          currentSortType = 'abs-desc';
+        } else if (currentSortType === 'abs-desc') {
+          currentSortType = 'asc';
+        } else { // asc
+          currentSortType = 'none';
+        }
+      } else {
+        // 新的列排序，重置为降序
+        currentSortColumn = columnId;
+        currentSortType = 'desc';
+      }
+      
+      // 重新渲染数据
+      renderTable();
     }
 
     // 切换图表视图
@@ -1474,10 +1530,10 @@ if (!contractFound && varietyParam) {
     }
 
     // 获取变化类样式
-function getChangeClass(change) {
-  if (change === null || change === undefined || change === 0 || change === '0') return null;
-  return change > 0 ? 'positive' : change < 0 ? 'negative' : null;
-}
+    function getChangeClass(change) {
+      if (change === null || change === undefined || change === 0 || change === '0') return null;
+      return change > 0 ? 'positive' : change < 0 ? 'negative' : null;
+    }
 
     // 渲染数据
     function renderData() {
@@ -1584,14 +1640,49 @@ function getChangeClass(change) {
       }
     }
 
+    // 应用排序
+    function applySortToList(list, type, sortType, valueField, changeField) {
+      if (sortType === 'none') return [...list];
+      
+      const field = type === 'pos' ? valueField : changeField;
+      
+      return [...list].sort((a, b) => {
+        const valueA = parseInt(a[field]) || 0;
+        const valueB = parseInt(b[field]) || 0;
+        
+        if (sortType === 'desc') {
+          return valueB - valueA;
+        } else if (sortType === 'asc') {
+          return valueA - valueB;
+        } else if (sortType === 'abs-desc') {
+          return Math.abs(valueB) - Math.abs(valueA);
+        }
+        
+        return 0;
+      });
+    }
+
     // 渲染表格
     function renderTable() {
       const tableBody = document.getElementById('data-body');
       tableBody.innerHTML = '';
       
+      // 获取原始数据
+      let longList = [...(data.longInfoList || [])];
+      let shortList = [...(data.shortInfoList || [])];
+      
+      // 应用排序（如果有）
+      if (currentSortColumn && currentSortType !== 'none') {
+        const [type, side] = currentSortColumn.split('-');
+        
+        if (side === 'long') {
+          longList = applySortToList(longList, type, currentSortType, 'longNum', 'longChange');
+        } else if (side === 'short') {
+          shortList = applySortToList(shortList, type, currentSortType, 'shortNum', 'shortChange');
+        }
+      }
+      
       // 组合多空列表
-      const longList = data.longInfoList || [];
-      const shortList = data.shortInfoList || [];
       const maxLength = Math.max(longList.length, shortList.length);
       const displayCount = Math.min(maxLength, 20); // 显示前20条
       
