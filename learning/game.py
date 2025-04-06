@@ -54,7 +54,7 @@ clock = pygame.time.Clock()
 哪吒_x = 100
 哪吒_y = height / 2
 哪吒_speed = 5
-哪吒血量 = 10
+哪吒血量 = 1000
 
 # 敖丙信息，初始不出现（设为 None）
 敖丙 = None
@@ -82,8 +82,8 @@ attack_interval = 60  # 每 60 帧（可根据情况调整）发射一次冰锤
 混天绫_speed = 6
 
 # 九龙盖火罩列表
-九龙盖火罩_list = []
-九龙盖火罩_duration = 20
+龙头盖火罩_list = []
+龙头盖火罩_duration = 20
 
 # 冰锤列表
 冰锤_list = []
@@ -127,14 +127,18 @@ while running:
     keys = pygame.key.get_pressed()
     if keys[pygame.K_LEFT] and 哪吒_x > 0:
         哪吒_x -= 哪吒_speed
-    elif keys[pygame.K_RIGHT] and 哪吒_x < width - 10:
+    if keys[pygame.K_RIGHT] and 哪吒_x < width - 10:
         哪吒_x += 哪吒_speed
+    if keys[pygame.K_UP] and 哪吒_y > 0:
+        哪吒_y -= 哪吒_speed
+    if keys[pygame.K_DOWN] and 哪吒_y < height - 10:
+        哪吒_y += 哪吒_speed
     elif keys[pygame.K_RETURN]:  # 按下回车键释放九龙盖火罩
         if current_time - last_ultimate_time >= ultimate_interval:
-            九龙盖火罩_x = 哪吒_x + 10 / 2 - 10 / 2
-            九龙盖火罩_y = 哪吒_y + 10 / 2 - 10 / 2
+            龙头盖火罩_x = 哪吒_x + 10 / 2 - 10 / 2
+            龙头盖火罩_y = 哪吒_y + 10 / 2 - 10 / 2
             ultimate_sound.play()
-            九龙盖火罩_list.append([九龙盖火罩_x, 九龙盖火罩_y, 九龙盖火罩_duration])
+            龙头盖火罩_list.append([龙头盖火罩_x, 龙头盖火罩_y, 龙头盖火罩_duration])
             last_ultimate_time = current_time
 
     # 创建敖丙（如果当前没有敖丙）
@@ -212,11 +216,11 @@ while running:
         if 混天绫[4] >= 混天绫_length:
             混天绫_list.remove(混天绫)
 
-    # 九龙盖火罩处理
-    for 九龙盖火罩 in 九龙盖火罩_list:
-        九龙盖火罩[2] -= 1
-        if 九龙盖火罩[2] <= 0:
-            九龙盖火罩_list.remove(九龙盖火罩)
+    # 龙头盖火罩处理
+    for 龙头盖火罩 in 龙头盖火罩_list:
+        龙头盖火罩[2] -= 1
+        if 龙头盖火罩[2] <= 0:
+            龙头盖火罩_list.remove(龙头盖火罩)
 
     # 冰锤移动
     for 冰锤 in 冰锤_list:
@@ -224,9 +228,22 @@ while running:
         if 冰锤[0] < -10:
             冰锤_list.remove(冰锤)
 
-    # 小怪移动
+    # 小怪移动和碰撞检测
     for 小怪 in 小怪_list:
         小怪[0] -= 小怪_speed
+        # 检查小怪是否碰到哪吒
+        if (
+            小怪[0] < 哪吒_x + 10
+            and 小怪[0] + 10 > 哪吒_x
+            and 小怪[1] < 哪吒_y + 10
+            and 小怪[1] + 10 > 哪吒_y
+        ):
+            print(f"哪吒被小怪碰撞！当前血量：{哪吒血量}")
+            哪吒血量 -= 1
+            if 哪吒血量 <= 0:
+                print("哪吒血量耗尽，游戏结束！")
+                running = False
+            小怪_list.remove(小怪)
         if 小怪[0] < -10:
             小怪_list.remove(小怪)
 
@@ -242,8 +259,10 @@ while running:
                 and 小怪[5] < 哪吒_y + 10
                 and 小怪[5] + 10 > 哪吒_y
             ):
+                print(f"哪吒被宝剑击中！当前血量：{哪吒血量}")
                 哪吒血量 -= 1
                 if 哪吒血量 <= 0:
+                    print("哪吒血量耗尽，游戏结束！")
                     running = False
                 小怪[3] = False  # 重置宝剑状态
             # 检查宝剑是否超出屏幕边界
@@ -265,7 +284,8 @@ while running:
 
     # 检查火尖枪是否击中敖丙
     if 敖丙:
-        for 火尖枪 in 火尖枪_list:
+        # 使用列表复制来避免在迭代过程中修改列表
+        for 火尖枪 in 火尖枪_list[:]:
             if (
                 火尖枪[0] < 敖丙[0] + 10
                 and 火尖枪[0] + 10 > 敖丙[0]
@@ -276,16 +296,17 @@ while running:
                 敖丙[2] -= 1
                 if 敖丙[2] <= 0:
                     敖丙 = None
-                火尖枪_list.remove(火尖枪)
+                if 火尖枪 in 火尖枪_list:  # 确保火尖枪还在列表中
+                    火尖枪_list.remove(火尖枪)
 
     # 检查九龙盖火罩是否击中敖丙
     if 敖丙:
-        for 九龙盖火罩 in 九龙盖火罩_list:
+        for 龙头盖火罩 in 龙头盖火罩_list:
             if (
-                九龙盖火罩[0] < 敖丙[0] + 10
-                and 九龙盖火罩[0] + 10 > 敖丙[0]
-                and 九龙盖火罩[1] < 敖丙[1] + 10
-                and 九龙盖火罩[1] + 10 > 敖丙[1]
+                龙头盖火罩[0] < 敖丙[0] + 10
+                and 龙头盖火罩[0] + 10 > 敖丙[0]
+                and 龙头盖火罩[1] < 敖丙[1] + 10
+                and 龙头盖火罩[1] + 10 > 敖丙[1]
             ):
                 敖丙[2] -= 3
                 if 敖丙[2] <= 0:
@@ -299,31 +320,35 @@ while running:
             and 冰锤[1] < 哪吒_y + 10
             and 冰锤[1] + 10 > 哪吒_y
         ):
+            print(f"哪吒被冰锤击中！当前血量：{哪吒血量}")
             哪吒血量 -= 1
             if 哪吒血量 <= 0:
+                print("哪吒血量耗尽，游戏结束！")
                 running = False
             冰锤_list.remove(冰锤)
 
     # 检查火尖枪是否击中小怪
-    for 火尖枪 in 火尖枪_list:
-        for 小怪 in 小怪_list:
+    for 火尖枪 in 火尖枪_list[:]:
+        for 小怪 in 小怪_list[:]:
             if (
                 火尖枪[0] < 小怪[0] + 10
                 and 火尖枪[0] + 10 > 小怪[0]
                 and 火尖枪[1] < 小怪[1] + 10
                 and 火尖枪[1] + 10 > 小怪[1]
             ):
-                小怪_list.remove(小怪)
-                火尖枪_list.remove(火尖枪)
+                if 小怪 in 小怪_list:  # 确保小怪还在列表中
+                    小怪_list.remove(小怪)
+                if 火尖枪 in 火尖枪_list:  # 确保火尖枪还在列表中
+                    火尖枪_list.remove(火尖枪)
 
     # 检查九龙盖火罩是否击中小怪
-    for 九龙盖火罩 in 九龙盖火罩_list:
+    for 龙头盖火罩 in 龙头盖火罩_list:
         for 小怪 in 小怪_list:
             if (
-                九龙盖火罩[0] < 小怪[0] + 10
-                and 九龙盖火罩[0] + 10 > 小怪[0]
-                and 九龙盖火罩[1] < 小怪[1] + 10
-                and 九龙盖火罩[1] + 10 > 小怪[1]
+                龙头盖火罩[0] < 小怪[0] + 10
+                and 龙头盖火罩[0] + 10 > 小怪[0]
+                and 龙头盖火罩[1] < 小怪[1] + 10
+                and 龙头盖火罩[1] + 10 > 小怪[1]
             ):
                 小怪_list.remove(小怪)
 
@@ -349,7 +374,7 @@ while running:
 
     # 绘制得分
     font = pygame.font.Font(None, 36)
-    score_text = font.render(f'得分: {len(小怪_list)}', True, (255, 255, 255))
+    score_text = font.render(f'Scores: {len(小怪_list)}', True, (255, 255, 255))
     screen.blit(score_text, (width - 150, 10))
 
     # 绘制哪吒（红色像素）
@@ -365,8 +390,8 @@ while running:
     for 乾坤圈 in 乾坤圈_list:
         pygame.draw.rect(screen, (255, 255, 0), (乾坤圈[0], 乾坤圈[1], 10, 10))
 
-    for 九龙盖火罩 in 九龙盖火罩_list:
-        pygame.draw.circle(screen, (255, 165, 0), (int(九龙盖火罩[0]), int(九龙盖火罩[1])), 10)
+    for 龙头盖火罩 in 龙头盖火罩_list:
+        pygame.draw.circle(screen, (255, 165, 0), (int(龙头盖火罩[0]), int(龙头盖火罩[1])), 10)
 
     for 冰锤 in 冰锤_list:
         pygame.draw.rect(screen, (255, 255, 255), (冰锤[0], 冰锤[1], 10, 10))
@@ -381,6 +406,6 @@ while running:
                          (混天绫[0] + 混天绫[2] * 混天绫_length, 混天绫[1] + 混天绫[3] * 混天绫_length), 10)
 
     pygame.display.flip()
-    clock.tick(60)
+    clock.tick(180)
 
 pygame.quit()
