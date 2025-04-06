@@ -159,14 +159,33 @@ while running:
         小怪_health = min(3, int(difficulty_multiplier))  # 小怪血量随难度增加
         小怪_list.append([x, y, 0, False, 0, 0, 小怪_health])
 
-    # 控制敖丙自动攻击
+    # 控制敖丙自动攻击和移动
     if 敖丙:
         attack_counter += 1
         if attack_counter >= attack_interval:
             冰锤_x = 敖丙[0] + 10 / 2 - 10 / 2
             冰锤_y = 敖丙[1] + 10 / 2 - 10 / 2
-            冰锤_list.append([冰锤_x, 冰锤_y])
+            # 计算冰锤朝向哪吒的方向
+            dx = 哪吒_x - 敖丙[0]
+            dy = 哪吒_y - 敖丙[1]
+            length = math.sqrt(dx ** 2 + dy ** 2)
+            if length > 0:
+                dx /= length
+                dy /= length
+            冰锤_list.append([冰锤_x, 冰锤_y, dx * 冰锤_speed, dy * 冰锤_speed])
             attack_counter = 0
+        
+        # 随机改变敖丙的垂直移动方向
+        if random.randint(1, 100) < 5:  # 5%的概率改变方向
+            敖丙.append(random.choice([-1, 1]) * 敖丙_speed)
+        if len(敖丙) < 4:  # 如果还没有垂直速度，添加一个
+            敖丙.append(random.choice([-1, 1]) * 敖丙_speed)
+        
+        # 更新敖丙的位置
+        敖丙[1] += 敖丙[3]  # 垂直移动
+        # 确保敖丙不会移出屏幕
+        if 敖丙[1] <= 0 or 敖丙[1] >= height - 10:
+            敖丙[3] = -敖丙[3]  # 碰到边界时反弹
 
     # 控制小怪自动攻击
     小怪_attack_counter += 1
@@ -224,8 +243,10 @@ while running:
 
     # 冰锤移动
     for 冰锤 in 冰锤_list:
-        冰锤[0] -= 冰锤_speed
-        if 冰锤[0] < -10:
+        冰锤[0] += 冰锤[2]  # 使用方向向量移动
+        冰锤[1] += 冰锤[3]
+        if (冰锤[0] < -10 or 冰锤[0] > width or
+            冰锤[1] < -10 or 冰锤[1] > height):
             冰锤_list.remove(冰锤)
 
     # 小怪移动和碰撞检测
