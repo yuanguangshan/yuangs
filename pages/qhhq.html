@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>市场数据</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: rgba(0, 0, 0, 0.7);
+            background-image: url('https://cdn.pixabay.com/photo/2023/11/17/12/14/lake-8394189_960_720.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            color: #fff;
+            margin: 0;
+            padding: 16px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 12px;
+            backdrop-filter: blur(5px);
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .title {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        
+        .update-info {
+            font-size: 0.8rem;
+            color: #888;
+        }
+        
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #333;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        .tab-button {
+            background-color: transparent;
+            border: none;
+            color: #888;
+            padding: 10px 20px;
+            font-size: 1rem;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+        
+        .tab-button.active {
+            color: #fff;
+            border-bottom: 2px solid #00c853;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 16px;
+        }
+        
+        .card {
+            background-color: rgba(26, 26, 26, 0.7);
+            border-radius: 12px;
+            padding: 16px;
+            transition: transform 0.2s, background-color 0.3s;
+            position: relative;
+            backdrop-filter: blur(3px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            background-color: rgba(32, 32, 32, 0.8);
+        }
+        
+        .star-button {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: transparent;
+            border: none;
+            color: #888;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            z-index: 10;
+        }
+        
+        .star-button.active {
+            color: #ffeb3b;
+        }
+        
+        .card-title {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+            margin-right: 30px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .card-price {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .card-change {
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+        }
+        
+        .positive {
+            color: #00c853;
+        }
+        
+        .negative {
+            color: #ff5252;
+        }
+        
+        .card-details {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            color: #888;
+        }
+        
+        .error-message {
+            color: #ff5252;
+            padding: 20px;
+            text-align: center;
+            background-color: rgba(255, 82, 82, 0.1);
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #888;
+        }
+        
+        .watchlist-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .watchlist-sort {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .sort-button {
+            background-color: #333;
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        
+        .watchlist-empty {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+            background-color: #1a1a1a;
+            border-radius: 12px;
+        }
+        
+        .drag-handle {
+            display: none;
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            cursor: grab;
+            color: #888;
+            font-size: 1.2rem;
+            z-index: 10;
+        }
+        
+        .watchlist-mode .card {
+            padding-left: 35px;
+        }
+        
+        .watchlist-mode .drag-handle {
+            display: block;
+        }
+        
+        .drag-ghost {
+            opacity: 0.5;
+        }
+        
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .tab-button {
+                padding: 10px 15px;
+                font-size: 0.9rem;
+            }
+        }
+        
+        .footer {
+            margin-top: 40px;
+            padding: 15px 0;
+            border-top: 1px solid #333;
+            text-align: center;
+        }
+        
+        .footer p {
+            margin: 0;
+            font-size: 0.8rem;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="title">市场行情</div>
+            <div class="update-info">
+                最后更新: <span id="last-update">-</span>
+                <div>自动刷新: <span id="countdown">20</span>s</div>
+            </div>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab-button" data-tab="watchlist">自选</button>
+            <button class="tab-button active" data-tab="commodity">商品</button>
+            <button class="tab-button" data-tab="forex">外汇</button>
+            <button class="tab-button" data-tab="bond">债券</button>
+            <!-- <button class="tab-button" data-tab="watchlist">自选</button> -->
+        </div>
+        
+        <div id="commodity-tab" class="tab-content active">
+            <div id="commodity-status" class="loading">加载数据中...</div>
+            <div id="commodity-grid" class="grid"></div>
+        </div>
+        
+        <div id="forex-tab" class="tab-content">
+            <div id="forex-status" class="loading">加载数据中...</div>
+            <div id="forex-grid" class="grid"></div>
+        </div>
+        
+        <div id="bond-tab" class="tab-content">
+            <div id="bond-status" class="loading">加载数据中...</div>
+            <div id="bond-grid" class="grid"></div>
+        </div>
+        
+        <div id="watchlist-tab" class="tab-content">
+            <div class="watchlist-controls">
+                <button id="edit-watchlist" class="sort-button">编辑</button>
+                <div class="watchlist-sort">
+                    <button id="sort-name" class="sort-button">按名称</button>
+                    <button id="sort-change" class="sort-button">按涨跌幅</button>
+                </div>
+            </div>
+            <div id="watchlist-status" class="loading">加载自选...</div>
+            <div id="watchlist-grid" class="grid"></div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p>Created by 苑广山 @2025</p>
+        </div>
+    </footer>
+
+    <script>
+        // API URLs
+        const API_URLS = {
+            commodity: 'https://api-ddc-wscn.awtmt.com/market/rank?market_type=forexdata&stk_type=commodity&order_by=none&sort_field=px_change_rate&limit=300&fields=prod_name%2Cprod_en_name%2Cprod_code%2Csymbol%2Clast_px%2Cpx_change%2Cpx_change_rate%2Chigh_px%2Clow_px%2Cweek_52_high%2Cweek_52_low%2Cprice_precision%2Cupdate_time',
+            forex: 'https://api-ddc-wscn.awtmt.com/market/rank?market_type=forexdata&stk_type=forex&order_by=none&sort_field=px_change_rate&limit=100&fields=prod_name%2Cprod_en_name%2Cprod_code%2Csymbol%2Clast_px%2Cpx_change%2Cpx_change_rate%2Chigh_px%2Clow_px%2Cweek_52_high%2Cweek_52_low%2Cprice_precision%2Cupdate_time',
+            bond: 'https://api-ddc-wscn.awtmt.com/market/rank?market_type=forexdata&stk_type=bond&order_by=none&sort_field=px_change_rate&limit=100&fields=prod_name%2Cprod_en_name%2Cprod_code%2Csymbol%2Clast_px%2Cpx_change%2Cpx_change_rate%2Chigh_px%2Clow_px%2Cweek_52_high%2Cweek_52_low%2Cprice_precision%2Cupdate_time'
+        };
+        
+        // Store all market data
+        const marketData = {
+            commodity: [],
+            forex: [],
+            bond: []
+        };
+        
+        // Watchlist management
+        let watchlist = [];
+        let isEditMode = false;
+        
+        // Tracking active fetches
+        let activeFetches = {
+            commodity: null,
+            forex: null,
+            bond: null
+        };
+        
+        // Load watchlist from localStorage
+        function loadWatchlist() {
+            const savedWatchlist = localStorage.getItem('marketWatchlist');
+            if (savedWatchlist) {
+                try {
+                    watchlist = JSON.parse(savedWatchlist);
+                } catch (e) {
+                    console.error('Failed to parse watchlist from localStorage', e);
+                    watchlist = [];
+                }
+            }
+        }
+        
+        // Save watchlist to localStorage
+        function saveWatchlist() {
+            localStorage.setItem('marketWatchlist', JSON.stringify(watchlist));
+        }
+        
+        // Add or remove item from watchlist
+        function toggleWatchlist(type, symbol) {
+            const index = watchlist.findIndex(item => item.symbol === symbol);
+            
+            if (index !== -1) {
+                // Remove from watchlist
+                watchlist.splice(index, 1);
+            } else {
+                // Find the item data from the marketData
+                const item = marketData[type].find(item => item[3] === symbol);
+                if (item) {
+                    watchlist.push({
+                        type,
+                        symbol,
+                        order: watchlist.length // Add at the end by default
+                    });
+                }
+            }
+            
+            saveWatchlist();
+            renderWatchlist();
+            
+            // Also update the star in the original tab
+            const starButton = document.querySelector(`.${type}-card[data-symbol="${symbol}"] .star-button`);
+            if (starButton) {
+                starButton.classList.toggle('active', isInWatchlist(symbol));
+            }
+        }
+        
+        // Check if an item is in the watchlist
+        function isInWatchlist(symbol) {
+            return watchlist.some(item => item.symbol === symbol);
+        }
+        
+        // Format date/time
+        function formatDateTime(timestamp) {
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleString('zh-CN');
+        }
+        
+        // Format price based on precision
+        function formatPrice(price, precision) {
+            precision = parseInt(precision) || 2;
+            return parseFloat(price).toFixed(precision);
+        }
+        
+        // Update countdown timer
+        function updateCountdown(seconds) {
+            document.getElementById('countdown').textContent = seconds;
+        }
+        
+        // Show status message
+        function showStatusMessage(tabId, message, isError = false) {
+            const statusElement = document.getElementById(`${tabId}-status`);
+            statusElement.textContent = message;
+            statusElement.className = isError ? 'error-message' : 'loading';
+            statusElement.style.display = message ? 'block' : 'none';
+        }
+        
+        // Create a card for a market item
+        function createCard(type, item, isWatchlist = false) {
+            const name = item[0];
+            const symbol = item[3];
+            const price = parseFloat(item[4]);
+            const change = parseFloat(item[5]);
+            const changeRate = parseFloat(item[6]);
+            const high = parseFloat(item[7]);
+            const low = parseFloat(item[8]);
+            const precision = item[11];
+            const updateTime = parseInt(item[12]);
+            const isPositive = change >= 0;
+            
+            const card = document.createElement('div');
+            card.className = `card ${type}-card`;
+            card.dataset.symbol = symbol;
+            card.dataset.type = type;
+            
+            // Handle icon for the watchlist mode
+            const dragHandle = `<div class="drag-handle" draggable="true">☰</div>`;
+            
+            // Star button for watchlist
+            const starActive = isInWatchlist(symbol) ? 'active' : '';
+            
+            card.innerHTML = `
+                ${isWatchlist ? dragHandle : ''}
+                <button class="star-button ${starActive}" title="${starActive ? '从自选中删除' : '添加到自选'}">★</button>
+                <div class="card-title">${name} (${symbol})</div>
+                <div class="card-price ${isPositive ? 'positive' : 'negative'}">${formatPrice(price, precision)}</div>
+                <div class="card-change ${isPositive ? 'positive' : 'negative'}">
+                    ${change >= 0 ? '+' : ''}${formatPrice(change, precision)} ${changeRate >= 0 ? '+' : ''}${changeRate.toFixed(2)}%
+                </div>
+                <div class="card-details">
+                    <span>最高: ${formatPrice(high, precision)}</span>
+                    <span>最低: ${formatPrice(low, precision)}</span>
+                </div>
+            `;
+            
+            // Add event listener for the star button
+            const starButton = card.querySelector('.star-button');
+            starButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleWatchlist(type, symbol);
+            });
+            
+            // Add drag and drop functionality for watchlist items
+            if (isWatchlist) {
+                const handle = card.querySelector('.drag-handle');
+                
+                handle.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', symbol);
+                    setTimeout(() => {
+                        card.classList.add('drag-ghost');
+                    }, 0);
+                });
+                
+                handle.addEventListener('dragend', () => {
+                    card.classList.remove('drag-ghost');
+                });
+                
+                card.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                });
+                
+                card.addEventListener('dragenter', (e) => {
+                    e.preventDefault();
+                    card.style.borderTop = '2px solid #00c853';
+                });
+                
+                card.addEventListener('dragleave', () => {
+                    card.style.borderTop = '';
+                });
+                
+                card.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    card.style.borderTop = '';
+                    
+                    const draggedSymbol = e.dataTransfer.getData('text/plain');
+                    if (draggedSymbol === symbol) return; // Same card, do nothing
+                    
+                    // Reorder the watchlist
+                    const draggedIndex = watchlist.findIndex(item => item.symbol === draggedSymbol);
+                    const dropIndex = watchlist.findIndex(item => item.symbol === symbol);
+                    
+                    if (draggedIndex !== -1 && dropIndex !== -1) {
+                        const [removed] = watchlist.splice(draggedIndex, 1);
+                        watchlist.splice(dropIndex, 0, removed);
+                        
+                        // Update orders
+                        watchlist.forEach((item, index) => {
+                            item.order = index;
+                        });
+                        
+                        saveWatchlist();
+                        renderWatchlist();
+                    }
+                });
+            }
+            
+            return card;
+        }
+        
+        // Render data cards for a specific tab
+        function renderCards(tabId, data) {
+            const grid = document.getElementById(`${tabId}-grid`);
+            grid.innerHTML = '';
+            
+            if (!data || !data.length) {
+                showStatusMessage(tabId, '没有可用数据', true);
+                return;
+            }
+            
+            // Hide status message
+            showStatusMessage(tabId, '');
+            
+            data.forEach(item => {
+                const card = createCard(tabId, item);
+                grid.appendChild(card);
+            });
+        }
+        
+        // Render the watchlist
+        function renderWatchlist() {
+            const grid = document.getElementById('watchlist-grid');
+            grid.innerHTML = '';
+            
+            if (isEditMode) {
+                grid.classList.add('watchlist-mode');
+            } else {
+                grid.classList.remove('watchlist-mode');
+            }
+            
+            if (!watchlist.length) {
+                showStatusMessage('watchlist', '');
+                
+                const emptyMessage = document.createElement('div');
+                emptyMessage.className = 'watchlist-empty';
+                emptyMessage.textContent = '您的自选列表是空的。请在其他标签页中点击星标添加项目到自选。';
+                grid.appendChild(emptyMessage);
+                return;
+            }
+            
+            showStatusMessage('watchlist', '');
+            
+            // Sort watchlist by order (default)
+            const sortedWatchlist = [...watchlist].sort((a, b) => a.order - b.order);
+            
+            sortedWatchlist.forEach(item => {
+                const itemData = marketData[item.type].find(data => data[3] === item.symbol);
+                if (itemData) {
+                    const card = createCard(item.type, itemData, true);
+                    grid.appendChild(card);
+                }
+            });
+        }
+        
+        // Sort watchlist by name
+        function sortWatchlistByName() {
+            const grid = document.getElementById('watchlist-grid');
+            const cards = Array.from(grid.children);
+            
+            cards.sort((a, b) => {
+                const nameA = a.querySelector('.card-title').textContent;
+                const nameB = b.querySelector('.card-title').textContent;
+                return nameA.localeCompare(nameB);
+            });
+            
+            grid.innerHTML = '';
+            cards.forEach(card => grid.appendChild(card));
+            
+            // Update order in the watchlist
+            updateWatchlistOrder();
+        }
+        
+        // Sort watchlist by change rate
+        function sortWatchlistByChange() {
+            const grid = document.getElementById('watchlist-grid');
+            const cards = Array.from(grid.children);
+            
+            cards.sort((a, b) => {
+                const changeA = parseFloat(a.querySelector('.card-change').textContent.split('%')[0].split(' ').pop());
+                const changeB = parseFloat(b.querySelector('.card-change').textContent.split('%')[0].split(' ').pop());
+                return changeB - changeA; // Descending order (highest first)
+            });
+            
+            grid.innerHTML = '';
+            cards.forEach(card => grid.appendChild(card));
+            
+            // Update order in the watchlist
+            updateWatchlistOrder();
+        }
+        
+        // Update the order in the watchlist based on current DOM order
+        function updateWatchlistOrder() {
+            const grid = document.getElementById('watchlist-grid');
+            const cards = Array.from(grid.children);
+            
+            cards.forEach((card, index) => {
+                const symbol = card.dataset.symbol;
+                const watchlistItem = watchlist.find(item => item.symbol === symbol);
+                if (watchlistItem) {
+                    watchlistItem.order = index;
+                }
+            });
+            
+            saveWatchlist();
+        }
+        
+        // Fetch data from API
+        async function fetchData(tabId) {
+            // Cancel previous fetch if still pending
+            if (activeFetches[tabId]) {
+                activeFetches[tabId].aborted = true;
+            }
+            
+            // Create a new AbortController for this request
+            const controller = new AbortController();
+            activeFetches[tabId] = { controller, aborted: false };
+            
+            try {
+                showStatusMessage(tabId, '获取数据中...');
+                
+                const url = API_URLS[tabId];
+                const response = await fetch(url, { signal: controller.signal });
+                
+                // If this request was aborted, don't proceed
+                if (activeFetches[tabId].aborted) {
+                    return [];
+                }
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Update last update time
+                document.getElementById('last-update').textContent = new Date().toLocaleTimeString('zh-CN');
+                
+                if (data && data.code === 20000 && data.data && data.data.candle) {
+                    // Store the data for the watchlist to use
+                    marketData[tabId] = data.data.candle;
+                    return data.data.candle;
+                } else {
+                    throw new Error('Invalid data format');
+                }
+            } catch (error) {
+                // Don't show errors for aborted requests
+                if (error.name === 'AbortError' || activeFetches[tabId].aborted) {
+                    return [];
+                }
+                
+                console.error(`获取${tabId}数据失败:`, error);
+                showStatusMessage(tabId, `获取数据失败: ${error.message}`, true);
+                return [];
+            } finally {
+                // Clear the active fetch reference
+                activeFetches[tabId] = null;
+            }
+        }
+        
+        // Update data for a specific tab
+        async function updateTabData(tabId) {
+            const data = await fetchData(tabId);
+            renderCards(tabId, data);
+            
+            // If watchlist tab is active, update it too with the new data
+            if (document.querySelector('.tab-button[data-tab="watchlist"]').classList.contains('active')) {
+                renderWatchlist();
+            }
+        }
+        
+        // Update all tab data
+        async function updateAllData() {
+            // Get the active tab
+            const activeTab = document.querySelector('.tab-button.active').getAttribute('data-tab');
+            
+            if (activeTab === 'watchlist') {
+                // For watchlist, make sure we update all market data first
+                await Promise.all([
+                    updateTabData('commodity'),
+                    updateTabData('forex'),
+                    updateTabData('bond')
+                ]);
+                renderWatchlist();
+            } else {
+                // Update the active tab first for better user experience
+                await updateTabData(activeTab);
+                
+                // Then update other tabs in the background
+                for (const tabId of Object.keys(API_URLS)) {
+                    if (tabId !== activeTab) {
+                        updateTabData(tabId);
+                    }
+                }
+            }
+            
+            // Reset and start countdown
+            let count = 20;
+            updateCountdown(count);
+            
+            const timer = setInterval(() => {
+                count--;
+                updateCountdown(count);
+                
+                if (count <= 0) {
+                    clearInterval(timer);
+                }
+            }, 1000);
+        }
+        
+        // Initialize the app
+        function init() {
+            // Tab switching functionality
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    // Remove active class from all tabs
+                    document.querySelectorAll('.tab-button').forEach(btn => {
+                        btn.classList.remove('active');
+                    });
+                    document.querySelectorAll('.tab-content').forEach(content => {
+                        content.classList.remove('active');
+                    });
+                    
+                    // Add active class to clicked tab
+                    button.classList.add('active');
+                    const tabId = button.getAttribute('data-tab');
+                    document.getElementById(`${tabId}-tab`).classList.add('active');
+                    
+                    // If watchlist tab is selected, render it
+                    if (tabId === 'watchlist') {
+                        renderWatchlist();
+                    }
+                });
+            });
+            
+            // Edit watchlist button
+            document.getElementById('edit-watchlist').addEventListener('click', function() {
+                isEditMode = !isEditMode;
+                this.textContent = isEditMode ? '完成' : '编辑';
+                renderWatchlist();
+            });
+            
+            // Sort watchlist buttons
+            document.getElementById('sort-name').addEventListener('click', sortWatchlistByName);
+            document.getElementById('sort-change').addEventListener('click', sortWatchlistByChange);
+            
+            // Load watchlist from localStorage
+            loadWatchlist();
+            
+            // Initial data load
+            updateAllData();
+            
+            // Auto-refresh every 20 seconds
+            setInterval(updateAllData, 20000);
+        }
+        
+        // Initialize the app when the DOM is loaded
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
