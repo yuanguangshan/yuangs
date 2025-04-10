@@ -387,8 +387,8 @@ function sendToPushDeer(content) {
     
     // 处理内容，确保中文字符正确编码
     let processedContent = content;
-    if (content && content.length > 5000) {
-      processedContent = content.substring(0, 5000) + '...(内容已截断)'; // 限制长度，避免请求过大
+    if (content && content.length > 20000) {
+      processedContent = content.substring(0, 20000) + '...(内容已截断)'; // 限制长度，避免请求过大
     }
     
     // 准备发送的数据
