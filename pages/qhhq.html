@@ -20,7 +20,7 @@
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            background-color: rgba(0, 0, 0, 0.5);
+            background-color: rgba(0, 0, 0, 0.7);
             padding: 20px;
             border-radius: 12px;
             backdrop-filter: blur(5px);
@@ -64,7 +64,7 @@
         }
         
         .tab-button.active {
-            color: #06b620;
+            color: #fff;
             border-bottom: 2px solid #00c853;
         }
         
@@ -83,7 +83,7 @@
         }
         
         .card {
-            background-color: rgba(60, 64, 67, 0.55);
+            background-color: rgba(60, 64, 67, 0.85);
             border-radius: 12px;
             padding: 16px;
             transition: transform 0.2s, background-color 0.3s;
@@ -609,6 +609,10 @@
         let newsCursor = '';
         let isLoadingNews = false;
         let showImportantOnly = true; // 是否只显示重点新闻的标志
+        
+        // 资讯自动刷新计时器
+        let newsRefreshTimer = null;
+        let newsCountdown = 30; // 资讯刷新倒计时，30秒
         
         // Watchlist management
         let watchlist = [];
@@ -1240,9 +1244,33 @@
                 this.textContent = showImportantOnly ? '显示全部' : '只看重点';
                 renderNews(true, 'news-tab-container');
             });
+            
+            // 标签切换时处理资讯自动刷新
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    const tabId = button.getAttribute('data-tab');
+                    
+                    // 清除现有的资讯刷新计时器
+                    if (newsRefreshTimer) {
+                        clearInterval(newsRefreshTimer);
+                        newsRefreshTimer = null;
+                    }
+                    
+                    // 如果切换到资讯标签，启动资讯自动刷新
+                    if (tabId === 'news') {
+                        startNewsAutoRefresh();
+                    }
+                });
+            });
             document.getElementById('refresh-news-tab').addEventListener('click', () => {
                 fetchNews(true);
                 renderNews(true, 'news-tab-container');
+                
+                // 重置资讯刷新倒计时
+                newsCountdown = 30;
+                if (document.querySelector('.tab-button[data-tab="news"]').classList.contains('active')) {
+                    startNewsAutoRefresh();
+                }
             });
             document.getElementById('load-more-news-tab').addEventListener('click', () => {
                 fetchNews().then(() => renderNews(false, 'news-tab-container'));
@@ -1257,18 +1285,85 @@
             
             // Auto-refresh every 20 seconds
             setInterval(updateAllData, 20000);
-            // Auto-refresh news every 5 minutes
+            // Auto-refresh news every 5 minutes (作为备用，确保即使自动刷新失败也能更新)
             setInterval(() => {
                 fetchNews(true);
                 // 如果资讯标签页是活跃的，也更新它
                 if (document.querySelector('.tab-button[data-tab="news"]').classList.contains('active')) {
                     renderNews(true, 'news-tab-container');
+                    // 重置资讯刷新倒计时
+                    newsCountdown = 30;
                 }
             }, 300000);
+            
+            // 启动资讯自动刷新
+            startNewsAutoRefresh();
+        }
+        
+        // 启动资讯自动刷新功能
+        function startNewsAutoRefresh() {
+            // 清除现有计时器
+            if (newsRefreshTimer) {
+                clearInterval(newsRefreshTimer);
+            }
+            
+            // 重置倒计时
+            newsCountdown = 30;
+            
+            // 创建新的计时器
+            newsRefreshTimer = setInterval(() => {
+                // 更新倒计时
+                newsCountdown--;
+                
+                // 在资讯标签页显示倒计时
+                const newsTabStatus = document.getElementById('news-tab-status');
+                if (newsTabStatus && document.querySelector('.tab-button[data-tab="news"]').classList.contains('active')) {
+                    newsTabStatus.textContent = `自动刷新倒计时: ${newsCountdown}秒`;
+                    newsTabStatus.style.display = 'block';
+                    newsTabStatus.className = 'loading';
+                }
+                
+                // 当倒计时结束时刷新数据
+                if (newsCountdown <= 0) {
+                    // 重置倒计时
+                    newsCountdown = 30;
+                    
+                    // 刷新资讯数据
+                    fetchNews(true).then(() => {
+                        // 如果资讯标签页是活跃的，更新显示
+                        if (document.querySelector('.tab-button[data-tab="news"]').classList.contains('active')) {
+                            renderNews(true, 'news-tab-container');
+                        }
+                    });
+                }
+            }, 1000);
         }
         
         // Initialize the app when the DOM is loaded
         document.addEventListener('DOMContentLoaded', init);
+        
+        // 页面关闭或隐藏时清除计时器
+        window.addEventListener('beforeunload', () => {
+            if (newsRefreshTimer) {
+                clearInterval(newsRefreshTimer);
+            }
+        });
+        
+        // 页面可见性变化时处理计时器
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // 页面隐藏时暂停计时器
+                if (newsRefreshTimer) {
+                    clearInterval(newsRefreshTimer);
+                    newsRefreshTimer = null;
+                }
+            } else {
+                // 页面可见且资讯标签页活跃时重启计时器
+                if (document.querySelector('.tab-button[data-tab="news"]').classList.contains('active')) {
+                    startNewsAutoRefresh();
+                }
+            }
+        });
     </script>
 </body>
 </html>
