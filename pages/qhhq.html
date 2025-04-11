@@ -415,6 +415,15 @@
             margin-top: 20px;
         }
         
+        .news-empty {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+            background-color: rgba(26, 26, 26, 0.6);
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        
         @media (max-width: 480px) {
             .news-item {
                 padding: 12px;
@@ -905,7 +914,7 @@
                 await updateTabData(activeTab);
                 
                 // Then update other tabs in the background
-                for (const tabId of Object.keys(API_URLS)) {
+                for (const tabId of Object.keys(marketData)) {
                     if (tabId !== activeTab) {
                         updateTabData(tabId);
                     }
@@ -939,7 +948,8 @@
                     newsCursor = '';
                 }
                 
-                const url = API_URLS.news + newsCursor;
+                // 构建URL，注意加入client和first_page参数
+                const url = API_URLS.news + newsCursor + (newsCursor ? '&first_page=false' : '') + '&client=pc';
                 const response = await fetch(url);
                 
                 if (!response.ok) {
@@ -948,21 +958,34 @@
                 
                 const data = await response.json();
                 
-                if (data && data.code === 20000 && data.data && data.data.items) {
+                if (data && data.code === 20000 && data.data) {
                     // If refreshing, replace the data, otherwise append
                     if (refresh) {
-                        newsData = data.data.items;
+                        newsData = data.data.items || [];
                     } else {
-                        newsData = [...newsData, ...data.data.items];
+                        // 确保不重复添加
+                        const newItems = (data.data.items || []).filter(item => 
+                            !newsData.some(existing => existing.id === item.id)
+                        );
+                        newsData = [...newsData, ...newItems];
                     }
                     
-                    // Get the last item's ID as the next cursor
-                    if (data.data.items.length > 0) {
-                        const lastItem = data.data.items[data.data.items.length - 1];
-                        newsCursor = lastItem.id;
+                    // Store the next_cursor for pagination
+                    if (data.data.next_cursor) {
+                        newsCursor = data.data.next_cursor;
+                    } else {
+                        // 没有更多数据了
+                        newsCursor = '';
                     }
                     
-                    renderNews();
+                    renderNews(refresh);
+                    
+                    // Hide the loading message
+                    showStatusMessage('news', '');
+                    
+                    // Show or hide load more button based on whether there's more data
+                    const loadMoreButton = document.getElementById('load-more-news');
+                    loadMoreButton.style.display = data.data.next_cursor ? 'inline-block' : 'none';
                 } else {
                     throw new Error('Invalid news data format');
                 }
@@ -997,7 +1020,7 @@
         }
         
         // Render news items
-        function renderNews() {
+        function renderNews(refresh = false) {
             const container = document.getElementById('news-container');
             
             // Hide status message
@@ -1009,7 +1032,7 @@
             }
             
             // Clear container if refreshing
-            if (newsCursor === newsData[newsData.length - 1].id) {
+            if (refresh) {
                 container.innerHTML = '';
             }
             
@@ -1029,6 +1052,12 @@
                     authorHtml = `
                         <div class="news-author">
                             ${item.author.avatar ? `<img src="${item.author.avatar}" alt="${item.author.display_name}" class="news-avatar">` : ''}
+                            <span class="news-author-name">${item.title || item.author.display_name}</span>
+                        </div>
+                    `;
+                } else if (item.title) {
+                    authorHtml = `
+                        <div class="news-author">
                             <span class="news-author-name">${item.title}</span>
                         </div>
                     `;
@@ -1049,7 +1078,7 @@
             });
             
             // Show/hide load more button based on data availability
-            document.getElementById('load-more-news').style.display = newsData.length >= 20 ? 'block' : 'none';
+            document.getElementById('load-more-news').style.display = newsCursor ? 'block' : 'none';
         }
         
         // Initialize the app
