@@ -485,6 +485,23 @@
                 margin-top: 8px;
             }
         }
+        
+        /* 重点新闻样式 */
+        .important-news {
+            border: 1px solid rgba(255, 215, 0, 0.4);
+            background-color: rgba(65, 72, 80, 0.95);
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.15);
+        }
+        
+        .news-important-tag {
+            background-color: rgba(255, 215, 0, 0.2);
+            color: #ffd700;
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 8px;
+            border: 1px solid rgba(255, 215, 0, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -502,6 +519,7 @@
             <button class="tab-button active" data-tab="commodity">商品</button>
             <button class="tab-button" data-tab="forex">外汇</button>
             <button class="tab-button" data-tab="bond">债券</button>
+            <button class="tab-button" data-tab="news">资讯</button>
             <!-- <button class="tab-button" data-tab="watchlist">自选</button> -->
         </div>
         
@@ -530,6 +548,20 @@
             </div>
             <div id="watchlist-status" class="loading">加载自选...</div>
             <div id="watchlist-grid" class="grid"></div>
+        </div>
+        
+        <div id="news-tab" class="tab-content">
+            <div class="watchlist-controls">
+                <button id="toggle-important-news" class="sort-button">只看重点</button>
+                <div class="watchlist-sort">
+                    <button id="refresh-news-tab" class="sort-button">刷新</button>
+                </div>
+            </div>
+            <div id="news-tab-status" class="loading">加载资讯中...</div>
+            <div id="news-tab-container"></div>
+            <div class="news-footer">
+                <button id="load-more-news-tab" class="news-button">加载更多</button>
+            </div>
         </div>
     </div>
 
@@ -576,6 +608,7 @@
         let newsData = [];
         let newsCursor = '';
         let isLoadingNews = false;
+        let showImportantOnly = false; // 是否只显示重点新闻的标志
         
         // Watchlist management
         let watchlist = [];
@@ -1061,11 +1094,13 @@
         }
         
         // Render news items
-        function renderNews(refresh = false) {
-            const container = document.getElementById('news-container');
+        function renderNews(refresh = false, targetId = 'news-container') {
+            const container = document.getElementById(targetId);
+            const isNewsTab = targetId === 'news-tab-container';
+            const statusId = isNewsTab ? 'news-tab' : 'news';
             
             // Hide status message
-            showStatusMessage('news', '');
+            showStatusMessage(statusId, '');
             
             if (!newsData || newsData.length === 0) {
                 container.innerHTML = '<div class="news-empty">暂无新闻数据</div>';
@@ -1077,15 +1112,30 @@
                 container.innerHTML = '';
             }
             
-            newsData.forEach(item => {
-                // Skip items that are already rendered
-                if (document.querySelector(`.news-item[data-id="${item.id}"]`)) {
+            // 过滤新闻数据，如果在资讯标签页且只看重点模式开启，则只显示score为2的新闻
+            const filteredNews = isNewsTab && showImportantOnly 
+                ? newsData.filter(item => item.score === 2)
+                : newsData;
+            
+            if (isNewsTab && showImportantOnly && filteredNews.length === 0) {
+                container.innerHTML = '<div class="news-empty">暂无重点新闻</div>';
+                return;
+            }
+            
+            filteredNews.forEach(item => {
+                // Skip items that are already rendered in this container
+                if (container.querySelector(`.news-item[data-id="${item.id}"]`)) {
                     return;
                 }
                 
                 const newsItem = document.createElement('div');
                 newsItem.className = 'news-item';
                 newsItem.dataset.id = item.id;
+                
+                // 如果是重点新闻（score为2），添加特殊样式
+                if (item.score === 2) {
+                    newsItem.classList.add('important-news');
+                }
                 
                 // Create author info if available
                 let authorHtml = '';
@@ -1094,12 +1144,14 @@
                         <div class="news-author">
                             ${item.author.avatar ? `<img src="${item.author.avatar}" alt="${item.author.display_name}" class="news-avatar">` : ''}
                             <span class="news-author-name">${item.title || item.author.display_name}</span>
+                            ${item.score === 2 ? '<span class="news-important-tag">重点</span>' : ''}
                         </div>
                     `;
                 } else if (item.title) {
                     authorHtml = `
                         <div class="news-author">
                             <span class="news-author-name">${item.title}</span>
+                            ${item.score === 2 ? '<span class="news-important-tag">重点</span>' : ''}
                         </div>
                     `;
                 }
@@ -1131,7 +1183,8 @@
             });
             
             // Show/hide load more button based on data availability
-            document.getElementById('load-more-news').style.display = newsCursor ? 'block' : 'none';
+            const loadMoreBtnId = isNewsTab ? 'load-more-news-tab' : 'load-more-news';
+            document.getElementById(loadMoreBtnId).style.display = newsCursor ? 'block' : 'none';
         }
         
         // Initialize the app
@@ -1156,6 +1209,13 @@
                     if (tabId === 'watchlist') {
                         renderWatchlist();
                     }
+                    // If news tab is selected, render it
+                    else if (tabId === 'news') {
+                        // 如果资讯标签页没有内容，则加载新闻
+                        if (document.getElementById('news-tab-container').children.length === 0) {
+                            renderNews(false, 'news-tab-container');
+                        }
+                    }
                 });
             });
             
@@ -1174,6 +1234,20 @@
             document.getElementById('refresh-news').addEventListener('click', () => fetchNews(true));
             document.getElementById('load-more-news').addEventListener('click', () => fetchNews());
             
+            // 资讯标签页按钮
+            document.getElementById('toggle-important-news').addEventListener('click', function() {
+                showImportantOnly = !showImportantOnly;
+                this.textContent = showImportantOnly ? '显示全部' : '只看重点';
+                renderNews(true, 'news-tab-container');
+            });
+            document.getElementById('refresh-news-tab').addEventListener('click', () => {
+                fetchNews(true);
+                renderNews(true, 'news-tab-container');
+            });
+            document.getElementById('load-more-news-tab').addEventListener('click', () => {
+                fetchNews().then(() => renderNews(false, 'news-tab-container'));
+            });
+            
             // Load watchlist from localStorage
             loadWatchlist();
             
@@ -1184,7 +1258,13 @@
             // Auto-refresh every 20 seconds
             setInterval(updateAllData, 20000);
             // Auto-refresh news every 5 minutes
-            setInterval(() => fetchNews(true), 300000);
+            setInterval(() => {
+                fetchNews(true);
+                // 如果资讯标签页是活跃的，也更新它
+                if (document.querySelector('.tab-button[data-tab="news"]').classList.contains('active')) {
+                    renderNews(true, 'news-tab-container');
+                }
+            }, 300000);
         }
         
         // Initialize the app when the DOM is loaded
