@@ -531,7 +531,97 @@
             box-shadow: 0 4px 15px rgba(255, 215, 0, 0.15);
         }
         
-   
+        /* 新闻来源标签样式 */
+        .news-source {
+            font-size: 0.8rem;
+            color: #aaa;
+            margin-left: 8px;
+            padding: 2px 6px;
+            background-color: rgba(0, 200, 83, 0.1);
+            border-radius: 4px;
+        }
+        
+        /* 东方财富样式 */
+        .eastmoney-item {
+            border-left: 3px solid #f57c00;
+        }
+        
+        .eastmoney-source {
+            background-color: rgba(245, 124, 0, 0.1);
+            color: #f57c00;
+        }
+        
+        /* 东方财富新闻区域样式 */
+        .eastmoney-item {
+            border-left: 3px solid #f57c00;
+            position: relative;
+        }
+        
+        .eastmoney-source {
+            background-color: rgba(245, 124, 0, 0.1);
+            color: #f57c00;
+        }
+        
+        .news-interactions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 12px;
+            color: #888;
+            font-size: 0.8rem;
+        }
+        
+        .interaction-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .interaction-icon {
+            font-size: 0.9rem;
+        }
+        
+        .news-item-image {
+            margin-top: 12px;
+            width: 100%;
+            max-height: 154px;
+            border-radius: 8px;
+            object-fit: cover;
+            overflow: hidden;
+        }
+        
+        .news-item-image img {
+            width: 100%;
+            height: auto;
+            transition: transform 0.3s;
+        }
+        
+        .news-item:hover .news-item-image img {
+            transform: scale(1.05);
+        }
+        
+        .news-important-tag {
+            background-color: rgba(255, 215, 0, 0.2);
+            color: #ffd700;
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 8px;
+            border: 1px solid rgba(255, 215, 0, 0.3);
+        }
+        
+        .eastmoney-hot {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background-color: rgba(255, 59, 48, 0.2);
+            color: #ff3b30;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -611,6 +701,23 @@
             </div>
         </div>
     </div>
+    
+    <!-- 东方财富新闻区域 -->
+    <div class="news-section">
+        <div class="container">
+            <div class="news-header">
+                <h2 class="news-title">东方财富快讯</h2>
+                <div class="news-controls">
+                    <button id="refresh-eastmoney-news" class="news-button">刷新</button>
+                </div>
+            </div>
+            <div id="eastmoney-news-status" class="loading">加载东方财富新闻中...</div>
+            <div id="eastmoney-news-container"></div>
+            <div class="news-footer">
+                <button id="load-more-eastmoney-news" class="news-button">加载更多</button>
+            </div>
+        </div>
+    </div>
 
     <footer class="footer">
         <div class="container">
@@ -624,7 +731,8 @@
             commodity: 'https://api-ddc-wscn.awtmt.com/market/rank?market_type=forexdata&stk_type=commodity&order_by=none&sort_field=px_change_rate&limit=300&fields=prod_name%2Cprod_en_name%2Cprod_code%2Csymbol%2Clast_px%2Cpx_change%2Cpx_change_rate%2Chigh_px%2Clow_px%2Cweek_52_high%2Cweek_52_low%2Cprice_precision%2Cupdate_time',
             forex: 'https://api-ddc-wscn.awtmt.com/market/rank?market_type=forexdata&stk_type=forex&order_by=none&sort_field=px_change_rate&limit=100&fields=prod_name%2Cprod_en_name%2Cprod_code%2Csymbol%2Clast_px%2Cpx_change%2Cpx_change_rate%2Chigh_px%2Clow_px%2Cweek_52_high%2Cweek_52_low%2Cprice_precision%2Cupdate_time',
             bond: 'https://api-ddc-wscn.awtmt.com/market/rank?market_type=forexdata&stk_type=bond&order_by=none&sort_field=px_change_rate&limit=100&fields=prod_name%2Cprod_en_name%2Cprod_code%2Csymbol%2Clast_px%2Cpx_change%2Cpx_change_rate%2Chigh_px%2Clow_px%2Cweek_52_high%2Cweek_52_low%2Cprice_precision%2Cupdate_time',
-            news: 'https://api-one-wscn.awtmt.com/apiv1/content/lives?channel=global-channel&accept=live%2Cvip-live&limit=20&cursor='
+            news: 'https://api-one-wscn.awtmt.com/apiv1/content/lives?channel=global-channel&accept=live%2Cvip-live&limit=20&cursor=',
+            eastmoneyNews: 'https://q.889.ink/em_news?interact=1&client=wap_sf&biz=wap_stock&fcolName=columns&fcolValue=345&type=1,20&order=1&pageIndex=1&pageSize=200'
         };
         
         // Store all market data
@@ -639,6 +747,11 @@
         let newsCursor = '';
         let isLoadingNews = false;
         let showImportantOnly = true; // 是否只显示重点新闻的标志
+        
+        // 东方财富新闻数据
+        let eastmoneyNewsData = [];
+        let eastmoneyPageIndex = 1;
+        let isLoadingEastmoneyNews = false;
         
         // 资讯自动刷新计时器
         let newsRefreshTimer = null;
@@ -1116,9 +1229,89 @@
             }
         }
         
+        // 获取东方财富新闻数据
+        async function fetchEastmoneyNews(refresh = false) {
+            if (isLoadingEastmoneyNews) return;
+            
+            isLoadingEastmoneyNews = true;
+            showStatusMessage('eastmoney-news', '获取东方财富新闻中...');
+            
+            try {
+                if (refresh) {
+                    eastmoneyPageIndex = 1;
+                }
+                
+                // 构建URL
+                const url = API_URLS.eastmoneyNews.replace('pageIndex=1', `pageIndex=${eastmoneyPageIndex}`);
+                
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data && data.code === 1 && data.data && data.data.list) {
+                    // 如果是刷新，替换数据，否则追加
+                    if (refresh) {
+                        eastmoneyNewsData = data.data.list || [];
+                    } else {
+                        // 确保不重复添加
+                        const newItems = (data.data.list || []).filter(item => 
+                            !eastmoneyNewsData.some(existing => existing.Art_Code === item.Art_Code)
+                        );
+                        eastmoneyNewsData = [...eastmoneyNewsData, ...newItems];
+                    }
+                    
+                    // 增加页码用于下次加载更多
+                    eastmoneyPageIndex++;
+                    
+                    renderEastmoneyNews(refresh);
+                    
+                    // 隐藏加载消息
+                    showStatusMessage('eastmoney-news', '');
+                    
+                    // 根据是否有更多数据显示或隐藏加载更多按钮
+                    const loadMoreButton = document.getElementById('load-more-eastmoney-news');
+                    if (loadMoreButton) {
+                        loadMoreButton.style.display = data.data.list.length > 0 ? 'inline-block' : 'none';
+                    }
+                } else {
+                    throw new Error('无效的东方财富新闻数据格式');
+                }
+            } catch (error) {
+                console.error('获取东方财富新闻数据失败:', error);
+                showStatusMessage('eastmoney-news', `获取东方财富新闻失败: ${error.message}`, true);
+            } finally {
+                isLoadingEastmoneyNews = false;
+            }
+        }
+        
         // Format news date
         function formatNewsDate(timestamp) {
             const date = new Date(timestamp * 1000);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMins / 60);
+            const diffDays = Math.floor(diffHours / 24);
+            
+            if (diffMins < 1) {
+                return '刚刚';
+            } else if (diffMins < 60) {
+                return `${diffMins}分钟前`;
+            } else if (diffHours < 24) {
+                return `${diffHours}小时前`;
+            } else if (diffDays < 7) {
+                return `${diffDays}天前`;
+            } else {
+                return date.toLocaleDateString('zh-CN');
+            }
+        }
+        
+        // Format date string
+        function formatDateString(dateStr) {
+            const date = new Date(dateStr);
             const now = new Date();
             const diffMs = now - date;
             const diffMins = Math.floor(diffMs / 60000);
@@ -1176,6 +1369,7 @@
                 const newsItem = document.createElement('div');
                 newsItem.className = 'news-item';
                 newsItem.dataset.id = item.id;
+                newsItem.dataset.source = 'wsj'; // 标记为华尔街见闻来源
                 
                 // 如果是重点新闻（score为2），添加特殊样式
                 if (item.score === 2) {
@@ -1189,6 +1383,7 @@
                         <div class="news-author">
                             ${item.author.avatar ? `<img src="${item.author.avatar}" alt="${item.author.display_name}" class="news-avatar">` : ''}
                             <span class="news-author-name">${item.title || item.author.display_name}</span>
+                            <span class="news-source">华尔街见闻</span>
                             ${item.score === 2 ? '<span class="news-important-tag">🔥</span>' : ''}
                         </div>
                     `;
@@ -1196,6 +1391,7 @@
                     authorHtml = `
                         <div class="news-author">
                             <span class="news-author-name">${item.title}</span>
+                            <span class="news-source">华尔街见闻</span>
                             ${item.score === 2 ? '<span class="news-important-tag">重点</span>' : ''}
                         </div>
                     `;
@@ -1230,6 +1426,109 @@
             // Show/hide load more button based on data availability
             const loadMoreBtnId = isNewsTab ? 'load-more-news-tab' : 'load-more-news';
             document.getElementById(loadMoreBtnId).style.display = newsCursor ? 'block' : 'none';
+        }
+        
+        // 渲染东方财富新闻
+        function renderEastmoneyNews(refresh = false) {
+            const container = document.getElementById('eastmoney-news-container');
+            
+            // 隐藏状态消息
+            showStatusMessage('eastmoney-news', '');
+            
+            if (!eastmoneyNewsData || eastmoneyNewsData.length === 0) {
+                container.innerHTML = '<div class="news-empty">暂无东方财富新闻数据</div>';
+                return;
+            }
+            
+            // 如果是刷新，清空容器
+            if (refresh) {
+                container.innerHTML = '';
+            }
+            
+            eastmoneyNewsData.forEach(item => {
+                // 跳过已经渲染的项目
+                if (container.querySelector(`.news-item[data-id="${item.Art_Code}"]`)) {
+                    return;
+                }
+                
+                const newsItem = document.createElement('div');
+                newsItem.className = 'news-item eastmoney-item';
+                newsItem.dataset.id = item.Art_Code;
+                newsItem.dataset.source = 'eastmoney';
+                
+                // 判断是否热门 (使用点击量判断)
+                const isHot = item.Interact && item.Interact.click_Num > 100000;
+                
+                // 构建HTML内容
+                const mediaName = item.Art_MediaName || '东方财富网';
+                const title = item.Art_Title || '东方财富快讯';
+                const url = item.Art_Url || '';
+                
+                // 点击量、评论数等互动数据
+                const clicks = item.Interact?.click_Num || 0;
+                const comments = item.Interact?.pinglun_Num || 0;
+                const likes = item.Interact?.like_Num || 0;
+                const shares = item.Interact?.share_Num || 0;
+                
+                // 发布时间
+                const publishTime = formatDateString(item.Art_ShowTime);
+                
+                // 图片
+                const hasImage = !!item.Art_Image;
+                
+                let imageHtml = '';
+                if (hasImage) {
+                    imageHtml = `
+                        <div class="news-item-image">
+                            <img src="${item.Art_Image}" alt="${title}">
+                        </div>
+                    `;
+                }
+                
+                // 热门标签
+                const hotLabel = isHot ? `<div class="eastmoney-hot">热门</div>` : '';
+                
+                newsItem.innerHTML = `
+                    ${hotLabel}
+                    <div class="news-item-header">
+                        <div class="news-author">
+                            <span class="news-author-name">${title}</span>
+                            <span class="news-source eastmoney-source">${mediaName}</span>
+                        </div>
+                        <div class="news-time">${publishTime}</div>
+                    </div>
+                    ${imageHtml}
+                    <div class="news-interactions">
+                        <div class="interaction-item">
+                            <span class="interaction-icon">👁️</span>
+                            <span>${clicks.toLocaleString()}</span>
+                        </div>
+                        <div class="interaction-item">
+                            <span class="interaction-icon">💬</span>
+                            <span>${comments}</span>
+                        </div>
+                        <div class="interaction-item">
+                            <span class="interaction-icon">👍</span>
+                            <span>${likes}</span>
+                        </div>
+                        <div class="interaction-item">
+                            <span class="interaction-icon">🔄</span>
+                            <span>${shares}</span>
+                        </div>
+                    </div>
+                    <div class="news-article-link">
+                        <a href="${url}" target="_blank" class="article-link-button">查看全文</a>
+                    </div>
+                `;
+                
+                container.appendChild(newsItem);
+            });
+            
+            // 显示或隐藏加载更多按钮
+            const loadMoreBtn = document.getElementById('load-more-eastmoney-news');
+            if (loadMoreBtn) {
+                loadMoreBtn.style.display = eastmoneyNewsData.length > 0 ? 'inline-block' : 'none';
+            }
         }
         
         // Initialize the app
@@ -1279,6 +1578,10 @@
             document.getElementById('refresh-news').addEventListener('click', () => fetchNews(true));
             document.getElementById('load-more-news').addEventListener('click', () => fetchNews());
             
+            // 东方财富新闻按钮
+            document.getElementById('refresh-eastmoney-news').addEventListener('click', () => fetchEastmoneyNews(true));
+            document.getElementById('load-more-eastmoney-news').addEventListener('click', () => fetchEastmoneyNews());
+            
             // 资讯标签页按钮
             document.getElementById('toggle-important-news').addEventListener('click', function() {
                 showImportantOnly = !showImportantOnly;
@@ -1323,6 +1626,7 @@
             // Initial data load
             updateAllData();
             fetchNews(true);
+            fetchEastmoneyNews(true);
             
             // Auto-refresh every 20 seconds
             setInterval(updateAllData, 20000);
@@ -1335,6 +1639,9 @@
                     // 重置资讯刷新倒计时
                     newsCountdown = 30;
                 }
+                
+                // 自动刷新东方财富新闻
+                fetchEastmoneyNews(true);
             }, 300000);
             
             // 启动资讯自动刷新
