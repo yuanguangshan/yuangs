@@ -148,6 +148,30 @@
             justify-content: space-between;
             font-size: 0.9rem;
             color: #888;
+            position: relative;
+        }
+        
+        /* 添加行情图标按钮样式 */
+        .chart-button {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            background: transparent;
+            border: none;
+            color: #00c853;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            padding: 3px 6px;
+            border-radius: 4px;
+        }
+        
+        .chart-button:hover {
+            background-color: rgba(0, 200, 83, 0.15);
+            color: #38ff92;
         }
         
         .error-message {
@@ -162,8 +186,10 @@
         
         .loading {
             text-align: center;
-            padding: 20px;
-            color: #888;
+            padding: 5px;
+            font-size: small;
+            margin-top: -35px;
+            color: #d0dc95;
         }
         
         .watchlist-controls {
@@ -231,6 +257,10 @@
             .card-change {
                 font-size: 1.1rem;
             }
+            
+            .chart-button {
+                font-size: 1rem;
+            }
         }
         
         @media (max-width: 480px) {
@@ -289,12 +319,20 @@
                 font-size: 0.8rem;
                 flex-direction: column;
                 gap: 4px;
+                padding-right: 30px; /* 为行情按钮留出空间 */
             }
             
             .star-button {
                 top: 8px;
                 right: 8px;
                 font-size: 1rem;
+            }
+            
+            .chart-button {
+                font-size: 0.9rem;
+                padding: 2px 4px;
+                bottom: 0;
+                right: 0;
             }
             
             .tab-button {
@@ -493,15 +531,7 @@
             box-shadow: 0 4px 15px rgba(255, 215, 0, 0.15);
         }
         
-        .news-important-tag {
-            background-color: rgba(255, 215, 0, 0.2);
-            color: #ffd700;
-            font-size: 0.75rem;
-            padding: 2px 6px;
-            border-radius: 4px;
-            margin-left: 8px;
-            border: 1px solid rgba(255, 215, 0, 0.3);
-        }
+   
     </style>
 </head>
 <body>
@@ -552,7 +582,7 @@
         
         <div id="news-tab" class="tab-content">
             <div class="watchlist-controls">
-                <button id="toggle-important-news" class="sort-button">只看重点</button>
+                <button id="toggle-important-news" class="sort-button">显示全部</button>
                 <div class="watchlist-sort">
                     <button id="refresh-news-tab" class="sort-button">刷新</button>
                 </div>
@@ -608,7 +638,11 @@
         let newsData = [];
         let newsCursor = '';
         let isLoadingNews = false;
-        let showImportantOnly = false; // 是否只显示重点新闻的标志
+        let showImportantOnly = true; // 是否只显示重点新闻的标志
+        
+        // 资讯自动刷新计时器
+        let newsRefreshTimer = null;
+        let newsCountdown = 30; // 资讯刷新倒计时，30秒
         
         // Watchlist management
         let watchlist = [];
@@ -698,6 +732,11 @@
             statusElement.style.display = message ? 'block' : 'none';
         }
         
+        // Get market page URL for the symbol
+        function getMarketPageUrl(symbol) {
+            return `https://wallstreetcn.com/markets/codes/${symbol}.OTC`;
+        }
+        
         // Create a card for a market item
         function createCard(type, item, isWatchlist = false) {
             const name = item[0];
@@ -722,6 +761,9 @@
             // Star button for watchlist
             const starActive = isInWatchlist(symbol) ? 'active' : '';
             
+            // 添加行情链接按钮
+            const chartUrl = getMarketPageUrl(symbol);
+            
             card.innerHTML = `
                 ${isWatchlist ? dragHandle : ''}
                 <button class="star-button ${starActive}" title="${starActive ? '从自选中删除' : '添加到自选'}">★</button>
@@ -733,6 +775,9 @@
                 <div class="card-details">
                     <span>最高: ${formatPrice(high, precision)}</span>
                     <span>最低: ${formatPrice(low, precision)}</span>
+                    <a href="${chartUrl}" class="chart-button" title="查看行情" target="_blank">
+                        <span>💹</span>
+                    </a>
                 </div>
             `;
             
@@ -1144,7 +1189,7 @@
                         <div class="news-author">
                             ${item.author.avatar ? `<img src="${item.author.avatar}" alt="${item.author.display_name}" class="news-avatar">` : ''}
                             <span class="news-author-name">${item.title || item.author.display_name}</span>
-                            ${item.score === 2 ? '<span class="news-important-tag">重点</span>' : ''}
+                            ${item.score === 2 ? '<span class="news-important-tag">🔥</span>' : ''}
                         </div>
                     `;
                 } else if (item.title) {
@@ -1240,9 +1285,33 @@
                 this.textContent = showImportantOnly ? '显示全部' : '只看重点';
                 renderNews(true, 'news-tab-container');
             });
+            
+            // 标签切换时处理资讯自动刷新
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    const tabId = button.getAttribute('data-tab');
+                    
+                    // 清除现有的资讯刷新计时器
+                    if (newsRefreshTimer) {
+                        clearInterval(newsRefreshTimer);
+                        newsRefreshTimer = null;
+                    }
+                    
+                    // 如果切换到资讯标签，启动资讯自动刷新
+                    if (tabId === 'news') {
+                        startNewsAutoRefresh();
+                    }
+                });
+            });
             document.getElementById('refresh-news-tab').addEventListener('click', () => {
                 fetchNews(true);
                 renderNews(true, 'news-tab-container');
+                
+                // 重置资讯刷新倒计时
+                newsCountdown = 30;
+                if (document.querySelector('.tab-button[data-tab="news"]').classList.contains('active')) {
+                    startNewsAutoRefresh();
+                }
             });
             document.getElementById('load-more-news-tab').addEventListener('click', () => {
                 fetchNews().then(() => renderNews(false, 'news-tab-container'));
@@ -1257,18 +1326,85 @@
             
             // Auto-refresh every 20 seconds
             setInterval(updateAllData, 20000);
-            // Auto-refresh news every 5 minutes
+            // Auto-refresh news every 5 minutes (作为备用，确保即使自动刷新失败也能更新)
             setInterval(() => {
                 fetchNews(true);
                 // 如果资讯标签页是活跃的，也更新它
                 if (document.querySelector('.tab-button[data-tab="news"]').classList.contains('active')) {
                     renderNews(true, 'news-tab-container');
+                    // 重置资讯刷新倒计时
+                    newsCountdown = 30;
                 }
             }, 300000);
+            
+            // 启动资讯自动刷新
+            startNewsAutoRefresh();
+        }
+        
+        // 启动资讯自动刷新功能
+        function startNewsAutoRefresh() {
+            // 清除现有计时器
+            if (newsRefreshTimer) {
+                clearInterval(newsRefreshTimer);
+            }
+            
+            // 重置倒计时
+            newsCountdown = 30;
+            
+            // 创建新的计时器
+            newsRefreshTimer = setInterval(() => {
+                // 更新倒计时
+                newsCountdown--;
+                
+                // 在资讯标签页显示倒计时
+                const newsTabStatus = document.getElementById('news-tab-status');
+                if (newsTabStatus && document.querySelector('.tab-button[data-tab="news"]').classList.contains('active')) {
+                    newsTabStatus.textContent = `自动刷新倒计时: ${newsCountdown}秒`;
+                    newsTabStatus.style.display = 'block';
+                    newsTabStatus.className = 'loading';
+                }
+                
+                // 当倒计时结束时刷新数据
+                if (newsCountdown <= 0) {
+                    // 重置倒计时
+                    newsCountdown = 30;
+                    
+                    // 刷新资讯数据
+                    fetchNews(true).then(() => {
+                        // 如果资讯标签页是活跃的，更新显示
+                        if (document.querySelector('.tab-button[data-tab="news"]').classList.contains('active')) {
+                            renderNews(true, 'news-tab-container');
+                        }
+                    });
+                }
+            }, 1000);
         }
         
         // Initialize the app when the DOM is loaded
         document.addEventListener('DOMContentLoaded', init);
+        
+        // 页面关闭或隐藏时清除计时器
+        window.addEventListener('beforeunload', () => {
+            if (newsRefreshTimer) {
+                clearInterval(newsRefreshTimer);
+            }
+        });
+        
+        // 页面可见性变化时处理计时器
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // 页面隐藏时暂停计时器
+                if (newsRefreshTimer) {
+                    clearInterval(newsRefreshTimer);
+                    newsRefreshTimer = null;
+                }
+            } else {
+                // 页面可见且资讯标签页活跃时重启计时器
+                if (document.querySelector('.tab-button[data-tab="news"]').classList.contains('active')) {
+                    startNewsAutoRefresh();
+                }
+            }
+        });
     </script>
 </body>
 </html>
