@@ -1,8 +1,10 @@
 // 等待页面完全加载
 // 页面加载完成后执行
 window.onload = function() {
-  // 确保我们在知乎文章页面
-  if (window.location.href.includes('zhihu.com/p/') || window.location.href.includes('zhihu.com/question/')) {
+  // 扩展匹配条件，包括首页
+  if (window.location.href.includes('zhihu.com/p/') || 
+      window.location.href.includes('zhihu.com/question/') || 
+      window.location.href.includes('zhihu.com/')) {
     // 延迟执行，确保知乎的动态内容已加载
     setTimeout(() => {
       addCopyButton();
@@ -35,13 +37,16 @@ function addCopyButton() {
   } else if (window.location.href.includes('zhihu.com/question/')) {
     // 问答页面，选择所有回答
     articleContents = Array.from(document.querySelectorAll('.AnswerItem .RichText, .ContentItem-RichText'));
+  } else if (window.location.href.includes('zhihu.com/')) {
+    // 首页，选择卡片中的内容
+    articleContents = Array.from(document.querySelectorAll('.Feed .RichContent .RichText, .ContentItem-RichText'));
   }
   
   // 为每个找到的文章内容添加复制按钮
   articleContents.forEach(articleContent => {
     // 检查这个特定内容元素是否已经有了关联的复制按钮
     // 我们通过查找其父元素或相关元素中是否已有按钮来判断
-    const parentElement = articleContent.closest('.ContentItem') || articleContent.closest('.Post-content') || articleContent.parentElement;
+    const parentElement = articleContent.closest('.ContentItem') || articleContent.closest('.Post-content') || articleContent.closest('.Feed-item') || articleContent.parentElement;
     if (parentElement && parentElement.querySelector('.zhihu-copy-button')) {
       return; // 如果已经有按钮，跳过这个内容元素
     }
@@ -75,7 +80,8 @@ function addCopyButton() {
     if (parentElement) {
       articleHeader = parentElement.querySelector('.ContentItem-actions') || 
                      parentElement.querySelector('.Post-Header') || 
-                     parentElement.querySelector('.QuestionHeader-main');
+                     parentElement.querySelector('.QuestionHeader-main') ||
+                     parentElement.querySelector('.Feed-meta'); // 首页的操作栏
     }
     
     // 如果找不到特定的操作栏，就使用内容元素的父元素
@@ -191,7 +197,7 @@ document.body.addEventListener('mouseup', function(e) {
 
 // 检查元素是否在文章内容区域
 function isInArticleContent(element) {
-  const contentSelectors = ['.Post-RichTextContainer', '.RichText', '.ContentItem-RichText'];
+  const contentSelectors = ['.Post-RichTextContainer', '.RichText', '.ContentItem-RichText', '.RichContent'];
   while (element && element !== document.body) {
     for (const selector of contentSelectors) {
       if (element.matches(selector)) return true;
@@ -273,6 +279,7 @@ function handleOutsideClick(e) {
     removeExistingFloatingButton();
   }
 }
+
 // 添加阅读进度条
 function addReadingProgress() {
   // 检查是否已存在进度条
@@ -334,6 +341,9 @@ function getCurrentArticle() {
   } else if (window.location.href.includes('zhihu.com/question/')) {
     // 问答页面，选择所有回答
     articleContents = Array.from(document.querySelectorAll('.AnswerItem .RichText, .ContentItem-RichText'));
+  } else if (window.location.href.includes('zhihu.com/')) {
+    // 首页
+    articleContents = Array.from(document.querySelectorAll('.Feed .RichContent, .ContentItem-RichText'));
   }
   
   if (articleContents.length === 0) return null;
@@ -426,4 +436,109 @@ function sendToPushDeer(content) {
   });
 }
 
-// 以下是文件结尾
+// 添加必要的CSS样式
+function addCssStyles() {
+  const style = document.createElement('style');
+  style.textContent = `
+    .zhihu-copy-button-container {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 10px;
+      position: relative;
+    }
+    
+    .zhihu-copy-button {
+      background-color: #f0f2f5;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      padding: 3px 8px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      color: #8590a6;
+      transition: all 0.2s;
+    }
+    
+    .zhihu-copy-button:hover {
+      background-color: #e5e7eb;
+    }
+    
+    .reading-time-indicator {
+      background-color: #0084ff;
+      color: white;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      position: absolute;
+      top: -6px;
+      right: -6px;
+    }
+    
+    .zhihu-copy-toast {
+      position: fixed;
+      bottom: 10%;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 4px;
+      z-index: 10000;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+    
+    .zhihu-copy-toast.show {
+      opacity: 1;
+    }
+    
+    .zhihu-floating-copy-button {
+      background-color: white;
+      border-radius: 4px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      padding: 8px;
+      z-index: 10000;
+    }
+    
+    .copy-options {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .copy-options button {
+      background-color: #f0f2f5;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      padding: 4px 8px;
+      font-size: 12px;
+      color: #8590a6;
+      transition: all 0.2s;
+    }
+    
+    .copy-options button:hover {
+      background-color: #e5e7eb;
+    }
+    
+    .zhihu-reading-progress {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 3px;
+      background-color: #0084ff;
+      z-index: 10000;
+      width: 0;
+      transition: width 0.2s;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+// 页面加载时添加CSS样式
+addCssStyles();
