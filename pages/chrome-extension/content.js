@@ -102,25 +102,262 @@ function addCopyButton() {
   });
 }
 
-// 复制文章内容的函数
+// 复制文章内容的函数 - 改进版
 function copyArticleContent(articleElement) {
   if (!articleElement) return;
   
-  // 获取纯文本内容
-  let content = articleElement.innerText;
+  // 显示初始提示
+  showCopySuccessMessage('正在准备内容...');
   
+  // 检查是否有阅读全文按钮
+  let expandButton = findExpandButton(articleElement);
+  
+  if (expandButton) {
+    // 如果找到了展开按钮，先点击展开，然后等待内容加载完成后再复制
+    console.log('发现阅读全文按钮，尝试展开...');
+    showCopySuccessMessage('正在展开全文...');
+    
+    // 1. 先创建原始内容的深拷贝，确保我们有一个基准来比较
+    const originalContent = articleElement.cloneNode(true);
+    const originalTextLength = originalContent.innerText.length;
+    console.log('原始内容长度:', originalTextLength);
+    
+    // 2. 设置展开处理状态
+    let expandAttempts = 0;
+    const maxExpandAttempts = 8; // 增加最大尝试次数
+    let contentChanged = false;
+    let lastContentLength = originalTextLength;
+    let stabilityCount = 0;
+    const requiredStability = 3; // 内容需要稳定这么多次才认为展开完成
+    
+    // 3. 创建一个记录完全展开内容的变量
+    let fullyExpandedContent = null;
+    
+    // 4. 设置更长的监听时间，确保所有内容都已展开
+    const expandCompletionTimeout = 12000; // 12秒总超时
+    
+    // 5. 创建一个MutationObserver来监听内容变化
+    const contentObserver = new MutationObserver((mutations) => {
+      // 获取当前内容长度
+      const currentText = articleElement.innerText;
+      const currentLength = currentText.length;
+      
+      // 检查内容是否有明显变化
+      if (currentLength > lastContentLength * 1.05) { // 内容增加了至少5%
+        console.log(`内容长度变化: ${lastContentLength} -> ${currentLength}`);
+        lastContentLength = currentLength;
+        contentChanged = true;
+        stabilityCount = 0; // 重置稳定计数
+        
+        // 尝试查找更多展开按钮
+        setTimeout(() => {
+          const newExpandButton = findExpandButton(articleElement);
+          if (newExpandButton && expandAttempts < maxExpandAttempts) {
+            console.log(`尝试点击新的展开按钮 (尝试 ${expandAttempts + 1}/${maxExpandAttempts})`);
+            expandAttempts++;
+            newExpandButton.click();
+          }
+        }, 500);
+      } else {
+        // 内容没有明显变化，可能已经稳定
+        stabilityCount++;
+        console.log(`内容稳定计数: ${stabilityCount}/${requiredStability}`);
+        
+        // 如果内容已经稳定了足够次数，认为展开完成
+        if (stabilityCount >= requiredStability) {
+          // 保存完全展开的内容
+          fullyExpandedContent = articleElement.innerText;
+          console.log('内容已完全展开且稳定，长度:', fullyExpandedContent.length);
+          
+          // 停止观察
+          contentObserver.disconnect();
+          
+          // 复制完全展开的内容
+          copyTextToClipboard(fullyExpandedContent);
+          showCopySuccessMessage(`已复制完整内容 (${fullyExpandedContent.length}字符)`);
+        }
+      }
+    });
+    
+    // 6. 开始观察文章元素的变化
+    contentObserver.observe(articleElement, {
+      childList: true, 
+      subtree: true, 
+      characterData: true,
+      attributes: true
+    });
+    
+    // 7. 点击第一个展开按钮
+    expandButton.click();
+    expandAttempts++;
+    
+    // 8. 设置主超时，确保不会无限等待
+    setTimeout(() => {
+      // 停止观察
+      contentObserver.disconnect();
+      
+      // 如果已经有完全展开的内容，使用它
+      if (fullyExpandedContent) {
+        console.log('使用已捕获的完全展开内容');
+        return; // 已经处理过了，不需要再次复制
+      }
+      
+      // 检查内容是否有变化
+      if (contentChanged) {
+        // 如果内容有变化但未达到稳定状态，使用当前内容
+        const finalContent = articleElement.innerText;
+        console.log('展开超时，使用当前内容，长度:', finalContent.length);
+        copyTextToClipboard(finalContent);
+        showCopySuccessMessage(`已复制内容 (${finalContent.length}字符)`);
+      } else {
+        // 如果内容没有变化，可能展开失败，使用原始内容
+        console.log('展开似乎失败，使用原始内容');
+        copyTextToClipboard(articleElement.innerText);
+        showCopySuccessMessage('已复制当前可见内容');
+      }
+    }, expandCompletionTimeout);
+    
+    // 9. 额外的展开尝试，确保尽可能捕获到所有内容
+    const expandInterval = setInterval(() => {
+      // 如果已经完成或达到最大尝试次数，停止尝试
+      if (fullyExpandedContent || expandAttempts >= maxExpandAttempts) {
+        clearInterval(expandInterval);
+        return;
+      }
+      
+      // 查找新的展开按钮
+      const newExpandButton = findExpandButton(articleElement);
+      if (newExpandButton) {
+        console.log(`定时尝试点击展开按钮 (尝试 ${expandAttempts + 1}/${maxExpandAttempts})`);
+        expandAttempts++;
+        newExpandButton.click();
+      }
+    }, 1000); // 每秒尝试一次
+    
+  } else {
+    // 如果没有展开按钮，直接获取当前内容
+    console.log('没有发现展开按钮，直接复制当前内容');
+    const content = articleElement.innerText;
+    copyTextToClipboard(content);
+    showCopySuccessMessage(`已复制内容 (${content.length}字符)`);
+  }
+}
+
+// 查找文章中的展开全文按钮
+function findExpandButton(articleElement) {
+  // 尝试多种可能的选择器来查找展开按钮
+  // 知乎的展开按钮可能有多种类名和结构
+  
+  // 1. 直接在文章元素内查找
+  let expandButton = articleElement.querySelector('.ContentItem-expandButton') || 
+                     articleElement.querySelector('.RichContent-expandButton') || 
+                     articleElement.querySelector('.RichContent-collapsedText') ||
+                     articleElement.querySelector('.Button.Button--plain.ContentItem-more') ||
+                     articleElement.querySelector('[role="button"][class*="expand"]') ||
+                     articleElement.querySelector('.RichContent-actions button') ||
+                     articleElement.querySelector('.ContentItem-actions button[class*="Button"]') ||
+                     articleElement.querySelector('.FoldButton') ||
+                     articleElement.querySelector('.ViewAll') ||
+                     articleElement.querySelector('.RichContent--unescapable .ContentItem-rightButton');
+  
+  if (expandButton) return expandButton;
+  
+  // 2. 检查是否有折叠的内容区域
+  const collapsedContent = articleElement.querySelector('.RichContent-inner.is-collapsed') ||
+                          articleElement.querySelector('.is-collapsed') ||
+                          articleElement.querySelector('[class*="collapsed"]');
+  if (collapsedContent) {
+    // 如果找到折叠内容，查找其中或附近的按钮
+    const nearbyButton = collapsedContent.querySelector('button') || 
+                        collapsedContent.nextElementSibling?.querySelector('button') ||
+                        collapsedContent.parentElement?.querySelector('button');
+    if (nearbyButton) return nearbyButton;
+  }
+  
+  // 3. 查找包含"阅读全文"或"展开阅读"文本的按钮或元素
+  const textPatterns = ['阅读全文', '展开阅读', '查看全部', '显示全部', '展开', '更多', '全文'];
+  
+  // 3.1 检查按钮
+  const allButtons = articleElement.querySelectorAll('button, [role="button"]');
+  for (const button of allButtons) {
+    const buttonText = button.textContent.trim();
+    if (textPatterns.some(pattern => buttonText.includes(pattern))) {
+      return button;
+    }
+  }
+  
+  // 3.2 检查链接
+  const allLinks = articleElement.querySelectorAll('a');
+  for (const link of allLinks) {
+    const linkText = link.textContent.trim();
+    if (textPatterns.some(pattern => linkText.includes(pattern))) {
+      return link;
+    }
+  }
+  
+  // 3.3 检查任何可能是按钮的元素
+  const allClickables = articleElement.querySelectorAll('[class*="button"], [class*="Button"], [class*="more"], [class*="More"]');
+  for (const element of allClickables) {
+    const elementText = element.textContent.trim();
+    if (textPatterns.some(pattern => elementText.includes(pattern))) {
+      return element;
+    }
+  }
+  
+  // 4. 查找父元素中的展开按钮
+  const parentElement = articleElement.closest('.ContentItem') || 
+                       articleElement.closest('.Post-content') ||
+                       articleElement.closest('.RichContent') ||
+                       articleElement.closest('.Feed-item');
+  if (parentElement) {
+    // 4.1 在父元素中查找按钮
+    expandButton = parentElement.querySelector('.ContentItem-expandButton') || 
+                  parentElement.querySelector('.RichContent-expandButton') ||
+                  parentElement.querySelector('.Button.Button--plain.ContentItem-more') ||
+                  parentElement.querySelector('[role="button"][class*="expand"]') ||
+                  parentElement.querySelector('.RichContent-actions button') ||
+                  parentElement.querySelector('.ContentItem-actions button[class*="Button"]');
+    if (expandButton) return expandButton;
+    
+    // 4.2 在父元素中查找折叠内容
+    const parentCollapsed = parentElement.querySelector('.RichContent-inner.is-collapsed') ||
+                           parentElement.querySelector('.is-collapsed') ||
+                           parentElement.querySelector('[class*="collapsed"]');
+    if (parentCollapsed) {
+      const nearbyButton = parentCollapsed.querySelector('button') || 
+                          parentCollapsed.nextElementSibling?.querySelector('button') ||
+                          parentCollapsed.parentElement?.querySelector('button');
+      if (nearbyButton) return nearbyButton;
+    }
+    
+    // 4.3 在父元素中查找包含特定文本的元素
+    const parentButtons = parentElement.querySelectorAll('button, [role="button"], a, [class*="button"], [class*="Button"], [class*="more"], [class*="More"]');
+    for (const button of parentButtons) {
+      const buttonText = button.textContent.trim();
+      if (textPatterns.some(pattern => buttonText.includes(pattern))) {
+        return button;
+      }
+    }
+  }
+  
+  // 没有找到展开按钮
+  return null;
+}
+
+// 复制文本到剪贴板的通用函数
+function copyTextToClipboard(text) {
   // 复制到剪贴板
-  navigator.clipboard.writeText(content)
+  navigator.clipboard.writeText(text)
     .then(() => {
       // 显示复制成功的提示
-      showCopySuccessMessage();
+      showCopySuccessMessage(`已复制内容 (${text.length}字符)`);
       // 发送到PushDeer
-      sendToPushDeer(content);
+      sendToPushDeer(text);
     })
     .catch(err => {
       console.error('复制失败:', err);
       // 使用备用方法
-      fallbackCopy(content);
+      fallbackCopy(text);
     });
 }
 
@@ -136,7 +373,7 @@ function fallbackCopy(text) {
   try {
     const successful = document.execCommand('copy');
     if (successful) {
-      showCopySuccessMessage();
+      showCopySuccessMessage(`已复制内容 (${text.length}字符)`);
     } else {
       console.error('复制失败');
     }
@@ -148,7 +385,7 @@ function fallbackCopy(text) {
 }
 
 // 显示复制成功的提示消息
-function showCopySuccessMessage() {
+function showCopySuccessMessage(message) {
   // 检查是否已存在提示，避免重复创建
   let toast = document.querySelector('.zhihu-copy-toast');
   
@@ -158,7 +395,8 @@ function showCopySuccessMessage() {
     document.body.appendChild(toast);
   }
   
-  toast.textContent = '文章内容已复制到剪贴板';
+  // 使用传入的消息或默认消息
+  toast.textContent = message || '文章内容已复制到剪贴板';
   toast.classList.add('show');
   
   // 2秒后隐藏提示
