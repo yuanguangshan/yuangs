@@ -353,7 +353,7 @@ function copyTextToClipboard(text) {
       showCopySuccessMessage(`已复制内容 (${text.length}字符)`);
       // 发送到PushDeer
       sendToPushDeer(text);
-      // 保存为本地MD文件
+      // 保存为本地MD文件--注释的话就不下载，否则下载
       saveToLocalMD(text);
     })
     .catch(err => {
