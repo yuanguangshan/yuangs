@@ -354,7 +354,7 @@ function copyTextToClipboard(text) {
       // 发送到PushDeer
       sendToPushDeer(text);
       // 保存为本地MD文件--注释的话就不下载，否则下载
-      saveToLocalMD(text);
+      // saveToLocalMD(text);
     })
     .catch(err => {
       console.error('复制失败:', err);
