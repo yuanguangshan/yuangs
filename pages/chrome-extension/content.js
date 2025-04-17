@@ -134,7 +134,7 @@ function copyArticleContent(articleElement) {
     let fullyExpandedContent = null;
     
     // 4. 设置更长的监听时间，确保所有内容都已展开
-    const expandCompletionTimeout = 12000; // 12秒总超时
+    const expandCompletionTimeout = 4000; // 2秒总超时
     
     // 5. 创建一个MutationObserver来监听内容变化
     const contentObserver = new MutationObserver((mutations) => {
