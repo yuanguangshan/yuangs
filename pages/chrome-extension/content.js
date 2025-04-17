@@ -353,12 +353,43 @@ function copyTextToClipboard(text) {
       showCopySuccessMessage(`已复制内容 (${text.length}字符)`);
       // 发送到PushDeer
       sendToPushDeer(text);
+      // 保存为本地MD文件
+      saveToLocalMD(text);
     })
     .catch(err => {
       console.error('复制失败:', err);
       // 使用备用方法
       fallbackCopy(text);
     });
+}
+
+// 保存文本为本地MD文件
+function saveToLocalMD(text) {
+  // 格式化文本为MD
+  const mdText = `> ${text.replace(/\n/g, '\n> ')}`;
+  
+  // 创建Blob对象
+  const blob = new Blob([mdText], { type: 'text/markdown' });
+  
+  // 生成文件名
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `zhihu-copy-${timestamp}.md`;
+  
+  // 创建下载链接
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  
+  // 触发下载
+  document.body.appendChild(a);
+  a.click();
+  
+  // 清理
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
 }
 
 // 备用的复制方法（兼容性更好）
