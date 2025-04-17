@@ -4,7 +4,8 @@ window.onload = function() {
   // 扩展匹配条件，包括首页
   if (window.location.href.includes('zhihu.com/p/') || 
       window.location.href.includes('zhihu.com/question/') || 
-      window.location.href.includes('zhihu.com/')) {
+      window.location.href.includes('zhihu.com/')|| 
+      window.location.href.includes('zhihu.com/people/')) {
     // 延迟执行，确保知乎的动态内容已加载
     setTimeout(() => {
       addCopyButton();
@@ -37,7 +38,10 @@ function addCopyButton() {
   } else if (window.location.href.includes('zhihu.com/question/')) {
     // 问答页面，选择所有回答
     articleContents = Array.from(document.querySelectorAll('.AnswerItem .RichText, .ContentItem-RichText'));
-  } else if (window.location.href.includes('zhihu.com/')) {
+  }else if (window.location.href.includes('zhihu.com/people/')) {
+    // 个人页面，选择所有回答
+    articleContents = Array.from(document.querySelectorAll('.AnswerItem .RichText, .ContentItem-RichText'));
+  }  else if (window.location.href.includes('zhihu.com/')) {
     // 首页，选择卡片中的内容
     articleContents = Array.from(document.querySelectorAll('.Feed .RichContent .RichText, .ContentItem-RichText'));
   }
