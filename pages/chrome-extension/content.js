@@ -178,7 +178,7 @@ function copyArticleContent(articleElement) {
           
           // 复制完全展开的内容
           copyTextToClipboard(fullyExpandedContent);
-          showCopySuccessMessage(`已复制完整内容 (${fullyExpandedContent.length}字符)`);
+          showCopySuccessMessage(`已复制完整内容 (${fullyExpandedContent.length}字)`);
         }
       }
     });
@@ -212,7 +212,7 @@ function copyArticleContent(articleElement) {
         const finalContent = articleElement.innerText;
         console.log('展开超时，使用当前内容，长度:', finalContent.length);
         copyTextToClipboard(finalContent);
-        showCopySuccessMessage(`已复制内容 (${finalContent.length}字符)`);
+        showCopySuccessMessage(`已复制内容 (${finalContent.length}字)`);
       } else {
         // 如果内容没有变化，可能展开失败，使用原始内容
         console.log('展开似乎失败，使用原始内容');
@@ -243,7 +243,7 @@ function copyArticleContent(articleElement) {
     console.log('没有发现展开按钮，直接复制当前内容');
     const content = articleElement.innerText;
     copyTextToClipboard(content);
-    showCopySuccessMessage(`已复制内容 (${content.length}字符)`);
+    showCopySuccessMessage(`已复制内容 (${content.length}字)`);
   }
 }
 
@@ -354,7 +354,7 @@ function copyTextToClipboard(text) {
   navigator.clipboard.writeText(text)
     .then(() => {
       // 显示复制成功的提示
-      showCopySuccessMessage(`已复制内容 (${text.length}字符)`);
+      showCopySuccessMessage(`已复制内容 (${text.length}字)`);
       // 发送到PushDeer
       sendToPushDeer(text);
       // 保存为本地MD文件--注释的话就不下载，否则下载
@@ -408,7 +408,7 @@ function fallbackCopy(text) {
   try {
     const successful = document.execCommand('copy');
     if (successful) {
-      showCopySuccessMessage(`已复制内容 (${text.length}字符)`);
+      showCopySuccessMessage(`已复制内容 (${text.length}字)`);
     } else {
       console.error('复制失败');
     }
@@ -668,10 +668,10 @@ function sendToPushDeer(content) {
       return;
     }
     
-    // 处理内容，确保中文字符正确编码
+    // 处理内容，确保中文正确编码
     let processedContent = content;
     if (content && content.length > 20000) {
-      processedContent = content.substring(0, 20000) + '...(内容已截断)'; // 限制长度，避免请求过大
+      processedContent = content.substring(0, 20000) + '...(内容已截断,限制2万字)'; // 限制长度，避免请求过大
     }
     
     // 准备发送的数据
