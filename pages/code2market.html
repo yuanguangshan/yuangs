@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>主力合约代码映射展示</title>
+  <style>
+    body {
+      font-family: "SF Pro SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f7f7f7;
+    }
+    header {
+      background: #2d8cf0;
+      color: #fff;
+      padding: 1em 0;
+      text-align: center;
+      font-size: 1.3em;
+      letter-spacing: 2px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 20px auto;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px 0 rgba(0,0,0,0.08);
+      padding: 20px;
+    }
+    .desc {
+      color: #888;
+      margin-bottom: 16px;
+      font-size: 0.97em;
+    }
+    #copy-btn {
+      background: #2d8cf0;
+      color: #fff;
+      border: none;
+      padding: 8px 18px;
+      border-radius: 4px;
+      margin-bottom: 16px;
+      cursor: pointer;
+      font-size: 1em;
+      transition: background 0.2s;
+    }
+    #copy-btn:active {
+      background: #1765ad;
+    }
+    #code-block {
+      background: #252525;
+      color: #d3f9d8;
+      padding: 10px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 0.94em;
+      margin-bottom: 22px;
+      white-space: pre;
+      max-height: 380px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 12px;
+      background: #fff;
+    }
+    th, td {
+      border: 1px solid #eee;
+      padding: 6px 7px;
+      text-align: center;
+      font-size: 0.97em;
+    }
+    th {
+      background: #f6faff;
+      color: #444;
+    }
+    tr:nth-child(even) {
+      background: #f9f9f9;
+    }
+    @media (max-width: 600px) {
+      .container {padding: 8px;}
+      th, td {padding: 4px 2px; font-size: 0.92em;}
+      #code-block {font-size: 0.84em;}
+    }
+  </style>
+</head>
+<body>
+  <header>主力合约品种代码 &rarr; 交易所 映射表</header>
+  <div class="container">
+    <div class="desc">
+      本页面自动从 <code>https://q.want.biz/m</code> 获取主力合约数据，生成 <b>品种代码 → 交易所</b> 的映射关系，支持大小写双写。<br>
+      可直接复制代码到你的JS项目或爬虫中使用。
+    </div>
+    <button id="copy-btn">复制映射代码</button>
+    <pre id="code-block">// 加载中...</pre>
+    <div id="table-wrap"></div>
+  </div>
+  <script>
+    async function fetchCodeToMkt() {
+      const url = 'https://q.want.biz/m';
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        throw new Error("无法获取数据，状态码:" + resp.status);
+      }
+      const data = await resp.json();
+      const code_to_mkt = {};
+      data.list.forEach(item => {
+        if (!item.uid) return;
+        const [exchange, main_code] = item.uid.split('|');
+        if (!exchange || !main_code) return;
+        // 去除末尾的 m 或 M
+        const code = main_code.replace(/m$/i, '');
+        code_to_mkt[code.toLowerCase()] = exchange;
+        code_to_mkt[code.toUpperCase()] = exchange;
+      });
+      return code_to_mkt;
+    }
+
+    // 渲染 code_to_mkt 代码块
+    function renderCodeBlock(map) {
+      const lines = ['const code_to_mkt = {'];
+      Object.keys(map).sort().forEach(key => {
+        lines.push(`  "${key}": "${map[key]}",`);
+      });
+      lines.push('};');
+      return lines.join('\n');
+    }
+
+    // 渲染表格
+    function renderTable(map) {
+      // 合并大写和小写，避免重复展示
+      const shown = new Set();
+      const rows = [];
+      Object.keys(map).sort().forEach(key => {
+        const lower = key.toLowerCase();
+        if (shown.has(lower)) return;
+        const upper = key.toUpperCase();
+        rows.push(`<tr><td>${lower}</td><td>${upper}</td><td>${map[key]}</td></tr>`);
+        shown.add(lower);
+      });
+      return `
+        <table>
+          <thead>
+            <tr><th>小写代码</th><th>大写代码</th><th>交易所</th></tr>
+          </thead>
+          <tbody>
+            ${rows.join('\n')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    // 复制按钮
+    document.getElementById('copy-btn').onclick = function() {
+      const code = document.getElementById('code-block').innerText;
+      navigator.clipboard.writeText(code).then(() => {
+        this.innerText = '已复制！';
+        setTimeout(() => this.innerText = '复制映射代码', 1200);
+      });
+    };
+
+    // 主运行
+    (async () => {
+      try {
+        const code_to_mkt = await fetchCodeToMkt();
+        document.getElementById('code-block').textContent = renderCodeBlock(code_to_mkt);
+        document.getElementById('table-wrap').innerHTML = renderTable(code_to_mkt);
+      } catch (e) {
+        document.getElementById('code-block').textContent = "// 数据获取失败：" + e.message;
+      }
+    })();
+  </script>
+</body>
+</html>
