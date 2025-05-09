@@ -734,19 +734,19 @@ function addCssStyles() {
     }
     
     .zhihu-copy-button:hover {
-      background-color: #e5e7eb;
+      background-color: #99f;
     }
     
     .reading-time-indicator {
-      background-color: #0084ff;
-      color: white;
+      background-color:rgba(30, 32, 29, 0.1);
+      color: #0000ff;
       border-radius: 50%;
-      width: 18px;
-      height: 18px;
+      width: 15px;
+      height: 15px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 10px;
+      font-size: 11px;
       position: absolute;
       top: -6px;
       right: -6px;
