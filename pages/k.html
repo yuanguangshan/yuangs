@@ -11,8 +11,14 @@
         .chart-container {
             position: relative;
             width: 100%;
+            max-width: 1200px; /* 限制最大宽度，提高可读性 */
             height: 450px;
-            margin-bottom: 60px;
+            margin: 0 auto 60px auto; /* 居中并设置下边距 */
+            border: 1px solid #e0e0e0; /* 添加边框 */
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08); /* 添加阴影 */
+            border-radius: 8px; /* 圆角 */
+            overflow: hidden; /* 隐藏超出部分 */
+            background-color: #fff; /* 图表容器背景色 */
         }
 
         .chart {
@@ -34,6 +40,7 @@
             border-radius: 5px;
             font-size: 14px;
             opacity: 0.8;
+            transition: background-color 0.3s ease, opacity 0.3s ease; /* 添加过渡效果 */
         }
 
         .download-btn:hover {
@@ -47,22 +54,24 @@
             background-color: #f5f5f5;
             margin: 0;
             padding: 20px;
+            box-sizing: border-box; /* 包含内边距和边框在总宽度内 */
         }
 
         /* 标题样式 */
         h1 {
             text-align: center;
-            font-size: 24px;
+            font-size: 28px; /* 稍微增大标题字号 */
             margin-bottom: 30px;
+            color: #2c3e50; /* 深色标题 */
         }
 
-        /* 图表标题样式 */
-        .chart-title {
+        /* 图表标题样式 (如果图表容器内需要额外标题) */
+        /* .chart-title {
             text-align: center;
             font-size: 20px;
             margin-bottom: 10px;
             color: #333;
-        }
+        } */
     </style>
 </head>
 <body>
@@ -72,28 +81,24 @@
 
 <!-- 第一个图表容器：期货品种走势对比 -->
 <div class="chart-container">
-    <!-- <div class="chart-title">图表1</div> -->
     <div id="main1" class="chart"></div>
     <button id="download-btn1" class="download-btn">下载</button>
 </div>
 
-<!-- 第二个图表容器：增仓率 vs 涨跌幅 -->
+<!-- 第二个图表容器：投机度 vs 涨跌幅 -->
 <div class="chart-container">
-    <!-- <div class="chart-title">图表2</div> -->
-    <div id="main3" class="chart"></div>
-    <button id="download-btn3" class="download-btn">下载</button>
-</div>
-
-<!-- 第三个图表容器：投机度 vs 涨幅 -->
-<div class="chart-container">
-    <!-- <div class="chart-title">图表2</div> -->
     <div id="main2" class="chart"></div>
     <button id="download-btn2" class="download-btn">下载</button>
 </div>
 
+<!-- 第三个图表容器：增仓率 vs 涨跌幅 -->
+<div class="chart-container">
+    <div id="main3" class="chart"></div>
+    <button id="download-btn3" class="download-btn">下载</button>
+</div>
+
 <!-- 第四个图表容器：期货品种各周期指标对比 -->
 <div class="chart-container">
-    <!-- <div class="chart-title">图表4</div> -->
     <div id="main4" class="chart"></div>
     <button id="download-btn4" class="download-btn">下载</button>
 </div>
@@ -101,10 +106,10 @@
 <!-- 第五个图表容器：期货品种指标对比 -->
 <div class="chart-container">
     <div id="main5" class="chart"></div>
+    <!-- 最后一个图表没有下载按钮，如果需要可以自行添加 -->
 </div>
 
 <script>
-    
     // 获取当前时间并判断是否为日盘时段
     function isDaySession() {
         const now = new Date();
@@ -199,7 +204,6 @@
     const metric2 = urlParams.get('j') || 'zdf'; // 默认第二个指标为涨跌幅 zdf
 
     // 获取数据并调用绘图函数
-    // Click the bar to view more detailed lhbdata to analyse the trend!!!
     async function fetchData() {
         try {
             const response = await fetch(apiUrl);
@@ -217,11 +221,14 @@
             }
 
             // 调用五个图表的绘制函数
-            renderChart1(filteredData);  // 期货品种走势对比
-            renderChart2(filteredData);  // 投机度 vs 涨幅图表
-            renderChart3(filteredData);  // 增仓率 vs 涨跌幅图表
-            renderChart4(filteredData);  // 各周期涨跌幅对比
-            renderChart5(filteredData, metric1, metric2);  // 期货品种指标对比
+            // 注意：因为 renderChart2 和 renderChart4 会对传入的 dataList 进行排序
+            // 如果其他图表也需要原始未排序的数据，或按不同标准排序，
+            // 则需要在这里对 dataList 进行深拷贝 [...dataList]
+            renderChart1(filteredData);
+            renderChart2([...filteredData]); // 克隆一份，避免排序影响chart3/4/5的输入
+            renderChart3([...filteredData]); // 克隆一份
+            renderChart4([...filteredData]); // 克隆一份
+            renderChart5([...filteredData], metric1, metric2); // 克隆一份
         } catch (error) {
             console.error('数据获取失败:', error);
         }
@@ -229,7 +236,10 @@
 
     // 绘制第一个图表: 期货品种走势对比
     function renderChart1(dataList) {
-        const processedData = dataList.map(item => {
+        // 深拷贝dataList以避免后续排序影响其他图表
+        const currentDataList = [...dataList];
+        
+        const processedData = currentDataList.map(item => {
             const openChange = parseFloat(((item.o - item.zjsj) / item.zjsj * 100).toFixed(2));  // 开盘涨幅
             const closeChange = parseFloat(((item.p - item.zjsj) / item.zjsj * 100).toFixed(2)); // 收盘涨幅
             const lowChange = parseFloat(((item.l - item.zjsj) / item.zjsj * 100).toFixed(2));   // 最低涨幅
@@ -237,15 +247,15 @@
             return {
                 name: item.name,
                 dm: item.dm,
-                data: [openChange, closeChange, lowChange, highChange], // 保存涨跌幅数据
+                value: [openChange, closeChange, lowChange, highChange], // ECharts K线图数据期望value
                 closeChange // 保存收盘涨幅用来排序
             };
         });
 
+        // 走势图需要根据收盘涨跌幅排序，以便直观展示
         const sortedData = processedData.sort((a, b) => b.closeChange - a.closeChange);
         const categories = sortedData.map(item => item.name);
-        const sortedProcessedData = sortedData.map(item => item);
-
+        
         const option = {
             title: {
                 text: '期货品种走势对比',
@@ -261,14 +271,25 @@
                 axisPointer: {
                     type: 'shadow'
                 },
-
+                // 自定义tooltip，显示开盘、收盘、最低、最高涨跌幅
+                formatter: function (params) {
+                    const data = params[0].data.value; // 获取K线图的value数组
+                    if (data && data.length === 4) {
+                        return `${params[0].name}<br/>` +
+                               `开盘涨幅: ${data[0]} %<br/>` +
+                               `收盘涨幅: ${data[1]} %<br/>` +
+                               `最低涨幅: ${data[2]} %<br/>` +
+                               `最高涨幅: ${data[3]} %`;
+                    }
+                    return params[0].name;
+                }
             },
             xAxis: {
                 type: 'category',
                 data: categories,
                 axisLabel: {
                     interval: 0,
-                    rotate: 270, // 调整为45度角，避免过长时重叠
+                    rotate: 45, // 调整为45度角，避免过长时重叠
                     fontSize: 12,
                     color: '#333'
                 },
@@ -310,10 +331,10 @@
             series: [{
                 name: '涨跌幅',
                 type: 'candlestick',
-                data: sortedProcessedData.map(item => ({
-                    value: item.data,
-                    dm: item.dm,
-                    name: item.name
+                data: sortedData.map(item => ({
+                    value: item.value, // K线图数据项的value
+                    dm: item.dm, // 确保 dm 字段存储在数据项中
+                    name: item.name // 确保 name 字段存储在数据项中
                 })),
                 itemStyle: {
                     color: '#EF5350',    // 阳线颜色
@@ -351,21 +372,24 @@
         // 添加点击事件
         chart1.off('click'); // 先移除之前的点击事件，避免多次绑定
         chart1.on('click', function (params) {
-            const dataItem = params.data;
-            const dm = dataItem.dm;
-            const codeWithoutNumbers = stripNumbers(dm);
+            // 对于 k 线图，params.data 就是我们传入的包含 dm 的对象
+            if (params.seriesType === 'candlestick' && params.data && params.data.dm) {
+                const dataItem = params.data;
+                const dm = dataItem.dm;
+                const codeWithoutNumbers = stripNumbers(dm);
 
-            const date = getCorrectDate();
-            const formattedDate = formatDate(date); // 格式化日期为 'YYYY-MM-DD'
+                const date = getCorrectDate();
+                const formattedDate = formatDate(date); // 格式化日期为 'YYYY-MM-DD'
 
-            // 构建URL
-            const baseUrl = 'https://data.want.biz/ranking/' + codeWithoutNumbers + '/all/' + formattedDate;
-            const queryString = '?variety=' + codeWithoutNumbers + '&sort_by=%E5%87%80%E6%8C%81%E4%BB%93%E6%95%B0%E5%80%BC&order=desc#profits';
+                // 构建URL
+                const baseUrl = 'https://data.want.biz/ranking/' + codeWithoutNumbers + '/all/' + formattedDate;
+                const queryString = '?variety=' + codeWithoutNumbers + '&sort_by=%E5%87%80%E6%8C%81%E4%BB%93%E6%95%B0%E5%80%BC&order=desc#profits';
 
-            const url = baseUrl + queryString;
+                const url = baseUrl + queryString;
 
-            // 在新标签页打开链接
-            window.open(url, '_blank');
+                // 在新标签页打开链接
+                window.open(url, '_blank');
+            }
         });
     }
 
@@ -380,15 +404,20 @@
         const hour = now.getHours();
         let date;
 
-        if (hour >= 0 && hour < 16) {
-            // 白天，使用上一个交易日
+        // 根据交易时间选择日期
+        // 假设日盘收盘后和夜盘开盘前，使用上一个交易日的数据
+        // 晚上交易时段和次日凌晨盘使用当天日期
+        // 具体的交易时间划分可能需要更精确的判断
+        if (hour >= 0 && hour < 3) { // 凌晨0点到2点半，属于夜盘交易时段的后半段
+             date = now; // 使用当前日期
+        } else if (hour >= 3 && hour < 9) { // 凌晨3点到上午9点，非交易时段，使用上一个交易日
             date = getLastTradingDay();
-        } else if (hour >= 16 || hour <= 24) {
-            // 晚上，使用当前交易日
-            date = now;
-        } else {
-            // 非交易时间，默认使用上一个交易日
+        } else if (hour >= 9 && hour < 15) { // 上午9点到下午3点，日盘交易时段
+            date = now; // 使用当前日期
+        } else if (hour >= 15 && hour < 21) { // 下午3点到晚上9点，非交易时段，使用上一个交易日
             date = getLastTradingDay();
+        } else { // 晚上21点到24点，夜盘交易时段
+            date = now; // 使用当前日期
         }
         return date;
     }
@@ -400,11 +429,11 @@
         const dayOfWeek = today.getDay(); // 0（周日） 到 6（周六）
 
         if (dayOfWeek === 0) { // 周日
-            lastTradingDay.setDate(today.getDate() - 2); // 周五
+            lastTradingDay.setDate(today.getDate() - 2); // 回到周五
         } else if (dayOfWeek === 1) { // 周一
-            lastTradingDay.setDate(today.getDate() - 3); // 周五
+            lastTradingDay.setDate(today.getDate() - 3); // 回到周五
         } else {
-            lastTradingDay.setDate(today.getDate() - 1); // 昨天
+            lastTradingDay.setDate(today.getDate() - 1); // 回到昨天
         }
         return lastTradingDay;
     }
@@ -423,11 +452,10 @@
 
     // 绘制第二个图表: 投机度 vs 涨幅
     function renderChart2(dataList) {
-        dataList.sort((a, b) => b.zdf - a.zdf);
+        // 对传入的 dataList 进行排序
+        dataList.sort((a, b) => b.zdf - a.zdf); 
         const categories = dataList.map(item => item.name);
-        const tjdData = dataList.map(item => item.tjd);
-        const zdfData = dataList.map(item => item.zdf);
-
+        
         const option = {
             title: {
                 text: '投机度与涨跌幅',
@@ -456,7 +484,7 @@
                 data: categories,
                 axisLabel: {
                     interval: 0,
-                    rotate: 270,
+                    rotate: 45, // 调整为45度角
                     fontSize: 12,
                     color: '#333'
                 },
@@ -520,17 +548,21 @@
                 {
                     name: '投机度',
                     type: 'bar',
-                    data: tjdData,
                     yAxisIndex: 0,
                     itemStyle: {
                         color: '#42A5F5'
                     },
-                    barWidth: '45%'
+                    barWidth: '45%',
+                    // 关键：将原始的 dm 和 name 存储在每个数据项中
+                    data: dataList.map(item => ({
+                        value: item.tjd,
+                        dm: item.dm, // 存储品种代码
+                        name: item.name // 存储品种名称
+                    }))
                 },
                 {
                     name: '涨幅',
                     type: 'line',
-                    data: zdfData,
                     yAxisIndex: 1,
                     itemStyle: {
                         color: '#FF7043'
@@ -538,20 +570,51 @@
                     lineStyle: {
                         width: 2
                     },
-                    smooth: true
+                    smooth: true,
+                    // 同样，线图数据也存储 dm，尽管点击通常发生在柱状图上
+                    data: dataList.map(item => ({
+                        value: item.zdf,
+                        dm: item.dm,
+                        name: item.name
+                    }))
                 }
             ]
         };
 
         chart2.setOption(option);
+
+        // 绑定 chart2 的点击事件
+        chart2.off('click'); // 先移除之前的点击事件，避免多次绑定
+        chart2.on('click', function (params) {
+            // 确保点击的是有效的数据点，并且我们关心的是柱状图或线图的点击
+            // params.data 包含了我们为数据项设置的 dm 和 name
+            if (params.data && params.data.dm) {
+                const dm = params.data.dm; 
+                const codeWithoutNumbers = stripNumbers(dm);
+                
+                // 构建URL
+                const url = 'https://wealth.want.biz/pages/longshort.html?variety=' + codeWithoutNumbers;
+                
+                // 在新标签页打开链接
+                window.open(url, '_blank');
+            }
+        });
     }
 
     // 绘制第三个图表: 增仓率 vs 涨跌幅
     function renderChart3(dataList) {
+        // 对传入的 dataList 进行排序
         dataList.sort((a, b) => b.zdf - a.zdf);
         const categories = dataList.map(item => item.name);
         const zdfData = dataList.map(item => item.zdf);
-        const zclData = dataList.map(item => parseFloat(((item.rz / (item.ccl - item.rz)) * 100).toFixed(2)));
+        const zclData = dataList.map(item => {
+            // 避免除以零或负数持仓量
+            const divisor = item.ccl - item.rz;
+            if (divisor === 0 || divisor < 0) { // 如果分母为0或负数
+                return 0; // 或者NaN，根据你的业务逻辑决定
+            }
+            return parseFloat(((item.rz / divisor) * 100).toFixed(2));
+        });
 
         const option = {
             title: {
@@ -581,7 +644,7 @@
                 data: categories,
                 axisLabel: {
                     interval: 0,
-                    rotate: 270,
+                    rotate: 45, // 调整为45度角
                     fontSize: 12,
                     color: '#333'
                 },
@@ -646,17 +709,21 @@
                 {
                     name: '增仓率',
                     type: 'bar',
-                    data: zclData,
                     yAxisIndex: 0,
                     itemStyle: {
                         color: '#42A5F5'
                     },
-                    barWidth: '45%'
+                    barWidth: '45%',
+                    // 关键：将原始的 dm 和 name 存储在每个数据项中
+                    data: dataList.map(item => ({
+                        value: (item.ccl - item.rz === 0 || item.ccl - item.rz < 0) ? 0 : parseFloat(((item.rz / (item.ccl - item.rz)) * 100).toFixed(2)),
+                        dm: item.dm, // 存储品种代码
+                        name: item.name // 存储品种名称
+                    }))
                 },
                 {
                     name: '涨跌幅',
                     type: 'line',
-                    data: zdfData,
                     yAxisIndex: 1,
                     itemStyle: {
                         color: '#EF5350'
@@ -664,7 +731,13 @@
                     lineStyle: {
                         width: 2
                     },
-                    smooth: true
+                    smooth: true,
+                    // 同样，线图数据也存储 dm
+                    data: dataList.map(item => ({
+                        value: item.zdf,
+                        dm: item.dm,
+                        name: item.name
+                    }))
                 }
             ]
         };
@@ -674,29 +747,36 @@
         // 添加点击事件
         chart3.off('click'); // 先移除之前的点击事件，避免多次绑定
         chart3.on('click', function (params) {
-            // 获取点击的数据项
-            const dataIndex = params.dataIndex;
-            const dm = dataList[dataIndex].dm;
-            const codeWithoutNumbers = stripNumbers(dm);
-            
-            // 构建URL
-            const url = 'https://wealth.want.biz/pages/longshort.html?variety=' + codeWithoutNumbers;
-            
-            // 在新标签页打开链接
-            window.open(url, '_blank');
+            // 确保点击的是有效的数据点
+            if (params.data && params.data.dm) {
+                const dm = params.data.dm; // 直接从params.data获取dm
+                const codeWithoutNumbers = stripNumbers(dm);
+                
+                // 构建URL
+                const url = 'https://wealth.want.biz/pages/longshort.html?variety=' + codeWithoutNumbers;
+                
+                // 在新标签页打开链接
+                window.open(url, '_blank');
+            }
         });
     }
 
     // 绘制第四个图表: 各周期涨跌幅对比
     function renderChart4(dataList) {
+        // 对传入的 dataList 进行排序
+        dataList.sort((a, b) => b.zdf - a.zdf); // 保持排序，但需注意其副作用
+
         const categories = dataList.map(item => item.name);
-        const zdfData = dataList.map(item => item.zdf);
-        const zdf3Data = dataList.map(item => item.zdf3);
-        const zdf5Data = dataList.map(item => item.zdf5);
-        const zdf20Data = dataList.map(item => item.zdf20);
-        const zdflyData = dataList.map(item => item.zdfly);
-        const zdf0Data = dataList.map(item => item.zdf0);
-        const zdf250Data = dataList.map(item => item.zdf250);
+        // 数据系列配置，方便循环生成 ECharts series
+        const seriesConfig = [
+            { name: '当日涨幅', field: 'zdf', color: '#FF5722' },
+            { name: '3日涨幅', field: 'zdf3', color: '#8BC34A' },
+            { name: '5日涨幅', field: 'zdf5', color: '#42A5F5' },
+            { name: '20日涨幅', field: 'zdf20', color: '#AB47BC' },
+            { name: '今年涨幅', field: 'zdfly', color: '#FFA726' },
+            { name: '近一年涨幅', field: 'zdf0', color: '#26A69A' },
+            { name: '250日涨幅', field: 'zdf250', color: '#EC407A' }
+        ];
 
         const option = {
             title: {
@@ -715,7 +795,7 @@
                 }
             },
             legend: {
-                data: ['当日涨幅', '3日涨幅', '5日涨幅', '20日涨幅', '今年涨幅', '近一年涨幅', '250日涨幅'],
+                data: seriesConfig.map(s => s.name), // 从配置中获取 legend data
                 top: '8%',
                 textStyle: {
                     fontSize: 12
@@ -730,7 +810,7 @@
                 boundaryGap: false,
                 axisLabel: {
                     interval: 0,
-                    rotate: 270,
+                    rotate: 45, // 调整为45度角
                     fontSize: 12,
                     color: '#333'
                 },
@@ -770,90 +850,48 @@
                     end: 100
                 }
             ],
-            series: [
-                {
-                    name: '当日涨幅',
-                    type: 'line',
-                    data: zdfData,
-                    itemStyle: {
-                        color: '#FF5722'
-                    },
-                    lineStyle: {width: 2},
-                    smooth: true
+            series: seriesConfig.map(s => ({ // 循环生成 series
+                name: s.name,
+                type: 'line',
+                // 关键：将原始的 dm 和 name 存储在每个数据项中
+                data: dataList.map(item => ({
+                    value: item[s.field],
+                    dm: item.dm, // 存储品种代码
+                    name: item.name // 存储品种名称
+                })),
+                itemStyle: {
+                    color: s.color
                 },
-                {
-                    name: '3日涨幅',
-                    type: 'line',
-                    data: zdf3Data,
-                    itemStyle: {
-                        color: '#8BC34A'
-                    },
-                    lineStyle: {width: 2},
-                    smooth: true
-                },
-                {
-                    name: '5日涨幅',
-                    type: 'line',
-                    data: zdf5Data,
-                    itemStyle: {
-                        color: '#42A5F5'
-                    },
-                    lineStyle: {width: 2},
-                    smooth: true
-                },
-                {
-                    name: '20日涨幅',
-                    type: 'line',
-                    data: zdf20Data,
-                    itemStyle: {
-                        color: '#AB47BC'
-                    },
-                    lineStyle: {width: 2},
-                    smooth: true
-                },
-                {
-                    name: '今年涨幅',
-                    type: 'line',
-                    data: zdflyData,
-                    itemStyle: {
-                        color: '#FFA726'
-                    },
-                    lineStyle: {width: 2},
-                    smooth: true
-                },
-                {
-                    name: '近一年涨幅',
-                    type: 'line',
-                    data: zdf0Data,
-                    itemStyle: {
-                        color: '#26A69A'
-                    },
-                    lineStyle: {width: 2},
-                    smooth: true
-                },
-                {
-                    name: '250日涨幅',
-                    type: 'line',
-                    data: zdf250Data,
-                    itemStyle: {
-                        color: '#EC407A'
-                    },
-                    lineStyle: {width: 2},
-                    smooth: true
-                }
-            ]
+                lineStyle: { width: 2 },
+                smooth: true
+            }))
         };
 
         chart4.setOption(option);
+        
+        // 为 chart4 添加点击事件
+        chart4.off('click'); // 先移除之前的点击事件，避免多次绑定
+        chart4.on('click', function (params) {
+            // 确保点击的是有效的数据点
+            if (params.data && params.data.dm) {
+                const dm = params.data.dm; 
+                const codeWithoutNumbers = stripNumbers(dm);
+                
+                // 构建URL
+                const url = 'https://wealth.want.biz/pages/longshort.html?variety=' + codeWithoutNumbers;
+                
+                // 在新标签页打开链接
+                window.open(url, '_blank');
+            }
+        });
     }
 
     // 绘制第五个图表: 期货品种指标对比
     function renderChart5(dataList, metric1, metric2) {
+        // 对传入的 dataList 进行排序
         dataList.sort((a, b) => b[metric1] - a[metric1]);
         const categories = dataList.map(item => item.name);
-        const metric1Data = dataList.map(item => item[metric1]);
-        const metric2Data = dataList.map(item => item[metric2]);
-
+        
         const option = {
             title: {
                 text: `期货品种${fieldMapping[metric1]}与${fieldMapping[metric2]}对比`,
@@ -872,7 +910,7 @@
                 formatter: function (params) {
                     let tooltipText = params[0].name;
                     params.forEach(param => {
-                        tooltipText += `<br/>${param.marker}${param.seriesName}: ${param.value}`;
+                        tooltipText += `<br/>${param.marker}${param.seriesName}: ${param.value.toFixed(2)}`; // 格式化 tooltip 中的数值
                     });
                     return tooltipText;
                 }
@@ -889,7 +927,7 @@
                 data: categories,
                 axisLabel: {
                     interval: 0,
-                    rotate: 270,
+                    rotate: 45, // 调整为45度角
                     fontSize: 12,
                     color: '#333'
                 },
@@ -924,6 +962,7 @@
                     name: fieldMapping[metric2],
                     position: 'right',
                     axisLabel: {
+                        formatter: '{value} %', // 假设 metric2 都是涨跌幅相关的百分比
                         fontSize: 12,
                         color: '#333'
                     },
@@ -952,17 +991,21 @@
                 {
                     name: fieldMapping[metric1],
                     type: 'bar',
-                    data: metric1Data.map(value => value.toFixed(2)),
                     yAxisIndex: 0,
                     itemStyle: {
                         color: '#42A5F5'
                     },
-                    barWidth: '45%'
+                    barWidth: '45%',
+                    // 关键：将原始的 dm 和 name 存储在每个数据项中
+                    data: dataList.map(item => ({
+                        value: item[metric1], // 值保持为原始数字类型，tooltip中格式化
+                        dm: item.dm,
+                        name: item.name
+                    }))
                 },
                 {
                     name: fieldMapping[metric2],
                     type: 'line',
-                    data: metric2Data,
                     yAxisIndex: 1,
                     itemStyle: {
                         color: '#FF7043'
@@ -970,12 +1013,34 @@
                     lineStyle: {
                         width: 2
                     },
-                    smooth: true
+                    smooth: true,
+                    // 同样，线图数据也存储 dm
+                    data: dataList.map(item => ({
+                        value: item[metric2],
+                        dm: item.dm,
+                        name: item.name
+                    }))
                 }
             ]
         };
 
         chart5.setOption(option);
+
+        // 为 chart5 添加点击事件
+        chart5.off('click'); // 先移除之前的点击事件，避免多次绑定
+        chart5.on('click', function (params) {
+            // 确保点击的是有效的数据点
+            if (params.data && params.data.dm) {
+                const dm = params.data.dm; 
+                const codeWithoutNumbers = stripNumbers(dm);
+                
+                // 构建URL
+                const url = 'https://wealth.want.biz/pages/longshort.html?variety=' + codeWithoutNumbers;
+                
+                // 在新标签页打开链接
+                window.open(url, '_blank');
+            }
+        });
     }
 
     // 为每个图表添加下载功能的事件监听器
@@ -998,8 +1063,8 @@
     // 下载图表函数
     function downloadChart(chartInstance, fileName) {
         const url = chartInstance.getDataURL({
-            backgroundColor: '#EAECEDFF',
-            pixelRatio: 2
+            backgroundColor: '#EAECEDFF', // 设置背景颜色，确保下载的图片背景是白色
+            pixelRatio: 2 // 提高分辨率，让图片更清晰
         });
         const link = document.createElement('a');
         link.href = url;
@@ -1020,21 +1085,43 @@
     });
 
 
-    // 在非交易时段，不更新，在交易时段，每20秒更新一次数据
+    // 在非交易时段，不更新，在交易时段，每15秒更新一次数据
     setInterval(() => {
         const now = new Date();
         const hour = now.getHours();
-        if ((hour >= 9 && hour < 15) || (hour >= 21 && hour < 24)) {
+        const minute = now.getMinutes();
+        
+        // 完善的期货交易时段判断 (示例，请根据实际交易所规则调整)
+        let isTradingTime = false;
+        // 日盘：09:00 - 10:15 (第一节)
+        if ((hour === 9 && minute >= 0) || (hour === 10 && minute < 15)) {
+            isTradingTime = true;
+        }
+        // 日盘：10:30 - 11:30 (第二节)
+        if ((hour === 10 && minute >= 30) || (hour === 11 && minute < 30)) {
+            isTradingTime = true;
+        }
+        // 日盘：13:30 - 15:00 (第三节)
+        if ((hour === 13 && minute >= 30) || (hour === 14 && minute < 60)) { // 14点59分59秒也算在内
+            isTradingTime = true;
+        }
+        // 夜盘：21:00 - 次日02:30 (部分品种)
+        // 需根据具体品种的夜盘时间调整，这里是普遍的夜盘开始和结束时间
+        if ((hour >= 21 && hour <= 23) || (hour >= 0 && hour < 2) || (hour === 2 && minute <= 30)) {
+             isTradingTime = true;
+        }
+
+        if (isTradingTime) {
             fetchData();
             // 获取当前时间
             const currentTime = new Date().toLocaleTimeString();
 
             // 在页面上显示当前时间
-            document.getElementById('current-time').textContent = `期货品种实时监控(${currentTime})`;
+            document.getElementById('current-time').textContent = `🎗期货品种实时监控🎗(${currentTime})`;
+        } else {
+            document.getElementById('current-time').textContent = `🎗期货品种实时监控🎗(当前非交易时段，不刷新)`;
         }
-    }, 15000);
-
-//TODO
+    }, 15000); // 15秒刷新一次
 </script>
 </body>
 </html>
