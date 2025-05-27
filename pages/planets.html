@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>太阳系八大行星演示</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #000011; /* 深邃的太空黑 */
+            color: #fff;
+            overflow: hidden; /* 防止滚动条 */
+        }
+
+        .header-info {
+            text-align: center;
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 5px;
+        }
+        .header-info p {
+            margin: 2px 0;
+            font-size: 0.9em;
+        }
+
+        .solar-system-container {
+            position: relative;
+            width: 95vmin; /* 响应式宽度，取视口较小一边的95% */
+            height: 95vmin; /* 响应式高度 */
+            /* border: 1px solid #333; */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sun {
+            width: 60px; /* 太阳大小，会根据行星大小调整 */
+            height: 60px;
+            background-color: #FFD700; /* 金黄色 */
+            border-radius: 50%;
+            position: absolute;
+            box-shadow: 0 0 30px #FFD700, 0 0 60px #FFA500;
+            z-index: 100; /* 太阳在最顶层 */
+        }
+        .sun-label {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.8em;
+            color: #FFD700;
+        }
+
+        .orbit {
+            position: absolute;
+            border-style: solid;
+            border-color: rgba(128, 128, 128, 0.3); /* 半透明灰色轨道线 */
+            border-width: 1px;
+            border-radius: 50%;
+            /* JS会设置宽高和动画 */
+            top: 50%;
+            left: 50%;
+            transform-origin: center center; /* 确保围绕中心旋转 */
+        }
+
+        .planet {
+            position: absolute;
+            border-radius: 50%;
+            /* JS会设置大小、颜色、初始位置和动画 */
+            /* 将行星放置在轨道的右侧(0度角) */
+            top: 50%; /* 垂直居中于轨道线 */
+            /* left: 100%; JS会精确计算 */
+            box-shadow: 0 0 5px rgba(255,255,255,0.3); /* 轻微辉光 */
+        }
+
+        .planet-label {
+            position: absolute;
+            font-size: 10px; /* 可以根据行星大小动态调整 */
+            color: #fff;
+            white-space: nowrap;
+            transform: translate(100%, -50%); /* 默认标签在行星右侧 */
+            padding-left: 3px; /* 标签与行星间距 */
+            opacity: 0.7;
+            pointer-events: none; /* 标签不影响鼠标事件 */
+        }
+
+        /* 为每个行星定义独特样式，JS中也会设置颜色 */
+        .mercury { background-color: #B0AFA8; }
+        .venus   { background-color: #E6D2A8; }
+        .earth   { background-color: #6B93D6; }
+        .mars    { background-color: #C1440E; }
+        .jupiter { background-color: #D8CA9D; } /* 有条纹，可以用渐变模拟 */
+        .saturn  { background-color: #F0E6C6; }
+        .uranus  { background-color: #AFDBE5; }
+        .neptune { background-color: #3A5FCD; }
+
+        /* 土星环 (使用伪元素) */
+        .saturn::after {
+            content: '';
+            position: absolute;
+            width: 180%; /* 环的宽度相对于土星直径 */
+            height: 180%;/* 环的高度相对于土星直径 */
+            border: 2px solid rgba(200, 190, 160, 0.7); /* 环的颜色和透明度 */
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotateX(70deg) rotateY(0deg); /* 倾斜环 */
+            box-sizing: border-box;
+            z-index: -1; /* 环在行星后面 */
+        }
+
+        .controls {
+            margin-top: 15px;
+            padding: 8px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+        .controls label {
+            margin-right: 5px;
+            font-size: 0.9em;
+        }
+        .controls input[type="range"] {
+            width: 100px;
+            vertical-align: middle;
+        }
+        #speed-value {
+            display: inline-block;
+            width: 30px;
+            text-align: right;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="header-info">
+        <h2>太阳系八大行星演示</h2>
+        <p>注意：行星大小和轨道距离已按不同比例缩放以便于观察。公转周期已加速。</p>
+    </div>
+
+    <div class="solar-system-container" id="solarSystem">
+        <div class="sun">
+            <div class="sun-label">太阳</div>
+        </div>
+        <!-- 行星和轨道将由JS动态创建 -->
+    </div>
+    <div class="controls">
+        <label for="speed-slider">动画速度:</label>
+        <input type="range" id="speed-slider" min="0.1" max="10" step="0.1" value="1">
+        <span id="speed-value">1.0</span>x
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const solarSystemContainer = document.getElementById('solarSystem');
+            const sunElement = document.querySelector('.sun');
+            const speedSlider = document.getElementById('speed-slider');
+            const speedValueDisplay = document.getElementById('speed-value');
+
+            // 真实数据 (半径单位: km, 轨道半径单位: 百万km, 周期单位: 地球日)
+            // 太阳半径: 695,700 km
+            const planetsData = [
+                { name: '水星', engName: 'mercury', radiusKm: 2440, orbitMillionKm: 57.9, periodDays: 88, color: '#B0AFA8' },
+                { name: '金星', engName: 'venus',   radiusKm: 6052, orbitMillionKm: 108.2, periodDays: 224.7, color: '#E6D2A8' },
+                { name: '地球', engName: 'earth',   radiusKm: 6371, orbitMillionKm: 150, periodDays: 365.25, color: '#6B93D6' },
+                { name: '火星', engName: 'mars',    radiusKm: 3390, orbitMillionKm: 227.9, periodDays: 687, color: '#C1440E' },
+                { name: '木星', engName: 'jupiter', radiusKm: 69911, orbitMillionKm: 778.5, periodDays: 4333, color: '#D8CA9D' },
+                { name: '土星', engName: 'saturn',  radiusKm: 58232, orbitMillionKm: 1433.5, periodDays: 10759, color: '#F0E6C6' },
+                { name: '天王星', engName: 'uranus',radiusKm: 25362, orbitMillionKm: 2872.5, periodDays: 30687, color: '#AFDBE5' },
+                { name: '海王星', engName: 'neptune',radiusKm: 24622, orbitMillionKm: 4495.1, periodDays: 60190, color: '#3A5FCD' },
+            ];
+
+            const containerSize = Math.min(solarSystemContainer.offsetWidth, solarSystemContainer.offsetHeight);
+
+            // 缩放比例和基准
+            const SUN_DIAMETER_PX = 60; // 太阳在屏幕上的固定大小
+            sunElement.style.width = `${SUN_DIAMETER_PX}px`;
+            sunElement.style.height = `${SUN_DIAMETER_PX}px`;
+
+            // 行星大小缩放：以地球为基准或设定最小尺寸
+            const EARTH_DIAMETER_PX = 10; // 地球在屏幕上的大约直径
+            const MIN_PLANET_DIAMETER_PX = 4; // 最小行星直径
+
+            // 轨道半径缩放：将最外层轨道（海王星）映射到容器的某个比例
+            const MAX_ORBIT_RADIUS_PX = containerSize * 0.45; // 最外层轨道半径，占容器的一半略少
+            const NEPTUNE_ORBIT_MILLION_KM = planetsData[planetsData.length - 1].orbitMillionKm;
+
+            // 非线性轨道缩放函数，使内行星轨道不至于太挤 (power scale)
+            function scaleOrbit(orbitMillionKm) {
+                // 使用指数缩放，例如开平方根或者更小的指数，来压缩外层轨道
+                // return (orbitMillionKm / NEPTUNE_ORBIT_MILLION_KM) * MAX_ORBIT_RADIUS_PX; // 线性
+                return Math.pow(orbitMillionKm / NEPTUNE_ORBIT_MILLION_KM, 0.65) * MAX_ORBIT_RADIUS_PX; // 指数缩放
+            }
+
+
+            planetsData.forEach((planetData, index) => {
+                // 1. 创建轨道
+                const orbitElement = document.createElement('div');
+                orbitElement.classList.add('orbit');
+                const orbitDiameterPx = scaleOrbit(planetData.orbitMillionKm) * 2;
+                orbitElement.style.width = `${orbitDiameterPx}px`;
+                orbitElement.style.height = `${orbitDiameterPx}px`;
+                // 使轨道中心与太阳中心重合
+                orbitElement.style.marginLeft = `-${orbitDiameterPx / 2}px`;
+                orbitElement.style.marginTop = `-${orbitDiameterPx / 2}px`;
+                solarSystemContainer.appendChild(orbitElement);
+                planetData.orbitElement = orbitElement; // 保存引用
+
+                // 2. 创建行星
+                const planetElement = document.createElement('div');
+                planetElement.classList.add('planet', planetData.engName.toLowerCase());
+                let planetDiameterPx = (planetData.radiusKm / planetsData[2].radiusKm) * EARTH_DIAMETER_PX; //相对地球大小
+                planetDiameterPx = Math.max(planetDiameterPx, MIN_PLANET_DIAMETER_PX); // 保证最小尺寸
+                if (planetData.name === "木星") planetDiameterPx = Math.min(planetDiameterPx, SUN_DIAMETER_PX * 0.6); // 木星不能比太阳还大
+                if (planetData.name === "土星") planetDiameterPx = Math.min(planetDiameterPx, SUN_DIAMETER_PX * 0.5);
+
+
+                planetElement.style.width = `${planetDiameterPx}px`;
+                planetElement.style.height = `${planetDiameterPx}px`;
+                planetElement.style.backgroundColor = planetData.color;
+
+                // 将行星放置在其轨道的“右侧” (0度角)
+                // marginLeft是相对于轨道左边缘的，所以是轨道半径 - 行星半径
+                const planetOrbitRadius = orbitDiameterPx / 2;
+                planetElement.style.position = 'absolute'; // 确保top/left相对于轨道元素
+                planetElement.style.top = `calc(50% - ${planetDiameterPx / 2}px)`;
+                planetElement.style.left = `calc(100% - ${planetDiameterPx / 2}px)`; // 放在轨道的右边缘
+                // 如果需要更精确的中心对齐:
+                // planetElement.style.transform = `translate(-${planetDiameterPx/2}px, -${planetDiameterPx/2}px)`;
+                // planetElement.style.top = '50%';
+                // planetElement.style.left = `${planetOrbitRadius}px`; // 初始放在轨道半径处
+
+                // 3. 创建行星标签
+                const labelElement = document.createElement('div');
+                labelElement.classList.add('planet-label');
+                labelElement.textContent = planetData.name;
+                // 标签可以放在行星元素内部，或者轨道元素内部并调整位置
+                planetElement.appendChild(labelElement);
+
+
+                orbitElement.appendChild(planetElement); // 把行星放在轨道div内部
+                planetData.element = planetElement; // 保存引用
+
+                // 初始随机一个角度，避免所有行星排成一线
+                planetData.currentAngle = Math.random() * 360;
+            });
+
+            let animationSpeedFactor = parseFloat(speedSlider.value);
+            speedSlider.addEventListener('input', (e) => {
+                animationSpeedFactor = parseFloat(e.target.value);
+                speedValueDisplay.textContent = animationSpeedFactor.toFixed(1);
+            });
+
+            let lastTimestamp = 0;
+            function animate(timestamp) {
+                const deltaTime = (timestamp - (lastTimestamp || timestamp)) / 1000; // 秒
+                lastTimestamp = timestamp;
+
+                planetsData.forEach(planetData => {
+                    // 周期越长，角速度越慢。地球周期是365.25天。
+                    // 基础角速度 (度/秒)，假设365.25天转360度
+                    const baseAngularSpeed = 360 / (365.25 * 24 * 60 *60); // 度/真实秒
+                    const planetAngularSpeed = (360 / planetData.periodDays) * animationSpeedFactor * 0.1; // 度/动画帧 (0.1是额外加速系数)
+
+                    planetData.currentAngle = (planetData.currentAngle + planetAngularSpeed * deltaTime * 60) % 360; // deltaTime * 60 to make it more visible
+
+                    planetData.orbitElement.style.transform = `rotate(${planetData.currentAngle}deg)`;
+
+                    // 使行星标签始终水平（反向旋转行星的旋转）
+                    const label = planetData.element.querySelector('.planet-label');
+                    if (label) {
+                        label.style.transform = `translate(100%, -50%) rotate(${-planetData.currentAngle}deg)`;
+                         // 调整标签位置避免被行星遮挡，尤其对于小行星
+                        if (parseFloat(planetData.element.style.width) < 8) {
+                            label.style.paddingLeft = `${parseFloat(planetData.element.style.width) / 2 + 3}px`;
+                        }
+                    }
+                     // 特殊处理土星环，使其也反向旋转以保持视觉上的固定倾角
+                    if (planetData.name === '土星') {
+                        const saturnRing = planetData.element.querySelector('::after'); // This won't work directly
+                        // Instead, apply rotation to the planet element itself if the ring is a pseudo-element,
+                        // or directly to the ring element if it's a separate div.
+                        // For pseudo-element, it's tricky. A common approach is to have an inner div for planet color
+                        // and rotate the outer .saturn element which has the ::after pseudo-element.
+                        // For simplicity here, the ring will rotate with the planet's position ON the orbit.
+                        // To keep ring orientation fixed *relative to the view*, not the orbit path,
+                        // we'd need to apply counter-rotation to the pseudo-element itself,
+                        // or make the ring a separate element and counter-rotate it.
+                        // The current CSS for saturn::after has fixed rotateX, so it will maintain its tilt relative to the planet body.
+                        // We need to counter-rotate the planet div for the label, so the planet body itself will appear not to spin.
+                        planetData.element.style.transform = `rotate(${-planetData.currentAngle}deg)`;
+                    } else {
+                        //其他行星也反向旋转自身，使其看起来不自转（或至少标签不转）
+                         planetData.element.style.transform = `rotate(${-planetData.currentAngle}deg)`;
+                    }
+                });
+
+                requestAnimationFrame(animate);
+            }
+
+            requestAnimationFrame(animate);
+        });
+    </script>
+</body>
+</html>
