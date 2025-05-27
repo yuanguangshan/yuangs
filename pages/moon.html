@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>月相变化演示</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #000010; /* 深蓝色背景，像太空 */
+            color: #fff;
+            padding-top: 20px;
+            overflow-x: hidden; /* 防止水平滚动条 */
+        }
+
+        .title-header {
+            margin-bottom: 15px;
+            font-size: 1.5em;
+            color: #FFD700; /* 金色标题 */
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            padding: 12px 18px;
+            background-color: rgba(50, 50, 70, 0.8); /* 半透明控制区背景 */
+            border-radius: 8px;
+            display: flex;
+            flex-wrap: wrap; /* 允许换行 */
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+
+        .controls label, .controls span {
+            color: #eee;
+            font-size: 0.9em;
+        }
+
+        .controls input[type="range"] {
+            width: 180px;
+            cursor: pointer;
+        }
+        .controls button {
+            padding: 8px 15px;
+            background-color: #4CAF50; /* 绿色按钮 */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.3s ease;
+        }
+        .controls button:hover {
+            background-color: #45a049;
+        }
+        #current-day {
+            min-width: 70px; /* 避免文字跳动 */
+            text-align: left;
+        }
+
+        .main-content-wrapper {
+            display: flex;
+            flex-wrap: wrap; /* 允许在小屏幕上换行 */
+            justify-content: center;
+            align-items: flex-start; /* 对齐顶部 */
+            gap: 30px; /* 左右两块的间距 */
+            width: 100%;
+            max-width: 900px; /* 限制最大宽度 */
+        }
+
+        .solar-system-container {
+            position: relative;
+            width: 350px; /* 调整大小以适应并排布局 */
+            height: 350px;
+            margin-top: 10px; /* 与控制区间隔 */
+            display: flex;
+            align-items: center;
+            justify-content: center; /* 地球居中 */
+            flex-shrink: 0; /* 防止缩小 */
+        }
+
+        .sun-rays { /* 模拟太阳光线 */
+            position: absolute;
+            left: -180px; /* 太阳光线起点 */
+            top: 50%;
+            transform: translateY(-50%);
+            width: 150px; /* 光线区域宽度 */
+            height: 300px; /* 光线区域高度 */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+        }
+        .sun-rays::before, .sun-rays::after {
+            content: '';
+            display: block;
+            height: 2px;
+            background: linear-gradient(to right, rgba(255,215,0,0.5), rgba(255,215,0,0));
+        }
+        .sun-ray {
+            height: 2px;
+            background: linear-gradient(to right, rgba(255,215,0,0.7), rgba(255,215,0,0));
+        }
+        .sun-label {
+            position: absolute;
+            left: -170px;
+            top: calc(50% - 50px); /* 调整标签位置 */
+            transform: translateY(-50%);
+            color: #FFD700;
+            font-size: 1.2em;
+            font-weight: bold;
+            writing-mode: vertical-rl; /* 垂直文字 */
+            text-orientation: mixed;
+        }
+
+
+        .earth {
+            width: 70px;
+            height: 70px;
+            background-color: #4682B4; /* 钢蓝色地球 */
+            border-radius: 50%;
+            position: relative; /* 改为relative，因为它是月球轨道的容器 */
+            box-shadow: 0 0 20px #4682B4, inset 0 0 10px rgba(0,0,0,0.3);
+            /* 地球位于太阳系容器的中心，月球轨道围绕它 */
+        }
+        .earth-label {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.9em;
+            color: #ADD8E6; /* 淡蓝色 */
+        }
+
+
+        .moon-orbit {
+            width: 220px; /* 月球轨道直径 */
+            height: 220px;
+            border: 1px dashed rgba(150, 150, 150, 0.4); /* 虚线轨道 */
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%); /* 使轨道中心与地球中心重合 */
+            /* JS将应用旋转 */
+        }
+
+        .moon {
+            width: 22px;
+            height: 22px;
+            background-color: #888; /* 月球暗面基色 */
+            border-radius: 50%;
+            position: absolute;
+            /* 初始位置在轨道右侧 (0度角) */
+            top: 50%; /* 垂直居中于轨道线 */
+            left: calc(100% - 11px); /* 水平在轨道最右侧, 11px是月球半径 */
+            transform: translate(-50%, -50%); /* 月球自身中心对准轨道线 */
+            box-shadow: 0 0 8px #aaa;
+        }
+
+        /* 月球在俯视图中被太阳照亮的一面 (始终朝向左侧的太阳) */
+        .moon::before {
+            content: '';
+            position: absolute;
+            width: 50%;
+            height: 100%;
+            background-color: #f0f0f0; /* 月球亮面颜色 */
+            /* 使其左半部分为半圆形 */
+            border-radius: 100% 0 0 100% / 50% 50% 50% 50%;
+            left: 0;
+            top: 0;
+            /* 这个伪元素会随月球一起旋转，但因为它是月球的左半部分，
+               所以当月球在其轨道上旋转时，这个亮面看起来总是“指向”左边的太阳 */
+        }
+        .moon-label {
+            position: absolute;
+            font-size: 0.8em;
+            color: #ccc;
+            /* 根据月球位置动态调整，或者固定在月球旁边 */
+            top: -18px;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+        }
+
+
+        .moon-phase-display-container {
+            text-align: center;
+            padding: 20px;
+            background-color: rgba(30, 30, 50, 0.7);
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(100,100,200,0.2);
+            width: 220px; /* 固定宽度 */
+            flex-shrink: 0; /* 防止缩小 */
+            margin-top: 10px;
+        }
+        .moon-phase-display-container h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+            color: #FFD700;
+        }
+
+        .observed-moon-container {
+            width: 120px; /* 增大月相显示尺寸 */
+            height: 120px;
+            border-radius: 50%;
+            background-color: #000; /* 太空背景 */
+            margin: 10px auto;
+            overflow: hidden; /* 关键：用于塑造月相 */
+            position: relative;
+            border: 2px solid #555;
+        }
+
+        .observed-moon {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            position: absolute;
+            /* JS将动态设置 background-color 和 box-shadow */
+        }
+
+        #phase-name {
+            margin-top: 15px;
+            font-size: 1.2em;
+            color: #lightskyblue;
+            font-weight: bold;
+            min-height: 1.5em;
+        }
+    </style>
+</head>
+<body>
+    <h1 class="title-header">太阳、地球与月球关系及月相变化</h1>
+
+    <div class="controls">
+        <label for="day-slider">天数 (0-29.5): </label>
+        <input type="range" id="day-slider" min="0" max="29.53" step="0.01" value="0">
+        <span id="current-day">第 0.0 天</span>
+        <button id="play-pause-button">播放</button>
+    </div>
+
+    <div class="main-content-wrapper">
+        <div class="solar-system-container">
+            <div class="sun-rays">
+                <div class="sun-ray"></div>
+                <div class="sun-ray"></div>
+                <div class="sun-ray"></div>
+            </div>
+            <div class="sun-label">太 阳 光</div>
+
+            <div class="earth">
+                <div class="earth-label">地球</div>
+                <div class="moon-orbit">
+                    <div class="moon">
+                        <div class="moon-label">月球</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="moon-phase-display-container">
+            <h3>从地球看到的月相</h3>
+            <div class="observed-moon-container">
+                <div class="observed-moon"></div>
+            </div>
+            <div id="phase-name">新月 (朔)</div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const moonOrbitElement = document.querySelector('.moon-orbit');
+            const moonInOrbitView = document.querySelector('.moon'); // 俯视图中的月球
+            const observedMoonElement = document.querySelector('.observed-moon'); // 地球视角月相
+            const phaseNameDisplay = document.getElementById('phase-name');
+            const daySlider = document.getElementById('day-slider');
+            const currentDayDisplay = document.getElementById('current-day');
+            const playPauseButton = document.getElementById('play-pause-button');
+
+            const SYNODIC_MONTH_DAYS = 29.53059; // 更精确的朔望月天数
+            const OBSERVED_MOON_DIAMETER_CSS = 120; // 对应CSS中 .observed-moon-container 的直径
+
+            let animationFrameId = null;
+            let isPlaying = false;
+            let currentDay = 0;
+
+            const lightColor = '#f0f0f0'; // 月球亮面颜色
+            const darkColor = '#202020';  // 月球暗面/阴影颜色 (稍亮于纯黑，增加对比)
+
+            function updateMoonPositionAndPhase(day) {
+                // 1. 更新俯视图中月球的轨道位置
+                // 角度从右侧0度开始，逆时针增加 (CSS rotate正方向)
+                // 新月时，月球在地球和太阳之间，如果太阳在左，月球应该在地球左侧，即轨道角度180度
+                // 但我们的月球CSS初始定位在轨道右侧(left:100%)，所以0度是新月开始点（月球在日地之间，但为了方便轨道旋转，我们让月球从轨道右侧开始）
+                // 太阳在左边。新月时月球在地球和太阳之间。
+                // 如果轨道0度代表月球在地球右方（远离太阳），则新月时月球角度应该是180度。
+                // 为了让动画从新月开始，月球初始在日地之间，我们让轨道角度对应相位角。
+                // orbitalAngleDegrees: 0度为新月（月球在地球和太阳之间，即地球的“左侧”相对于轨道中心）
+                // moonInOrbitView 初始在轨道0度位置（右侧）。我们需要将其旋转 -90 度使其从顶部开始，或者调整起始角度。
+                // 我们设定轨道角度0度 = 新月位置（月球在地球和太阳之间）。
+                // CSS中月球初始在轨道右侧 (left: calc(100% - radius))。
+                // 传入的 orbitalAngleDegrees 是相位角，0度=新月。
+                // 为了让月球显示在正确位置：如果太阳在左，新月时月球在轨道左侧（相对于地球）。
+                // CSS rotate(0deg)是月球在右侧，所以需要+180度偏移。
+                // 或者，更简单：让月球的初始物理位置通过JS设置在轨道的左侧。
+                // `.moon` left is `calc(0% - 11px)` for left start.
+                // For simplicity, we will rotate the `.moon-orbit` div.
+                // The `.moon` div itself is positioned at the 0-degree mark (right side) of the orbit path.
+                // So, an orbitalAngleDegrees of 0 should place it on the right.
+                // To match New Moon (between Earth and Sun, Sun at left), orbit should be rotated 180 degrees.
+                const visualOrbitalAngle = (day / SYNODIC_MONTH_DAYS) * 360; // 0 to 360
+                moonOrbitElement.style.transform = `translate(-50%, -50%) rotate(${visualOrbitalAngle}deg)`;
+                // .moon::before (lit side) always faces left due to its own CSS.
+                // As .moon-orbit rotates, .moon rotates, and its lit side effectively turns.
+
+                // 2. 计算并显示观察到的月相
+                const phaseAngleDegrees = visualOrbitalAngle % 360; // 0=New, 90=FQ, 180=Full, 270=LQ
+                const phaseAngleRadians = phaseAngleDegrees * (Math.PI / 180);
+
+                // illuminationFraction (k): 0 for New Moon, 0.5 for Quarter, 1 for Full Moon
+                const illuminationFraction = (1 - Math.cos(phaseAngleRadians)) / 2;
+
+                if (phaseAngleDegrees >= 0 && phaseAngleDegrees <= 180) { // Waxing: New -> FQ -> Full
+                    observedMoonElement.style.backgroundColor = darkColor; // Base is dark
+                    const litWidth = illuminationFraction * OBSERVED_MOON_DIAMETER_CSS;
+                    // Light part (using shadow) grows from the right
+                    observedMoonElement.style.boxShadow = `inset ${-litWidth}px 0 0 0 ${lightColor}`;
+                } else { // Waning: Full -> LQ -> New
+                    observedMoonElement.style.backgroundColor = lightColor; // Base is light
+                    // Dark part (using shadow) grows from the right
+                    const darkWidth = (1 - illuminationFraction) * OBSERVED_MOON_DIAMETER_CSS;
+                    observedMoonElement.style.boxShadow = `inset ${-darkWidth}px 0 0 0 ${darkColor}`;
+                }
+                // Handle exact New and Full Moon cases for perfect appearance
+                if (day === 0 || Math.abs(day - SYNODIC_MONTH_DAYS) < 0.01) { // New Moon
+                     observedMoonElement.style.backgroundColor = darkColor;
+                     observedMoonElement.style.boxShadow = 'none';
+                } else if (Math.abs(phaseAngleDegrees - 180) < 0.1) { // Full Moon (check small range)
+                     observedMoonElement.style.backgroundColor = lightColor;
+                     observedMoonElement.style.boxShadow = 'none';
+                }
+
+
+                // 3. 更新月相名称
+                let currentPhaseName = "未知";
+                if (phaseAngleDegrees >= 348.75 || phaseAngleDegrees < 11.25) currentPhaseName = "新月 (朔)";
+                else if (phaseAngleDegrees < 33.75) currentPhaseName = "娥眉月"; // Waxing Crescent
+                else if (phaseAngleDegrees < 56.25) currentPhaseName = "娥眉月";
+                else if (phaseAngleDegrees < 78.75) currentPhaseName = "上弦月";
+                else if (phaseAngleDegrees < 101.25) currentPhaseName = "上弦月";
+                else if (phaseAngleDegrees < 123.75) currentPhaseName = "盈凸月"; // Waxing Gibbous
+                else if (phaseAngleDegrees < 146.25) currentPhaseName = "盈凸月";
+                else if (phaseAngleDegrees < 168.75) currentPhaseName = "盈凸月";
+                else if (phaseAngleDegrees < 191.25) currentPhaseName = "满月 (望)";
+                else if (phaseAngleDegrees < 213.75) currentPhaseName = "亏凸月"; // Waning Gibbous
+                else if (phaseAngleDegrees < 236.25) currentPhaseName = "亏凸月";
+                else if (phaseAngleDegrees < 258.75) currentPhaseName = "亏凸月";
+                else if (phaseAngleDegrees < 281.25) currentPhaseName = "下弦月";
+                else if (phaseAngleDegrees < 303.75) currentPhaseName = "下弦月";
+                else if (phaseAngleDegrees < 326.25) currentPhaseName = "残月";   // Waning Crescent
+                else if (phaseAngleDegrees < 348.75) currentPhaseName = "残月";
+                // More precise naming based on common divisions (8 phases + intermediate where needed for smoothness)
+                //Simplified ranges from previous implementation for clarity for now
+                if (phaseAngleDegrees >= 337.5 || phaseAngleDegrees < 22.5) currentPhaseName = "新月 (朔)";
+                else if (phaseAngleDegrees < 67.5) currentPhaseName = "娥眉月";
+                else if (phaseAngleDegrees < 112.5) currentPhaseName = "上弦月";
+                else if (phaseAngleDegrees < 157.5) currentPhaseName = "盈凸月";
+                else if (phaseAngleDegrees < 202.5) currentPhaseName = "满月 (望)";
+                else if (phaseAngleDegrees < 247.5) currentPhaseName = "亏凸月";
+                else if (phaseAngleDegrees < 292.5) currentPhaseName = "下弦月";
+                else if (phaseAngleDegrees < 337.5) currentPhaseName = "残月";
+
+
+                phaseNameDisplay.textContent = currentPhaseName;
+                currentDayDisplay.textContent = `第 ${day.toFixed(1)} 天`;
+            }
+
+            function animate() {
+                if (!isPlaying) return;
+                currentDay = (currentDay + 0.05) % SYNODIC_MONTH_DAYS; // Speed: 0.05 days per frame
+                if (currentDay < 0.05 && currentDay !==0) currentDay = 0; // Snap to 0 to avoid tiny negative at loop end
+                daySlider.value = currentDay;
+                updateMoonPositionAndPhase(currentDay);
+                animationFrameId = requestAnimationFrame(animate);
+            }
+
+            daySlider.addEventListener('input', (e) => {
+                currentDay = parseFloat(e.target.value);
+                updateMoonPositionAndPhase(currentDay);
+                if (isPlaying) {
+                    cancelAnimationFrame(animationFrameId); // Stop current animation
+                    requestAnimationFrame(animate); // Restart from new slider position
+                }
+            });
+
+            playPauseButton.addEventListener('click', () => {
+                if (isPlaying) {
+                    isPlaying = false;
+                    playPauseButton.textContent = '播放';
+                    cancelAnimationFrame(animationFrameId);
+                } else {
+                    isPlaying = true;
+                    playPauseButton.textContent = '暂停';
+                    currentDay = parseFloat(daySlider.value); // Sync with slider
+                    animate();
+                }
+            });
+
+            // Initial setup
+            updateMoonPositionAndPhase(parseFloat(daySlider.value));
+        });
+    </script>
+</body>
+</html>
