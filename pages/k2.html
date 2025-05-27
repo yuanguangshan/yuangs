@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>期货品种监控</title>
+    <!-- 引入 ECharts 脚本 -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 30px;
+            color: #fff;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .controls-panel {
+            background: rgba(255,255,255,0.95);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .control-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .control-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .control-btn {
+            padding: 10px 20px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .control-btn:active {
+            transform: translateY(0);
+        }
+
+        .control-input {
+            padding: 8px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 20px;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        .control-input:focus {
+            border-color: #667eea;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .chart-container {
+            background: rgba(255,255,255,0.95);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            transition: transform 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .chart-container:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+        }
+
+        .chart {
+            width: 100%;
+            height: 400px;
+        }
+
+        .chart-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            text-align: center;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e1e5e9;
+        }
+
+        .download-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            padding: 8px 15px;
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            z-index: 10;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 10px rgba(76, 175, 80, 0.3);
+        }
+
+        .download-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+        }
+
+        .status-panel {
+            background: rgba(255,255,255,0.95);
+            padding: 15px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .status-text {
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: #2c3e50;
+        }
+
+        .trading-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .trading-status.active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .trading-status.inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+            font-size: 1.2rem;
+            color: #666;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .metric-selector {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .metric-selector label {
+            font-weight: 500;
+            color: #2c3e50;
+        }
+
+        .metric-selector select {
+            padding: 8px 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 15px;
+            outline: none;
+            background: white;
+            transition: border-color 0.3s ease;
+        }
+
+        .metric-selector select:focus {
+            border-color: #667eea;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+                padding: 15px;
+            }
+
+            .chart-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .chart {
+                height: 300px;
+            }
+
+            .control-group {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .metric-selector {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+            border: 1px solid #f5c6cb;
+        }
+
+        .no-data {
+            text-align: center;
+            color: #666;
+            font-size: 1.1rem;
+            padding: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 id="current-time">🎗期货品种实时监控🎗</h1>
+        
+        <div class="status-panel">
+            <div class="status-text">
+                当前时间: <span id="current-time-display"></span>
+                <span id="trading-status" class="trading-status"></span>
+            </div>
+        </div>
+
+        <div class="controls-panel">
+            <div class="control-group">
+                <div class="control-item">
+                    <button id="refresh-btn" class="control-btn">🔄 刷新数据</button>
+                </div>
+                <div class="control-item">
+                    <button id="auto-refresh-btn" class="control-btn">⏱️ 自动刷新: 开启</button>
+                </div>
+                <div class="control-item metric-selector">
+                    <label for="metric1-select">指标1:</label>
+                    <select id="metric1-select">
+                        <option value="cje">成交额</option>
+                        <option value="vol">成交量</option>
+                        <option value="tjd">投机度</option>
+                        <option value="ccl">持仓量</option>
+                        <option value="cdzj">沉淀资金</option>
+                    </select>
+                </div>
+                <div class="control-item metric-selector">
+                    <label for="metric2-select">指标2:</label>
+                    <select id="metric2-select">
+                        <option value="zdf" selected>涨跌幅</option>
+                        <option value="zdf3">3日涨幅</option>
+                        <option value="zdf5">5日涨幅</option>
+                        <option value="zdf20">20日涨幅</option>
+                        <option value="zdfly">今年涨幅</option>
+                    </select>
+                </div>
+                <div class="control-item">
+                    <button id="apply-metrics-btn" class="control-btn">📊 应用指标</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <span>正在加载数据...</span>
+        </div>
+
+        <div id="error-container"></div>
+
+        <div class="chart-grid" id="charts-container">
+            <!-- 第一个图表：期货品种走势对比 -->
+            <div class="chart-container">
+                <div class="chart-title">期货品种走势对比</div>
+                <div id="main1" class="chart"></div>
+                <button class="download-btn" onclick="downloadChart(chart1, '期货品种走势对比.png')">📥 下载</button>
+            </div>
+
+            <!-- 第二个图表：投机度 vs 涨跌幅 -->
+            <div class="chart-container">
+                <div class="chart-title">投机度与涨跌幅对比</div>
+                <div id="main2" class="chart"></div>
+                <button class="download-btn" onclick="downloadChart(chart2, '投机度与涨跌幅对比.png')">📥 下载</button>
+            </div>
+
+            <!-- 第三个图表：增仓率 vs 涨跌幅 -->
+            <div class="chart-container">
+                <div class="chart-title">增仓率与涨跌幅对比</div>
+                <div id="main3" class="chart"></div>
+                <button class="download-btn" onclick="downloadChart(chart3, '增仓率与涨跌幅对比.png')">📥 下载</button>
+            </div>
+
+            <!-- 第四个图表：各周期指标对比 -->
+            <div class="chart-container">
+                <div class="chart-title">各周期涨跌幅对比</div>
+                <div id="main4" class="chart"></div>
+                <button class="download-btn" onclick="downloadChart(chart4, '各周期涨跌幅对比.png')">📥 下载</button>
+            </div>
+
+            <!-- 第五个图表：自定义指标对比 -->
+            <div class="chart-container">
+                <div class="chart-title" id="chart5-title">自定义指标对比</div>
+                <div id="main5" class="chart"></div>
+                <button class="download-btn" onclick="downloadChart(chart5, '自定义指标对比.png')">📥 下载</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let chart1, chart2, chart3, chart4, chart5;
+        let autoRefresh = true;
+        let refreshInterval;
+        let currentData = [];
+
+        // 指标字段映射
+        const fieldMapping = {
+            qrspj: '昨收盘价', zdf5: '5日涨幅', zdf6: '6日涨幅', zjlx: '资金流向', dm: '代码',
+            zsjd: '展示精度', lx: '品种类型代号', zdf0: '近一年涨幅', avg2: '计算均价', ccl: '持仓量',
+            ly: '计算来源', zdf250: '250日涨幅', zdf3: '3日涨幅', dt: '跌停', bpgs: '档位数',
+            mcj: '卖出价', mcl: '卖出量', zdflm: '本月涨幅', jjsj: '今结算价', zf: '振幅',
+            mmpl: '量档位', tjd: '投机度', xsfx: '现手方向', name: '合约名称', zt: '涨停',
+            spgs: '档位', mmpjg: '价格档位', zjsj: '昨结算价', spsj: '收盘时间', np: '内盘',
+            rz: '日增仓', kpsj: '开盘时间', sc: '市场代码', uid: '唯一id', vol: '成交量',
+            jysj: '交易时间', cjbs: '成交笔数', wp: '外盘', zdf20: '20日涨幅', cje: '成交额',
+            mrj: '买入价', utime: '更新时间', mrl: '买入量', h: '最高价', j: '均价',
+            zccl: '昨持仓量', l: '最低价', o: '开盘价', zdfly: '今年涨幅', p: '最新价',
+            cclbh: '持仓变量', lb: '量比', zde: '涨跌额', jyzt: '交易状态', xs: '现手',
+            zdf: '涨跌幅', cdzj: '沉淀资金'
+        };
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCharts();
+            initializeControls();
+            fetchData();
+            startAutoRefresh();
+            updateTimeDisplay();
+            setInterval(updateTimeDisplay, 1000);
+        });
+
+        // 初始化图表
+        function initializeCharts() {
+            chart1 = echarts.init(document.getElementById('main1'));
+            chart2 = echarts.init(document.getElementById('main2'));
+            chart3 = echarts.init(document.getElementById('main3'));
+            chart4 = echarts.init(document.getElementById('main4'));
+            chart5 = echarts.init(document.getElementById('main5'));
+
+            // 窗口大小改变时重置图表
+            window.addEventListener('resize', () => {
+                chart1.resize();
+                chart2.resize();
+                chart3.resize();
+                chart4.resize();
+                chart5.resize();
+            });
+        }
+
+        // 初始化控件
+        function initializeControls() {
+            document.getElementById('refresh-btn').addEventListener('click', fetchData);
+            document.getElementById('auto-refresh-btn').addEventListener('click', toggleAutoRefresh);
+            document.getElementById('apply-metrics-btn').addEventListener('click', applyCustomMetrics);
+        }
+
+        // 更新时间显示
+        function updateTimeDisplay() {
+            const now = new Date();
+            const timeString = now.toLocaleString('zh-CN');
+            document.getElementById('current-time-display').textContent = timeString;
+            
+            const isTradingTime = checkTradingTime(now);
+            const statusElement = document.getElementById('trading-status');
+            
+            if (isTradingTime) {
+                statusElement.textContent = '● 交易中';
+                statusElement.className = 'trading-status active';
+            } else {
+                statusElement.textContent = '● 非交易时段';
+                statusElement.className = 'trading-status inactive';
+            }
+        }
+
+        // 检查交易时间
+        function checkTradingTime(now) {
+            const hour = now.getHours();
+            const minute = now.getMinutes();
+            
+            // 日盘：09:00-10:15, 10:30-11:30, 13:30-15:00
+            if ((hour === 9) || (hour === 10 && minute < 15) || 
+                (hour === 10 && minute >= 30) || (hour === 11 && minute < 30) ||
+                (hour === 13 && minute >= 30) || (hour === 14)) {
+                return true;
+            }
+            
+            // 夜盘：21:00-次日02:30
+            if ((hour >= 21) || (hour < 2) || (hour === 2 && minute <= 30)) {
+                return true;
+            }
+            
+            return false;
+        }
+
+        // 获取API URL
+        function getApiUrl() {
+            return checkTradingTime(new Date()) ? 'https://q.want.biz' : 'https://q.want.biz/night';
+        }
+
+        // 显示加载状态
+        function showLoading() {
+            document.getElementById('loading').style.display = 'flex';
+            document.getElementById('charts-container').style.opacity = '0.5';
+        }
+
+        // 隐藏加载状态
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('charts-container').style.opacity = '1';
+        }
+
+        // 显示错误信息
+        function showError(message) {
+            const errorContainer = document.getElementById('error-container');
+            errorContainer.innerHTML = `<div class="error-message">❌ ${message}</div>`;
+        }
+
+        // 清除错误信息
+        function clearError() {
+            document.getElementById('error-container').innerHTML = '';
+        }
+
+        // 获取数据
+        async function fetchData() {
+            showLoading();
+            clearError();
+            
+            try {
+                const response = await fetch(getApiUrl());
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const apiData = await response.json();
+                
+                if (!apiData || !apiData.list || !Array.isArray(apiData.list)) {
+                    throw new Error('数据格式错误');
+                }
+
+                // 过滤数据
+                let filteredData = apiData.list.filter(item => item.cdzj > 15 * 1e8);
+                
+                if (filteredData.length === 0) {
+                    throw new Error('没有符合条件的数据');
+                }
+
+                // 优先显示未收盘品种
+                const hasOpenMarkets = filteredData.some(item => item.jyzt === 0);
+                if (hasOpenMarkets) {
+                    filteredData = filteredData.filter(item => item.jyzt === 0);
+                }
+
+                currentData = filteredData;
+                renderAllCharts(filteredData);
+                
+                // 更新标题显示数据更新时间
+                document.getElementById('current-time').textContent = 
+                    `🎗期货品种实时监控🎗 (${new Date().toLocaleTimeString()})`;
+                
+            } catch (error) {
+                console.error('数据获取失败:', error);
+                showError(`数据获取失败: ${error.message}`);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // 渲染所有图表
+        function renderAllCharts(data) {
+            try {
+                renderChart1([...data]);
+                renderChart2([...data]);
+                renderChart3([...data]);
+                renderChart4([...data]);
+                
+                const metric1 = document.getElementById('metric1-select').value;
+                const metric2 = document.getElementById('metric2-select').value;
+                renderChart5([...data], metric1, metric2);
+            } catch (error) {
+                console.error('图表渲染失败:', error);
+                showError(`图表渲染失败: ${error.message}`);
+            }
+        }
+
+        // 图表1: 期货品种走势对比
+        function renderChart1(dataList) {
+            const processedData = dataList.map(item => {
+                const openChange = parseFloat(((item.o - item.zjsj) / item.zjsj * 100).toFixed(2));
+                const closeChange = parseFloat(((item.p - item.zjsj) / item.zjsj * 100).toFixed(2));
+                const lowChange = parseFloat(((item.l - item.zjsj) / item.zjsj * 100).toFixed(2));
+                const highChange = parseFloat(((item.h - item.zjsj) / item.zjsj * 100).toFixed(2));
+                return {
+                    name: item.name,
+                    dm: item.dm,
+                    value: [openChange, closeChange, lowChange, highChange],
+                    closeChange
+                };
+            });
+
+            const sortedData = processedData.sort((a, b) => b.closeChange - a.closeChange);
+            const categories = sortedData.map(item => item.name);
+            
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(0,0,0,0.8)',
+                    borderColor: '#777',
+                    textStyle: { color: '#fff' },
+                    formatter: function (params) {
+                        const data = params[0].data.value;
+                        if (data && data.length === 4) {
+                            return `${params[0].name}<br/>` +
+                                   `开盘涨幅: ${data[0]}%<br/>` +
+                                   `收盘涨幅: ${data[1]}%<br/>` +
+                                   `最低涨幅: ${data[2]}%<br/>` +
+                                   `最高涨幅: ${data[3]}%`;
+                        }
+                        return params[0].name;
+                    }
+                },
+                xAxis: {
+                    type: 'category',
+                    data: categories,
+                    axisLabel: {
+                        interval: 0,
+                        rotate: 45,
+                        fontSize: 11,
+                        color: '#666'
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: {
+                        formatter: '{value}%',
+                        fontSize: 11,
+                        color: '#666'
+                    }
+                },
+                dataZoom: [
+                    { type: 'inside', start: 0, end: 100 },
+                    { start: 0, end: 100, height: 20 }
+                ],
+                series: [{
+                    type: 'candlestick',
+                    data: sortedData.map(item => ({
+                        value: item.value,
+                        dm: item.dm,
+                        name: item.name
+                    })),
+                    itemStyle: {
+                        color: '#ef4444',
+                        color0: '#22c55e',
+                        borderColor: '#ef4444',
+                        borderColor0: '#22c55e'
+                    }
+                }]
+            };
+
+            chart1.setOption(option);
+            bindChartClick(chart1);
+        }
+
+        // 图表2: 投机度 vs 涨跌幅
+        function renderChart2(dataList) {
+            dataList.sort((a, b) => b.zdf - a.zdf);
+            const categories = dataList.map(item => item.name);
+            
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(0,0,0,0.8)',
+                    textStyle: { color: '#fff' }
+                },
+                legend: {
+                    data: ['投机度', '涨跌幅'],
+                    top: 10
+                },
+                xAxis: {
+                    type: 'category',
+                    data: categories,
+                    axisLabel: {
+                        interval: 0,
+                        rotate: 45,
+                        fontSize: 11,
+                        color: '#666'
+                    }
+                },
+                yAxis: [
+                    {
+                        type: 'value',
+                        name: '投机度',
+                        position: 'left',
+                        axisLabel: { fontSize: 11, color: '#666' }
+                    },
+                    {
+                        type: 'value',
+                        name: '涨跌幅(%)',
+                        position: 'right',
+                        axisLabel: { formatter: '{value}%', fontSize: 11, color: '#666' }
+                    }
+                ],
+                dataZoom: [
+                    { type: 'inside', start: 0, end: 100 },
+                    { start: 0, end: 100, height: 20 }
+                ],
+                series: [
+                    {
+                        name: '投机度',
+                        type: 'bar',
+                        yAxisIndex: 0,
+                        itemStyle: { color: '#3b82f6' },
+                        data: dataList.map(item => ({
+                            value: item.tjd,
+                            dm: item.dm,
+                            name: item.name
+                        }))
+                    },
+                    {
+                        name: '涨跌幅',
+                        type: 'line',
+                        yAxisIndex: 1,
+                        itemStyle: { color: '#ef4444' },
+                        data: dataList.map(item => ({
+                            value: item.zdf,
+                            dm: item.dm,
+                            name: item.name
+                        }))
+                    }
+                ]
+            };
+
+            chart2.setOption(option);
+            bindChartClick(chart2);
+        }
+
+        // 图表3: 增仓率 vs 涨跌幅
+        function renderChart3(dataList) {
+            dataList.sort((a, b) => b.zdf - a.zdf);
+            
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(0,0,0,0.8)',
+                    textStyle: { color: '#fff' }
+                },
+                legend: {
+                    data: ['增仓率', '涨跌幅'],
+                    top: 10
+                },
+                xAxis: {
+                    type: 'category',
+                    data: dataList.map(item => item.name),
+                    axisLabel: {
+                        interval: 0,
+                        rotate: 45,
+                        fontSize: 11,
+                        color: '#666'
+                    }
+                },
+                yAxis: [
+                    {
+                        type: 'value',
+                        name: '增仓率(%)',
+                        position: 'left',
+                        axisLabel: { formatter: '{value}%', fontSize: 11, color: '#666' }
+                    },
+                    {
+                        type: 'value',
+                        name: '涨跌幅(%)',
+                        position: 'right',
+                        axisLabel: { formatter: '{value}%', fontSize: 11, color: '#666' }
+                    }
+                ],
+                dataZoom: [
+                    { type: 'inside', start: 0, end: 100 },
+                    { start: 0, end: 100, height: 20 }
+                ],
+                series: [
+                    {
+                        name: '增仓率',
+                        type: 'bar',
+                        yAxisIndex: 0,
+                        itemStyle: { color: '#06b6d4' },
+                        data: dataList.map(item => {
+                            const divisor = item.ccl - item.rz;
+                            const rate = divisor <= 0 ? 0 : parseFloat(((item.rz / divisor) * 100).toFixed(2));
+                            return {
+                                value: rate,
+                                dm: item.dm,
+                                name: item.name
+                            };
+                        })
+                    },
+                    {
+                        name: '涨跌幅',
+                        type: 'line',
+                        yAxisIndex: 1,
+                        itemStyle: { color: '#ef4444' },
+                        data: dataList.map(item => ({
+                            value: item.zdf,
+                            dm: item.dm,
+                            name: item.name
+                        }))
+                    }
+                ]
+            };
+
+            chart3.setOption(option);
+            bindChartClick(chart3);
+        }
+
+        // 图表4: 各周期涨跌幅对比
+        function renderChart4(dataList) {
+            dataList.sort((a, b) => b.zdf - a.zdf);
+            
+            const seriesConfig = [
+                { name: '当日涨幅', field: 'zdf', color: '#ef4444' },
+                { name: '3日涨幅', field: 'zdf3', color: '#22c55e' },
+                { name: '5日涨幅', field: 'zdf5', color: '#3b82f6' },
+                { name: '20日涨幅', field: 'zdf20', color: '#a855f7' },
+                { name: '今年涨幅', field: 'zdfly', color: '#f59e0b' },
+                { name: '250日涨幅', field: 'zdf250', color: '#14b8a6' }
+            ];
+
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(0,0,0,0.8)',
+                    textStyle: { color: '#fff' }
+                },
+                legend: {
+                    data: seriesConfig.map(s => s.name),
+                    top: 10,
+                    type: 'scroll'
+                },
+                xAxis: {
+                    type: 'category',
+                    data: dataList.map(item => item.name),
+                    axisLabel: {
+                        interval: 0,
+                        rotate: 45,
+                        fontSize: 11,
+                        color: '#666'
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '涨跌幅(%)',
+                    axisLabel: { formatter: '{value}%', fontSize: 11, color: '#666' }
+                },
+                dataZoom: [
+                    { type: 'inside', start: 0, end: 100 },
+                    { start: 0, end: 100, height: 20 }
+                ],
+                series: seriesConfig.map(s => ({
+                    name: s.name,
+                    type: 'line',
+                    itemStyle: { color: s.color },
+                    data: dataList.map(item => ({
+                        value: item[s.field],
+                        dm: item.dm,
+                        name: item.name
+                    })),
+                    smooth: true
+                }))
+            };
+
+            chart4.setOption(option);
+            bindChartClick(chart4);
+        }
+
+        // 图表5: 自定义指标对比
+        function renderChart5(dataList, metric1, metric2) {
+            dataList.sort((a, b) => b[metric1] - a[metric1]);
+            
+            const title = `${fieldMapping[metric1]}与${fieldMapping[metric2]}对比`;
+            document.getElementById('chart5-title').textContent = title;
+            
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(0,0,0,0.8)',
+                    textStyle: { color: '#fff' }
+                },
+                legend: {
+                    data: [fieldMapping[metric1], fieldMapping[metric2]],
+                    top: 10
+                },
+                xAxis: {
+                    type: 'category',
+                    data: dataList.map(item => item.name),
+                    axisLabel: {
+                        interval: 0,
+                        rotate: 45,
+                        fontSize: 11,
+                        color: '#666'
+                    }
+                },
+                yAxis: [
+                    {
+                        type: 'value',
+                        name: fieldMapping[metric1],
+                        position: 'left',
+                        axisLabel: { fontSize: 11, color: '#666' }
+                    },
+                    {
+                        type: 'value',
+                        name: fieldMapping[metric2],
+                        position: 'right',
+                        axisLabel: { fontSize: 11, color: '#666' }
+                    }
+                ],
+                dataZoom: [
+                    { type: 'inside', start: 0, end: 100 },
+                    { start: 0, end: 100, height: 20 }
+                ],
+                series: [
+                    {
+                        name: fieldMapping[metric1],
+                        type: 'bar',
+                        yAxisIndex: 0,
+                        itemStyle: { color: '#8b5cf6' },
+                        data: dataList.map(item => ({
+                            value: item[metric1],
+                            dm: item.dm,
+                            name: item.name
+                        }))
+                    },
+                    {
+                        name: fieldMapping[metric2],
+                        type: 'line',
+                        yAxisIndex: 1,
+                        itemStyle: { color: '#f59e0b' },
+                        data: dataList.map(item => ({
+                            value: item[metric2],
+                            dm: item.dm,
+                            name: item.name
+                        }))
+                    }
+                ]
+            };
+
+            chart5.setOption(option);
+            bindChartClick(chart5);
+        }
+
+        // 绑定图表点击事件
+        function bindChartClick(chart) {
+            chart.off('click');
+            chart.on('click', function(params) {
+                if (params.data && params.data.dm) {
+                    const dm = params.data.dm;
+                    const codeWithoutNumbers = dm.replace(/\d+/g, '');
+                    const url = `https://wealth.want.biz/v1/longshort.html?variety=${codeWithoutNumbers}`;
+                    window.open(url, '_blank');
+                }
+            });
+        }
+
+        // 下载图表
+        function downloadChart(chartInstance, fileName) {
+            const url = chartInstance.getDataURL({
+                backgroundColor: '#fff',
+                pixelRatio: 2
+            });
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            link.click();
+        }
+
+        // 切换自动刷新
+        function toggleAutoRefresh() {
+            autoRefresh = !autoRefresh;
+            const btn = document.getElementById('auto-refresh-btn');
+            
+            if (autoRefresh) {
+                btn.textContent = '⏱️ 自动刷新: 开启';
+                btn.style.background = 'linear-gradient(45deg, #667eea, #764ba2)';
+                startAutoRefresh();
+            } else {
+                btn.textContent = '⏱️ 自动刷新: 关闭';
+                btn.style.background = 'linear-gradient(45deg, #666, #999)';
+                stopAutoRefresh();
+            }
+        }
+
+        // 开始自动刷新
+        function startAutoRefresh() {
+            if (refreshInterval) clearInterval(refreshInterval);
+            
+            refreshInterval = setInterval(() => {
+                if (autoRefresh && checkTradingTime(new Date())) {
+                    fetchData();
+                }
+            }, 15000);
+        }
+
+        // 停止自动刷新
+        function stopAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+        }
+
+        // 应用自定义指标
+        function applyCustomMetrics() {
+            if (currentData.length > 0) {
+                const metric1 = document.getElementById('metric1-select').value;
+                const metric2 = document.getElementById('metric2-select').value;
+                renderChart5([...currentData], metric1, metric2);
+            }
+        }
+    </script>
+</body>
+</html>
