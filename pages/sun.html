@@ -3,256 +3,651 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>动态太阳系</title>
+    <title>完整太阳系</title>
     <style>
         body {
             margin: 0;
             height: 100vh;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            background-color: #000;
-            background-image: radial-gradient(ellipse at center, 
-                rgba(255, 255, 255, 0.1) 0%, 
-                rgba(255, 255, 255, 0) 70%),
-                /* Add some subtle stars */
-                radial-gradient(circle at 10% 20%, rgba(255,255,255,0.3) 1px, transparent 2px),
-                radial-gradient(circle at 80% 30%, rgba(255,255,255,0.3) 1px, transparent 2px),
-                radial-gradient(circle at 30% 70%, rgba(255,255,255,0.2) 1px, transparent 2px),
-                radial-gradient(circle at 90% 85%, rgba(255,255,255,0.3) 1px, transparent 2px),
-                radial-gradient(circle at 50% 50%, rgba(255,255,255,0.2) 0px, transparent 1px);
-            background-size: cover, 1px 1px, 1px 1px, 1px 1px, 1px 1px, 1px 1px; /* Cover for gradient, small size for stars */
-            overflow: hidden; /* Hide scrollbars */
+            background: #000;
+            background-image: 
+                radial-gradient(2px 2px at 20px 30px, rgba(255,255,255,0.4), transparent),
+                radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.3), transparent),
+                radial-gradient(1px 1px at 90px 40px, rgba(255,255,255,0.5), transparent),
+                radial-gradient(1px 1px at 130px 80px, rgba(255,255,255,0.3), transparent),
+                radial-gradient(2px 2px at 160px 30px, rgba(255,255,255,0.4), transparent),
+                radial-gradient(1px 1px at 200px 90px, rgba(255,255,255,0.3), transparent),
+                radial-gradient(2px 2px at 250px 50px, rgba(255,255,255,0.5), transparent);
+            background-repeat: repeat;
+            background-size: 300px 150px;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+        }
+
+        .controls {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .control-btn {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+            color: white;
+        }
+
+        .speed-slider {
+            width: 60px;
+            background: transparent;
+        }
+
+        .info-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            min-width: 200px;
+            font-size: 12px;
+            display: none;
         }
 
         .solar-system {
             position: relative;
-            /* Use vmin for responsive scaling based on smaller viewport dimension */
-            width: 80vmin; 
-            height: 80vmin;
-            /* border: 1px solid red; /* For debugging layout */
+            width: 95vmin;
+            height: 95vmin;
+            margin: 20px;
         }
 
         .sun {
             position: absolute;
             top: 50%;
             left: 50%;
-            width: 10vmin;
-            height: 10vmin;
-            background-color: #ffcc00;
+            width: 6vmin;
+            height: 6vmin;
+            background: radial-gradient(circle at 30% 30%, #ffff88, #ffcc00, #ff9900, #ff4400);
             border-radius: 50%;
             transform: translate(-50%, -50%);
-            box-shadow: 0 0 3vmin #ffcc00, 
-                        0 0 6vmin #ffaa00, 
-                        0 0 10vmin #ff8800,
-                        0 0 15vmin #ff4400; /* Glowing effect */
-            z-index: 10; /* Sun on top */
+            box-shadow: 
+                0 0 2vmin #ffcc00,
+                0 0 4vmin #ffaa00,
+                0 0 6vmin #ff8800,
+                0 0 8vmin #ff4400,
+                inset 0 0 2vmin rgba(255, 100, 0, 0.5);
+            z-index: 10;
+            animation: sun-pulse 4s infinite ease-in-out;
+        }
+
+        @keyframes sun-pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.05); }
         }
 
         .orbit {
             position: absolute;
             top: 50%;
             left: 50%;
-            border: 1px solid rgba(255, 255, 255, 0.15); /* Subtle orbit path */
+            border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 50%;
-            transform-origin: center center; /* Rotate around the center */
-            animation: orbit-rotation infinite linear; 
-            /* animation-play-state: paused; /* Uncomment to pause initially */
+            transform-origin: center center;
+            animation: orbit-rotation infinite linear;
+        }
+
+        .orbit::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 50%;
         }
 
         .planet {
             position: absolute;
-            top: 50%; /* Vertically center relative to orbit div's height */
-            left: 0;  /* Start at the 'left' edge of the orbit div */
+            top: 50%;
+            left: 0;
             border-radius: 50%;
-            transform: translateY(-50%); /* Adjust vertical centering */
-            /* Apply counter-rotation to prevent the planet image from spinning with the orbit */
-            /* animation: counter-rotation infinite linear; */ /* See note below */
+            transform: translateY(-50%);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: inset 0 0 1vmin rgba(0, 0, 0, 0.5);
         }
-        
-        /* --- Specific Planet Orbits --- */
-        /* Sizes increase outwards, durations increase (slower orbit) */
 
+        .planet:hover {
+            transform: translateY(-50%) scale(1.3);
+            z-index: 20;
+        }
+
+        /* 行星轨道和样式 */
         .mercury-orbit {
-            width: 18vmin; height: 18vmin; margin-left: -9vmin; margin-top: -9vmin;
-            animation-duration: 8.8s; /* Scaled approx period */
+            width: 12vmin; height: 12vmin; 
+            margin-left: -6vmin; margin-top: -6vmin;
+            animation-duration: 6s;
         }
         .mercury {
-            width: 1vmin; height: 1vmin; background-color: #aaa;
-            /* animation-duration: 8.8s; */
+            width: 0.8vmin; height: 0.8vmin; 
+            background: radial-gradient(circle at 30% 30%, #bbb, #888, #666);
         }
 
         .venus-orbit {
-            width: 28vmin; height: 28vmin; margin-left: -14vmin; margin-top: -14vmin;
-            animation-duration: 22.5s;
+            width: 16vmin; height: 16vmin; 
+            margin-left: -8vmin; margin-top: -8vmin;
+            animation-duration: 10s;
         }
         .venus {
-            width: 1.8vmin; height: 1.8vmin; background-color: #e6d3a8;
-            /* animation-duration: 22.5s; */
+            width: 1.2vmin; height: 1.2vmin; 
+            background: radial-gradient(circle at 30% 30%, #ffd700, #ffa500, #ff8c00);
         }
 
         .earth-orbit {
-            width: 40vmin; height: 40vmin; margin-left: -20vmin; margin-top: -20vmin;
-            animation-duration: 36.5s; /* Easy reference: 1 year = 36.5s */
+            width: 20vmin; height: 20vmin; 
+            margin-left: -10vmin; margin-top: -10vmin;
+            animation-duration: 15s;
         }
         .earth {
-            width: 2vmin; height: 2vmin; background-color: #6fa8dc;
-            /* animation-duration: 36.5s; */
+            width: 1.3vmin; height: 1.3vmin; 
+            background: radial-gradient(circle at 30% 30%, #87ceeb, #4682b4, #2e8b57);
+            position: relative;
         }
-        /* Add a simple moon for Earth */
-        .earth .moon-orbit { 
-            position: absolute;
-            top:50%; left:50%;
-            width: 5vmin; height: 5vmin; /* Moon orbit relative to Earth */
-            margin-left:-2.5vmin; margin-top:-2.5vmin;
-            border: none; /* Hide moon orbit line */
-            animation-duration: 2.7s; /* Moon's orbital period */
-        }
-         .earth .moon {
-            width: 0.5vmin; height: 0.5vmin; background-color: #ccc;
-            /* No counter-rotation needed for moon if it's just a dot */
-         }
 
+        .moon-orbit {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 3vmin; height: 3vmin;
+            margin-left: -1.5vmin; margin-top: -1.5vmin;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            animation-duration: 1.5s;
+        }
+        .moon {
+            width: 0.4vmin; height: 0.4vmin; 
+            background: radial-gradient(circle at 30% 30%, #ddd, #aaa, #888);
+        }
 
         .mars-orbit {
-            width: 55vmin; height: 55vmin; margin-left: -27.5vmin; margin-top: -27.5vmin;
-            animation-duration: 68.7s;
+            width: 25vmin; height: 25vmin; 
+            margin-left: -12.5vmin; margin-top: -12.5vmin;
+            animation-duration: 22s;
         }
         .mars {
-            width: 1.5vmin; height: 1.5vmin; background-color: #c1440e;
-            /* animation-duration: 68.7s; */
+            width: 1vmin; height: 1vmin; 
+            background: radial-gradient(circle at 30% 30%, #ff6347, #dc143c, #8b0000);
         }
 
-        /* Jupiter, Saturn, etc. would be further out with longer durations */
-        /* Example for Jupiter - might start overlapping others depending on scale */
-         .jupiter-orbit {
-             width: 75vmin; height: 75vmin; margin-left: -37.5vmin; margin-top: -37.5vmin;
-             animation-duration: 120s; /* Significantly longer, adjust as needed for visual speed */
-         }
-         .jupiter {
-             width: 4vmin; height: 4vmin; background-color: #d8caae;
-             /* animation-duration: 120s; */
-         }
-        /* Add more planets (Saturn, Uranus, Neptune) similarly */
-        /* Adjust vmin sizes and animation durations accordingly */
-
-
-        /* --- Animations --- */
-        @keyframes orbit-rotation {
-            from { transform: rotate(0deg); }
-            to   { transform: rotate(360deg); }
+        .asteroid-belt {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 32vmin;
+            height: 32vmin;
+            margin-left: -16vmin;
+            margin-top: -16vmin;
+            border: 1px dashed rgba(139, 69, 19, 0.3);
+            border-radius: 50%;
         }
 
-        /* 
-         * Optional Counter-Rotation: 
-         * If you want planets to NOT spin madly with their orbit, apply this.
-         * You'd uncomment the 'animation: counter-rotation...' line for each .planet
-         * and ensure the animation-duration matches its orbit's duration.
-         * NOTE: This can sometimes be visually subtle or complex to get right with scaling.
-         * For simplicity in this example, it's commented out. If planets were textured images,
-         * this would be more important.
-        */
-        /*
-        @keyframes counter-rotation {
-            from { transform: translateY(-50%) rotate(0deg); }
-            to   { transform: translateY(-50%) rotate(-360deg); }
-        } 
-        */
+        .asteroid {
+            position: absolute;
+            width: 0.1vmin;
+            height: 0.1vmin;
+            background: #8b4513;
+            border-radius: 50%;
+        }
 
-        /* Simple label */
+        .jupiter-orbit {
+            width: 38vmin; height: 38vmin; 
+            margin-left: -19vmin; margin-top: -19vmin;
+            animation-duration: 35s;
+        }
+        .jupiter {
+            width: 3vmin; height: 3vmin; 
+            background: radial-gradient(circle at 30% 30%, #daa520, #b8860b, #8b4513);
+            position: relative;
+        }
+
+        .jupiter::after {
+            content: '';
+            position: absolute;
+            top: 30%;
+            left: 10%;
+            right: 10%;
+            height: 40%;
+            background: linear-gradient(to bottom, 
+                rgba(255, 255, 255, 0.2) 0%,
+                rgba(139, 69, 19, 0.3) 25%,
+                rgba(218, 165, 32, 0.4) 50%,
+                rgba(139, 69, 19, 0.3) 75%,
+                rgba(255, 255, 255, 0.2) 100%);
+            border-radius: 50%;
+        }
+
+        .saturn-orbit {
+            width: 48vmin; height: 48vmin; 
+            margin-left: -24vmin; margin-top: -24vmin;
+            animation-duration: 55s;
+        }
+        .saturn {
+            width: 2.5vmin; height: 2.5vmin; 
+            background: radial-gradient(circle at 30% 30%, #ffd700, #daa520, #b8860b);
+            position: relative;
+        }
+
+        .saturn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4vmin;
+            height: 1px;
+            background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.6), transparent);
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            box-shadow: 
+                0 0 0 1px rgba(255, 255, 255, 0.3),
+                0 0 0 2px rgba(255, 255, 255, 0.1);
+        }
+
+        .uranus-orbit {
+            width: 58vmin; height: 58vmin; 
+            margin-left: -29vmin; margin-top: -29vmin;
+            animation-duration: 75s;
+        }
+        .uranus {
+            width: 2vmin; height: 2vmin; 
+            background: radial-gradient(circle at 30% 30%, #4fd0e3, #4169e1, #191970);
+            position: relative;
+        }
+
+        .uranus::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 3vmin;
+            height: 3vmin;
+            border: 1px solid rgba(79, 208, 227, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%) rotate(98deg);
+        }
+
+        .neptune-orbit {
+            width: 68vmin; height: 68vmin; 
+            margin-left: -34vmin; margin-top: -34vmin;
+            animation-duration: 100s;
+        }
+        .neptune {
+            width: 1.9vmin; height: 1.9vmin; 
+            background: radial-gradient(circle at 30% 30%, #4169e1, #0000cd, #191970);
+        }
+
+        .pluto-orbit {
+            width: 76vmin; height: 76vmin; 
+            margin-left: -38vmin; margin-top: -38vmin;
+            animation-duration: 140s;
+            border-style: dotted;
+        }
+        .pluto {
+            width: 0.6vmin; height: 0.6vmin; 
+            background: radial-gradient(circle at 30% 30%, #8B7355, #654321, #2F1B14);
+        }
+
         .planet-label {
             position: absolute;
-            bottom: 100%; /* Position above the planet */
+            bottom: 120%;
             left: 50%;
             transform: translateX(-50%);
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 1.2vmin;
+            color: white;
+            font-size: 1vmin;
             white-space: nowrap;
-            display: none; /* Hide initially */
-            background-color: rgba(0, 0, 0, 0.5);
-            padding: 0.2vmin 0.5vmin;
-            border-radius: 3px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 0.3vmin 0.6vmin;
+            border-radius: 4px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
-        /* Show label on hover (optional JS could make this better) */
         .planet:hover .planet-label {
-            display: block;
+            opacity: 1;
+        }
+
+        @keyframes orbit-rotation {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .controls, .info-panel {
+                position: relative;
+                top: auto;
+                left: auto;
+                right: auto;
+                margin: 10px;
+            }
+            
+            .solar-system {
+                width: 95vmin;
+                height: 95vmin;
+                margin: 10px;
+            }
+            
+            body {
+                flex-direction: column;
+                padding: 10px;
+            }
+
+            .planet-label {
+                font-size: 1.2vmin;
+            }
+        }
+
+        .paused {
+            animation-play-state: paused !important;
+        }
+
+        .dwarf-planet {
+            opacity: 0.8;
         }
 
     </style>
 </head>
 <body>
+    
+    <div class="controls">
+        <button class="control-btn" id="pauseBtn" onclick="togglePause()">⏸ 暂停</button>
+        <div class="speed-control">
+            <span>速度:</span>
+            <input type="range" class="speed-slider" id="speedSlider" min="0.1" max="3" step="0.1" value="1" onchange="changeSpeed(this.value)">
+            <span id="speedValue">1x</span>
+        </div>
+        <button class="control-btn" onclick="toggleInfo()">ℹ 信息</button>
+        <button class="control-btn" onclick="toggleAsteroids()">☄ 小行星带</button>
+    </div>
+
+    <div class="info-panel" id="infoPanel">
+        <h3>太阳系信息</h3>
+        <div id="planetInfo">
+            <p><strong>完整太阳系</strong></p>
+            <p>包含太阳、八大行星和矮行星冥王星</p>
+            <p>点击天体查看详细信息</p>
+        </div>
+    </div>
 
     <div class="solar-system">
-        <div class="sun"></div>
+        <div class="sun" onclick="showPlanetInfo('sun')"></div>
+
+        <!-- 小行星带 -->
+        <div class="asteroid-belt" id="asteroidBelt"></div>
 
         <div class="orbit mercury-orbit">
-            <div class="planet mercury">
+            <div class="planet mercury" onclick="showPlanetInfo('mercury')">
                 <span class="planet-label">水星</span>
             </div>
         </div>
 
         <div class="orbit venus-orbit">
-            <div class="planet venus">
+            <div class="planet venus" onclick="showPlanetInfo('venus')">
                 <span class="planet-label">金星</span>
             </div>
         </div>
 
         <div class="orbit earth-orbit">
-            <div class="planet earth">
-                 <span class="planet-label">地球</span>
-                 <!-- Earth's Moon -->
-                 <div class="orbit moon-orbit">
-                     <div class="planet moon"></div>
-                 </div>
+            <div class="planet earth" onclick="showPlanetInfo('earth')">
+                <span class="planet-label">地球</span>
+                <div class="orbit moon-orbit">
+                    <div class="planet moon" onclick="showPlanetInfo('moon'); event.stopPropagation();"></div>
+                </div>
             </div>
         </div>
 
         <div class="orbit mars-orbit">
-            <div class="planet mars">
-                 <span class="planet-label">火星</span>
+            <div class="planet mars" onclick="showPlanetInfo('mars')">
+                <span class="planet-label">火星</span>
             </div>
         </div>
 
-         <div class="orbit jupiter-orbit">
-             <div class="planet jupiter">
-                 <span class="planet-label">木星</span>
-             </div>
-         </div>
+        <div class="orbit jupiter-orbit">
+            <div class="planet jupiter" onclick="showPlanetInfo('jupiter')">
+                <span class="planet-label">木星</span>
+            </div>
+        </div>
 
-        <!-- Add Saturn, Uranus, Neptune orbits and planets here -->
-        <!-- Remember to adjust sizes (vmin) and animation-duration -->
+        <div class="orbit saturn-orbit">
+            <div class="planet saturn" onclick="showPlanetInfo('saturn')">
+                <span class="planet-label">土星</span>
+            </div>
+        </div>
 
+        <div class="orbit uranus-orbit">
+            <div class="planet uranus" onclick="showPlanetInfo('uranus')">
+                <span class="planet-label">天王星</span>
+            </div>
+        </div>
+
+        <div class="orbit neptune-orbit">
+            <div class="planet neptune" onclick="showPlanetInfo('neptune')">
+                <span class="planet-label">海王星</span>
+            </div>
+        </div>
+
+        <div class="orbit pluto-orbit">
+            <div class="planet pluto dwarf-planet" onclick="showPlanetInfo('pluto')">
+                <span class="planet-label">冥王星</span>
+            </div>
+        </div>
     </div>
 
     <script>
-        // Optional JavaScript for future enhancements:
-        // - Pause/Play button
-        // - Speed control
-        // - Click on planet for info
-        // - More accurate physics (though much more complex)
-
-        // Example: Pause/Resume on click anywhere
-        /*
-        const solarSystem = document.querySelector('.solar-system');
         let isPaused = false;
-        document.body.addEventListener('click', () => {
-            const orbits = document.querySelectorAll('.orbit');
-            isPaused = !isPaused;
-            orbits.forEach(orbit => {
-                orbit.style.animationPlayState = isPaused ? 'paused' : 'running';
-            });
-            // Also pause/resume counter-rotation if you uncommented it
-            const planets = document.querySelectorAll('.planet');
-             planets.forEach(planet => {
-                 // Check if the counter-rotation animation is applied
-                 // This part needs refinement if counter-rotation is used
-                 // planet.style.animationPlayState = isPaused ? 'paused' : 'running';
-             });
-        });
-        */
-        console.log("太阳系模拟已加载。");
+        let currentSpeed = 1;
+        let showAsteroids = false;
 
+        const planetData = {
+            sun: {
+                name: "太阳",
+                info: "太阳系的中心恒星，质量占太阳系总质量的99.86%，表面温度约5500°C，核心温度达1500万°C。"
+            },
+            mercury: {
+                name: "水星",
+                info: "距离太阳最近的行星，公转周期88天，自转周期59天。表面温度变化极大，白天427°C，夜晚-173°C。"
+            },
+            venus: {
+                name: "金星",
+                info: "太阳系中最热的行星，表面温度462°C，被称为地球的'姊妹星'。大气压是地球的90倍，主要由二氧化碳组成。"
+            },
+            earth: {
+                name: "地球",
+                info: "我们的家园，太阳系中唯一已知存在生命的行星。71%的表面被海洋覆盖，有一颗天然卫星——月球。"
+            },
+            moon: {
+                name: "月球",
+                info: "地球的唯一天然卫星，距离地球38万公里，公转周期27.3天。月球影响地球的潮汐，并稳定地球的自转轴。"
+            },
+            mars: {
+                name: "火星",
+                info: "红色星球，有稀薄的大气层，一天长度与地球相似（24小时37分钟）。有极地冰帽、巨大的火山和峡谷。"
+            },
+            jupiter: {
+                name: "木星",
+                info: "太阳系最大的行星，质量是其他所有行星总和的2.5倍。有95颗已知卫星，包括四大伽利略卫星。"
+            },
+            saturn: {
+                name: "土星",
+                info: "以美丽的光环闻名，密度比水还小。有146颗已知卫星，包括最大的土卫六泰坦，它有浓厚的大气层。"
+            },
+            uranus: {
+                name: "天王星",
+                info: "冰巨星，自转轴倾斜98度，几乎是'躺着'公转。有27颗已知卫星和微弱的光环系统。"
+            },
+            neptune: {
+                name: "海王星",
+                info: "太阳系最远的大行星，风速可达2100公里/小时，是太阳系中风速最快的行星。有16颗已知卫星。"
+            },
+            pluto: {
+                name: "冥王星",
+                info: "2006年被重新分类为矮行星，位于柯伊伯带。有5颗已知卫星，最大的是卡戎，几乎与冥王星一样大。"
+            }
+        };
+
+        function createAsteroids() {
+            const asteroidBelt = document.getElementById('asteroidBelt');
+            asteroidBelt.innerHTML = '';
+            
+            for (let i = 0; i < 50; i++) {
+                const asteroid = document.createElement('div');
+                asteroid.className = 'asteroid';
+                
+                const angle = (i / 50) * 360;
+                const radius = 15 + Math.random() * 2; // 随机半径
+                const x = Math.cos(angle * Math.PI / 180) * radius;
+                const y = Math.sin(angle * Math.PI / 180) * radius;
+                
+                asteroid.style.left = `calc(50% + ${x}vmin)`;
+                asteroid.style.top = `calc(50% + ${y}vmin)`;
+                asteroid.style.animationDelay = `${Math.random() * 2}s`;
+                
+                asteroidBelt.appendChild(asteroid);
+            }
+        }
+
+        function toggleAsteroids() {
+            showAsteroids = !showAsteroids;
+            const asteroidBelt = document.getElementById('asteroidBelt');
+            
+            if (showAsteroids) {
+                createAsteroids();
+                asteroidBelt.style.display = 'block';
+            } else {
+                asteroidBelt.style.display = 'none';
+            }
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            const orbits = document.querySelectorAll('.orbit');
+            const sun = document.querySelector('.sun');
+            const pauseBtn = document.getElementById('pauseBtn');
+            
+            orbits.forEach(orbit => {
+                if (isPaused) {
+                    orbit.classList.add('paused');
+                } else {
+                    orbit.classList.remove('paused');
+                }
+            });
+            
+            if (isPaused) {
+                sun.classList.add('paused');
+                pauseBtn.innerHTML = '▶ 播放';
+            } else {
+                sun.classList.remove('paused');
+                pauseBtn.innerHTML = '⏸ 暂停';
+            }
+        }
+
+        function changeSpeed(speed) {
+            currentSpeed = speed;
+            document.getElementById('speedValue').textContent = speed + 'x';
+            
+            const style = document.createElement('style');
+            style.textContent = `
+                .orbit {
+                    animation-duration: calc(var(--original-duration) / ${speed}) !important;
+                }
+                .sun {
+                    animation-duration: calc(4s / ${speed}) !important;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        function showPlanetInfo(planetKey) {
+            const planet = planetData[planetKey];
+            if (planet) {
+                const infoPanel = document.getElementById('infoPanel');
+                const planetInfo = document.getElementById('planetInfo');
+                
+                planetInfo.innerHTML = `
+                    <p><strong>${planet.name}</strong></p>
+                    <p>${planet.info}</p>
+                `;
+                
+                infoPanel.style.display = 'block';
+            }
+        }
+
+        function toggleInfo() {
+            const infoPanel = document.getElementById('infoPanel');
+            infoPanel.style.display = infoPanel.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("完整太阳系模拟已加载");
+            
+            // 为每个轨道设置CSS变量保存原始持续时间
+            const orbits = document.querySelectorAll('.orbit');
+            orbits.forEach(orbit => {
+                const duration = getComputedStyle(orbit).animationDuration;
+                orbit.style.setProperty('--original-duration', duration);
+            });
+            
+            // 添加键盘快捷键
+            document.addEventListener('keydown', function(e) {
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    togglePause();
+                } else if (e.code === 'KeyA') {
+                    toggleAsteroids();
+                }
+            });
+        });
+
+        // 为移动设备添加触摸支持
+        let touchStartY = 0;
+        document.addEventListener('touchstart', function(e) {
+            touchStartY = e.touches[0].clientY;
+        });
+
+        document.addEventListener('touchend', function(e) {
+            const touchEndY = e.changedTouches[0].clientY;
+            if (Math.abs(touchEndY - touchStartY) < 10) {
+                togglePause();
+            }
+        });
     </script>
 
 </body>
