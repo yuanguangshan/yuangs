@@ -6,60 +6,123 @@
   <title>集思录ETF数据监控</title>
   <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
   <style>
+    /* 全局样式 */
     body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; /* 更现代的字体 */
+      margin: 0; /* 移除默认外边距 */
+      padding: 20px;
+      background-color: #f8fbfd; /* 淡雅的背景色 */
+      color: #333;
+      line-height: 1.6;
     }
 
-    h1, h2 {
-      color: #333;
+    h1, h2, h6 {
+      color: #2c3e50; /* 深蓝色调的标题 */
       text-align: center;
+      margin-bottom: 25px;
     }
+    h1 { font-size: 2.2em; margin-top: 30px; }
+    h2 { font-size: 1.8em; margin-top: 40px; }
+    h6 { font-size: 0.9em; color: #666; margin-top: -15px; margin-bottom: 20px; }
 
     .container {
       max-width: 1200px;
       margin: 0 auto;
+      padding: 20px;
+      background-color: #ffffff; /* 白色内容区域背景 */
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); /* 柔和的阴影 */
+      border-radius: 8px; /* 圆角边框 */
     }
 
+    /* 表格样式 */
     table {
       width: 100%;
       border-collapse: collapse;
-      margin: 20px 0;
+      margin: 25px 0;
+      border-radius: 8px; /* 应用到表格本身 */
+      overflow: hidden; /* 配合圆角边框 */
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05); /* 更轻的阴影 */
     }
 
     th, td {
-      border: 1px solid #ccc;
-      padding: 8px;
-      text-align: center;
+      border: 1px solid #e0e0e0; /* 浅色边框 */
+      padding: 12px 10px; /* 增加内边距 */
+      font-size: 1.05em;
     }
 
     th {
-      background-color: #f4f4f4;
+      background-color: #eaf2f8; /* 浅蓝色表头 */
+      color: #34495e; /* 深色文字 */
+      font-weight: bold;
       cursor: pointer;
+      position: relative;
+      text-align: center; /* 确保表头居中 */
     }
 
     th.sort-asc::after {
       content: " ▲";
+      font-size: 0.8em;
+      vertical-align: super;
+      color: #007bff;
     }
 
     th.sort-desc::after {
       content: " ▼";
+      font-size: 0.8em;
+      vertical-align: super;
+      color: #dc3545;
     }
 
     tr:nth-child(even) {
-      background-color: #f9f9f9;
+      background-color: #f6faff; /* 偶数行淡蓝色背景 */
+    }
+    tr:hover {
+      background-color: #e9f5ff; /* 行悬停效果 */
     }
 
+    /* 数字列右对齐 */
+    td:nth-child(3), /* 涨幅 */
+    td:nth-child(4), /* 总规模 */
+    td:nth-child(5), /* 规模变化 */
+    td:nth-child(6) { /* 规模变化率 */
+        text-align: right;
+    }
+
+    /* 名称和代码列居中 */
+    td:nth-child(1), /* 名称 */
+    td:nth-child(2) { /* 代码 */
+        text-align: center;
+    }
+
+    .change {
+      font-weight: bold; /* 涨幅数字加粗 */
+    }
+
+    a {
+      color: #007bff; /* 标准链接蓝色 */
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+
+    /* 图表容器样式 */
     .chart-container {
       width: 100%;
-      height: 400px;
-      margin-top: 20px;
+      height: 450px; /* 稍微高一点的图表 */
+      margin-top: 30px;
+      background-color: #ffffff;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      border-radius: 8px;
     }
 
+    /* 加载和错误信息 */
     .loading, .error {
       text-align: center;
       font-size: 18px;
       color: #555;
+      padding: 30px;
     }
 
     .error {
@@ -78,8 +141,11 @@
     <p id="loadingMessage" class="loading">数据加载中，请稍候...</p>
     <p id="errorMessage" class="error hidden">数据加载失败，请稍后重试。</p>
 
-    <h2><a href="https://www.jisilu.cn/data/etf/#index">Top 20 ETF 数据</a>
-    <h6><a href="https://wealth.want.biz/pages/qdii.html">T+0 ETF 数据</a>
+    <h2>
+        <a href="https://www.jisilu.cn/data/etf/#index" style="color:#2c3e50;">Top 20 ETF 数据</a>
+    </h2>
+    <h6>
+        <a href="https://wealth.want.biz/pages/qdii.html" style="color:#666;">T+0 ETF 数据 (集思录)</a>
     </h6>
     <table id="top20Table">
       <thead>
@@ -119,12 +185,20 @@
   <script>
     let originalData = []; // 用于保存原始数据
     let filteredData = []; // 用于保存过滤后的数据
-    let currentSortColumn = null; // 当前排序的列
-    let isAsc = true; // 当前排序方向
+    let currentSortColumn = "总规模"; // 默认排序列
+    let isAsc = false; // 默认降序
     const categories = [
       "沪深300", "中证500", "创业板指", "中证1000",
-      "科创50", "中证A500", "证券公司", "上证50","港股","证券",
-      "光伏", "芯片","半导体","药","电池","新能源","债","红利",
+      "科创50", "中证A50", "证券公司", "上证50", "港股", "证券",
+      "光伏", "芯片", "半导体", "药", "电池", "新能源", "债", "红利",
+      "军工", "化工", "有色", "传媒", "食品饮料", "生物科技", "消费", "医疗", "环保"
+    ];
+
+    // 自定义颜色调色板 (适用于ECharts)
+    const customColors = [
+      '#007bff', '#28a745', '#ffc107', '#dc3545', '#17a2b8',
+      '#6610f2', '#6f42c1', '#fd7e14', '#e83e8c', '#20c997',
+      '#6c757d', '#3498db', '#e74c3c', '#2ecc71', '#f39c12'
     ];
 
     // 从 URL 中解析参数
@@ -158,9 +232,9 @@
           return {
             名称: row.index_nm || "未知", // 处理 index_nm 为空的情况
             代码: row.fund_id,
-            涨幅: parseFloat(row.increase_rt).toFixed(2),
-            总规模: parseFloat((row.unit_total).toFixed(2)), // 转换为亿
-            规模变化: parseFloat((row.unit_incr).toFixed(2)), // 转换为亿
+            涨幅: parseFloat(row.increase_rt), // 保持为数字，方便排序和着色
+            总规模: parseFloat(row.unit_total.toFixed(2)), // 转换为亿并保留2位小数
+            规模变化: parseFloat(row.unit_incr.toFixed(2)), // 转换为亿并保留2位小数
             规模变化率: ((row.unit_incr / row.unit_total) * 100).toFixed(2) + "%"
           };
         });
@@ -169,8 +243,6 @@
         filteredData = originalData.filter(row => row.总规模 > vol);
 
         // 默认按"总规模"降序排序并渲染
-        currentSortColumn = "涨幅";
-        isAsc = false;
         renderSortedTable();
 
         // 渲染类别统计数据
@@ -198,7 +270,7 @@
             isAsc = !isAsc; // 切换排序方向
           } else {
             currentSortColumn = sortKey; // 切换排序列
-            isAsc = true; // 默认升序
+            isAsc = false; // 默认降序
           }
 
           // 清除所有列的排序样式
@@ -215,6 +287,12 @@
           renderSortedTable();
         });
       });
+
+       // 初始化排序样式
+       const defaultSortHeader = document.querySelector(`#top20Table thead th[data-sort="${currentSortColumn}"]`);
+       if (defaultSortHeader) {
+           defaultSortHeader.classList.add(isAsc ? "sort-asc" : "sort-desc");
+       }
     }
 
     // 渲染排序后的表格
@@ -222,12 +300,15 @@
       const top20Table = document.getElementById("top20Table").querySelector("tbody");
       top20Table.innerHTML = ""; // 清空表格内容
 
-      // 对原始数据排序
+      // 对过滤后的数据进行排序
       const sortedData = [...filteredData].sort((a, b) => {
+        const valA = parseFloat(a[currentSortColumn]);
+        const valB = parseFloat(b[currentSortColumn]);
+
         if (isAsc) {
-          return parseFloat(a[currentSortColumn]) - parseFloat(b[currentSortColumn]);
+          return valA - valB;
         } else {
-          return parseFloat(b[currentSortColumn]) - parseFloat(a[currentSortColumn]);
+          return valB - valA;
         }
       });
 
@@ -240,41 +321,32 @@
         for (const key in row) {
           const td = document.createElement("td");
           
-          // 检查字段是否为代码字段
-          if (key === "代码") { // 假设代码字段的键名为"代码"
+          if (key === "代码") {
             const link = document.createElement("a");
-            const code = row[key]; // 获取代码
-            link.href = `https://fund.eastmoney.com/${code}.html`; // 创建链接
-            link.textContent = code; // 链接文本
-            td.appendChild(link); // 将链接添加到单元格中
+            const code = row[key];
+            link.href = `https://fund.eastmoney.com/${code}.html`;
+            link.target = "_blank"; // 在新标签页打开
+            link.textContent = code;
+            td.appendChild(link);
+          } else if (key === "涨幅") {
+            const changeValue = parseFloat(row[key]);
+            td.textContent = changeValue.toFixed(2) + "%"; // 格式化为百分比字符串
+            td.classList.add("change");
+            // 根据涨幅的正负设置颜色 (中国股市习惯: 红涨绿跌)
+            if (changeValue > 0) {
+                td.style.color = '#da0e1c'; /* 红色 */
+            } else if (changeValue < 0) {
+                td.style.color = '#1ea54c'; /* 绿色 */
+            } else {
+                td.style.color = '#333'; /* 黑色 */
+            }
           } else {
             td.textContent = row[key];
-          }
-
-          // 如果是涨幅列，添加 change 类
-          if (key === "涨幅") {
-            td.classList.add("change");
           }
 
           tr.appendChild(td);
         }
         top20Table.appendChild(tr);
-      });
-
-      // 获取所有涨幅列的单元格
-      const changeCells = document.querySelectorAll('.change');
-
-      // 遍历每个单元格
-      changeCells.forEach(cell => {
-          // 获取单元格的文本内容，并转换为数字
-          const changeValue = parseFloat(cell.textContent);
-
-          // 根据涨幅的正负设置颜色
-          if (changeValue > 0) {
-              cell.style.color = 'red';
-          } else if (changeValue < 0) {
-              cell.style.color = 'green';
-          }
       });
 
       // 更新图表
@@ -286,66 +358,158 @@
       const chartDom = document.getElementById("chart-top20");
       const chart = echarts.init(chartDom);
 
-      // 根据数值决定颜色
-      const getColor = (value) => {
-        return value >= 0 ?  '#1ea54c' : '#da0e1c'
-      };
-
       const option = {
+        color: customColors, // 应用自定义颜色
         title: {
-          text: "Top 20 总规模及规模变化 (亿)",
+          text: "Top 20 ETF 总规模及规模变化 (亿)",
           left: "center",
           textStyle: {
-            fontSize: 16
+            fontSize: 18,
+            color: '#34495e'
           }
         },
         tooltip: {
-          trigger: "item",
-          formatter: "{b}: {c} 亿"
+          trigger: "axis", // 轴触发，显示多系列数据
+          axisPointer: { type: 'shadow' }, // 阴影指示器
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          borderColor: '#ddd',
+          borderWidth: 1,
+          textStyle: { color: '#333' },
+          formatter: function (params) {
+            let res = `<div style="padding: 5px;">${params[0].name}</div>`;
+            params.forEach(item => {
+              // 确保总规模和规模变化显示亿，涨幅显示百分比
+              let valueText = item.value;
+              if (item.seriesName === "涨幅") {
+                valueText = item.value.toFixed(2) + "%";
+              } else {
+                valueText = item.value.toFixed(2) + " 亿";
+              }
+
+              // 根据涨幅或规模变化的颜色设置tooltip中的marker颜色
+              let markerColor = item.color;
+              if (item.seriesName === "规模变化" || item.seriesName === "涨幅") {
+                 markerColor = item.value >= 0 ? '#da0e1c' : '#1ea54c'; // 红涨绿跌
+              }
+
+              res += `<div style="display: flex; align-items: center; padding: 2px 0;">
+                        <span style="display:inline-block;margin-right:4px;border-radius:10px;width:10px;height:10px;background-color:${markerColor};"></span>
+                        ${item.seriesName}: ${valueText}
+                      </div>`;
+            });
+            return res;
+          }
+        },
+        legend: {
+          data: ["总规模", "规模变化", "涨幅"], // 添加涨幅
+          top: "5%",
+          left: "right",
+          textStyle: { color: '#555' }
+        },
+        grid: { // 调整图表内边距
+          left: '3%',
+          right: '4%',
+          bottom: '3%',
+          containLabel: true
         },
         xAxis: {
           type: "category",
           data: data.map(item => item.名称),
           axisLabel: {
             interval: 0,
-            rotate: 30 // 旋转以避免重叠
-          }
+            rotate: 45, // 旋转标签避免重叠
+            textStyle: { color: '#555' }
+          },
+          axisLine: { lineStyle: { color: '#ccc' } } // 轴线颜色
         },
         yAxis: [
           {
             type: "value",
             name: "总规模 (亿)",
             position: "left",
-            color: "#0e15da"
+            axisLabel: { textStyle: { color: '#007bff' } },
+            axisLine: { lineStyle: { color: '#007bff' } },
+            splitLine: { show: true, lineStyle: { type: 'dashed', color: '#eee' } } // 网格线
           },
           {
             type: "value",
             name: "规模变化 (亿)",
             position: "right",
-            color: "#f78c6b"
+            offset: 0, // 可以调整与左侧y轴的距离
+            axisLabel: { textStyle: { color: '#dc3545' } },
+            axisLine: { lineStyle: { color: '#dc3545' } },
+            splitLine: { show: false } // 不显示重复的网格线
+          },
+          {
+            type: "value",
+            name: "涨幅 (%)",
+            position: "right",
+            offset: 50, // 调整与右侧y轴的距离
+            axisLabel: { textStyle: { color: '#28a745' } },
+            axisLine: { lineStyle: { color: '#28a745' } },
+            splitLine: { show: false }
           }
         ],
         series: [
           {
+            name: "总规模",
             data: data.map(item => item.总规模),
             type: "bar",
             yAxisIndex: 0,
             itemStyle: {
-              color:"#0e82da" 
-            }
+              borderRadius: [5, 5, 0, 0], // 圆角柱子
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [ // 渐变色
+                { offset: 0, color: '#007bff' },
+                { offset: 1, color: '#6aaffe' }
+              ])
+            },
+            barWidth: '25%', // 调整柱子宽度
           },
           {
-            data: data.map(item => item.规模变化),
+            name: "规模变化",
+            data: data.map(item => {
+              return {
+                value: item.规模变化,
+                itemStyle: {
+                  borderRadius: [5, 5, 0, 0],
+                  color: item.规模变化 >= 0 ? // 红涨绿跌
+                    new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                      { offset: 0, color: '#da0e1c' }, // 红色
+                      { offset: 1, color: '#ff697d' }
+                    ]) :
+                    new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                      { offset: 0, color: '#1ea54c' }, // 绿色
+                      { offset: 1, color: '#6be07f' }
+                    ])
+                }
+              };
+            }),
             type: "bar",
             yAxisIndex: 1,
+            barWidth: '25%',
+          },
+          {
+            name: "涨幅",
+            data: data.map(item => item.涨幅),
+            type: "line", // 使用折线图表示涨幅
+            yAxisIndex: 2,
+            smooth: true, // 平滑曲线
+            symbol: 'circle', // 标记点样式
+            symbolSize: 8,
+            lineStyle: {
+                width: 3,
+                color: '#28a745' // 折线颜色
+            },
             itemStyle: {
-              color: (params) => getColor(params.value) // 动态设置颜色
+                color: (params) => params.value >= 0 ? '#da0e1c' : '#1ea54c', // 根据涨幅值设置点颜色
             }
           }
         ]
       };
 
       chart.setOption(option);
+      // 监听窗口大小变化，重新渲染图表
+      window.addEventListener('resize', () => chart.resize());
     }
 
     // 渲染类别统计结果
@@ -354,8 +518,7 @@
       categorySummaryTable.innerHTML = ""; // 清空表格内容
 
       const categoryStats = {};
-      let totalScale = 0; // 记录所有类别的总规模
-      let totalChange = 0; // 记录所有类别的总规模变化
+      let totalOverallScale = 0; // 记录所有ETF的总规模（用于计算占比）
 
       // 初始化类别统计对象
       categories.forEach(category => {
@@ -365,28 +528,49 @@
       // 统计数据
       data.forEach(row => {
         const { 名称, 总规模, 规模变化 } = row;
-        categories.forEach(category => {
-          if (名称.includes(category)) {
+        let matched = false;
+        // 尝试精确匹配或包含匹配
+        for (const category of categories) {
+          // 精确匹配或以类别名称开头
+          if (名称 === category || 名称.startsWith(category)) {
             categoryStats[category].总规模 += 总规模;
             categoryStats[category].规模变化 += 规模变化;
             categoryStats[category].数量 += 1;
-            totalScale += 总规模; // 累计总规模
-            totalChange += 规模变化; // 累计规模变化
+            matched = true;
+            break; // 匹配到一个类别就退出
           }
-        });
+        }
+        // 如果没有精确匹配，则尝试包含匹配
+        if (!matched) {
+          for (const category of categories) {
+            if (名称.includes(category)) {
+              categoryStats[category].总规模 += 总规模;
+              categoryStats[category].规模变化 += 规模变化;
+              categoryStats[category].数量 += 1;
+              matched = true;
+              break;
+            }
+          }
+        }
+        totalOverallScale += 总规模; // 累计总规模
       });
+      
+      // 将统计结果转换为数组，并过滤掉数量为0的类别，按总规模降序排序
+      const sortedCategoryStats = Object.entries(categoryStats)
+        .filter(([, stats]) => stats.数量 > 0)
+        .sort((a, b) => b[1].总规模 - a[1].总规模);
 
       // 渲染统计数据
       const chartData = [];
-      Object.entries(categoryStats).forEach(([category, stats]) => {
-        const scalePercent = totalScale > 0 ? ((stats.总规模 / totalScale) * 100).toFixed(2) + "%" : "0%"; // 计算占比
+      sortedCategoryStats.forEach(([category, stats]) => {
+        const scalePercent = totalOverallScale > 0 ? ((stats.总规模 / totalOverallScale) * 100).toFixed(2) + "%" : "0%"; // 计算占比
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${category}</td>
-          <td>${stats.总规模.toFixed(2)}</td>
-          <td>${stats.规模变化.toFixed(2)}</td>
-          <td>${stats.数量}</td>
-          <td>${scalePercent}</td>
+          <td style="text-align:right;">${stats.总规模.toFixed(2)}</td>
+          <td style="text-align:right;">${stats.规模变化.toFixed(2)}</td>
+          <td style="text-align:center;">${stats.数量}</td>
+          <td style="text-align:right;">${scalePercent}</td>
         `;
         categorySummaryTable.appendChild(tr);
 
@@ -397,49 +581,84 @@
       return chartData;
     }
 
-    // 绘制类别统计图表,@cursor edited
+    // 绘制类别统计图表
     function renderCategoryChart(data) {
       const chartDom = document.getElementById("chart-category");
       const chart = echarts.init(chartDom);
 
       const option = {
+        color: customColors,
         title: {
           text: "类别统计总规模及规模变化 (亿)",
           left: "center",
           textStyle: {
-            fontSize: 16
+            fontSize: 18,
+            color: '#34495e'
           }
         },
         tooltip: {
           trigger: "axis",
           axisPointer: {
             type: "shadow"
+          },
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          borderColor: '#ddd',
+          borderWidth: 1,
+          textStyle: { color: '#333' },
+          formatter: function (params) {
+            let res = `<div style="padding: 5px;">${params[0].name}</div>`;
+            params.forEach(item => {
+              let valueText = item.value.toFixed(2) + " 亿";
+              let markerColor = item.color;
+              if (item.seriesName === "规模变化") {
+                 markerColor = item.value >= 0 ? '#da0e1c' : '#1ea54c'; // 红涨绿跌
+              }
+              res += `<div style="display: flex; align-items: center; padding: 2px 0;">
+                        <span style="display:inline-block;margin-right:4px;border-radius:10px;width:10px;height:10px;background-color:${markerColor};"></span>
+                        ${item.seriesName}: ${valueText}
+                      </div>`;
+            });
+            return res;
           }
         },
         legend: {
           data: ["总规模", "规模变化"],
-          top: "10%"
+          top: "5%",
+          left: "right",
+          textStyle: { color: '#555' }
+        },
+        grid: {
+          left: '3%',
+          right: '4%',
+          bottom: '3%',
+          containLabel: true
         },
         xAxis: {
           type: "category",
           data: data.map(item => item.name),
           axisLabel: {
             interval: 0,
-            rotate: 30 // 旋转以避免重叠
-          }
+            rotate: 45,
+            textStyle: { color: '#555' }
+          },
+          axisLine: { lineStyle: { color: '#ccc' } }
         },
         yAxis: [
           {
             type: "value",
             name: "总规模 (亿)",
             position: "left",
-            color: "#0e15da"
+            axisLabel: { textStyle: { color: '#007bff' } },
+            axisLine: { lineStyle: { color: '#007bff' } },
+            splitLine: { show: true, lineStyle: { type: 'dashed', color: '#eee' } }
           },
           {
             type: "value",
             name: "规模变化 (亿)",
             position: "right",
-            color: "#f78c6b"
+            axisLabel: { textStyle: { color: '#dc3545' } },
+            axisLine: { lineStyle: { color: '#dc3545' } },
+            splitLine: { show: false } // 不显示重复的网格线
           }
         ],
         series: [
@@ -447,7 +666,15 @@
             name: "总规模",
             data: data.map(item => item.value),
             type: "bar",
-            yAxisIndex: 0
+            yAxisIndex: 0,
+            itemStyle: {
+              borderRadius: [5, 5, 0, 0],
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: '#007bff' },
+                { offset: 1, color: '#6aaffe' }
+              ])
+            },
+            barWidth: '40%',
           },
           {
             name: "规模变化",
@@ -455,17 +682,28 @@
               return {
                 value: item.change,
                 itemStyle: {
-                  color: item.change < 0 ? '#1ea54c' : '#da0e1c'
+                  borderRadius: [5, 5, 0, 0],
+                  color: item.change >= 0 ? // 红涨绿跌
+                    new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                      { offset: 0, color: '#da0e1c' }, // 红色
+                      { offset: 1, color: '#ff697d' }
+                    ]) :
+                    new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                      { offset: 0, color: '#1ea54c' }, // 绿色
+                      { offset: 1, color: '#6be07f' }
+                    ])
                 }
               };
             }),
             type: "bar",
-            yAxisIndex: 1
+            yAxisIndex: 1,
+            barWidth: '40%',
           }
         ]
       };
 
       chart.setOption(option);
+      window.addEventListener('resize', () => chart.resize());
     }
 
     // 调用函数加载数据
@@ -473,4 +711,3 @@
   </script>
 </body>
 </html>
-
