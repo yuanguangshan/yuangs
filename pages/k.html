@@ -398,6 +398,19 @@
         .treemap-top-list .value.red { color: #ef4444; font-weight: 500; }
         .treemap-top-list .value.green { color: #22c55e; font-weight: 500; }
         .treemap-top-list .label { color: #555; }
+        /* --- 新增 START --- */
+        #chart6-metric-selector {
+            text-align: center;
+            margin-bottom: 10px;
+            margin-top: -10px;
+        }
+        #chart6-metric-selector label {
+            cursor: pointer;
+            margin: 0 10px;
+            font-size: 0.9rem;
+            color: #444;
+        }
+        /* --- 新增 END --- */
     </style>
 </head>
 <body>
@@ -470,6 +483,17 @@
         <div class="chart-grid" id="charts-container">
             <div class="chart-container" data-chart-var="chart6">
                 <div class="chart-title">品种涨跌图</div>
+                <!-- --- 新增 START --- -->
+                <div id="chart6-metric-selector">
+                    <label>面积代表: </label>
+                    <label>
+                        <input type="radio" name="chart6-metric" value="cje" checked> 成交额
+                    </label>
+                    <label>
+                        <input type="radio" name="chart6-metric" value="cdzj"> 沉淀资金
+                    </label>
+                </div>
+                <!-- --- 新增 END --- -->
                 <div id="main6-treemap-legend" class="treemap-top-list"></div>
                 <div id="main6" class="chart"></div>
                 <button class="download-btn" onclick="downloadChart(chart6, '品种涨跌图.png')">📥 下载</button>
@@ -514,6 +538,9 @@ let autoRefresh = true;
 let refreshInterval;
 let currentData = [];
 let chartOptions = {};
+// --- 新增 START ---
+let chart6Metric = 'cje'; // 用于存储Chart 6的当前指标, 默认为'cje'
+// --- 新增 END ---
 
 const fieldMapping = {
     qrspj: '昨收盘价', zdf5: '5日涨幅', zdf6: '6日涨幅', zjlx: '资金流向', dm: '代码',
@@ -624,6 +651,19 @@ function initializeControls() {
         autoRefreshBtn.textContent = '⏱️ 自动刷新: 关闭';
         autoRefreshBtn.classList.add('secondary');
     }
+
+    // --- 新增 START ---
+    // 为Chart6的指标切换单选按钮绑定事件
+    const metricRadios = document.querySelectorAll('input[name="chart6-metric"]');
+    metricRadios.forEach(radio => {
+        radio.addEventListener('change', function() {
+            chart6Metric = this.value; // 更新全局选择
+            if (currentData.length > 0) {
+                renderChart6(currentData); // 使用当前数据重新渲染图表
+            }
+        });
+    });
+    // --- 新增 END ---
 }
 
 function updateTimeDisplay() {
@@ -660,13 +700,9 @@ function getApiUrl() {
 }
 
 function showLoading() {
-    // 不再显示loading元素，但仍然降低charts-container的透明度
-    // document.getElementById('loading').style.display = 'flex';
     document.getElementById('charts-container').style.opacity = '0.5';
 }
 function hideLoading() {
-    // 不再隐藏loading元素，但仍然恢复charts-container的透明度
-    // document.getElementById('loading').style.display = 'none';
     document.getElementById('charts-container').style.opacity = '1';
 }
 function showError(message) {
@@ -718,6 +754,7 @@ function renderAllCharts(data) {
 }
 
 function renderChart1(dataList) {
+    // ... (此函数未修改，保持原样)
     const processedData = dataList.map(item => {
         const openChange = parseFloat(((item.o - item.zjsj) / item.zjsj * 100).toFixed(2));
         const closeChange = parseFloat(((item.p - item.zjsj) / item.zjsj * 100).toFixed(2));
@@ -861,6 +898,7 @@ function renderChart1(dataList) {
 }
 
 function renderChart2(dataList) {
+    // ... (此函数未修改，保持原样)
     dataList.sort((a, b) => b.zdf - a.zdf);
     const categories = dataList.map(item => getSimplifiedName(item.name));
     const option = {
@@ -948,6 +986,7 @@ function renderChart2(dataList) {
 }
 
 function renderChart3(dataList) {
+    // ... (此函数未修改，保持原样)
     dataList.sort((a, b) => b.zdf - a.zdf);
     const option = {
         backgroundColor: 'transparent',
@@ -1041,6 +1080,7 @@ function renderChart3(dataList) {
     bindChartClick(chart3);
 }
 function renderChart4(dataList) {
+    // ... (此函数未修改，保持原样)
     dataList.sort((a, b) => b.zdf - a.zdf);
     const seriesConfig = [
         { name: '当日涨幅', field: 'zdf', color: '#ef4444' },
@@ -1110,6 +1150,7 @@ function renderChart4(dataList) {
     bindChartClick(chart4);
 }
 function renderChart5(dataList, metric1, metric2) {
+    // ... (此函数未修改，保持原样)
     if (dataList.length === 0) {
         chart5.clear();
         document.getElementById('main5').innerHTML = '<div class="no-data">暂无符合条件的数据</div>';
@@ -1227,8 +1268,13 @@ function renderChart5(dataList, metric1, metric2) {
     chart5.setOption(option);
     bindChartClick(chart5);
 }
+
+// --- 修改 START ---
+// 将 renderChart6 函数完全替换为这个新版本
 function renderChart6(dataList) {
-    let treemapData = dataList.filter(item => item.cje > 10 * 1e8);
+    // 筛选条件保持不变，但增加对 cdzj 字段的检查以确保数据完整性
+    let treemapData = dataList.filter(item => item.cje > 10 * 1e8 && item.hasOwnProperty('cdzj'));
+
     if (treemapData.length === 0) {
         chart6.clear();
         document.getElementById('main6').innerHTML = '<div class="no-data">暂无符合条件的品种涨跌数据</div>';
@@ -1240,35 +1286,36 @@ function renderChart6(dataList) {
             main6Element.innerHTML = '';
         }
     }
-    treemapData.sort((a, b) => b.cje - a.cje);
-    // 自定义颜色分档函数
+
+    // 根据全局变量 chart6Metric 动态排序
+    treemapData.sort((a, b) => b[chart6Metric] - a[chart6Metric]);
+
+    // 自定义颜色分档函数 (保持不变)
     function getTreemapColor(zdf) {
         const abs = Math.abs(zdf);
         if (zdf <= 0) {
-            // 跌幅为负 (绿色代表下跌)
-            if (abs >= 5) return '#006400';      // 深绿 (Deep Green)
-            if (abs >= 2) return '#22c55e';      // 一般绿 (Emerald Green)
-            if (abs >= 1) return '#66bb6a';      // 中等偏浅绿 (Medium Light Green) - 确保与白色文字有良好对比
-            return '#86efac';                    // 亮绿 (Light Green) - 确保与白色文字有最低限度对比 (WCAG AA级别)
+            if (abs >= 5) return '#006400';
+            if (abs >= 2) return '#22c55e';
+            if (abs >= 1) return '#66bb6a';
+            return '#86efac';
         } else {
-            // 涨幅为正 (红色代表上涨)
-            if (abs >= 5) return '#8b0000';      // 深红 (Deep Red)
-            if (abs >= 2) return '#ef4444';      // 一般红 (Tomato Red)
-            if (abs >= 1) return '#ff8888';      // 中等偏浅红 (Medium Light Red) - 确保与白色文字有良好对比
-            return '#fca5a5';                    // 亮红 (Light Red) - 确保与白色文字有最低限度对比 (WCAG AA级别)
+            if (abs >= 5) return '#8b0000';
+            if (abs >= 2) return '#ef4444';
+            if (abs >= 1) return '#ff8888';
+            return '#fca5a5';
         }
     }
-    
-    
     
     const treemapSeriesData = treemapData.map(item => {
         return {
             name: getSimplifiedName(item.name),
-            value: item.cje,
+            // 根据全局变量 chart6Metric 动态设置 value (决定面积)
+            value: item[chart6Metric], 
             dm: item.dm,
             fullName: item.name,
             zdf: item.zdf,
             cje: item.cje,
+            cdzj: item.cdzj, // 将 cdzj 也存入，方便 tooltip 和 label 使用
             itemStyle: {
                 color: getTreemapColor(item.zdf),
                 borderColor: '#fff',
@@ -1280,9 +1327,12 @@ function renderChart6(dataList) {
                 color: '#fff',
                 fontSize: 12,
                 formatter: function(params) {
-                    const cjeFormatted = formatCjeToBillion(params.data.cje);
+                    // 根据当前模式动态显示 成交额 或 沉淀资金
+                    const metricValueFormatted = formatCjeToBillion(params.data[chart6Metric]);
                     const zdfFormatted = params.data.zdf ? params.data.zdf.toFixed(2) + '%' : '0.00%';
-                    return `${params.name}\n${cjeFormatted}\n${zdfFormatted}`;
+                    // 根据当前选择的指标，显示对应的标签
+                    //const labelPrefix = chart6Metric === 'cje' ? '额' : '金';
+                    return `${params.name}\n${metricValueFormatted}\n${zdfFormatted}`;
                 },
                 rich: {
                     name: { fontSize: 13, fontWeight: 'bold' },
@@ -1296,16 +1346,19 @@ function renderChart6(dataList) {
             }
         };
     });
+
     const option = {
         backgroundColor: 'transparent',
         tooltip: {
             trigger: 'item',
             backgroundColor: 'rgba(0,0,0,0.8)',
             textStyle: { color: '#fff' },
+            // Tooltip同时显示成交额和沉淀资金，信息更全面
             formatter: function(params) {
                 if (params.data) {
                     return `${params.data.fullName}<br/>` +
                            `成交额: ${formatCjeToBillion(params.data.cje)}<br/>` +
+                           `沉淀资金: ${formatCjeToBillion(params.data.cdzj)}<br/>` +
                            `涨跌幅: ${params.data.zdf.toFixed(2)}%`;
                 }
                 return '';
@@ -1328,10 +1381,12 @@ function renderChart6(dataList) {
         }]
     };
     chartOptions.chart6 = option;
-    chart6.setOption(option);
+    chart6.setOption(option, true); // 使用 true 来确保不合并旧配置
     bindChartClick(chart6);
     updateTreemapLegend(treemapData);
 }
+// --- 修改 END ---
+
 function updateTreemapLegend(data) {
     const legendContainer = document.getElementById('main6-treemap-legend');
     let html = '';
