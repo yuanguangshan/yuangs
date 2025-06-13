@@ -723,16 +723,50 @@ function renderChart1(dataList) {
         const closeChange = parseFloat(((item.p - item.zjsj) / item.zjsj * 100).toFixed(2));
         const lowChange = parseFloat(((item.l - item.zjsj) / item.zjsj * 100).toFixed(2));
         const highChange = parseFloat(((item.h - item.zjsj) / item.zjsj * 100).toFixed(2));
+        
         return {
             name: getSimplifiedName(item.name),
             fullName: item.name,
             dm: item.dm,
             value: [openChange, closeChange, lowChange, highChange],
-            closeChange
+            closeChange,
+            rawValues: {
+                open: item.o,
+                high: item.h,
+                low: item.l,
+                close: item.p,
+                prevClose: item.zjsj
+            }
         };
     });
+
     const sortedData = processedData.sort((a, b) => b.closeChange - a.closeChange);
     const categories = sortedData.map(item => item.name);
+
+    const markPointData = [];
+    if (sortedData.length > 0) {
+        const highestGainer = sortedData[0];
+        if (highestGainer.closeChange > 0) {
+            markPointData.push({
+                name: '涨幅最高',
+                value: highestGainer.closeChange,
+                coord: [0, highestGainer.value[1]],
+                itemStyle: { color: '#ef4444' }
+            });
+        }
+    }
+    if (sortedData.length > 1) { 
+        const biggestLoser = sortedData[sortedData.length - 1];
+        if (biggestLoser.closeChange < 0) {
+            markPointData.push({
+                name: '跌幅最大',
+                value: biggestLoser.closeChange,
+                coord: [sortedData.length - 1, biggestLoser.value[1]],
+                itemStyle: { color: '#22c55e' }
+            });
+        }
+    }
+
     const option = {
         backgroundColor: 'transparent',
         tooltip: {
@@ -741,16 +775,25 @@ function renderChart1(dataList) {
             borderColor: '#777',
             textStyle: { color: '#fff' },
             formatter: function (params) {
-                const data = params[0].data.value;
-                const originalName = params[0].data.fullName;
-                if (data && data.length === 4) {
-                    return `${originalName}<br/>` +
-                           `开盘涨幅: ${data[0]}%<br/>` +
-                           `收盘涨幅: ${data[1]}%<br/>` +
-                           `最低涨幅: ${data[2]}%<br/>` +
-                           `最高涨幅: ${data[3]}%`;
+                const dataPoint = params[0];
+                const data = dataPoint.data;
+                const raw = data.rawValues; 
+                
+                if (raw) {
+                    const changeValue = (raw.close - raw.prevClose).toFixed(2);
+                    const changePercent = data.closeChange.toFixed(2);
+                    const color = data.closeChange >= 0 ? '#ef4444' : '#22c55e';
+
+                    return `${data.fullName}<br/>` +
+                           // --- CHANGE START: Reformat the "最新价" line ---
+                           `最新价: <strong style="color:${color};">${changePercent}% (${raw.close}, ${changeValue})</strong><br/>` +
+                           // --- CHANGE END ---
+                           `开盘价: ${raw.open}<br/>` +
+                           `最高价: ${raw.high}<br/>` +
+                           `最低价: ${raw.low}<br/>` +
+                           `昨结算: ${raw.prevClose}`;
                 }
-                return originalName;
+                return data.fullName;
             }
         },
         xAxis: {
@@ -775,17 +818,27 @@ function renderChart1(dataList) {
         ],
         series: [{
             type: 'candlestick',
-            data: sortedData.map(item => ({
-                value: item.value,
-                dm: item.dm,
-                name: item.name,
-                fullName: item.fullName
-            })),
+            data: sortedData, 
             itemStyle: {
                 color: '#ef4444',
                 color0: '#22c55e',
                 borderColor: '#ef4444',
                 borderColor0: '#22c55e'
+            },
+            markPoint: {
+                symbol: 'pin',
+                symbolSize: 40,
+                tooltip: { show: false },
+                label: {
+                    fontSize: 10,
+                    formatter: function(params) {
+                        if (typeof params.value === 'number') {
+                            return params.value.toFixed(2) + '%';
+                        }
+                        return '';
+                    }
+                },
+                data: markPointData
             }
         }]
     };
@@ -793,6 +846,7 @@ function renderChart1(dataList) {
     chart1.setOption(option);
     bindChartClick(chart1);
 }
+
 function renderChart2(dataList) {
     dataList.sort((a, b) => b.zdf - a.zdf);
     const categories = dataList.map(item => getSimplifiedName(item.name));
@@ -879,6 +933,7 @@ function renderChart2(dataList) {
     chart2.setOption(option);
     bindChartClick(chart2);
 }
+
 function renderChart3(dataList) {
     dataList.sort((a, b) => b.zdf - a.zdf);
     const option = {
