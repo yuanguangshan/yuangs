@@ -398,7 +398,6 @@
         .treemap-top-list .value.red { color: #ef4444; font-weight: 500; }
         .treemap-top-list .value.green { color: #22c55e; font-weight: 500; }
         .treemap-top-list .label { color: #555; }
-        /* --- 新增 START --- */
         #chart6-metric-selector {
             text-align: center;
             margin-bottom: 10px;
@@ -410,7 +409,6 @@
             font-size: 0.9rem;
             color: #444;
         }
-        /* --- 新增 END --- */
     </style>
 </head>
 <body>
@@ -480,24 +478,23 @@
             <span>别着急，数据马上就更新...</span>
         </div>
         <div id="error-container"></div>
-        <div class="chart-grid" id="charts-container"> <div class="chart-container" data-chart-var="chart6">
-            <div class="chart-title">品种涨跌图</div>
-            <!-- --- 新增 START --- -->
-            <div id="chart6-metric-selector">
-                <label>面积代表: </label>
-                <label>
-                    <input type="radio" name="chart6-metric" value="cje" checked> 成交额
-                </label>
-                <label>
-                    <input type="radio" name="chart6-metric" value="cdzj"> 沉淀资金
-                </label>
+        <div class="chart-grid" id="charts-container">
+            <div class="chart-container" data-chart-var="chart6">
+                <div class="chart-title">品种涨跌图</div>
+                <div id="chart6-metric-selector">
+                    <label>面积代表: </label>
+                    <label>
+                        <input type="radio" name="chart6-metric" value="cje" checked> 成交额
+                    </label>
+                    <label>
+                        <input type="radio" name="chart6-metric" value="cdzj"> 沉淀资金
+                    </label>
+                </div>
+                <div id="main6-treemap-legend" class="treemap-top-list"></div>
+                <div id="main6" class="chart"></div>
+                <button class="download-btn" onclick="downloadChart(chart6, '品种涨跌图.png')">📥 下载</button>
+                <button class="fullscreen-btn">全屏</button>
             </div>
-            <!-- --- 新增 END --- -->
-            <div id="main6-treemap-legend" class="treemap-top-list"></div>
-            <div id="main6" class="chart"></div>
-            <button class="download-btn" onclick="downloadChart(chart6, '品种涨跌图.png')">📥 下载</button>
-            <button class="fullscreen-btn">全屏</button>
-        </div>
             <div class="chart-container" data-chart-var="chart1">
                 <div class="chart-title">期货品种走势对比</div>
                 <div id="main1" class="chart"></div>
@@ -537,9 +534,7 @@ let autoRefresh = true;
 let refreshInterval;
 let currentData = [];
 let chartOptions = {};
-// --- 新增 START ---
 let chart6Metric = 'cje'; // 用于存储Chart 6的当前指标, 默认为'cje'
-// --- 新增 END ---
 
 const fieldMapping = {
     qrspj: '昨收盘价', zdf5: '5日涨幅', zdf6: '6日涨幅', zjlx: '资金流向', dm: '代码',
@@ -651,28 +646,54 @@ function initializeControls() {
         autoRefreshBtn.classList.add('secondary');
     }
 
-    // --- 新增 START ---
-    // 为Chart6的指标切换单选按钮绑定事件
     const metricRadios = document.querySelectorAll('input[name="chart6-metric"]');
     metricRadios.forEach(radio => {
         radio.addEventListener('change', function() {
-            chart6Metric = this.value; // 更新全局选择
+            chart6Metric = this.value;
             if (currentData.length > 0) {
-                renderChart6(currentData); // 使用当前数据重新渲染图表
+                renderChart6(currentData);
             }
         });
     });
-    // --- 新增 END ---
 }
+
+// --- 修正 START ---
+
+// 升级后的函数，返回 'day', 'night', 或 'closed' 来明确表示当前时段
+function getSessionType(now = new Date()) {
+    const hour = now.getHours();
+    const minute = now.getMinutes();
+
+    // 夜盘时段: 21:00 - 02:30
+    if (hour >= 21 || hour < 2 || (hour === 2 && minute <= 30)) {
+        return 'night';
+    }
+
+    // 日盘时段: 09:00 - 11:30, 13:30 - 15:00
+    // 注意: 原代码中的 10:15-10:30 中场休息未精确处理，这里简化为连续时段
+    if (((hour >= 9 && hour < 12) || (hour === 11 && minute < 30)) || // 09:00 - 11:29
+        ((hour >= 13 && hour < 15) || (hour === 13 && minute >= 30))) { // 13:30 - 14:59
+        return 'day';
+    }
+    
+    // 其他所有时间都视为休市
+    return 'closed';
+}
+
 
 function updateTimeDisplay() {
     const now = new Date();
     const timeString = now.toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     document.getElementById('current-time-display').textContent = timeString;
-    const isTradingTime = checkTradingTime(now);
+
+    const sessionType = getSessionType(now);
     const statusElement = document.getElementById('trading-status');
-    if (isTradingTime) {
-        statusElement.textContent = '● 交易中';
+
+    if (sessionType === 'day') {
+        statusElement.textContent = '● 日盘交易中';
+        statusElement.className = 'trading-status active';
+    } else if (sessionType === 'night') {
+        statusElement.textContent = '● 夜盘交易中';
         statusElement.className = 'trading-status active';
     } else {
         statusElement.textContent = '● 非交易时段';
@@ -680,23 +701,20 @@ function updateTimeDisplay() {
     }
 }
 
-function checkTradingTime(now) {
-    const hour = now.getHours();
-    const minute = now.getMinutes();
-    if ((hour === 9 && minute >= 0) || (hour === 10 && minute < 15) || 
-        (hour === 10 && minute >= 30) || (hour === 11 && minute < 30) ||
-        (hour === 13 && minute >= 30) || (hour === 14) || (hour === 15 && minute === 0)) {
-        return true;
-    }
-    if ((hour >= 21) || (hour >= 0 && hour < 2) || (hour === 2 && minute <= 30)) {
-        return true;
-    }
-    return false;
-}
+// 不再需要旧的 checkTradingTime 函数
 
 function getApiUrl() {
-    return checkTradingTime(new Date()) ? 'https://q.want.biz' : 'https://q.want.biz/night';
+    const sessionType = getSessionType();
+    // 如果是夜盘，明确使用 night URL
+    if (sessionType === 'night') {
+        return 'https://q.want.biz/night';
+    }
+    // 其他情况（日盘或休市）都使用日盘URL
+    // 休市时，日盘URL会返回上一个交易日的收盘数据
+    return 'https://q.want.biz';
 }
+
+// --- 修正 END ---
 
 function showLoading() {
     document.getElementById('charts-container').style.opacity = '0.5';
@@ -716,14 +734,29 @@ async function fetchData() {
     showLoading();
     clearError();
     try {
-        const response = await fetch(getApiUrl());
+        const apiUrl = getApiUrl(); // 使用修正后的函数获取正确的URL
+        const response = await fetch(apiUrl);
         if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         const apiData = await response.json();
         if (!apiData || !apiData.list || !Array.isArray(apiData.list)) throw new Error('数据格式错误');
+        
         let filteredData = apiData.list.filter(item => item.cdzj > 15 * 1e8); 
-        if (filteredData.length === 0) throw new Error('没有符合条件的数据');
-        const hasOpenMarkets = filteredData.some(item => item.jyzt === 0);
-        if (hasOpenMarkets) filteredData = filteredData.filter(item => item.jyzt === 0);
+        if (filteredData.length === 0) throw new Error('没有符合条件的数据 (沉淀资金 > 15亿)');
+
+        // 这个逻辑作为安全保障依然有用：确保只显示API返回数据中标为“交易中”的品种
+        const sessionType = getSessionType();
+        if (sessionType !== 'closed') {
+            const hasOpenMarkets = filteredData.some(item => item.jyzt === 0);
+            if (hasOpenMarkets) {
+                filteredData = filteredData.filter(item => item.jyzt === 0);
+            }
+        }
+        
+        // 如果经过所有筛选后没有数据，也应提示用户
+        if (filteredData.length === 0) {
+            throw new Error('当前交易时段内，没有符合条件的活跃品种。');
+        }
+
         currentData = filteredData;
         renderAllCharts(filteredData);
         document.getElementById('current-time').textContent = 
@@ -753,7 +786,6 @@ function renderAllCharts(data) {
 }
 
 function renderChart1(dataList) {
-    // ... (此函数未修改，保持原样)
     const processedData = dataList.map(item => {
         const openChange = parseFloat(((item.o - item.zjsj) / item.zjsj * 100).toFixed(2));
         const closeChange = parseFloat(((item.p - item.zjsj) / item.zjsj * 100).toFixed(2));
@@ -897,7 +929,6 @@ function renderChart1(dataList) {
 }
 
 function renderChart2(dataList) {
-    // ... (此函数未修改，保持原样)
     dataList.sort((a, b) => b.zdf - a.zdf);
     const categories = dataList.map(item => getSimplifiedName(item.name));
     const option = {
@@ -985,7 +1016,6 @@ function renderChart2(dataList) {
 }
 
 function renderChart3(dataList) {
-    // ... (此函数未修改，保持原样)
     dataList.sort((a, b) => b.zdf - a.zdf);
     const option = {
         backgroundColor: 'transparent',
@@ -1079,7 +1109,6 @@ function renderChart3(dataList) {
     bindChartClick(chart3);
 }
 function renderChart4(dataList) {
-    // ... (此函数未修改，保持原样)
     dataList.sort((a, b) => b.zdf - a.zdf);
     const seriesConfig = [
         { name: '当日涨幅', field: 'zdf', color: '#ef4444' },
@@ -1149,7 +1178,6 @@ function renderChart4(dataList) {
     bindChartClick(chart4);
 }
 function renderChart5(dataList, metric1, metric2) {
-    // ... (此函数未修改，保持原样)
     if (dataList.length === 0) {
         chart5.clear();
         document.getElementById('main5').innerHTML = '<div class="no-data">暂无符合条件的数据</div>';
@@ -1268,10 +1296,7 @@ function renderChart5(dataList, metric1, metric2) {
     bindChartClick(chart5);
 }
 
-// --- 修改 START ---
-// 将 renderChart6 函数完全替换为这个新版本
 function renderChart6(dataList) {
-    // 筛选条件保持不变，但增加对 cdzj 字段的检查以确保数据完整性
     let treemapData = dataList.filter(item => item.cje > 10 * 1e8 && item.hasOwnProperty('cdzj'));
 
     if (treemapData.length === 0) {
@@ -1286,10 +1311,8 @@ function renderChart6(dataList) {
         }
     }
 
-    // 根据全局变量 chart6Metric 动态排序
     treemapData.sort((a, b) => b[chart6Metric] - a[chart6Metric]);
 
-    // 自定义颜色分档函数 (保持不变)
     function getTreemapColor(zdf) {
         const abs = Math.abs(zdf);
         if (zdf <= 0) {
@@ -1308,13 +1331,12 @@ function renderChart6(dataList) {
     const treemapSeriesData = treemapData.map(item => {
         return {
             name: getSimplifiedName(item.name),
-            // 根据全局变量 chart6Metric 动态设置 value (决定面积)
             value: item[chart6Metric], 
             dm: item.dm,
             fullName: item.name,
             zdf: item.zdf,
             cje: item.cje,
-            cdzj: item.cdzj, // 将 cdzj 也存入，方便 tooltip 和 label 使用
+            cdzj: item.cdzj,
             itemStyle: {
                 color: getTreemapColor(item.zdf),
                 borderColor: '#fff',
@@ -1326,11 +1348,8 @@ function renderChart6(dataList) {
                 color: '#fff',
                 fontSize: 12,
                 formatter: function(params) {
-                    // 根据当前模式动态显示 成交额 或 沉淀资金
                     const metricValueFormatted = formatCjeToBillion(params.data[chart6Metric]);
                     const zdfFormatted = params.data.zdf ? params.data.zdf.toFixed(2) + '%' : '0.00%';
-                    // 根据当前选择的指标，显示对应的标签
-                    //const labelPrefix = chart6Metric === 'cje' ? '额' : '金';
                     return `${params.name}\n${metricValueFormatted}\n${zdfFormatted}`;
                 },
                 rich: {
@@ -1352,7 +1371,6 @@ function renderChart6(dataList) {
             trigger: 'item',
             backgroundColor: 'rgba(0,0,0,0.8)',
             textStyle: { color: '#fff' },
-            // Tooltip同时显示成交额和沉淀资金，信息更全面
             formatter: function(params) {
                 if (params.data) {
                     return `${params.data.fullName}<br/>` +
@@ -1380,11 +1398,10 @@ function renderChart6(dataList) {
         }]
     };
     chartOptions.chart6 = option;
-    chart6.setOption(option, true); // 使用 true 来确保不合并旧配置
+    chart6.setOption(option, true);
     bindChartClick(chart6);
     updateTreemapLegend(treemapData);
 }
-// --- 修改 END ---
 
 function updateTreemapLegend(data) {
     const legendContainer = document.getElementById('main6-treemap-legend');
@@ -1444,14 +1461,19 @@ function toggleAutoRefresh() {
         stopAutoRefresh();
     }
 }
+
+// --- 修正 START ---
 function startAutoRefresh() {
     if (refreshInterval) clearInterval(refreshInterval);
     refreshInterval = setInterval(() => {
-        if (autoRefresh && checkTradingTime(new Date())) {
+        // 自动刷新只在明确的交易时段内进行
+        if (autoRefresh && getSessionType() !== 'closed') {
             fetchData();
         }
     }, 15000);
 }
+// --- 修正 END ---
+
 function stopAutoRefresh() {
     if (refreshInterval) {
         clearInterval(refreshInterval);
@@ -1466,9 +1488,7 @@ function applyCustomMetrics() {
     }
 }
 
-// ----------- 全屏功能修正 START -----------
 function addFullscreenListeners() {
-    // 点击按钮请求全屏或退出全屏
     document.querySelectorAll('.fullscreen-btn').forEach(button => {
         button.addEventListener('click', () => {
             const chartContainer = button.closest('.chart-container');
@@ -1485,7 +1505,6 @@ function addFullscreenListeners() {
             }
         });
     });
-    // 浏览器全屏变化时自动resize
     document.addEventListener('fullscreenchange', () => {
         if (document.fullscreenElement) {
             const chartContainer = document.fullscreenElement;
@@ -1506,12 +1525,10 @@ function addFullscreenListeners() {
             }, 150);
         }
     });
-    // 初始化按钮状态
     document.querySelectorAll('.fullscreen-btn').forEach(button => {
         button.textContent = '全屏';
     });
 }
-// ----------- 全屏功能修正 END -----------
 
 </script>
 </body>
