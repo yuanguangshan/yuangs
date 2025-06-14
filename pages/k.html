@@ -490,6 +490,9 @@
                     <label>
                         <input type="radio" name="chart6-metric" value="cdzj"> 沉淀资金
                     </label>
+                    <label>
+                        <input type="radio" name="chart6-metric" value="oiAnalysis"> 持仓量
+                    </label>
                 </div>
                 <div id="main6-treemap-legend" class="treemap-top-list"></div>
                 <div id="main6" class="chart"></div>
@@ -651,11 +654,22 @@ function initializeControls() {
     metricRadios.forEach(radio => {
         radio.addEventListener('change', function() {
             chart6Metric = this.value;
-            if (currentData.length > 0) {
+            // Ensure currentData is defined and has data before rendering
+            if (typeof currentData !== 'undefined' && currentData.length > 0) {
                 renderChart6(currentData);
+            } else if (typeof currentData === 'undefined') {
+                console.warn('currentData is undefined in chart6-metric event listener');
+            } else {
+                console.log('currentData is empty, chart6 not rendered on metric change yet.');
             }
         });
     });
+
+    // Initialize chart6Metric from the checked radio button on load
+    const checkedRadio = document.querySelector('input[name="chart6-metric"]:checked');
+    if (checkedRadio) {
+        chart6Metric = checkedRadio.value;
+    }
 }
 
 // --- 修正 START ---
@@ -840,7 +854,7 @@ function renderChart1(dataList) {
                 name: '跌幅最大',
                 value: biggestLoser.closeChange,
                 coord: [sortedData.length - 1, biggestLoser.value[1]],
-                itemStyle: { color: '#22c55e' }
+                itemStyle: { color: '#22c553' }
             });
         }
     }
@@ -1297,12 +1311,47 @@ function renderChart5(dataList, metric1, metric2) {
     bindChartClick(chart5);
 }
 
+function getZdfTreemapColor(zdf) {
+    const abs = Math.abs(zdf);
+    if (zdf <= 0) {
+        if (abs >= 5) return '#006400'; // DarkGreen
+        if (abs >= 2) return '#22c55e'; // Green
+        if (abs >= 1) return '#66bb6a'; // LightGreen
+        return '#86efac'; // LighterGreen
+    } else {
+        if (abs >= 5) return '#8b0000'; // DarkRed
+        if (abs >= 2) return '#ef4444'; // Red
+        if (abs >= 1) return '#ff8888'; // LightRed
+        return '#fca5a5'; // LighterRed
+    }
+}
+
+function getOpenInterestChangeColor(rz) {
+    if (rz > 0) return '#ef4444'; // Red for increase
+    if (rz < 0) return '#22c55e'; // Green for decrease
+    return '#9ca3af'; // Neutral gray for no change
+}
+
 function renderChart6(dataList) {
-    let treemapData = dataList.filter(item => item.cje > 10 * 1e8 && item.hasOwnProperty('cdzj'));
+    let treemapData;
+    let legendDataFunction = updateTreemapLegendZdf; // Default legend
+
+    if (chart6Metric === 'oiAnalysis') {
+        treemapData = dataList.filter(item => typeof item.ccl === 'number' && typeof item.rz === 'number');
+        if (treemapData.length > 0) {
+            treemapData.sort((a, b) => b.ccl - a.ccl); // Sort by ccl for oiAnalysis
+        }
+        legendDataFunction = updateTreemapLegendOi;
+    } else { // Default to cje or cdzj
+        treemapData = dataList.filter(item => item.cje > 10 * 1e8 && item.hasOwnProperty('cdzj') && typeof item.zdf === 'number');
+        if (treemapData.length > 0) {
+            treemapData.sort((a, b) => b[chart6Metric] - a[chart6Metric]);
+        }
+    }
 
     if (treemapData.length === 0) {
         chart6.clear();
-        document.getElementById('main6').innerHTML = '<div class="no-data">暂无符合条件的品种涨跌数据</div>';
+        document.getElementById('main6').innerHTML = '<div class="no-data">暂无符合条件的品种数据</div>';
         document.getElementById('main6-treemap-legend').innerHTML = '';
         return;
     } else {
@@ -1312,34 +1361,64 @@ function renderChart6(dataList) {
         }
     }
 
-    treemapData.sort((a, b) => b[chart6Metric] - a[chart6Metric]);
-
-    function getTreemapColor(zdf) {
-        const abs = Math.abs(zdf);
-        if (zdf <= 0) {
-            if (abs >= 5) return '#006400';
-            if (abs >= 2) return '#22c55e';
-            if (abs >= 1) return '#66bb6a';
-            return '#86efac';
-        } else {
-            if (abs >= 5) return '#8b0000';
-            if (abs >= 2) return '#ef4444';
-            if (abs >= 1) return '#ff8888';
-            return '#fca5a5';
-        }
-    }
-    
     const treemapSeriesData = treemapData.map(item => {
+        let value, color, labelFormatter, tooltipFormatterParams;
+
+        if (chart6Metric === 'oiAnalysis') {
+            value = Math.abs(item.ccl); // Area is absolute ccl
+            color = getOpenInterestChangeColor(item.rz);
+            const prevCcl = item.ccl - item.rz;
+            let rzRatio = 0;
+            if (prevCcl !== 0) {
+                rzRatio = (item.rz / prevCcl) * 100;
+            }
+            
+            tooltipFormatterParams = {
+                fullName: item.name,
+                ccl: item.ccl ? item.ccl.toLocaleString() : '-',
+                rz: item.rz ? item.rz.toLocaleString() : '-',
+                rzRatio: rzRatio.toFixed(2) + '%',
+                metricType: 'oiAnalysis'
+            };
+
+            labelFormatter = function(params) {
+                const cclFormatted = params.data.ccl ? (params.data.ccl / 10000).toFixed(2) + '万手' : '-';
+                const rzFormatted = params.data.rz ? params.data.rz.toLocaleString() : '-';
+                let rzRatioFormatted = params.data.rzRatio || '0.00%';
+                return `${params.name}\n${cclFormatted}\n增仓比: ${rzRatioFormatted}`;
+            };
+
+        } else { // cje or cdzj
+            value = item[chart6Metric];
+            color = getZdfTreemapColor(item.zdf);
+            tooltipFormatterParams = {
+                fullName: item.name,
+                cje: formatCjeToBillion(item.cje),
+                cdzj: formatCjeToBillion(item.cdzj),
+                zdf: item.zdf ? item.zdf.toFixed(2) + '%' : '0.00%',
+                metricType: chart6Metric
+            };
+            labelFormatter = function(params) {
+                const metricValueFormatted = formatCjeToBillion(params.data.value); // value is item[chart6Metric]
+                const zdfFormatted = params.data.zdf ? params.data.zdf.toFixed(2) + '%' : '0.00%';
+                return `${params.name}\n${metricValueFormatted}\n${zdfFormatted}`;
+            };
+        }
+
         return {
             name: getSimplifiedName(item.name),
-            value: item[chart6Metric], 
+            value: value,
             dm: item.dm,
             fullName: item.name,
+            // Store all relevant data for tooltips/labels
             zdf: item.zdf,
             cje: item.cje,
             cdzj: item.cdzj,
+            ccl: item.ccl,
+            rz: item.rz,
+            rzRatio: chart6Metric === 'oiAnalysis' ? tooltipFormatterParams.rzRatio : undefined,
             itemStyle: {
-                color: getTreemapColor(item.zdf),
+                color: color,
                 borderColor: '#fff',
                 borderWidth: 1
             },
@@ -1348,15 +1427,11 @@ function renderChart6(dataList) {
                 position: 'inside',
                 color: '#fff',
                 fontSize: 12,
-                formatter: function(params) {
-                    const metricValueFormatted = formatCjeToBillion(params.data[chart6Metric]);
-                    const zdfFormatted = params.data.zdf ? params.data.zdf.toFixed(2) + '%' : '0.00%';
-                    return `${params.name}\n${metricValueFormatted}\n${zdfFormatted}`;
-                },
+                formatter: labelFormatter,
                 rich: {
                     name: { fontSize: 13, fontWeight: 'bold' },
                     value: { fontSize: 11 },
-                    zdf: { fontSize: 11 }
+                    metric: { fontSize: 11 }
                 },
                 overflow: 'truncate',
                 width: '90%',
@@ -1373,13 +1448,19 @@ function renderChart6(dataList) {
             backgroundColor: 'rgba(0,0,0,0.8)',
             textStyle: { color: '#fff' },
             formatter: function(params) {
-                if (params.data) {
-                    return `${params.data.fullName}<br/>` +
-                           `成交额: ${formatCjeToBillion(params.data.cje)}<br/>` +
-                           `沉淀资金: ${formatCjeToBillion(params.data.cdzj)}<br/>` +
-                           `涨跌幅: ${params.data.zdf.toFixed(2)}%`;
+                if (!params.data) return '';
+                const data = params.data; // This is one of the objects from treemapSeriesData
+                if (data.metricType === 'oiAnalysis') {
+                     return `${data.fullName}<br/>` +
+                            `持仓量: ${data.ccl ? data.ccl.toLocaleString() : '-'}<br/>` +
+                            `日增仓: ${data.rz ? data.rz.toLocaleString() : '-'}<br/>` +
+                            `增仓比: ${data.rzRatio || '0.00%'}`;
+                } else { // cje or cdzj
+                    return `${data.fullName}<br/>` +
+                           `成交额: ${formatCjeToBillion(data.cje)}<br/>` +
+                           `沉淀资金: ${formatCjeToBillion(data.cdzj)}<br/>` +
+                           `涨跌幅: ${data.zdf ? data.zdf.toFixed(2) + '%' : '0.00%'}`;
                 }
-                return '';
             }
         },
         series: [{
@@ -1401,10 +1482,75 @@ function renderChart6(dataList) {
     chartOptions.chart6 = option;
     chart6.setOption(option, true);
     bindChartClick(chart6);
-    updateTreemapLegend(treemapData);
+    legendDataFunction(treemapData); // Call the appropriate legend function
 }
 
-function updateTreemapLegend(data) {
+function updateTreemapLegendZdf(data) { // Renamed from updateTreemapLegend
+    const legendContainer = document.getElementById('main6-treemap-legend');
+    let html = '';
+    const topGainers = [...data].sort((a, b) => b.zdf - a.zdf).filter(item => item.zdf > 0).slice(0, 3);
+    const topLosers = [...data].sort((a, b) => a.zdf - b.zdf).filter(item => item.zdf < 0).slice(0, 3);
+    topGainers.forEach(item => {
+        html += `
+            <div class="item">
+                <span class="dot red"></span>
+                <span class="label">${getSimplifiedName(item.name)}:</span>
+                <span class="value red">${item.zdf.toFixed(2)}%</span>
+            </div>`;
+    });
+    if (topGainers.length > 0 && topLosers.length > 0) html += `<div> </div>`;
+    topLosers.forEach(item => {
+        html += `
+            <div class="item">
+                <span class="dot green"></span>
+                <span class="label">${getSimplifiedName(item.name)}:</span>
+                <span class="value green">${item.zdf.toFixed(2)}%</span>
+            </div>`;
+    });
+    legendContainer.innerHTML = html;
+}
+
+// New legend function for Open Interest Analysis
+function updateTreemapLegendOi(data) {
+    const legendContainer = document.getElementById('main6-treemap-legend');
+    let html = '';
+    // Sort by rz for legend: top increases and top decreases
+    const topIncreases = [...data].sort((a, b) => b.rz - a.rz).filter(item => item.rz > 0).slice(0, 3);
+    const topDecreases = [...data].sort((a, b) => a.rz - b.rz).filter(item => item.rz < 0).slice(0, 3);
+
+    topIncreases.forEach(item => {
+        const prevCcl = item.ccl - item.rz;
+        let rzRatioText = '-';
+        if (prevCcl !== 0) {
+            rzRatioText = ((item.rz / prevCcl) * 100).toFixed(2) + '%';
+        }
+        html += `
+            <div class="item">
+                <span class="dot red"></span>
+                <span class="label">${getSimplifiedName(item.name)} (增仓):</span>
+                <span class="value red">${item.rz.toLocaleString()} (${rzRatioText})</span>
+            </div>`;
+    });
+
+    if (topIncreases.length > 0 && topDecreases.length > 0) html += `<div style="margin: 2px 0;"> </div>`;
+
+    topDecreases.forEach(item => {
+        const prevCcl = item.ccl - item.rz;
+        let rzRatioText = '-';
+        if (prevCcl !== 0) {
+            rzRatioText = ((item.rz / prevCcl) * 100).toFixed(2) + '%';
+        }
+        html += `
+            <div class="item">
+                <span class="dot green"></span>
+                <span class="label">${getSimplifiedName(item.name)} (减仓):</span>
+                <span class="value green">${item.rz.toLocaleString()} (${rzRatioText})</span>
+            </div>`;
+    });
+    legendContainer.innerHTML = html;
+}
+
+function updateTreemapLegendZdf(data) { // Renamed from updateTreemapLegend
     const legendContainer = document.getElementById('main6-treemap-legend');
     let html = '';
     const topGainers = [...data].sort((a, b) => b.zdf - a.zdf).filter(item => item.zdf > 0).slice(0, 3);
