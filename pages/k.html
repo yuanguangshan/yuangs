@@ -493,6 +493,9 @@
                     <label>
                         <input type="radio" name="chart6-metric" value="oiAnalysis"> 持仓量
                     </label>
+                    <label>
+                        <input type="radio" name="chart6-metric" value="volumeAnalysis"> 成交量
+                    </label>
                 </div>
                 <div id="main6-treemap-legend" class="treemap-top-list"></div>
                 <div id="main6" class="chart"></div>
@@ -1336,7 +1339,13 @@ function renderChart6(dataList) {
     let treemapData;
     let legendDataFunction = updateTreemapLegendZdf; // Default legend
 
-    if (chart6Metric === 'oiAnalysis') {
+    if (chart6Metric === 'volumeAnalysis') {
+        treemapData = dataList.filter(item => typeof item.vol === 'number' && item.vol > 0 && typeof item.rz === 'number');
+        if (treemapData.length > 0) {
+            treemapData.sort((a, b) => b.vol - a.vol); // Sort by volume
+        }
+        legendDataFunction = updateTreemapLegendVolume;
+    } else if (chart6Metric === 'oiAnalysis') {
         treemapData = dataList.filter(item => typeof item.ccl === 'number' && typeof item.rz === 'number');
         if (treemapData.length > 0) {
             treemapData.sort((a, b) => b.ccl - a.ccl); // Sort by ccl for oiAnalysis
@@ -1383,9 +1392,26 @@ function renderChart6(dataList) {
 
             labelFormatter = function(params) {
                 const cclFormatted = params.data.ccl ? (params.data.ccl / 10000).toFixed(2) + '万手' : '-';
-                const rzFormatted = params.data.rz ? params.data.rz.toLocaleString() : '-';
+                // const rzFormatted = params.data.rz ? params.data.rz.toLocaleString() : '-'; // Not directly shown in label for OI
                 let rzRatioFormatted = params.data.rzRatio || '0.00%';
                 return `${params.name}\n${cclFormatted}\n增仓比: ${rzRatioFormatted}`;
+            };
+
+        } else if (chart6Metric === 'volumeAnalysis') {
+            value = Math.abs(item.vol); // Area is absolute volume
+            color = getOpenInterestChangeColor(item.rz); // Color by rz sign (proxy for volume change driver)
+            
+            tooltipFormatterParams = {
+                fullName: item.name,
+                vol: item.vol ? item.vol.toLocaleString() + '手' : '-',
+                rz: item.rz ? item.rz.toLocaleString() : '-',
+                metricType: 'volumeAnalysis'
+            };
+
+            labelFormatter = function(params) {
+                const volFormatted = params.data.vol ? (params.data.vol / 10000).toFixed(2) + '万手' : '-';
+                const rzSign = params.data.rz > 0 ? ' (增)' : (params.data.rz < 0 ? ' (减)' : '');
+                return `${params.name}\n${volFormatted}${rzSign}`;
             };
 
         } else { // cje or cdzj
@@ -1416,6 +1442,7 @@ function renderChart6(dataList) {
             cdzj: item.cdzj,
             ccl: item.ccl,
             rz: item.rz,
+            vol: item.vol, // Added vol here
             rzRatio: chart6Metric === 'oiAnalysis' ? tooltipFormatterParams.rzRatio : undefined,
             itemStyle: {
                 color: color,
@@ -1455,6 +1482,10 @@ function renderChart6(dataList) {
                             `持仓量: ${data.ccl ? data.ccl.toLocaleString() : '-'}<br/>` +
                             `日增仓: ${data.rz ? data.rz.toLocaleString() : '-'}<br/>` +
                             `增仓比: ${data.rzRatio || '0.00%'}`;
+                } else if (data.metricType === 'volumeAnalysis') {
+                    return `${data.fullName}<br/>` +
+                           `成交量: ${data.vol ? data.vol.toLocaleString() + '手' : '-'}<br/>` +
+                           `日增仓: ${data.rz ? data.rz.toLocaleString() : '-'}`;
                 } else { // cje or cdzj
                     return `${data.fullName}<br/>` +
                            `成交额: ${formatCjeToBillion(data.cje)}<br/>` +
@@ -1510,6 +1541,36 @@ function updateTreemapLegendZdf(data) { // Renamed from updateTreemapLegend
     legendContainer.innerHTML = html;
 }
 
+// New legend function for Volume Analysis
+function updateTreemapLegendVolume(data) {
+    const legendContainer = document.getElementById('main6-treemap-legend');
+    let html = '';
+    // Sort by rz for legend: top increases and top decreases in volume context
+    const topVolumeIncrease = [...data].sort((a, b) => b.rz - a.rz).filter(item => item.rz > 0).slice(0, 3);
+    const topVolumeDecrease = [...data].sort((a, b) => a.rz - b.rz).filter(item => item.rz < 0).slice(0, 3);
+
+    topVolumeIncrease.forEach(item => {
+        html += `
+            <div class="item">
+                <span class="dot red"></span>
+                <span class="label">${getSimplifiedName(item.name)} (放量增):</span>
+                <span class="value red">${item.vol.toLocaleString()}手 (rz ${item.rz.toLocaleString()})</span>
+            </div>`;
+    });
+
+    if (topVolumeIncrease.length > 0 && topVolumeDecrease.length > 0) html += `<div style="margin: 2px 0;"> </div>`;
+
+    topVolumeDecrease.forEach(item => {
+        html += `
+            <div class="item">
+                <span class="dot green"></span>
+                <span class="label">${getSimplifiedName(item.name)} (放量减):</span>
+                <span class="value green">${item.vol.toLocaleString()}手 (rz ${item.rz.toLocaleString()})</span>
+            </div>`;
+    });
+    legendContainer.innerHTML = html;
+}
+
 // New legend function for Open Interest Analysis
 function updateTreemapLegendOi(data) {
     const legendContainer = document.getElementById('main6-treemap-legend');
@@ -1550,6 +1611,36 @@ function updateTreemapLegendOi(data) {
     legendContainer.innerHTML = html;
 }
 
+// New legend function for Volume Analysis
+function updateTreemapLegendVolume(data) {
+    const legendContainer = document.getElementById('main6-treemap-legend');
+    let html = '';
+    // Sort by rz for legend: top increases and top decreases in volume context
+    const topVolumeIncrease = [...data].sort((a, b) => b.rz - a.rz).filter(item => item.rz > 0).slice(0, 3);
+    const topVolumeDecrease = [...data].sort((a, b) => a.rz - b.rz).filter(item => item.rz < 0).slice(0, 3);
+
+    topVolumeIncrease.forEach(item => {
+        html += `
+            <div class="item">
+                <span class="dot red"></span>
+                <span class="label">${getSimplifiedName(item.name)} (放量增):</span>
+                <span class="value red">${item.vol.toLocaleString()}手 (rz ${item.rz.toLocaleString()})</span>
+            </div>`;
+    });
+
+    if (topVolumeIncrease.length > 0 && topVolumeDecrease.length > 0) html += `<div style="margin: 2px 0;"> </div>`;
+
+    topVolumeDecrease.forEach(item => {
+        html += `
+            <div class="item">
+                <span class="dot green"></span>
+                <span class="label">${getSimplifiedName(item.name)} (放量减):</span>
+                <span class="value green">${item.vol.toLocaleString()}手 (rz ${item.rz.toLocaleString()})</span>
+            </div>`;
+    });
+    legendContainer.innerHTML = html;
+}
+
 function updateTreemapLegendZdf(data) { // Renamed from updateTreemapLegend
     const legendContainer = document.getElementById('main6-treemap-legend');
     let html = '';
@@ -1570,6 +1661,36 @@ function updateTreemapLegendZdf(data) { // Renamed from updateTreemapLegend
                 <span class="dot green"></span>
                 <span class="label">${getSimplifiedName(item.name)}:</span>
                 <span class="value green">${item.zdf.toFixed(2)}%</span>
+            </div>`;
+    });
+    legendContainer.innerHTML = html;
+}
+
+// New legend function for Volume Analysis
+function updateTreemapLegendVolume(data) {
+    const legendContainer = document.getElementById('main6-treemap-legend');
+    let html = '';
+    // Sort by rz for legend: top increases and top decreases in volume context
+    const topVolumeIncrease = [...data].sort((a, b) => b.rz - a.rz).filter(item => item.rz > 0).slice(0, 3);
+    const topVolumeDecrease = [...data].sort((a, b) => a.rz - b.rz).filter(item => item.rz < 0).slice(0, 3);
+
+    topVolumeIncrease.forEach(item => {
+        html += `
+            <div class="item">
+                <span class="dot red"></span>
+                <span class="label">${getSimplifiedName(item.name)} (放量增):</span>
+                <span class="value red">${item.vol.toLocaleString()}手 (rz ${item.rz.toLocaleString()})</span>
+            </div>`;
+    });
+
+    if (topVolumeIncrease.length > 0 && topVolumeDecrease.length > 0) html += `<div style="margin: 2px 0;"> </div>`;
+
+    topVolumeDecrease.forEach(item => {
+        html += `
+            <div class="item">
+                <span class="dot green"></span>
+                <span class="label">${getSimplifiedName(item.name)} (放量减):</span>
+                <span class="value green">${item.vol.toLocaleString()}手 (rz ${item.rz.toLocaleString()})</span>
             </div>`;
     });
     legendContainer.innerHTML = html;
