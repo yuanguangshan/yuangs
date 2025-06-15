@@ -520,6 +520,15 @@
                 <button class="download-btn" onclick="downloadChart(chart3, '增仓率与涨跌幅对比.png')">📥 下载</button>
                 <button class="fullscreen-btn">全屏</button>
             </div>
+            
+            <!-- 新增图表容器 -->
+            <div class="chart-container" data-chart-var="chart7">
+                <div class="chart-title">涨跌幅与增仓比关系图</div>
+                <div id="main7" class="chart"></div>
+                <button class="download-btn" onclick="downloadChart(chart7, '涨跌幅与增仓比关系图.png')">📥 下载</button>
+                <button class="fullscreen-btn">全屏</button>
+            </div>
+            
             <div class="chart-container" data-chart-var="chart4">
                 <div class="chart-title">各周期涨跌幅对比</div>
                 <div id="main4" class="chart"></div>
@@ -536,7 +545,8 @@
         </div>
     </div>
 <script>
-let chart1, chart2, chart3, chart4, chart5, chart6;
+// 新增 chart7 变量
+let chart1, chart2, chart3, chart4, chart5, chart6, chart7;
 let autoRefresh = true;
 let refreshInterval;
 let currentData = [];
@@ -633,8 +643,11 @@ function initializeCharts() {
     chart4 = echarts.init(document.getElementById('main4'));
     chart5 = echarts.init(document.getElementById('main5'));
     chart6 = echarts.init(document.getElementById('main6'));
+    // 初始化新增的 chart7
+    chart7 = echarts.init(document.getElementById('main7'));
+    
     window.addEventListener('resize', () => {
-        chart1.resize(); chart2.resize(); chart3.resize(); chart4.resize(); chart5.resize(); chart6.resize();
+        chart1.resize(); chart2.resize(); chart3.resize(); chart4.resize(); chart5.resize(); chart6.resize(); chart7.resize();
     });
     // 设置自定义指标对比图的默认指标
     document.getElementById('metric1-select').value = 'cdzj';
@@ -688,7 +701,6 @@ function getSessionType(now = new Date()) {
     }
 
     // 日盘时段: 09:00 - 11:30, 13:30 - 15:00
-    // 注意: 原代码中的 10:15-10:30 中场休息未精确处理，这里简化为连续时段
     if (((hour >= 9 && hour < 12) || (hour === 11 && minute < 30)) || // 09:00 - 11:29
         ((hour >= 13 && hour < 15) || (hour === 13 && minute >= 30))) { // 13:30 - 14:59
         return 'day';
@@ -719,8 +731,6 @@ function updateTimeDisplay() {
     }
 }
 
-// 不再需要旧的 checkTradingTime 函数
-
 function getApiUrl() {
     const sessionType = getSessionType();
     // 如果是夜盘，明确使用 night URL
@@ -728,7 +738,6 @@ function getApiUrl() {
         return 'https://q.want.biz/night';
     }
     // 其他情况（日盘或休市）都使用日盘URL
-    // 休市时，日盘URL会返回上一个交易日的收盘数据
     return 'https://q.want.biz';
 }
 
@@ -761,7 +770,6 @@ async function fetchData() {
         let filteredData = apiData.list.filter(item => item.cdzj > 15 * 1e8); 
         if (filteredData.length === 0) throw new Error('没有符合条件的数据 (沉淀资金 > 15亿)');
 
-        // 这个逻辑作为安全保障依然有用：确保只显示API返回数据中标为“交易中”的品种
         const sessionType = getSessionType();
         if (sessionType !== 'closed') {
             const hasOpenMarkets = filteredData.some(item => item.jyzt === 0);
@@ -770,7 +778,6 @@ async function fetchData() {
             }
         }
         
-        // 如果经过所有筛选后没有数据，也应提示用户
         if (filteredData.length === 0) {
             throw new Error('当前交易时段内，没有符合条件的活跃品种。');
         }
@@ -797,6 +804,8 @@ function renderAllCharts(data) {
         const metric2 = document.getElementById('metric2-select').value || 'tjd';
         renderChart5([...data], metric1, metric2);
         renderChart6([...data]);
+        // 调用新增的图表渲染函数
+        renderChart7([...data]);
     } catch (error) {
         console.error('图表渲染失败:', error);
         showError(`图表渲染失败: ${error.message}`);
@@ -1535,7 +1544,150 @@ function renderChart6(dataList) {
     legendDataFunction(treemapData); // Call the appropriate legend function
 }
 
-function updateTreemapLegendZdf(data) { // Renamed from updateTreemapLegend
+// =================== 修正后的图表渲染函数 START ===================function renderChart7(dataList) {
+   // =================== 方案 B：使用 visualMap 的图表渲染函数 START ===================
+function renderChart7(dataList) {
+    // 1. 预处理数据，并找到 cdzj 的最大值和最小值
+    let minCdzj = Infinity;
+    let maxCdzj = -Infinity;
+
+    const scatterData = dataList.map(item => {
+        const prevCcl = item.ccl - item.rz;
+        const rzRatio = prevCcl === 0 ? 0 : parseFloat(((item.rz / prevCcl) * 100).toFixed(2));
+        
+        // 更新 cdzj 的最大最小值
+        if (item.cdzj < minCdzj) minCdzj = item.cdzj;
+        if (item.cdzj > maxCdzj) maxCdzj = item.cdzj;
+
+        return {
+            name: getSimplifiedName(item.name),
+            fullName: item.name,
+            dm: item.dm,
+            cdzj: item.cdzj,
+            // 将 cdzj 放在 value 数组的第三个位置 (索引 2)
+            value: [item.zdf, rzRatio, item.cdzj] 
+        };
+    }).filter(item => item.value[0] !== undefined && item.value[1] !== undefined);
+
+    if (scatterData.length === 0) {
+        chart7.clear();
+        document.getElementById('main7').innerHTML = '<div class="no-data">暂无符合条件的数据</div>';
+        return;
+    }
+
+    // 如果所有 cdzj 值都相同，则 minCdzj === maxCdzj，为避免 visualMap 报错或无意义，
+    // 可以设定一个默认的 min/max 范围，或者确保 minMax 有差异。
+    // For visualMap, if min === max, it will render all symbols with the same size based on the inRange.
+    // So no explicit handling for minCdzj === maxCdzj is needed here as visualMap handles it gracefully.
+
+    const option = {
+        backgroundColor: 'transparent',
+        tooltip: {
+            trigger: 'item',
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            textStyle: { color: '#fff' },
+            formatter: function(params) {
+                const data = params.data;
+                const zdf = data.value[0];
+                const rzRatio = data.value[1];
+                const color = zdf >= 0 ? '#ef4444' : '#22c55e';
+                const rzColor = rzRatio >= 0 ? '#ef4444' : '#22c55e';
+                
+                return `<strong style="font-size: 16px; font-weight: bold;">${data.fullName}</strong><br/>` +
+                       `涨跌幅: <strong style="color:${color};">${zdf.toFixed(2)}%</strong><br/>` +
+                       `增仓比: <strong style="color:${rzColor};">${rzRatio.toFixed(2)}%</strong><br/>` +
+                       `沉淀资金: ${formatCjeToBillion(data.cdzj)}`;
+            }
+        },
+        grid: {
+            left: '10%',
+            right: '10%',
+            bottom: '15%',
+            top: '10%'
+        },
+        xAxis: {
+            type: 'value',
+            name: '涨跌幅 (%)',
+            nameLocation: 'middle',
+            nameGap: 25,
+            splitLine: { lineStyle: { type: 'dashed' } },
+            axisLabel: { formatter: '{value}%' }
+        },
+        yAxis: {
+            type: 'value',
+            name: '增仓比 (%)',
+            nameLocation: 'middle',
+            nameGap: 45,
+            splitLine: { lineStyle: { type: 'dashed' } },
+            axisLabel: { formatter: '{value}%' }
+        },
+        dataZoom: [
+            { type: 'inside', xAxisIndex: 0, yAxisIndex: 0 },
+            { type: 'slider', xAxisIndex: 0, yAxisIndex: 0, height: 20 }
+        ],
+        // 2. 新增 visualMap 组件来控制气泡大小
+        visualMap: {
+            type: 'continuous',
+            dimension: 2, // 映射 value 数组的第三个值 (cdzj)
+            min: minCdzj,
+            max: maxCdzj,
+            show: false,  // 不在图表上显示 visualMap 的颜色条
+            inRange: {
+                symbolSize: [30, 120] // 定义气泡大小的范围 (像素)
+            }
+        },
+        series: [{
+            type: 'scatter',
+            data: scatterData,
+            // symbolSize 不再需要手动计算，由 visualMap 接管
+            itemStyle: {
+                color: function(params) {
+                    const zdf = params.data.value[0];
+                    const rzRatio = params.data.value[1];
+                    if (zdf > 0 && rzRatio > 0) return '#d92420'; // 强红: 增仓上涨 (最强)
+                    if (zdf < 0 && rzRatio < 0) return '#00a65a'; // 强绿: 减仓下跌 (最弱)
+                    if (zdf > 0 && rzRatio < 0) return '#f39c12'; // 橙黄: 减仓上涨 (多头离场)
+                    if (zdf < 0 && rzRatio > 0) return '#0073b7'; // 亮蓝: 增仓下跌 (空头加仓)
+                    return '#95a5a6'; // 中性灰
+                },
+                opacity: 0.8,
+                borderColor: 'rgba(255, 255, 255, 0.5)',
+                borderWidth: 2
+            },
+            label: {
+                show: true,
+                position: 'inside', // 保持内部显示
+                formatter: '{b}',
+                fontSize: 11,
+                color: '#fff',
+                fontWeight: 'bold'
+            },
+            labelLayout: {
+                hideOverlap: false // 保持不隐藏重叠标签
+            },
+            markLine: {
+                silent: true,
+                symbol: 'none',
+                lineStyle: {
+                    color: '#aaa',
+                    type: 'solid'
+                },
+                data: [
+                    { yAxis: 0 },
+                    { xAxis: 0 }
+                ]
+            }
+        }]
+    };
+
+    chartOptions.chart7 = option;
+    chart7.setOption(option);
+    bindChartClick(chart7);
+}
+// =================== 方案 B：使用 visualMap 的图表渲染函数 END ===================
+// =================== 修正后的图表渲染函数 END ===================
+
+function updateTreemapLegendZdf(data) {
     const legendContainer = document.getElementById('main6-treemap-legend');
     let html = '';
     const topGainers = [...data].sort((a, b) => b.zdf - a.zdf).filter(item => item.zdf > 0).slice(0, 3);
@@ -1560,11 +1712,9 @@ function updateTreemapLegendZdf(data) { // Renamed from updateTreemapLegend
     legendContainer.innerHTML = html;
 }
 
-// New legend function for Volume Analysis
 function updateTreemapLegendVolume(data) {
     const legendContainer = document.getElementById('main6-treemap-legend');
     let html = '';
-    // Sort by rz for legend: top increases and top decreases in volume context
     const topVolumeIncrease = [...data].sort((a, b) => b.rz - a.rz).filter(item => item.rz > 0).slice(0, 3);
     const topVolumeDecrease = [...data].sort((a, b) => a.rz - b.rz).filter(item => item.rz < 0).slice(0, 3);
 
@@ -1590,11 +1740,9 @@ function updateTreemapLegendVolume(data) {
     legendContainer.innerHTML = html;
 }
 
-// New legend function for Open Interest Analysis
 function updateTreemapLegendOi(data) {
     const legendContainer = document.getElementById('main6-treemap-legend');
     let html = '';
-    // Sort by rz for legend: top increases and top decreases
     const topIncreases = [...data].sort((a, b) => b.rz - a.rz).filter(item => item.rz > 0).slice(0, 3);
     const topDecreases = [...data].sort((a, b) => a.rz - b.rz).filter(item => item.rz < 0).slice(0, 3);
 
@@ -1625,91 +1773,6 @@ function updateTreemapLegendOi(data) {
                 <span class="dot green"></span>
                 <span class="label">${getSimplifiedName(item.name)} (减仓):</span>
                 <span class="value green">${item.rz.toLocaleString()} (${rzRatioText})</span>
-            </div>`;
-    });
-    legendContainer.innerHTML = html;
-}
-
-// New legend function for Volume Analysis
-function updateTreemapLegendVolume(data) {
-    const legendContainer = document.getElementById('main6-treemap-legend');
-    let html = '';
-    // Sort by rz for legend: top increases and top decreases in volume context
-    const topVolumeIncrease = [...data].sort((a, b) => b.rz - a.rz).filter(item => item.rz > 0).slice(0, 3);
-    const topVolumeDecrease = [...data].sort((a, b) => a.rz - b.rz).filter(item => item.rz < 0).slice(0, 3);
-
-    topVolumeIncrease.forEach(item => {
-        html += `
-            <div class="item">
-                <span class="dot red"></span>
-                <span class="label">${getSimplifiedName(item.name)} (增仓):</span>
-                <span class="value red">${item.vol.toLocaleString()}手 (rz ${item.rz.toLocaleString()})</span>
-            </div>`;
-    });
-
-    if (topVolumeIncrease.length > 0 && topVolumeDecrease.length > 0) html += `<div style="margin: 2px 0;"> </div>`;
-
-    topVolumeDecrease.forEach(item => {
-        html += `
-            <div class="item">
-                <span class="dot green"></span>
-                <span class="label">${getSimplifiedName(item.name)} (减仓):</span>
-                <span class="value green">${item.vol.toLocaleString()}手 (rz ${item.rz.toLocaleString()})</span>
-            </div>`;
-    });
-    legendContainer.innerHTML = html;
-}
-
-function updateTreemapLegendZdf(data) { // Renamed from updateTreemapLegend
-    const legendContainer = document.getElementById('main6-treemap-legend');
-    let html = '';
-    const topGainers = [...data].sort((a, b) => b.zdf - a.zdf).filter(item => item.zdf > 0).slice(0, 3);
-    const topLosers = [...data].sort((a, b) => a.zdf - b.zdf).filter(item => item.zdf < 0).slice(0, 3);
-    topGainers.forEach(item => {
-        html += `
-            <div class="item">
-                <span class="dot red"></span>
-                <span class="label">${getSimplifiedName(item.name)}:</span>
-                <span class="value red">${item.zdf.toFixed(2)}%</span>
-            </div>`;
-    });
-    if (topGainers.length > 0 && topLosers.length > 0) html += `<div> </div>`;
-    topLosers.forEach(item => {
-        html += `
-            <div class="item">
-                <span class="dot green"></span>
-                <span class="label">${getSimplifiedName(item.name)}:</span>
-                <span class="value green">${item.zdf.toFixed(2)}%</span>
-            </div>`;
-    });
-    legendContainer.innerHTML = html;
-}
-
-// New legend function for Volume Analysis
-function updateTreemapLegendVolume(data) {
-    const legendContainer = document.getElementById('main6-treemap-legend');
-    let html = '';
-    // Sort by rz for legend: top increases and top decreases in volume context
-    const topVolumeIncrease = [...data].sort((a, b) => b.rz - a.rz).filter(item => item.rz > 0).slice(0, 3);
-    const topVolumeDecrease = [...data].sort((a, b) => a.rz - b.rz).filter(item => item.rz < 0).slice(0, 3);
-
-    topVolumeIncrease.forEach(item => {
-        html += `
-            <div class="item">
-                <span class="dot red"></span>
-                <span class="label">${getSimplifiedName(item.name)} (增仓):</span>
-                <span class="value red">${item.vol.toLocaleString()}手 (增 ${item.rz.toLocaleString()}手)</span>
-            </div>`;
-    });
-
-    if (topVolumeIncrease.length > 0 && topVolumeDecrease.length > 0) html += `<div style="margin: 2px 0;"> </div>`;
-
-    topVolumeDecrease.forEach(item => {
-        html += `
-            <div class="item">
-                <span class="dot green"></span>
-                <span class="label">${getSimplifiedName(item.name)} (减仓):</span>
-                <span class="value green">${item.vol.toLocaleString()}手 (减 ${item.rz.toLocaleString()}手)</span>
             </div>`;
     });
     legendContainer.innerHTML = html;
@@ -1749,17 +1812,14 @@ function toggleAutoRefresh() {
     }
 }
 
-// --- 修正 START ---
 function startAutoRefresh() {
     if (refreshInterval) clearInterval(refreshInterval);
     refreshInterval = setInterval(() => {
-        // 自动刷新只在明确的交易时段内进行
         if (autoRefresh && getSessionType() !== 'closed') {
             fetchData();
         }
     }, 15000);
 }
-// --- 修正 END ---
 
 function stopAutoRefresh() {
     if (refreshInterval) {
@@ -1804,7 +1864,8 @@ function addFullscreenListeners() {
             if (btn) btn.textContent = '退出全屏';
         } else {
             setTimeout(() => {
-                ['chart1','chart2','chart3','chart4','chart5','chart6'].forEach(chartVar => {
+                // 更新包含 chart7 在内的所有图表
+                ['chart1','chart2','chart3','chart4','chart5','chart6','chart7'].forEach(chartVar => {
                     const chartInstance = window[chartVar];
                     if (chartInstance) chartInstance.resize();
                 });
