@@ -424,16 +424,19 @@
 
         /* Style for Chart 7 Size Legend */
         #chart7-size-legend {
-            position: absolute;
-            top: 15px; /* Adjust top/right to position it */
-            right: 170px; /* To the left of download/fullscreen buttons */
+            /* 修正：不再绝对定位，成为 flex item */
+            /* position: absolute; */
+            /* top: 15px; */
+            /* right: 170px; */
+            margin-left: 20px; /* 与前面的 radio 按钮保持距离 */
             background: rgba(255,255,255,0.8);
             padding: 5px 10px;
             border-radius: 8px;
             font-size: 0.85rem;
             color: #333;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            z-index: 9; /* Below download/fullscreen, but above chart */
+            z-index: 9;
+            white-space: nowrap; /* 防止文字换行 */
         }
 
         /* Media queries for responsiveness */
@@ -444,10 +447,9 @@
                 padding-left: 10px;
             }
             #chart7-size-legend {
-                position: relative; /* Make it flow with content */
-                top: auto;
-                right: auto;
-                margin-top: 10px;
+                /* 修正：在小屏幕上，移除左边距，并让其占据整行 */
+                margin-left: 0;
+                width: 100%;
                 text-align: center;
             }
             .download-btn { right: 10px; top: 10px; padding: 4px 8px; font-size: 10px; }
@@ -581,6 +583,7 @@
                     <label>
                         <input type="radio" name="chart7-size-metric" value="ccl"> 持仓量
                     </label>
+                    <div id="chart7-size-legend"></div> <!-- 修正：移动到这里 -->
                 </div>
                 <div id="main7" class="chart"></div>
                 <button class="download-btn" onclick="downloadChart(chart7, '涨跌幅与增仓比关系图.png')">📥 下载</button>
@@ -663,8 +666,8 @@ document.addEventListener('DOMContentLoaded', function() {
     fetchData();
     startAutoRefresh();
     updateTimeDisplay();
-    setInterval(updateTimeDisplay, 1000);
     addFullscreenListeners();
+    setInterval(updateTimeDisplay, 1000); // 时钟更新
 });
 
 function initializeMenu() {
@@ -710,13 +713,11 @@ function initializeCharts() {
     chart4 = echarts.init(document.getElementById('main4'));
     chart5 = echarts.init(document.getElementById('main5'));
     chart6 = echarts.init(document.getElementById('main6'));
-    // 初始化新增的 chart7
-    chart7 = echarts.init(document.getElementById('main7'));
+    chart7 = echarts.init(document.getElementById('main7')); // 初始化 Chart 7
     
     window.addEventListener('resize', () => {
         chart1.resize(); chart2.resize(); chart3.resize(); chart4.resize(); chart5.resize(); chart6.resize(); chart7.resize();
     });
-    // 设置自定义指标对比图的默认指标
     document.getElementById('metric1-select').value = 'cdzj';
     document.getElementById('metric2-select').value = 'tjd';
 }
@@ -743,7 +744,6 @@ function initializeControls() {
         });
     });
 
-    // Chart 7 气泡大小指标选择器
     const metricRadios7 = document.querySelectorAll('input[name="chart7-size-metric"]');
     metricRadios7.forEach(radio => {
         radio.addEventListener('change', function() {
@@ -754,12 +754,10 @@ function initializeControls() {
         });
     });
 
-    // Initialize chart6Metric from the checked radio button on load
     const checkedRadio6 = document.querySelector('input[name="chart6-metric"]:checked');
     if (checkedRadio6) {
         chart6Metric = checkedRadio6.value;
     }
-    // Initialize chart7SizeMetric from the checked radio button on load
     const checkedRadio7 = document.querySelector('input[name="chart7-size-metric"]:checked');
     if (checkedRadio7) {
         chart7SizeMetric = checkedRadio7.value;
@@ -770,17 +768,13 @@ function getSessionType(now = new Date()) {
     const hour = now.getHours();
     const minute = now.getMinutes();
 
-    // 夜盘时段: 21:00 - 02:30
     if (hour >= 21 || hour < 2 || (hour === 2 && minute <= 30)) {
         return 'night';
     }
-
-    // 日盘时段: 09:00 - 11:30, 13:30 - 15:00
-    if (((hour >= 9 && hour < 12) || (hour === 11 && minute < 30)) ||
+    if (((hour >= 9 && hour < 12) || (hour === 11 && minute < 30)) || 
         ((hour >= 13 && hour < 15) || (hour === 13 && minute >= 30))) {
         return 'day';
     }
-    
     return 'closed';
 }
 
@@ -814,11 +808,11 @@ function getApiUrl() {
 
 function showLoading() {
     document.getElementById('loading').style.display = 'flex';
-    document.getElementById('charts-container').style.opacity = '0.5';
+    // 修正：移除对 charts-container 透明度的修改
 }
 function hideLoading() {
     document.getElementById('loading').style.display = 'none';
-    document.getElementById('charts-container').style.opacity = '1';
+    // 修正：移除对 charts-container 透明度的修改
 }
 function showError(message) {
     const errorContainer = document.getElementById('error-container');
@@ -875,15 +869,12 @@ function renderAllCharts(data) {
         const metric2 = document.getElementById('metric2-select').value || 'tjd';
         renderChart5([...data], metric1, metric2);
         renderChart6([...data]);
-        renderChart7([...data]); // 确保调用 Chart 7
+        renderChart7([...data]);
     } catch (error) {
         console.error('图表渲染失败:', error);
         showError(`图表渲染失败: ${error.message}`);
     }
 }
-
-// ... (renderChart1, renderChart2, renderChart3, renderChart4, renderChart5, renderChart6 保持不变) ...
-// 为节省空间，这些函数代码此处省略，请确保您的文件中包含它们。
 
 function renderChart1(dataList) {
     const processedData = dataList.map(item => {
@@ -1617,7 +1608,6 @@ function renderChart6(dataList) {
     legendDataFunction(treemapData); // Call the appropriate legend function
 }
 
-// =================== 方案 B：使用 visualMap 的图表渲染函数 START ===================
 function renderChart7(dataList) {
     // 映射 metrics 到 value 数组的维度索引
     const metricDimensionMap = {
@@ -1675,14 +1665,6 @@ function renderChart7(dataList) {
         return;
     }
     
-    // 如果所有选定尺寸指标的值都相同，将 min 和 max 设置为不同值，以防止 visualMap 无法正常映射
-    // ECharts visualMap already handles min === max gracefully by setting a single size
-    // However, if we want a range even if all values are the same, we could:
-    // if (minSizeMetric === maxSizeMetric) {
-    //     minSizeMetric = minSizeMetric * 0.9; 
-    //     maxSizeMetric = maxSizeMetric * 1.1;
-    // }
-
     const option = {
         backgroundColor: 'transparent',
         tooltip: {
@@ -1764,15 +1746,18 @@ function renderChart7(dataList) {
                 borderWidth: 2
             },
             label: {
-                show: true,
-                position: 'inside', // 保持内部显示
-                formatter: '{b}',
-                fontSize: 11,
-                color: '#fff',
-                fontWeight: 'bold'
+                show: false // 修正：默认不显示气泡上的文字标签
             },
-            labelLayout: {
-                hideOverlap: false // 保持不隐藏重叠标签
+            emphasis: {
+                focus: 'series', // 高亮当前，淡化其他
+                label: {
+                    show: true, // 修正：鼠标悬浮时显示品种名称
+                    position: 'top',
+                    formatter: '{b}', // {b} 代表 data.name (品种简称)
+                    fontSize: 12,
+                    fontWeight: 'bold',
+                    color: '#000' // 可以根据背景调整颜色
+                }
             },
             markLine: {
                 silent: true,
@@ -1794,14 +1779,12 @@ function renderChart7(dataList) {
     updateChart7SizeLegend(fieldMapping[chart7SizeMetric]); // 更新右上角提示
     bindChartClick(chart7);
 }
-// =================== 方案 B：使用 visualMap 的图表渲染函数 END ===================
-
 
 // 新增 Chart 7 的气泡大小含义提示函数
 function updateChart7SizeLegend(metricName) {
     const legendElement = document.getElementById('chart7-size-legend');
     if (metricName) {
-        legendElement.textContent = `气泡: ${metricName}`;
+        legendElement.textContent = `气泡大小代表: ${metricName}`;
     } else {
         legendElement.textContent = '';
     }
