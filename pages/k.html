@@ -1606,9 +1606,7 @@ function renderChart6(dataList) {
     bindChartClick(chart6);
     legendDataFunction(treemapData); // Call the appropriate legend function
 }
-
 function renderChart7(dataList) {
-    // 映射 metrics 到 value 数组的维度索引
     const metricDimensionMap = {
         'cdzj': 2,
         'cje': 3,
@@ -1616,7 +1614,6 @@ function renderChart7(dataList) {
         'ccl': 5
     };
 
-    // 格式化函数映射
     const metricFormatterMap = {
         'cdzj': formatCjeToBillion,
         'cje': formatCjeToBillion,
@@ -1629,16 +1626,13 @@ function renderChart7(dataList) {
 
     const scatterData = dataList.map(item => {
         const prevCcl = item.ccl - item.rz;
-        // 增仓比：注意这里是 日增仓 / (持仓量 - 日增仓) * 100
         const rzRatio = prevCcl === 0 ? 0 : parseFloat(((item.rz / prevCcl) * 100).toFixed(2));
         
-        // 确保所有用到的指标都有值，用于计算min/max
         const cdzjVal = item.cdzj || 0;
         const cjeVal = item.cje || 0;
         const volVal = item.vol || 0;
         const cclVal = item.ccl || 0;
 
-        // 更新当前选定尺寸指标的最大最小值
         const currentSizeMetricValue = item[chart7SizeMetric] || 0;
         if (currentSizeMetricValue < minSizeMetric) minSizeMetric = currentSizeMetricValue;
         if (currentSizeMetricValue > maxSizeMetric) maxSizeMetric = currentSizeMetricValue;
@@ -1647,12 +1641,10 @@ function renderChart7(dataList) {
             name: getSimplifiedName(item.name),
             fullName: item.name,
             dm: item.dm,
-            // 存储原始指标值，便于 tooltip 格式化
             cdzj: cdzjVal,
             cje: cjeVal,
             vol: volVal,
             ccl: cclVal,
-            // value 数组：[涨跌幅, 增仓比, 沉淀资金, 成交额, 成交量, 持仓量]
             value: [item.zdf, rzRatio, cdzjVal, cjeVal, volVal, cclVal] 
         };
     }).filter(item => item.value[0] !== undefined && item.value[1] !== undefined);
@@ -1660,7 +1652,7 @@ function renderChart7(dataList) {
     if (scatterData.length === 0) {
         chart7.clear();
         document.getElementById('main7').innerHTML = '<div class="no-data">暂无符合条件的数据</div>';
-        updateChart7SizeLegend(''); // 清空图例
+        updateChart7SizeLegend(''); 
         return;
     }
     
@@ -1681,7 +1673,6 @@ function renderChart7(dataList) {
                        `涨跌幅: <strong style="color:${color};">${zdf.toFixed(2)}%</strong><br/>` +
                        `增仓比: <strong style="color:${rzColor};">${rzRatio.toFixed(2)}%</strong><br/>`;
 
-                // 根据当前选择的尺寸指标，动态显示对应的格式化值
                 const currentSizeMetricDisplayName = fieldMapping[chart7SizeMetric];
                 const currentSizeMetricRawValue = data[chart7SizeMetric];
                 const formatterFn = metricFormatterMap[chart7SizeMetric];
@@ -1719,7 +1710,7 @@ function renderChart7(dataList) {
         ],
         visualMap: {
             type: 'continuous',
-            dimension: metricDimensionMap[chart7SizeMetric], // 动态映射 dimension
+            dimension: metricDimensionMap[chart7SizeMetric],
             min: minSizeMetric,
             max: maxSizeMetric,
             show: false,
@@ -1745,25 +1736,44 @@ function renderChart7(dataList) {
                 borderWidth: 2
             },
             label: {
-                show: false // 修正：默认不显示气泡上的文字标签
+                show: true, // <<<<<<<<<<< 修正：默认显示气泡上的文字标签
+                position: 'inside', // 保持内部显示
+                formatter: '{b}', // {b} 代表 data.name (品种简称)
+                fontSize: 11,
+                color: '#fff',
+                fontWeight: 'bold'
             },
             emphasis: {
                 focus: 'series', // 高亮当前，淡化其他
                 label: {
-                    show: true, // 修正：鼠标悬浮时显示品种名称
-                    position: 'top',
-                    formatter: '{b}', // {b} 代表 data.name (品种简称)
+                    show: true, // 鼠标悬浮时也显示标签
+                    position: 'top', // 悬浮时标签显示在气泡上方，避免遮挡气泡本身
+                    formatter: '{b}',
                     fontSize: 12,
                     fontWeight: 'bold',
-                    color: '#000' // 可以根据背景调整颜色
+                    color: '#000' // 可以根据背景调整颜色，使其更突出
                 }
             },
-            
+            labelLayout: { // <<<<<<<<<<< 修正：添加标签防重叠功能
+                hideOverlap: true 
+            },
+            markLine: {
+                silent: true,
+                symbol: 'none',
+                lineStyle: {
+                    color: '#aaa',
+                    type: 'solid'
+                },
+                data: [
+                    { yAxis: 0 },
+                    { xAxis: 0 }
+                ]
+            }
         }]
     };
 
     chartOptions.chart7 = option;
-    chart7.setOption(option, true); // 使用 true 来合并 option
+    chart7.setOption(option, true);
     updateChart7SizeLegend(fieldMapping[chart7SizeMetric]); // 更新右上角提示
     bindChartClick(chart7);
 }
