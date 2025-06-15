@@ -723,11 +723,11 @@ function initializeCharts() {
     chart4 = echarts.init(document.getElementById('main4'));
     chart5 = echarts.init(document.getElementById('main5'));
     chart6 = echarts.init(document.getElementById('main6'));
-    chart7 = echarts.init(document.getElementById('main7')); // 初始化 Chart 7
-    chart8 = echarts.init(document.getElementById('main8')); // ***** 初始化 Chart 8 *****
+    chart7 = echarts.init(document.getElementById('main7')); 
+    chart8 = echarts.init(document.getElementById('main8')); // 初始化 Chart 8
     
     window.addEventListener('resize', () => {
-        chart1.resize(); chart2.resize(); chart3.resize(); chart4.resize(); chart5.resize(); chart6.resize(); chart7.resize(); chart8.resize(); // ***** 添加 Chart 8 resize *****
+        chart1.resize(); chart2.resize(); chart3.resize(); chart4.resize(); chart5.resize(); chart6.resize(); chart7.resize(); chart8.resize(); // 添加 Chart 8 resize
     });
     document.getElementById('metric1-select').value = 'cdzj';
     document.getElementById('metric2-select').value = 'tjd';
@@ -760,7 +760,7 @@ function initializeControls() {
         radio.addEventListener('change', function() {
             chart7SizeMetric = this.value;
             if (currentData.length > 0) {
-                renderChart7(currentData); // 重新渲染 Chart 7
+                renderChart7(currentData); 
             }
         });
     });
@@ -882,7 +882,7 @@ function renderAllCharts(data) {
         renderChart5([...data], metric1, metric2);
         renderChart6([...data]);
         renderChart7([...data]);
-        renderChart8([...data]); // ***** 调用 Chart 8 渲染函数 *****
+        renderChart8([...data]); // 调用 Chart 8 渲染函数
     } catch (error) {
         console.error('图表渲染失败:', error);
         showError(`图表渲染失败: ${error.message}`);
@@ -1793,11 +1793,18 @@ function renderChart8(dataList) {
         'dt': { count: 0, color: '#006400', label: '跌停' } // DarkGreen
     };
 
+    // 统计上涨和下跌品种的数量及涨跌幅总和
+    let totalRiseCount = 0;
+    let sumRiseZdf = 0;
+    let totalFallCount = 0;
+    let sumFallZdf = 0;
+
     dataList.forEach(item => {
         const zdf = item.zdf;
         const isZT = item.zt === 1;
         const isDT = item.dt === 1;
 
+        // 涨跌幅区间统计
         if (isZT) {
             counts['zt'].count++;
         } else if (isDT) {
@@ -1817,7 +1824,22 @@ function renderChart8(dataList) {
         } else if (zdf < -5) {
             counts['zdf_neg_gt_5'].count++;
         }
+
+        // 总体上涨/下跌统计（用于圆环中心文字）
+        if (typeof zdf === 'number') {
+            if (zdf > 0) {
+                totalRiseCount++;
+                sumRiseZdf += zdf;
+            } else if (zdf < 0) {
+                totalFallCount++;
+                sumFallZdf += zdf; // 累加负值
+            }
+        }
     });
+
+    const avgRiseZdf = totalRiseCount > 0 ? (sumRiseZdf / totalRiseCount).toFixed(2) : '0.00';
+    // 下跌的平均值取绝对值显示，更直观
+    const displayAvgFallZdf = totalFallCount > 0 ? (Math.abs(sumFallZdf) / totalFallCount).toFixed(2) : '0.00';
 
     // Filter out categories with 0 count, unless it's flat (always show flat)
     const chartData = Object.keys(counts)
@@ -1859,12 +1881,60 @@ function renderChart8(dataList) {
             data: chartData.map(item => item.name),
             textStyle: { color: '#333' }
         },
+        graphic: [ // 在图表中心显示上涨和下跌统计
+            {
+                type: 'text',
+                left: '50%',
+                top: '40%', // 上涨数量位置
+                style: {
+                    text: `上涨：${totalRiseCount}个`,
+                    fill: '#ef4444', // 红色
+                    fontSize: 13,
+                    fontWeight: 'bold',
+                    textAlign: 'center'
+                }
+            },
+            {
+                type: 'text',
+                left: '50%',
+                top: '45%', // 平均涨幅位置
+                style: {
+                    text: `均涨：${avgRiseZdf}%`,
+                    fill: '#ef4444', // 红色
+                    fontSize: 13,
+                    textAlign: 'center'
+                }
+            },
+            {
+                type: 'text',
+                left: '50%',
+                top: '52%', // 下跌数量位置
+                style: {
+                    text: `下跌：${totalFallCount}个`,
+                    fill: '#22c55e', // 绿色
+                    fontSize: 13,
+                    fontWeight: 'bold',
+                    textAlign: 'center'
+                }
+            },
+            {
+                type: 'text',
+                left: '50%',
+                top: '57%', // 平均跌幅位置
+                style: {
+                    text: `均跌：${displayAvgFallZdf}%`,
+                    fill: '#22c55e', // 绿色
+                    fontSize: 13,
+                    textAlign: 'center'
+                }
+            }
+        ],
         series: [
             {
                 name: '品种数量',
                 type: 'pie',
                 radius: ['40%', '70%'], // 甜甜圈图
-                center: ['55%', '50%'], // 调整中心位置，为左侧 legend 留出空间
+                center: ['55%', '50%'], // 调整中心位置，为左侧 legend 和中心文字留出空间
                 avoidLabelOverlap: false,
                 label: {
                     show: true,
@@ -1872,15 +1942,15 @@ function renderChart8(dataList) {
                     formatter: '{b}\n{c} ({d}%)', // 显示名称、数量和百分比
                     color: '#333',
                     fontSize: 12,
-                    fontWeight: 'bold', // 标签字体加粗
-                    overflow: 'breakAll', // 允许标签文字换行
-                    minMargin: 5 // 标签最小边距
+                    fontWeight: 'bold', 
+                    overflow: 'breakAll', 
+                    minMargin: 5 
                 },
                 labelLine: {
                     show: true,
-                    length: 10,  // 第一段线的长度
-                    length2: 15, // 第二段线的长度
-                    smooth: true // 标签线平滑
+                    length: 10,  
+                    length2: 15, 
+                    smooth: true 
                 },
                 data: chartData,
                 emphasis: {
@@ -1944,6 +2014,11 @@ function updateTreemapLegendVolume(data) {
     if (topVolumeIncrease.length > 0 && topVolumeDecrease.length > 0) html += `<div style="margin: 2px 0;"> </div>`;
 
     topVolumeDecrease.forEach(item => {
+        const prevCcl = item.ccl - item.rz;
+        let rzRatioText = '-';
+        if (prevCcl !== 0) {
+            rzRatioText = ((item.rz / prevCcl) * 100).toFixed(2) + '%';
+        }
         html += `
             <div class="item">
                 <span class="dot green"></span>
@@ -2079,7 +2154,7 @@ function addFullscreenListeners() {
         } else {
             setTimeout(() => {
                 // 更新包含 chart7, chart8 在内的所有图表
-                ['chart1','chart2','chart3','chart4','chart5','chart6','chart7','chart8'].forEach(chartVar => { // ***** 更新图表列表 *****
+                ['chart1','chart2','chart3','chart4','chart5','chart6','chart7','chart8'].forEach(chartVar => { 
                     const chartInstance = window[chartVar];
                     if (chartInstance) chartInstance.resize();
                 });
