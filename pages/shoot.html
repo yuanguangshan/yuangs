@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>三消射击游戏 - 修正版</title>
+    <style>
+        :root {
+            --grid-size: 40px; 
+            --gap: 4px;
+            --bg-color: #2c3e50;
+            --grid-bg: #34495e;
+            --score-color: #ecf0f1;
+            --red: #e74c3c;
+            --orange: #e67e22;
+            --yellow: #f1c40f;
+            --border-radius: 5px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--score-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .game-wrapper {
+            text-align: center;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: calc(25 * var(--grid-size) + 24 * var(--gap));
+            margin: 0 auto 20px auto;
+        }
+
+        h1 {
+            font-size: 2em;
+            margin: 0;
+        }
+
+        #score-board {
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+
+        .game-container {
+            display: flex;
+            gap: var(--gap);
+            position: relative;
+        }
+
+        .grid {
+            display: grid;
+            gap: var(--gap);
+            background-color: var(--grid-bg);
+            padding: var(--gap);
+            border-radius: var(--border-radius);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+
+        #match-grid {
+            grid-template-columns: repeat(10, var(--grid-size));
+            grid-template-rows: repeat(10, var(--grid-size));
+        }
+
+        #enemy-grid {
+            grid-template-columns: repeat(15, var(--grid-size));
+            grid-template-rows: repeat(10, var(--grid-size));
+        }
+
+        .cell {
+            width: var(--grid-size);
+            height: var(--grid-size);
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: calc(var(--grid-size) * 0.7);
+        }
+        
+        .enemy-cell {
+             cursor: default;
+        }
+
+        .cell.red { background-color: var(--red); }
+        .cell.orange { background-color: var(--orange); }
+        .cell.yellow { background-color: var(--yellow); }
+
+        .cell.selected {
+            box-shadow: 0 0 10px 4px #ecf0f1;
+            transform: scale(1.1);
+            z-index: 10;
+        }
+        
+        .enemy {
+            animation: enemy-spawn 0.3s ease-out;
+        }
+        
+        @keyframes enemy-spawn {
+            from { transform: scale(0.5); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .bullet {
+            position: absolute;
+            width: calc(var(--grid-size) * 0.3);
+            height: calc(var(--grid-size) * 0.3);
+            border-radius: 50%;
+            z-index: 20;
+            transition: left 0.5s linear;
+        }
+        
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.75);
+            color: white;
+            display: none; /* Initially hidden */
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            text-align: center;
+        }
+
+        #game-over-screen h2 {
+            font-size: 4em;
+            margin: 0;
+            color: var(--red);
+        }
+
+        #game-over-screen p {
+            font-size: 1.5em;
+        }
+
+        #game-over-screen button {
+            font-size: 1.2em;
+            padding: 15px 30px;
+            border: none;
+            background-color: var(--yellow);
+            color: var(--bg-color);
+            border-radius: 10px;
+            cursor: pointer;
+            margin-top: 20px;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+        #game-over-screen button:hover {
+            transform: scale(1.05);
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="game-wrapper">
+    <div class="header">
+        <h1>三消射击</h1>
+        <div id="score-board">得分: 0</div>
+    </div>
+    <div class="game-container" id="game-container">
+        <div id="match-grid" class="grid"></div>
+        <div id="enemy-grid" class="grid"></div>
+        <div id="game-over-screen">
+            <h2>游戏结束</h2>
+            <p id="final-score"></p>
+            <button onclick="location.reload()">重新开始</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 游戏配置 ---
+    const MATCH_GRID_SIZE = 10;
+    const ENEMY_GRID_WIDTH = 15;
+    const ENEMY_GRID_HEIGHT = 10;
+    const COLORS = ['red', 'orange', 'yellow'];
+    const ENEMY_SPAWN_INTERVAL = 2000;
+    const ENEMY_MOVE_INTERVAL = 1000;
+
+    // --- DOM 元素 ---
+    const matchGridEl = document.getElementById('match-grid');
+    const enemyGridEl = document.getElementById('enemy-grid');
+    const scoreBoardEl = document.getElementById('score-board');
+    const gameContainerEl = document.getElementById('game-container');
+    const gameOverScreenEl = document.getElementById('game-over-screen');
+    const finalScoreEl = document.getElementById('final-score');
+
+    // --- 游戏状态 ---
+    let score = 0;
+    let matchGrid = [];
+    let enemyGrid = [];
+    let selectedCell = null;
+    let isSwapping = false;
+    let isGameOver = false;
+    let enemySpawnTimer, enemyMoveTimer;
+
+    // --- 初始化游戏 ---
+    function init() {
+        for (let r = 0; r < MATCH_GRID_SIZE; r++) {
+            matchGrid[r] = [];
+            for (let c = 0; c < MATCH_GRID_SIZE; c++) {
+                const cell = createCell(r, c);
+                matchGridEl.appendChild(cell);
+                matchGrid[r][c] = cell;
+            }
+        }
+
+        for (let r = 0; r < ENEMY_GRID_HEIGHT; r++) {
+            enemyGrid[r] = [];
+            for (let c = 0; c < ENEMY_GRID_WIDTH; c++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell', 'enemy-cell');
+                cell.dataset.r = r;
+                cell.dataset.c = c;
+                enemyGridEl.appendChild(cell);
+                enemyGrid[r][c] = { el: cell, hasEnemy: false };
+            }
+        }
+
+        populateGrid();
+        startGameTimers();
+    }
+    
+    function createCell(r, c) {
+        const cell = document.createElement('div');
+        cell.classList.add('cell');
+        cell.dataset.r = r;
+        cell.dataset.c = c;
+        cell.style.backgroundColor = getRandomColor();
+        cell.addEventListener('click', () => handleCellClick(r, c));
+        return cell;
+    }
+
+    function getRandomColor() {
+        return COLORS[Math.floor(Math.random() * COLORS.length)];
+    }
+    
+    function populateGrid() {
+        do {
+            while(checkAndClearAllMatches(false).length > 0) {}
+        } while (isGridEmpty());
+    }
+    
+    function isGridEmpty() {
+        for (let r = 0; r < MATCH_GRID_SIZE; r++) {
+            for (let c = 0; c < MATCH_GRID_SIZE; c++) {
+                if (!matchGrid[r][c].style.backgroundColor) return true;
+            }
+        }
+        return false;
+    }
+
+    // --- 游戏核心逻辑 ---
+    function handleCellClick(r, c) {
+        if (isSwapping || isGameOver) return;
+        const clickedCell = matchGrid[r][c];
+        if (!selectedCell) {
+            selectedCell = clickedCell;
+            selectedCell.classList.add('selected');
+        } else {
+            if (selectedCell === clickedCell) {
+                selectedCell.classList.remove('selected');
+                selectedCell = null;
+            } else if (areAdjacent(selectedCell, clickedCell)) {
+                swapAndCheck(selectedCell, clickedCell);
+            } else {
+                selectedCell.classList.remove('selected');
+                selectedCell = clickedCell;
+                selectedCell.classList.add('selected');
+            }
+        }
+    }
+
+    function areAdjacent(cell1, cell2) {
+        const r1 = parseInt(cell1.dataset.r);
+        const c1 = parseInt(cell1.dataset.c);
+        const r2 = parseInt(cell2.dataset.r);
+        const c2 = parseInt(cell2.dataset.c);
+        return Math.abs(r1 - r2) + Math.abs(c1 - c2) === 1;
+    }
+
+    async function swapAndCheck(cell1, cell2) {
+        isSwapping = true;
+        if (selectedCell) selectedCell.classList.remove('selected');
+        selectedCell = null;
+        await swapCells(cell1, cell2);
+        const matches = checkAndClearAllMatches(true);
+        if (matches.length === 0) {
+            await swapCells(cell1, cell2);
+        }
+        isSwapping = false;
+    }
+    
+    function swapCells(cell1, cell2) {
+        return new Promise(resolve => {
+            const color1 = cell1.style.backgroundColor;
+            cell1.style.backgroundColor = cell2.style.backgroundColor;
+            cell2.style.backgroundColor = color1;
+            setTimeout(resolve, 200);
+        });
+    }
+
+    function checkAndClearAllMatches(shouldFireBullets = true) {
+        const allMatches = [];
+        for (let r = 0; r < MATCH_GRID_SIZE; r++) {
+            for (let c = 0; c < MATCH_GRID_SIZE - 2; c++) {
+                const cell1 = matchGrid[r][c];
+                if (!cell1.style.backgroundColor) continue;
+                const match = [cell1];
+                let nextC = c + 1;
+                while(nextC < MATCH_GRID_SIZE && matchGrid[r][nextC].style.backgroundColor === cell1.style.backgroundColor) {
+                    match.push(matchGrid[r][nextC]);
+                    nextC++;
+                }
+                if (match.length >= 3) {
+                    allMatches.push(match);
+                    c = nextC - 1;
+                }
+            }
+        }
+        for (let c = 0; c < MATCH_GRID_SIZE; c++) {
+            for (let r = 0; r < MATCH_GRID_SIZE - 2; r++) {
+                 const cell1 = matchGrid[r][c];
+                 if (!cell1.style.backgroundColor) continue;
+                 const match = [cell1];
+                 let nextR = r + 1;
+                 while(nextR < MATCH_GRID_SIZE && matchGrid[nextR][c].style.backgroundColor === cell1.style.backgroundColor) {
+                    match.push(matchGrid[nextR][c]);
+                    nextR++;
+                 }
+                 if (match.length >= 3) {
+                    allMatches.push(match);
+                    r = nextR - 1;
+                 }
+            }
+        }
+        if (allMatches.length > 0) {
+            const uniqueCellsToClear = new Set(allMatches.flat());
+            uniqueCellsToClear.forEach(cell => {
+                if (shouldFireBullets) {
+                    fireBullet(parseInt(cell.dataset.r), cell.style.backgroundColor);
+                }
+                cell.style.backgroundColor = '';
+            });
+            dropAndRefill(shouldFireBullets);
+        }
+        return allMatches;
+    }
+    
+    function dropAndRefill(shouldFireBullets) {
+        for (let c = 0; c < MATCH_GRID_SIZE; c++) {
+            let emptyRow = MATCH_GRID_SIZE - 1;
+            for (let r = MATCH_GRID_SIZE - 1; r >= 0; r--) {
+                if (matchGrid[r][c].style.backgroundColor !== '') {
+                    if (r !== emptyRow) {
+                       swapCells(matchGrid[r][c], matchGrid[emptyRow][c]);
+                    }
+                    emptyRow--;
+                }
+            }
+        }
+        for (let r = 0; r < MATCH_GRID_SIZE; r++) {
+            for (let c = 0; c < MATCH_GRID_SIZE; c++) {
+                if (matchGrid[r][c].style.backgroundColor === '') {
+                    matchGrid[r][c].style.backgroundColor = getRandomColor();
+                }
+            }
+        }
+        setTimeout(() => checkAndClearAllMatches(shouldFireBullets), 300);
+    }
+    
+    // --- 射击和敌人逻辑 ---
+    function fireBullet(row, color) {
+        if (isGameOver) return;
+        const bullet = document.createElement('div');
+        bullet.classList.add('bullet');
+        bullet.style.backgroundColor = color;
+        const cellSizeWithGap = 44;
+        const startY = row * cellSizeWithGap + (cellSizeWithGap / 2);
+        const startX = MATCH_GRID_SIZE * cellSizeWithGap;
+        bullet.style.top = `${startY}px`;
+        bullet.style.left = `${startX}px`;
+        gameContainerEl.appendChild(bullet);
+        requestAnimationFrame(() => {
+            bullet.style.left = `${gameContainerEl.offsetWidth}px`;
+        });
+        const checkCollisionInterval = setInterval(() => {
+            const bulletRect = bullet.getBoundingClientRect();
+            for (let c = 0; c < ENEMY_GRID_WIDTH; c++) {
+                const enemyCell = enemyGrid[row][c];
+                if (enemyCell.hasEnemy) {
+                    const enemyRect = enemyCell.el.getBoundingClientRect();
+                    if (bulletRect.right > enemyRect.left && bulletRect.left < enemyRect.right) {
+                        enemyCell.hasEnemy = false;
+                        enemyCell.el.innerHTML = '';
+                        updateScore(2);
+                        bullet.remove();
+                        clearInterval(checkCollisionInterval);
+                        return;
+                    }
+                }
+            }
+        }, 16);
+        setTimeout(() => {
+            bullet.remove();
+            clearInterval(checkCollisionInterval);
+        }, 500);
+    }
+
+    function spawnEnemy() {
+        if (isGameOver) return;
+        const r = Math.floor(Math.random() * ENEMY_GRID_HEIGHT);
+        const c = ENEMY_GRID_WIDTH - 1;
+        if (!enemyGrid[r][c].hasEnemy) {
+            enemyGrid[r][c].hasEnemy = true;
+            enemyGrid[r][c].el.innerHTML = '<div class="enemy">😈</div>';
+        }
+    }
+
+    /******************************************************
+     * 
+     *  ↓↓↓ 这是本次修正的核心函数 ↓↓↓
+     * 
+     ******************************************************/
+    function moveEnemies() {
+        if (isGameOver) return;
+        for (let r = 0; r < ENEMY_GRID_HEIGHT; r++) {
+            // **修正**: 从左向右遍历 (c 从 0 开始)
+            // 这样可以防止一个敌人在一次函数调用中移动多次
+            for (let c = 0; c < ENEMY_GRID_WIDTH; c++) {
+                if (enemyGrid[r][c].hasEnemy) {
+                    if (c === 0) {
+                        // 敌人到达终点，游戏结束
+                        endGame();
+                        return; // 立刻退出函数，防止后续操作
+                    }
+                    // 检查左边一格是否为空
+                    if (!enemyGrid[r][c - 1].hasEnemy) {
+                        // 向左移动
+                        enemyGrid[r][c].hasEnemy = false;
+                        enemyGrid[r][c].el.innerHTML = '';
+                        enemyGrid[r][c - 1].hasEnemy = true;
+                        enemyGrid[r][c - 1].el.innerHTML = '<div class="enemy">😈</div>';
+                    }
+                }
+            }
+        }
+    }
+
+    // --- 游戏状态管理 ---
+    function updateScore(points) {
+        score += points;
+        scoreBoardEl.textContent = `得分: ${score}`;
+    }
+    
+    function startGameTimers() {
+        enemySpawnTimer = setInterval(spawnEnemy, ENEMY_SPAWN_INTERVAL);
+        enemyMoveTimer = setInterval(moveEnemies, ENEMY_MOVE_INTERVAL);
+    }
+    
+    function stopGameTimers() {
+        clearInterval(enemySpawnTimer);
+        clearInterval(enemyMoveTimer);
+    }
+
+    function endGame() {
+        if (isGameOver) return;
+        isGameOver = true;
+        stopGameTimers();
+        finalScoreEl.textContent = `你的最终得分是: ${score}`;
+        gameOverScreenEl.style.display = 'flex';
+    }
+
+    // --- 启动游戏 ---
+    init();
+</script>
+
+</body>
+</html>
