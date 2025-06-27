@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D飞机俯视游戏</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: white;
+        }
+
+        .game-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .game-title {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        .game-stats {
+            display: flex;
+            gap: 30px;
+            font-size: 1.1em;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.8em;
+            opacity: 0.8;
+            margin-bottom: 2px;
+        }
+
+        .stat-value {
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        .game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            perspective: 1000px;
+            background: linear-gradient(to bottom, #87CEEB 0%, #98FB98 50%, #8FBC8F 100%);
+        }
+
+        .terrain {
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            top: -50%;
+            left: -50%;
+            transform-style: preserve-3d;
+            animation: terrainMove 20s linear infinite;
+        }
+
+        @keyframes terrainMove {
+            0% { transform: translateZ(0) rotateX(60deg); }
+            100% { transform: translateZ(-2000px) rotateX(60deg); }
+        }
+
+        .mountain {
+            position: absolute;
+            width: 0;
+            height: 0;
+            transform-style: preserve-3d;
+        }
+
+        .mountain-face {
+            position: absolute;
+            background: linear-gradient(135deg, #8B4513, #A0522D);
+            transform-origin: bottom;
+        }
+
+        .mountain-shadow {
+            position: absolute;
+            background: rgba(0,0,0,0.3);
+            transform-origin: bottom;
+        }
+
+        .cloud {
+            position: absolute;
+            background: rgba(255,255,255,0.8);
+            border-radius: 50px;
+            animation: cloudFloat 15s linear infinite;
+        }
+
+        @keyframes cloudFloat {
+            0% { transform: translateZ(0) translateY(0); }
+            100% { transform: translateZ(-1500px) translateY(-20px); }
+        }
+
+        .tree {
+            position: absolute;
+            width: 8px;
+            height: 20px;
+            background: linear-gradient(to bottom, #228B22, #006400);
+            border-radius: 4px;
+            transform-style: preserve-3d;
+        }
+
+        .airplane {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 100;
+            transition: all 0.1s ease;
+            filter: drop-shadow(0 5px 15px rgba(0,0,0,0.5));
+        }
+
+        .airplane-body {
+            position: absolute;
+            width: 40px;
+            height: 8px;
+            background: linear-gradient(45deg, #FF6B6B, #FF8E53);
+            border-radius: 4px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .airplane-wing {
+            position: absolute;
+            width: 30px;
+            height: 4px;
+            background: linear-gradient(45deg, #4ECDC4, #44A08D);
+            border-radius: 2px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .airplane-wing.left {
+            transform: translate(-50%, -50%) rotate(-45deg) translateX(-15px);
+        }
+
+        .airplane-wing.right {
+            transform: translate(-50%, -50%) rotate(45deg) translateX(15px);
+        }
+
+        .airplane-tail {
+            position: absolute;
+            width: 15px;
+            height: 3px;
+            background: linear-gradient(45deg, #FF6B6B, #FF8E53);
+            border-radius: 2px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%) translateX(-25px);
+        }
+
+        .airplane-propeller {
+            position: absolute;
+            width: 20px;
+            height: 2px;
+            background: rgba(255,255,255,0.8);
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%) translateX(20px);
+            animation: propellerSpin 0.1s linear infinite;
+            border-radius: 1px;
+        }
+
+        @keyframes propellerSpin {
+            0% { transform: translate(-50%, -50%) translateX(20px) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) translateX(20px) rotate(360deg); }
+        }
+
+        .obstacle {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(circle, #FF4444, #CC0000);
+            border-radius: 50%;
+            border: 3px solid #FFFF00;
+            animation: obstacleMove 8s linear infinite;
+            z-index: 50;
+            box-shadow: 0 0 20px rgba(255,68,68,0.6);
+        }
+
+        @keyframes obstacleMove {
+            0% { transform: translateZ(500px) scale(0.3); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateZ(-500px) scale(1.5); opacity: 0; }
+        }
+
+        .fuel-item {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: radial-gradient(circle, #4CAF50, #2E7D32);
+            border-radius: 50%;
+            border: 2px solid #8BC34A;
+            animation: fuelMove 10s linear infinite;
+            z-index: 50;
+            box-shadow: 0 0 15px rgba(76,175,80,0.6);
+        }
+
+        @keyframes fuelMove {
+            0% { transform: translateZ(500px) scale(0.3); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateZ(-500px) scale(1.3); opacity: 0; }
+        }
+
+        .explosion {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #FF6B00, #FF0000, transparent);
+            animation: explode 0.6s ease-out forwards;
+            z-index: 200;
+        }
+
+        @keyframes explode {
+            0% { transform: scale(0); opacity: 1; }
+            50% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #FFD700;
+            border-radius: 50%;
+            animation: particleFloat 2s ease-out forwards;
+        }
+
+        @keyframes particleFloat {
+            0% { transform: translate(0, 0) scale(1); opacity: 1; }
+            100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        .control-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(145deg, #4CAF50, #45a049);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+        }
+
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(76,175,80,0.4);
+        }
+
+        .control-btn:active {
+            transform: translateY(0);
+        }
+
+        .fuel-bar {
+            position: fixed;
+            top: 80px;
+            left: 20px;
+            width: 200px;
+            height: 20px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 10px;
+            border: 2px solid #4CAF50;
+            overflow: hidden;
+        }
+
+        .fuel-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #FF4444, #FFEB3B, #4CAF50);
+            border-radius: 8px;
+            transition: width 0.3s ease;
+            width: 100%;
+        }
+
+        .fuel-label {
+            position: absolute;
+            top: -25px;
+            left: 0;
+            color: white;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        .game-over {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            z-index: 1000;
+            backdrop-filter: blur(15px);
+            border: 2px solid #4CAF50;
+            display: none;
+        }
+
+        .game-over h2 {
+            color: #FF4444;
+            margin-bottom: 20px;
+            font-size: 2em;
+        }
+
+        .game-over p {
+            margin-bottom: 20px;
+            font-size: 1.2em;
+        }
+
+        .restart-btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(145deg, #4CAF50, #45a049);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 1.1em;
+            transition: all 0.3s ease;
+        }
+
+        .restart-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(76,175,80,0.4);
+        }
+
+        .instructions {
+            position: fixed;
+            top: 130px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            font-size: 0.9em;
+            max-width: 250px;
+        }
+
+        .instructions h3 {
+            color: #4CAF50;
+            margin-bottom: 10px;
+        }
+
+        .instructions p {
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        @media (max-width: 768px) {
+            .game-stats { gap: 15px; font-size: 1em; }
+            .airplane { width: 50px; height: 50px; }
+            .controls { bottom: 10px; gap: 10px; }
+            .control-btn { padding: 8px 15px; font-size: 0.8em; }
+            .instructions { position: static; margin: 10px; max-width: none; }
+            .fuel-bar { width: 150px; height: 15px; top: 70px; left: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-header">
+        <div class="game-title">✈️ 3D飞行冒险</div>
+        <div class="game-stats">
+            <div class="stat-item">
+                <div class="stat-label">得分</div>
+                <div class="stat-value" id="score">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">距离</div>
+                <div class="stat-value" id="distance">0km</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">高度</div>
+                <div class="stat-value" id="altitude">1000m</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">速度</div>
+                <div class="stat-value" id="speed">250km/h</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="fuel-bar">
+        <div class="fuel-label">燃料</div>
+        <div class="fuel-fill" id="fuelFill"></div>
+    </div>
+
+    <div class="game-container" id="gameContainer">
+        <div class="terrain" id="terrain"></div>
+        
+        <div class="airplane" id="airplane">
+            <div class="airplane-propeller"></div>
+            <div class="airplane-body"></div>
+            <div class="airplane-wing left"></div>
+            <div class="airplane-wing right"></div>
+            <div class="airplane-tail"></div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="control-btn" id="upBtn">⬆️ 上升</button>
+        <button class="control-btn" id="downBtn">⬇️ 下降</button>
+        <button class="control-btn" id="leftBtn">⬅️ 左转</button>
+        <button class="control-btn" id="rightBtn">➡️ 右转</button>
+        <button class="control-btn" id="pauseBtn">⏸️ 暂停</button>
+    </div>
+
+    <div class="instructions">
+        <h3>🎮 操作说明</h3>
+        <p><strong>键盘：</strong> WASD 或 方向键控制飞行</p>
+        <p><strong>鼠标：</strong> 点击按钮控制</p>
+        <p><strong>目标：</strong> 避开红色障碍物，收集绿色燃料</p>
+        <p><strong>提示：</strong> 注意燃料消耗和地形高度</p>
+    </div>
+
+    <div class="game-over" id="gameOver">
+        <h2>游戏结束</h2>
+        <p>你的得分: <span id="finalScore">0</span></p>
+        <p>飞行距离: <span id="finalDistance">0</span>km</p>
+        <button class="restart-btn" onclick="restartGame()">🔄 重新开始</button>
+    </div>
+
+    <script>
+        class AirplaneGame {
+            constructor() {
+                this.airplane = document.getElementById('airplane');
+                this.terrain = document.getElementById('terrain');
+                this.gameContainer = document.getElementById('gameContainer');
+                
+                // 游戏状态
+                this.score = 0;
+                this.distance = 0;
+                this.fuel = 100;
+                this.altitude = 1000;
+                this.speed = 250;
+                this.isGameRunning = true;
+                this.isPaused = false;
+                
+                // 飞机位置
+                this.airplaneX = 0;
+                this.airplaneY = 0;
+                this.airplaneRotation = 0;
+                
+                // 游戏对象数组
+                this.obstacles = [];
+                this.fuelItems = [];
+                this.mountains = [];
+                this.clouds = [];
+                this.trees = [];
+                
+                // 输入控制
+                this.keys = {};
+                this.mouseControls = {};
+                
+                this.initializeGame();
+                this.setupControls();
+                this.generateTerrain();
+                this.gameLoop();
+            }
+            
+            initializeGame() {
+                this.updateUI();
+                this.generateInitialObjects();
+            }
+            
+            setupControls() {
+                // 键盘控制
+                document.addEventListener('keydown', (e) => {
+                    this.keys[e.key.toLowerCase()] = true;
+                    if (e.key === ' ') {
+                        e.preventDefault();
+                        this.togglePause();
+                    }
+                });
+                
+                document.addEventListener('keyup', (e) => {
+                    this.keys[e.key.toLowerCase()] = false;
+                });
+                
+                // 鼠标/触摸控制
+                const buttons = {
+                    upBtn: () => this.mouseControls.up = true,
+                    downBtn: () => this.mouseControls.down = true,
+                    leftBtn: () => this.mouseControls.left = true,
+                    rightBtn: () => this.mouseControls.right = true,
+                    pauseBtn: () => this.togglePause()
+                };
+                
+                Object.keys(buttons).forEach(id => {
+                    const btn = document.getElementById(id);
+                    btn.addEventListener('mousedown', buttons[id]);
+                    btn.addEventListener('touchstart', buttons[id]);
+                    btn.addEventListener('mouseup', () => this.mouseControls = {});
+                    btn.addEventListener('touchend', () => this.mouseControls = {});
+                });
+            }
+            
+            generateTerrain() {
+                // 生成山脉
+                for (let i = 0; i < 20; i++) {
+                    this.createMountain();
+                }
+                
+                // 生成云朵
+                for (let i = 0; i < 15; i++) {
+                    this.createCloud();
+                }
+                
+                // 生成树木
+                for (let i = 0; i < 50; i++) {
+                    this.createTree();
+                }
+            }
+            
+            createMountain() {
+                const mountain = document.createElement('div');
+                mountain.className = 'mountain';
+                
+                const size = Math.random() * 200 + 100;
+                const height = Math.random() * 150 + 100;
+                
+                mountain.style.left = Math.random() * 150 + '%';
+                mountain.style.top = Math.random() * 150 + '%';
+                mountain.style.borderLeft = `${size/2}px solid transparent`;
+                mountain.style.borderRight = `${size/2}px solid transparent`;
+                mountain.style.borderBottom = `${height}px solid #8B4513`;
+                mountain.style.transform = `rotateX(90deg) translateZ(-${Math.random() * 200}px)`;
+                mountain.style.filter = `hue-rotate(${Math.random() * 60}deg)`;
+                
+                this.terrain.appendChild(mountain);
+                this.mountains.push(mountain);
+            }
+            
+            createCloud() {
+                const cloud = document.createElement('div');
+                cloud.className = 'cloud';
+                
+                const size = Math.random() * 60 + 40;
+                cloud.style.width = size + 'px';
+                cloud.style.height = size * 0.6 + 'px';
+                cloud.style.left = Math.random() * 150 + '%';
+                cloud.style.top = Math.random() * 50 + '%';
+                cloud.style.animationDelay = Math.random() * 15 + 's';
+                cloud.style.opacity = Math.random() * 0.5 + 0.3;
+                
+                // 添加云朵的小组件
+                for (let i = 0; i < 3; i++) {
+                    const cloudPart = document.createElement('div');
+                    cloudPart.style.position = 'absolute';
+                    cloudPart.style.borderRadius = '50%';
+                    cloudPart.style.background = 'inherit';
+                    cloudPart.style.width = size * (0.3 + Math.random() * 0.4) + 'px';
+                    cloudPart.style.height = size * (0.3 + Math.random() * 0.4) + 'px';
+                    cloudPart.style.left = Math.random() * size + 'px';
+                    cloudPart.style.top = Math.random() * size * 0.3 + 'px';
+                    cloud.appendChild(cloudPart);
+                }
+                
+                this.terrain.appendChild(cloud);
+                this.clouds.push(cloud);
+            }
+            
+            createTree() {
+                const tree = document.createElement('div');
+                tree.className = 'tree';
+                
+                tree.style.left = Math.random() * 150 + '%';
+                tree.style.top = Math.random() * 150 + '%';
+                tree.style.height = Math.random() * 15 + 15 + 'px';
+                tree.style.transform = `rotateX(90deg) translateZ(-${Math.random() * 50}px)`;
+                tree.style.animationDelay = Math.random() * 20 + 's';
+                
+                this.terrain.appendChild(tree);
+                this.trees.push(tree);
+            }
+            
+            generateInitialObjects() {
+                // 生成初始障碍物和燃料
+                setInterval(() => {
+                    if (this.isGameRunning && !this.isPaused) {
+                        if (Math.random() < 0.3) {
+                            this.createObstacle();
+                        }
+                        if (Math.random() < 0.2) {
+                            this.createFuelItem();
+                        }
+                    }
+                }, 2000);
+            }
+            
+            createObstacle() {
+                const obstacle = document.createElement('div');
+                obstacle.className = 'obstacle';
+                
+                obstacle.style.left = Math.random() * 80 + 10 + '%';
+                obstacle.style.top = Math.random() * 80 + 10 + '%';
+                obstacle.style.animationDelay = '0s';
+                
+                this.gameContainer.appendChild(obstacle);
+                this.obstacles.push(obstacle);
+                
+                // 自动清理
+                setTimeout(() => {
+                    if (obstacle.parentNode) {
+                        obstacle.parentNode.removeChild(obstacle);
+                    }
+                    this.obstacles = this.obstacles.filter(obs => obs !== obstacle);
+                }, 8000);
+            }
+            
+            createFuelItem() {
+                const fuelItem = document.createElement('div');
+                fuelItem.className = 'fuel-item';
+                
+                fuelItem.style.left = Math.random() * 80 + 10 + '%';
+                fuelItem.style.top = Math.random() * 80 + 10 + '%';
+                fuelItem.style.animationDelay = '0s';
+                
+                this.gameContainer.appendChild(fuelItem);
+                this.fuelItems.push(fuelItem);
+                
+                // 自动清理
+                setTimeout(() => {
+                    if (fuelItem.parentNode) {
+                        fuelItem.parentNode.removeChild(fuelItem);
+                    }
+                    this.fuelItems = this.fuelItems.filter(fuel => fuel !== fuelItem);
+                }, 10000);
+            }
+            
+            updateAirplaneMovement() {
+                if (this.isPaused || !this.isGameRunning) return;
+                
+                const moveSpeed = 3;
+                let moved = false;
+                
+                // 键盘控制
+                if (this.keys['w'] || this.keys['arrowup'] || this.mouseControls.up) {
+                    this.airplaneY = Math.max(this.airplaneY - moveSpeed, -200);
+                    this.altitude = Math.min(this.altitude + 10, 2000);
+                    moved = true;
+                }
+                if (this.keys['s'] || this.keys['arrowdown'] || this.mouseControls.down) {
+                    this.airplaneY = Math.min(this.airplaneY + moveSpeed, 200);
+                    this.altitude = Math.max(this.altitude - 10, 100);
+                    moved = true;
+                }
+                if (this.keys['a'] || this.keys['arrowleft'] || this.mouseControls.left) {
+                    this.airplaneX = Math.max(this.airplaneX - moveSpeed, -300);
+                    this.airplaneRotation = Math.max(this.airplaneRotation - 2, -15);
+                    moved = true;
+                }
+                if (this.keys['d'] || this.keys['arrowright'] || this.mouseControls.right) {
+                    this.airplaneX = Math.min(this.airplaneX + moveSpeed, 300);
+                    this.airplaneRotation = Math.min(this.airplaneRotation + 2, 15);
+                    moved = true;
+                }
+                
+                // 自动回正
+                if (!moved) {
+                    this.airplaneRotation *= 0.9;
+                }
+                
+                // 更新飞机位置
+                this.airplane.style.transform = `translate(-50%, -50%) translate(${this.airplaneX}px, ${this.airplaneY}px) rotate(${this.airplaneRotation}deg)`;
+            }
+            
+            checkCollisions() {
+                if (this.isPaused || !this.isGameRunning) return;
+                
+                const airplaneRect = this.airplane.getBoundingClientRect();
+                const centerX = airplaneRect.left + airplaneRect.width / 2;
+                const centerY = airplaneRect.top + airplaneRect.height / 2;
+                
+                // 检查障碍物碰撞
+                this.obstacles.forEach((obstacle, index) => {
+                    const obstacleRect = obstacle.getBoundingClientRect();
+                    const obsX = obstacleRect.left + obstacleRect.width / 2;
+                    const obsY = obstacleRect.top + obstacleRect.height / 2;
+                    
+                    const distance = Math.sqrt((centerX - obsX) ** 2 + (centerY - obsY) ** 2);
+                    
+                    if (distance < 40) {
+                        this.createExplosion(centerX, centerY);
+                        this.gameOver();
+                    }
+                });
+                
+                // 检查燃料收集
+                this.fuelItems.forEach((fuelItem, index) => {
+                    const fuelRect = fuelItem.getBoundingClientRect();
+                    const fuelX = fuelRect.left + fuelRect.width / 2;
+                    const fuelY = fuelRect.top + fuelRect.height / 2;
+                    
+                    const distance = Math.sqrt((centerX - fuelX) ** 2 + (centerY - fuelY) ** 2);
+                    
+                    if (distance < 35) {
+                        this.collectFuel(fuelItem, index);
+                        this.createParticleEffect(fuelX, fuelY, '#4CAF50');
+                    }
+                });
+            }
+            
+            collectFuel(fuelItem, index) {
+                this.fuel = Math.min(this.fuel + 20, 100);
+                this.score += 50;
+                
+                // 移除燃料项
+                if (fuelItem.parentNode) {
+                    fuelItem.parentNode.removeChild(fuelItem);
+                }
+                this.fuelItems.splice(index, 1);
+            }
+            
+            createExplosion(x, y) {
+                const explosion = document.createElement('div');
+                explosion.className = 'explosion';
+                explosion.style.left = x - 50 + 'px';
+                explosion.style.top = y - 50 + 'px';
+                
+                document.body.appendChild(explosion);
+                
+                setTimeout(() => {
+                    if (explosion.parentNode) {
+                        explosion.parentNode.removeChild(explosion);
+                    }
+                }, 600);
+            }
+            
+            createParticleEffect(x, y, color) {
+                for (let i = 0; i < 8; i++) {
+                    const particle = document.createElement('div');
+                    particle.className = 'particle';
+                    particle.style.left = x + 'px';
+                    particle.style.top = y + 'px';
+                    particle.style.background = color;
+                    
+                    const dx = (Math.random() - 0.5) * 100;
+                    const dy = (Math.random() - 0.5) * 100;
+                    particle.style.setProperty('--dx', dx + 'px');
+                    particle.style.setProperty('--dy', dy + 'px');
+                    
+                    document.body.appendChild(particle);
+                    
+                    setTimeout(() => {
+                        if (particle.parentNode) {
+                            particle.parentNode.removeChild(particle);
+                        }
+                    }, 2000);
+                }
+            }
+            
+            updateGameLogic() {
+                if (this.isPaused || !this.isGameRunning) return;
+                
+                // 更新距离和得分
+                this.distance += 0.1;
+                this.score += 1;
+                
+                // 消耗燃料
+                this.fuel -= 0.05;
+                if (this.fuel <= 0) {
+                    this.gameOver();
+                }
+                
+                // 随机速度变化
+                this.speed = 250 + Math.sin(Date.now() * 0.001) * 20;
+                
+                this.updateUI();
+            }
+            
+            updateUI() {
+                document.getElementById('score').textContent = Math.floor(this.score);
+                document.getElementById('distance').textContent = Math.floor(this.distance) + 'km';
+                document.getElementById('altitude').textContent = Math.floor(this.altitude) + 'm';
+                document.getElementById('speed').textContent = Math.floor(this.speed) + 'km/h';
+                
+                const fuelFill = document.getElementById('fuelFill');
+                fuelFill.style.width = this.fuel + '%';
+                
+                // 燃料警告
+                if (this.fuel < 30) {
+                    fuelFill.style.animation = 'pulse 0.5s infinite';
+                } else {
+                    fuelFill.style.animation = '';
+                }
+            }
+            
+            togglePause() {
+                this.isPaused = !this.isPaused;
+                const pauseBtn = document.getElementById('pauseBtn');
+                pauseBtn.textContent = this.isPaused ? '▶️ 继续' : '⏸️ 暂停';
+                
+                // 暂停动画
+                const animations = document.querySelectorAll('.terrain, .obstacle, .fuel-item, .cloud');
+                animations.forEach(el => {
+                    el.style.animationPlayState = this.isPaused ? 'paused' : 'running';
+                });
+            }
+            
+            gameOver() {
+                this.isGameRunning = false;
+                
+                // 停止所有动画
+                const animations = document.querySelectorAll('.terrain, .obstacle, .fuel-item, .cloud');
+                animations.forEach(el => {
+                    el.style.animationPlayState = 'paused';
+                });
+                
+                // 显示游戏结束界面
+                document.getElementById('finalScore').textContent = Math.floor(this.score);
+                document.getElementById('finalDistance').textContent = Math.floor(this.distance);
+                document.getElementById('gameOver').style.display = 'block';
+            }
+            
+            gameLoop() {
+                if (this.isGameRunning) {
+                    this.updateAirplaneMovement();
+                    this.checkCollisions();
+                    this.updateGameLogic();
+                }
+                
+                requestAnimationFrame(() => this.gameLoop());
+            }
+        }
+        
+        // 全局游戏实例
+        let game;
+        
+        function startGame() {
+            game = new AirplaneGame();
+        }
+        
+        function restartGame() {
+            // 清理现有游戏
+            if (game) {
+                const gameContainer = document.getElementById('gameContainer');
+                const obstacles = gameContainer.querySelectorAll('.obstacle, .fuel-item');
+                obstacles.forEach(obs => obs.remove());
+                
+                const terrain = document.getElementById('terrain');
+                const terrainObjects = terrain.querySelectorAll('.mountain, .cloud, .tree');
+                terrainObjects.forEach(obj => obj.remove());
+            }
+            
+            // 重置UI
+            document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('pauseBtn').textContent = '⏸️ 暂停';
+            
+            // 启动新游戏
+            startGame();
+        }
+        
+        // 初始化游戏
+        document.addEventListener('DOMContentLoaded', () => {
+            startGame();
+        });
+    </script>
+</body>
+</html>
