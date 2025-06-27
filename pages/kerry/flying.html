@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D飞机俯视游戏</title>
+    <title>3D飞机俯视游戏 - 完整版</title>
     <style>
         * {
             margin: 0;
@@ -90,6 +90,120 @@
             100% { transform: translateZ(-2000px) rotateX(60deg); }
         }
 
+        /* 机场和跑道样式 */
+        .airport {
+            position: absolute;
+            width: 400px;
+            height: 200px;
+            left: 50%;
+            bottom: 10%;
+            transform: translateX(-50%);
+            z-index: 10;
+            transition: all 1s ease;
+        }
+
+        .runway {
+            position: absolute;
+            width: 300px;
+            height: 40px;
+            background: linear-gradient(90deg, #333, #555, #333);
+            border: 2px solid #FFFF00;
+            border-radius: 20px;
+            left: 50%;
+            bottom: 50%;
+            transform: translateX(-50%);
+            box-shadow: 0 0 20px rgba(255,255,0,0.5);
+        }
+
+        .runway::before {
+            content: "";
+            position: absolute;
+            width: 100%;
+            height: 4px;
+            background: repeating-linear-gradient(90deg, 
+                white 0px, white 20px, 
+                transparent 20px, transparent 40px);
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .runway-lights {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+
+        .runway-light {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: #FFFF00;
+            border-radius: 50%;
+            animation: runwayBlink 2s infinite;
+        }
+
+        @keyframes runwayBlink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+
+        .airport-building {
+            position: absolute;
+            width: 80px;
+            height: 60px;
+            background: linear-gradient(135deg, #4A5568, #2D3748);
+            border-radius: 5px;
+            right: 20px;
+            bottom: 20px;
+        }
+
+        .control-tower {
+            position: absolute;
+            width: 20px;
+            height: 80px;
+            background: linear-gradient(to top, #2D3748, #4A5568);
+            right: 0px;
+            bottom: 60px;
+            border-radius: 3px;
+        }
+
+        .control-tower::after {
+            content: "";
+            position: absolute;
+            width: 25px;
+            height: 15px;
+            background: #E53E3E;
+            top: 0;
+            left: -2.5px;
+            border-radius: 3px;
+            animation: towerLight 3s infinite;
+        }
+
+        @keyframes towerLight {
+            0%, 90% { opacity: 1; }
+            95%, 100% { opacity: 0.3; }
+        }
+
+        /* 降落引导线 */
+        .landing-guide {
+            position: absolute;
+            width: 3px;
+            background: linear-gradient(to bottom, 
+                rgba(255,255,0,0) 0%,
+                rgba(255,255,0,0.8) 20%,
+                rgba(255,255,0,0.8) 80%,
+                rgba(255,255,0,0) 100%);
+            transform-origin: bottom;
+            z-index: 5;
+            animation: guidePulse 2s infinite;
+            display: none;
+        }
+
+        @keyframes guidePulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
         .mountain {
             position: absolute;
             width: 0;
@@ -140,6 +254,20 @@
             z-index: 100;
             transition: all 0.1s ease;
             filter: drop-shadow(0 5px 15px rgba(0,0,0,0.5));
+        }
+
+        .airplane.on-ground {
+            transform: translate(-50%, -50%) scale(0.8);
+        }
+
+        .airplane.taking-off {
+            animation: takeoffShake 0.5s ease-in-out;
+        }
+
+        @keyframes takeoffShake {
+            0%, 100% { transform: translate(-50%, -50%) scale(0.8); }
+            25% { transform: translate(-50%, -50%) scale(0.8) rotate(-1deg); }
+            75% { transform: translate(-50%, -50%) scale(0.8) rotate(1deg); }
         }
 
         .airplane-body {
@@ -194,6 +322,10 @@
             transform: translate(-50%, -50%) translateX(20px);
             animation: propellerSpin 0.1s linear infinite;
             border-radius: 1px;
+        }
+
+        .airplane-propeller.slow {
+            animation: propellerSpin 0.3s linear infinite;
         }
 
         @keyframes propellerSpin {
@@ -303,6 +435,14 @@
             transform: translateY(0);
         }
 
+        .control-btn.taxi {
+            background: linear-gradient(145deg, #FF9800, #F57C00);
+        }
+
+        .control-btn.taxi:hover {
+            box-shadow: 0 5px 15px rgba(255,152,0,0.4);
+        }
+
         .fuel-bar {
             position: fixed;
             top: 80px;
@@ -384,7 +524,7 @@
             border-radius: 10px;
             backdrop-filter: blur(10px);
             font-size: 0.9em;
-            max-width: 250px;
+            max-width: 280px;
         }
 
         .instructions h3 {
@@ -397,19 +537,55 @@
             line-height: 1.4;
         }
 
+        .status-indicator {
+            position: fixed;
+            top: 110px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 15px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            font-weight: bold;
+            border: 2px solid;
+            transition: all 0.3s ease;
+        }
+
+        .status-indicator.ground {
+            color: #FF9800;
+            border-color: #FF9800;
+        }
+
+        .status-indicator.airborne {
+            color: #4CAF50;
+            border-color: #4CAF50;
+        }
+
+        .status-indicator.landing {
+            color: #2196F3;
+            border-color: #2196F3;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
         @media (max-width: 768px) {
             .game-stats { gap: 15px; font-size: 1em; }
             .airplane { width: 50px; height: 50px; }
-            .controls { bottom: 10px; gap: 10px; }
+            .controls { bottom: 10px; gap: 10px; flex-wrap: wrap; }
             .control-btn { padding: 8px 15px; font-size: 0.8em; }
             .instructions { position: static; margin: 10px; max-width: none; }
             .fuel-bar { width: 150px; height: 15px; top: 70px; left: 10px; }
+            .airport { width: 300px; height: 150px; }
+            .runway { width: 200px; height: 30px; }
         }
     </style>
 </head>
 <body>
     <div class="game-header">
-        <div class="game-title">✈️ 3D飞行冒险</div>
+        <div class="game-title">✈️ 3D飞行冒险 - 完整版</div>
         <div class="game-stats">
             <div class="stat-item">
                 <div class="stat-label">得分</div>
@@ -421,11 +597,11 @@
             </div>
             <div class="stat-item">
                 <div class="stat-label">高度</div>
-                <div class="stat-value" id="altitude">1000m</div>
+                <div class="stat-value" id="altitude">0m</div>
             </div>
             <div class="stat-item">
                 <div class="stat-label">速度</div>
-                <div class="stat-value" id="speed">250km/h</div>
+                <div class="stat-value" id="speed">0km/h</div>
             </div>
         </div>
     </div>
@@ -435,11 +611,43 @@
         <div class="fuel-fill" id="fuelFill"></div>
     </div>
 
+    <div class="status-indicator ground" id="statusIndicator">
+        地面待命
+    </div>
+
     <div class="game-container" id="gameContainer">
         <div class="terrain" id="terrain"></div>
         
-        <div class="airplane" id="airplane">
-            <div class="airplane-propeller"></div>
+        <!-- 机场 -->
+        <div class="airport" id="airport">
+            <div class="runway" id="runway">
+                <div class="runway-lights">
+                    <div class="runway-light" style="left: 10px; top: 5px;"></div>
+                    <div class="runway-light" style="left: 50px; top: 5px;"></div>
+                    <div class="runway-light" style="left: 90px; top: 5px;"></div>
+                    <div class="runway-light" style="left: 130px; top: 5px;"></div>
+                    <div class="runway-light" style="left: 170px; top: 5px;"></div>
+                    <div class="runway-light" style="left: 210px; top: 5px;"></div>
+                    <div class="runway-light" style="left: 250px; top: 5px;"></div>
+                    
+                    <div class="runway-light" style="left: 10px; bottom: 5px;"></div>
+                    <div class="runway-light" style="left: 50px; bottom: 5px;"></div>
+                    <div class="runway-light" style="left: 90px; bottom: 5px;"></div>
+                    <div class="runway-light" style="left: 130px; bottom: 5px;"></div>
+                    <div class="runway-light" style="left: 170px; bottom: 5px;"></div>
+                    <div class="runway-light" style="left: 210px; bottom: 5px;"></div>
+                    <div class="runway-light" style="left: 250px; bottom: 5px;"></div>
+                </div>
+            </div>
+            <div class="airport-building"></div>
+            <div class="control-tower"></div>
+        </div>
+
+        <!-- 降落引导线 -->
+        <div class="landing-guide" id="landingGuide"></div>
+        
+        <div class="airplane on-ground" id="airplane">
+            <div class="airplane-propeller slow"></div>
             <div class="airplane-body"></div>
             <div class="airplane-wing left"></div>
             <div class="airplane-wing right"></div>
@@ -452,15 +660,18 @@
         <button class="control-btn" id="downBtn">⬇️ 下降</button>
         <button class="control-btn" id="leftBtn">⬅️ 左转</button>
         <button class="control-btn" id="rightBtn">➡️ 右转</button>
+        <button class="control-btn taxi" id="taxiBtn">🛬 滑行</button>
         <button class="control-btn" id="pauseBtn">⏸️ 暂停</button>
     </div>
 
     <div class="instructions">
         <h3>🎮 操作说明</h3>
         <p><strong>键盘：</strong> WASD 或 方向键控制飞行</p>
-        <p><strong>鼠标：</strong> 点击按钮控制</p>
+        <p><strong>滑行：</strong> T 键或点击滑行按钮</p>
+        <p><strong>起飞：</strong> 滑行时按上键加速起飞</p>
+        <p><strong>降落：</strong> 返回机场时出现引导线</p>
         <p><strong>目标：</strong> 避开红色障碍物，收集绿色燃料</p>
-        <p><strong>提示：</strong> 注意燃料消耗和地形高度</p>
+        <p><strong>提示：</strong> 注意燃料消耗和安全降落</p>
     </div>
 
     <div class="game-over" id="gameOver">
@@ -476,20 +687,32 @@
                 this.airplane = document.getElementById('airplane');
                 this.terrain = document.getElementById('terrain');
                 this.gameContainer = document.getElementById('gameContainer');
+                this.airport = document.getElementById('airport');
+                this.runway = document.getElementById('runway');
+                this.landingGuide = document.getElementById('landingGuide');
+                this.statusIndicator = document.getElementById('statusIndicator');
                 
                 // 游戏状态
                 this.score = 0;
                 this.distance = 0;
                 this.fuel = 100;
-                this.altitude = 1000;
-                this.speed = 250;
+                this.altitude = 0;
+                this.speed = 0;
                 this.isGameRunning = true;
                 this.isPaused = false;
                 
+                // 飞行状态
+                this.flightState = 'ground'; // ground, taxiing, takeoff, airborne, landing
+                this.isOnGround = true;
+                this.isTaxiing = false;
+                this.taxiSpeed = 0;
+                this.takeoffSpeed = 0;
+                
                 // 飞机位置
                 this.airplaneX = 0;
-                this.airplaneY = 0;
+                this.airplaneY = 200; // 开始在跑道上
                 this.airplaneRotation = 0;
+                this.runwayPosition = 0; // 在跑道上的位置
                 
                 // 游戏对象数组
                 this.obstacles = [];
@@ -510,7 +733,11 @@
             
             initializeGame() {
                 this.updateUI();
+                this.updateFlightStatus();
                 this.generateInitialObjects();
+                
+                // 飞机开始在跑道左端
+                this.airplane.style.transform = `translate(-50%, -50%) translate(${this.airplaneX}px, ${this.airplaneY}px)`;
             }
             
             setupControls() {
@@ -520,6 +747,9 @@
                     if (e.key === ' ') {
                         e.preventDefault();
                         this.togglePause();
+                    }
+                    if (e.key.toLowerCase() === 't') {
+                        this.toggleTaxi();
                     }
                 });
                 
@@ -533,6 +763,7 @@
                     downBtn: () => this.mouseControls.down = true,
                     leftBtn: () => this.mouseControls.left = true,
                     rightBtn: () => this.mouseControls.right = true,
+                    taxiBtn: () => this.toggleTaxi(),
                     pauseBtn: () => this.togglePause()
                 };
                 
@@ -540,9 +771,49 @@
                     const btn = document.getElementById(id);
                     btn.addEventListener('mousedown', buttons[id]);
                     btn.addEventListener('touchstart', buttons[id]);
-                    btn.addEventListener('mouseup', () => this.mouseControls = {});
-                    btn.addEventListener('touchend', () => this.mouseControls = {});
+                    if (id !== 'taxiBtn' && id !== 'pauseBtn') {
+                        btn.addEventListener('mouseup', () => this.mouseControls = {});
+                        btn.addEventListener('touchend', () => this.mouseControls = {});
+                    }
                 });
+            }
+            
+            toggleTaxi() {
+                if (this.isOnGround && !this.isPaused) {
+                    this.isTaxiing = !this.isTaxiing;
+                    this.flightState = this.isTaxiing ? 'taxiing' : 'ground';
+                    this.updateFlightStatus();
+                    
+                    // 更新螺旋桨速度
+                    const propeller = this.airplane.querySelector('.airplane-propeller');
+                    if (this.isTaxiing) {
+                        propeller.classList.remove('slow');
+                    } else {
+                        propeller.classList.add('slow');
+                        this.taxiSpeed = 0;
+                    }
+                }
+            }
+            
+            updateFlightStatus() {
+                const statusText = {
+                    ground: '地面待命',
+                    taxiing: '跑道滑行',
+                    takeoff: '起飞中...',
+                    airborne: '空中飞行',
+                    landing: '准备降落'
+                };
+                
+                const statusClass = {
+                    ground: 'ground',
+                    taxiing: 'ground',
+                    takeoff: 'airborne',
+                    airborne: 'airborne',
+                    landing: 'landing'
+                };
+                
+                this.statusIndicator.textContent = statusText[this.flightState];
+                this.statusIndicator.className = `status-indicator ${statusClass[this.flightState]}`;
             }
             
             generateTerrain() {
@@ -625,9 +896,9 @@
             }
             
             generateInitialObjects() {
-                // 生成初始障碍物和燃料
+                // 生成初始障碍物和燃料（只在空中飞行时生成）
                 setInterval(() => {
-                    if (this.isGameRunning && !this.isPaused) {
+                    if (this.isGameRunning && !this.isPaused && this.flightState === 'airborne') {
                         if (Math.random() < 0.3) {
                             this.createObstacle();
                         }
@@ -681,42 +952,184 @@
             updateAirplaneMovement() {
                 if (this.isPaused || !this.isGameRunning) return;
                 
-                const moveSpeed = 3;
-                let moved = false;
-                
-                // 键盘控制
-                if (this.keys['w'] || this.keys['arrowup'] || this.mouseControls.up) {
-                    this.airplaneY = Math.max(this.airplaneY - moveSpeed, -200);
-                    this.altitude = Math.min(this.altitude + 10, 2000);
-                    moved = true;
-                }
-                if (this.keys['s'] || this.keys['arrowdown'] || this.mouseControls.down) {
-                    this.airplaneY = Math.min(this.airplaneY + moveSpeed, 200);
-                    this.altitude = Math.max(this.altitude - 10, 100);
-                    moved = true;
-                }
-                if (this.keys['a'] || this.keys['arrowleft'] || this.mouseControls.left) {
-                    this.airplaneX = Math.max(this.airplaneX - moveSpeed, -300);
-                    this.airplaneRotation = Math.max(this.airplaneRotation - 2, -15);
-                    moved = true;
-                }
-                if (this.keys['d'] || this.keys['arrowright'] || this.mouseControls.right) {
-                    this.airplaneX = Math.min(this.airplaneX + moveSpeed, 300);
-                    this.airplaneRotation = Math.min(this.airplaneRotation + 2, 15);
-                    moved = true;
+                if (this.flightState === 'ground') {
+                    // 地面待命状态，飞机不动
+                    this.speed = 0;
+                    return;
                 }
                 
-                // 自动回正
-                if (!moved) {
-                    this.airplaneRotation *= 0.9;
+                if (this.flightState === 'taxiing') {
+                    // 滑行状态
+                    if (this.keys['w'] || this.keys['arrowup'] || this.mouseControls.up) {
+                        this.taxiSpeed = Math.min(this.taxiSpeed + 0.5, 15);
+                        this.runwayPosition += this.taxiSpeed;
+                        
+                        // 检查起飞条件
+                        if (this.taxiSpeed >= 12) {
+                            this.flightState = 'takeoff';
+                            this.airplane.classList.add('taking-off');
+                            this.updateFlightStatus();
+                            
+                            setTimeout(() => {
+                                this.takeOff();
+                            }, 1000);
+                        }
+                    } else {
+                        this.taxiSpeed = Math.max(this.taxiSpeed - 0.2, 0);
+                        this.runwayPosition += this.taxiSpeed;
+                    }
+                    
+                    // 更新飞机在跑道上的位置
+                    this.airplaneX = -100 + (this.runwayPosition * 2);
+                    this.speed = this.taxiSpeed * 10;
+                    
+                    // 左右微调
+                    if (this.keys['a'] || this.keys['arrowleft'] || this.mouseControls.left) {
+                        this.airplaneY = Math.min(this.airplaneY + 1, 220);
+                    }
+                    if (this.keys['d'] || this.keys['arrowright'] || this.mouseControls.right) {
+                        this.airplaneY = Math.max(this.airplaneY - 1, 180);
+                    }
+                    
+                    return;
+                }
+                
+                if (this.flightState === 'airborne') {
+                    // 空中飞行
+                    const moveSpeed = 3;
+                    let moved = false;
+                    
+                    // 键盘控制
+                    if (this.keys['w'] || this.keys['arrowup'] || this.mouseControls.up) {
+                        this.airplaneY = Math.max(this.airplaneY - moveSpeed, -200);
+                        this.altitude = Math.min(this.altitude + 10, 2000);
+                        moved = true;
+                    }
+                    if (this.keys['s'] || this.keys['arrowdown'] || this.mouseControls.down) {
+                        this.airplaneY = Math.min(this.airplaneY + moveSpeed, 200);
+                        this.altitude = Math.max(this.altitude - 10, 100);
+                        moved = true;
+                    }
+                    if (this.keys['a'] || this.keys['arrowleft'] || this.mouseControls.left) {
+                        this.airplaneX = Math.max(this.airplaneX - moveSpeed, -300);
+                        this.airplaneRotation = Math.max(this.airplaneRotation - 2, -15);
+                        moved = true;
+                    }
+                    if (this.keys['d'] || this.keys['arrowright'] || this.mouseControls.right) {
+                        this.airplaneX = Math.min(this.airplaneX + moveSpeed, 300);
+                        this.airplaneRotation = Math.min(this.airplaneRotation + 2, 15);
+                        moved = true;
+                    }
+                    
+                    // 自动回正
+                    if (!moved) {
+                        this.airplaneRotation *= 0.9;
+                    }
+                    
+                    // 检查降落条件
+                    this.checkLandingCondition();
                 }
                 
                 // 更新飞机位置
                 this.airplane.style.transform = `translate(-50%, -50%) translate(${this.airplaneX}px, ${this.airplaneY}px) rotate(${this.airplaneRotation}deg)`;
             }
             
+            takeOff() {
+                this.flightState = 'airborne';
+                this.isOnGround = false;
+                this.isTaxiing = false;
+                this.airplane.classList.remove('on-ground', 'taking-off');
+                this.altitude = 200;
+                this.speed = 250;
+                this.updateFlightStatus();
+                
+                // 隐藏机场
+                this.airport.style.transform = 'translateX(-50%) translateY(100px) scale(0.5)';
+                this.airport.style.opacity = '0.3';
+            }
+            
+            checkLandingCondition() {
+                // 当飞机回到接近起始位置且高度较低时，显示降落引导
+                if (Math.abs(this.airplaneX) < 50 && this.airplaneY > 100 && this.altitude < 300) {
+                    if (this.flightState !== 'landing') {
+                        this.flightState = 'landing';
+                        this.updateFlightStatus();
+                        this.showLandingGuide();
+                        
+                        // 显示机场
+                        this.airport.style.transform = 'translateX(-50%) translateY(0) scale(1)';
+                        this.airport.style.opacity = '1';
+                    }
+                    
+                    // 检查降落
+                    if (this.airplaneY > 180 && this.airplaneY < 220 && Math.abs(this.airplaneX) < 30) {
+                        this.land();
+                    }
+                } else if (this.flightState === 'landing') {
+                    this.flightState = 'airborne';
+                    this.updateFlightStatus();
+                    this.hideLandingGuide();
+                    
+                    // 隐藏机场
+                    this.airport.style.transform = 'translateX(-50%) translateY(100px) scale(0.5)';
+                    this.airport.style.opacity = '0.3';
+                }
+            }
+            
+            showLandingGuide() {
+                const guide = this.landingGuide;
+                guide.style.display = 'block';
+                
+                // 计算引导线位置
+                const airplaneRect = this.airplane.getBoundingClientRect();
+                const runwayRect = this.runway.getBoundingClientRect();
+                
+                const startX = airplaneRect.left + airplaneRect.width / 2;
+                const startY = airplaneRect.top + airplaneRect.height / 2;
+                const endX = runwayRect.left + runwayRect.width / 2;
+                const endY = runwayRect.top + runwayRect.height / 2;
+                
+                const length = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+                const angle = Math.atan2(endY - startY, endX - startX) * 180 / Math.PI + 90;
+                
+                guide.style.height = length + 'px';
+                guide.style.left = startX + 'px';
+                guide.style.top = startY + 'px';
+                guide.style.transform = `rotate(${angle}deg)`;
+            }
+            
+            hideLandingGuide() {
+                this.landingGuide.style.display = 'none';
+            }
+            
+            land() {
+                this.flightState = 'ground';
+                this.isOnGround = true;
+                this.airplane.classList.add('on-ground');
+                this.altitude = 0;
+                this.speed = 0;
+                this.airplaneX = 0;
+                this.airplaneY = 200;
+                this.airplaneRotation = 0;
+                this.runwayPosition = 0;
+                this.updateFlightStatus();
+                this.hideLandingGuide();
+                
+                // 降落奖励
+                this.score += 100;
+                this.fuel = Math.min(this.fuel + 30, 100);
+                
+                // 螺旋桨变慢
+                const propeller = this.airplane.querySelector('.airplane-propeller');
+                propeller.classList.add('slow');
+                
+                // 显示机场
+                this.airport.style.transform = 'translateX(-50%) translateY(0) scale(1)';
+                this.airport.style.opacity = '1';
+            }
+            
             checkCollisions() {
-                if (this.isPaused || !this.isGameRunning) return;
+                if (this.isPaused || !this.isGameRunning || this.flightState !== 'airborne') return;
                 
                 const airplaneRect = this.airplane.getBoundingClientRect();
                 const centerX = airplaneRect.left + airplaneRect.width / 2;
@@ -803,18 +1216,19 @@
             updateGameLogic() {
                 if (this.isPaused || !this.isGameRunning) return;
                 
-                // 更新距离和得分
-                this.distance += 0.1;
-                this.score += 1;
-                
-                // 消耗燃料
-                this.fuel -= 0.05;
-                if (this.fuel <= 0) {
-                    this.gameOver();
+                // 只在飞行中更新距离和消耗燃料
+                if (this.flightState === 'airborne') {
+                    this.distance += 0.1;
+                    this.score += 1;
+                    this.fuel -= 0.05;
+                    
+                    if (this.fuel <= 0) {
+                        this.gameOver();
+                    }
+                    
+                    // 随机速度变化
+                    this.speed = 250 + Math.sin(Date.now() * 0.001) * 20;
                 }
-                
-                // 随机速度变化
-                this.speed = 250 + Math.sin(Date.now() * 0.001) * 20;
                 
                 this.updateUI();
             }
@@ -842,7 +1256,7 @@
                 pauseBtn.textContent = this.isPaused ? '▶️ 继续' : '⏸️ 暂停';
                 
                 // 暂停动画
-                const animations = document.querySelectorAll('.terrain, .obstacle, .fuel-item, .cloud');
+                const animations = document.querySelectorAll('.terrain, .obstacle, .fuel-item, .cloud, .runway-light, .control-tower');
                 animations.forEach(el => {
                     el.style.animationPlayState = this.isPaused ? 'paused' : 'running';
                 });
@@ -852,7 +1266,7 @@
                 this.isGameRunning = false;
                 
                 // 停止所有动画
-                const animations = document.querySelectorAll('.terrain, .obstacle, .fuel-item, .cloud');
+                const animations = document.querySelectorAll('.terrain, .obstacle, .fuel-item, .cloud, .runway-light, .control-tower');
                 animations.forEach(el => {
                     el.style.animationPlayState = 'paused';
                 });
@@ -896,6 +1310,17 @@
             // 重置UI
             document.getElementById('gameOver').style.display = 'none';
             document.getElementById('pauseBtn').textContent = '⏸️ 暂停';
+            
+            // 重置飞机状态
+            const airplane = document.getElementById('airplane');
+            airplane.className = 'airplane on-ground';
+            const propeller = airplane.querySelector('.airplane-propeller');
+            propeller.classList.add('slow');
+            
+            // 重置机场
+            const airport = document.getElementById('airport');
+            airport.style.transform = 'translateX(-50%) translateY(0) scale(1)';
+            airport.style.opacity = '1';
             
             // 启动新游戏
             startGame();
