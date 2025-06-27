@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第三人称射击对战</title>
+    <style>
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+        }
+        
+        body { 
+            background: linear-gradient(45deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            font-family: 'Courier New', monospace; 
+            overflow: hidden;
+            user-select: none;
+        }
+        
+        #game-container { 
+            position: relative; 
+            width: 100vw; 
+            height: 100vh; 
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(120, 120, 120, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 50%, rgba(120, 120, 120, 0.1) 0%, transparent 50%),
+                linear-gradient(90deg, #0f0f23 0%, #1a1a2e 100%);
+            cursor: crosshair;
+        }
+        
+        .player { 
+            position: absolute; 
+            width: 30px; 
+            height: 30px; 
+            border-radius: 6px; 
+            transition: all 0.1s ease;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.8);
+        }
+        
+        #player1 { 
+            background: linear-gradient(135deg, #00ff41, #00cc33);
+            border-color: #00ff41;
+            box-shadow: 0 0 15px rgba(0, 255, 65, 0.5);
+        }
+        
+        .ai { 
+            background: linear-gradient(135deg, #ff4757, #ff3742);
+            border-color: #ff4757;
+            box-shadow: 0 0 15px rgba(255, 71, 87, 0.5);
+        }
+        
+        .bullet { 
+            position: absolute; 
+            width: 4px; 
+            height: 4px; 
+            border-radius: 50%;
+            box-shadow: 0 0 6px currentColor;
+            pointer-events: none;
+        }
+        
+        .bullet-player { 
+            background: #00ff41;
+            color: #00ff41;
+        }
+        
+        .bullet-ai { 
+            background: #ff4757;
+            color: #ff4757;
+        }
+        
+        .health-bar {
+            position: absolute;
+            bottom: -8px;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        
+        .health-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff4757, #ffaa00, #00ff41);
+            transition: width 0.3s ease;
+            border-radius: 2px;
+        }
+        
+        .ui-container {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            pointer-events: none;
+            z-index: 100;
+        }
+        
+        .stats {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 20px;
+            border-radius: 10px;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+        
+        .stats div {
+            margin: 5px 0;
+            font-size: 16px;
+        }
+        
+        .stats .label {
+            color: #888;
+            font-size: 12px;
+        }
+        
+        .controls {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 20px;
+            border-radius: 10px;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        
+        .auto-aim-toggle {
+            background: rgba(0, 255, 65, 0.1);
+            border: 1px solid #00ff41;
+            color: #00ff41;
+            padding: 5px 10px;
+            margin-top: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            pointer-events: auto;
+            transition: all 0.3s ease;
+        }
+        
+        .auto-aim-toggle:hover {
+            background: rgba(0, 255, 65, 0.2);
+        }
+        
+        .auto-aim-toggle.active {
+            background: rgba(0, 255, 65, 0.3);
+            box-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+        }
+        
+        .game-over {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            backdrop-filter: blur(5px);
+        }
+        
+        .game-over-content {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            color: white;
+        }
+        
+        .game-over h2 {
+            margin-bottom: 20px;
+            font-size: 32px;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+        
+        .game-over p {
+            margin-bottom: 30px;
+            font-size: 18px;
+            color: #ccc;
+        }
+        
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #00ff41, #00cc33);
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 0 10px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 255, 65, 0.4);
+        }
+        
+        .crosshair {
+            position: fixed;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 150;
+            transform: translate(-50%, -50%);
+            transition: all 0.1s ease;
+        }
+        
+        .crosshair.auto-aim {
+            border-color: #00ff41;
+            box-shadow: 0 0 10px rgba(0, 255, 65, 0.8);
+        }
+        
+        .crosshair::before,
+        .crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 255, 255, 0.8);
+        }
+        
+        .crosshair.auto-aim::before,
+        .crosshair.auto-aim::after {
+            background: #00ff41;
+        }
+        
+        .crosshair::before {
+            width: 2px;
+            height: 8px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .crosshair::after {
+            width: 8px;
+            height: 2px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .hit-effect {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border: 2px solid #ff4757;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: hit-pulse 0.5s ease-out forwards;
+        }
+        
+        @keyframes hit-pulse {
+            0% {
+                transform: scale(0.5);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(2);
+                opacity: 0;
+            }
+        }
+        
+        .explosion {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: explosion 0.6s ease-out forwards;
+        }
+        
+        @keyframes explosion {
+            0% {
+                transform: scale(0);
+                background: radial-gradient(circle, #ffaa00, #ff4757);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1);
+                background: radial-gradient(circle, #ff4757, transparent);
+            }
+            100% {
+                transform: scale(2);
+                opacity: 0;
+            }
+        }
+        
+        .target-line {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #00ff41, transparent);
+            pointer-events: none;
+            z-index: 10;
+            opacity: 0.6;
+        }
+        
+        @media (max-width: 768px) {
+            .ui-container {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .stats, .controls {
+                font-size: 14px;
+                padding: 10px 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    <div class="crosshair" id="crosshair"></div>
+    
+    <div class="ui-container">
+        <div class="stats">
+            <div class="label">玩家状态</div>
+            <div>生命: <span id="player-health">100</span>%</div>
+            <div>得分: <span id="score">0</span></div>
+            <div>弹药: <span id="ammo">30</span></div>
+            <div>击杀: <span id="kills">0</span></div>
+            <div class="auto-aim-toggle" id="auto-aim-toggle" onclick="toggleAutoAim()">
+                自动瞄准: <span id="auto-aim-status">关闭</span>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <div><strong>操作说明</strong></div>
+            <div>WASD - 移动角色</div>
+            <div>鼠标/自动 - 瞄准</div>
+            <div>左键 - 射击 (2x速度)</div>
+            <div>R键 - 装弹 (+10发)</div>
+            <div>T键 - 切换自动瞄准</div>
+            <div>空格 - 暂停游戏</div>
+        </div>
+    </div>
+    
+    <div class="game-over" id="game-over">
+        <div class="game-over-content">
+            <h2 id="game-result">游戏结束</h2>
+            <p>最终得分: <span id="final-score">0</span></p>
+            <p>击杀数: <span id="final-kills">0</span></p>
+            <button class="btn" onclick="restartGame()">重新开始</button>
+            <button class="btn" onclick="location.reload()">返回主页</button>
+        </div>
+    </div>
+
+    <script>
+        // 游戏配置
+        const CONFIG = {
+            CANVAS_WIDTH: window.innerWidth,
+            CANVAS_HEIGHT: window.innerHeight,
+            PLAYER_SPEED: 4,
+            AI_SPEED: 2,
+            BULLET_SPEED: 8,
+            MAX_HEALTH: 100,
+            PLAYER_DAMAGE: 250,
+            AI_DAMAGE: 1,
+            AI_COUNT: 5,
+            RELOAD_AMOUNT: 10,
+            PLAYER_FIRE_RATE: 100, // 提高2倍射击速度 (原来200ms)
+            AUTO_AIM_RANGE: 200    // 自动瞄准范围
+        };
+
+        // 游戏状态
+        let gameState = {
+            players: [],
+            bullets: [],
+            score: 0,
+            kills: 0,
+            currentAmmo: 30,
+            isPaused: false,
+            isGameOver: false,
+            mouseX: 0,
+            mouseY: 0,
+            keys: {},
+            lastAISpawn: 0,
+            autoAim: false,
+            targetLine: null
+        };
+
+        // 初始化游戏
+        function initGame() {
+            createPlayer();
+            spawnAI();
+            bindEvents();
+            gameLoop();
+            updateUI();
+        }
+
+        // 创建玩家
+        function createPlayer() {
+            const player = {
+                id: 'player1',
+                x: CONFIG.CANVAS_WIDTH / 2,
+                y: CONFIG.CANVAS_HEIGHT / 2,
+                health: CONFIG.MAX_HEALTH,
+                maxHealth: CONFIG.MAX_HEALTH,
+                isAI: false,
+                color: '#00ff41',
+                lastShot: 0,
+                speed: CONFIG.PLAYER_SPEED
+            };
+            
+            gameState.players.push(player);
+            renderPlayer(player);
+        }
+
+        // 生成AI
+        function spawnAI() {
+            for (let i = 0; i < CONFIG.AI_COUNT; i++) {
+                setTimeout(() => createAI(i), i * 1000);
+            }
+        }
+
+        function createAI(index) {
+            if (gameState.isGameOver) return;
+            
+            const ai = {
+                id: `ai${index}`,
+                x: Math.random() * (CONFIG.CANVAS_WIDTH - 50) + 25,
+                y: Math.random() * (CONFIG.CANVAS_HEIGHT - 50) + 25,
+                health: CONFIG.MAX_HEALTH,
+                maxHealth: CONFIG.MAX_HEALTH,
+                isAI: true,
+                color: '#ff4757',
+                lastShot: 0,
+                speed: CONFIG.AI_SPEED,
+                target: null,
+                movePattern: Math.random() > 0.5 ? 'aggressive' : 'defensive'
+            };
+            
+            gameState.players.push(ai);
+            renderPlayer(ai);
+        }
+
+        // 渲染玩家
+        function renderPlayer(player) {
+            let elem = document.getElementById(player.id);
+            if (!elem) {
+                elem = document.createElement('div');
+                elem.id = player.id;
+                elem.className = player.isAI ? 'ai player' : 'player';
+                elem.innerHTML = `
+                    <div class="health-bar">
+                        <div class="health-fill"></div>
+                    </div>
+                `;
+                document.getElementById('game-container').appendChild(elem);
+            }
+            
+            elem.style.left = `${player.x}px`;
+            elem.style.top = `${player.y}px`;
+            
+            // 更新血条
+            const healthFill = elem.querySelector('.health-fill');
+            const healthPercent = Math.max(0, (player.health / player.maxHealth) * 100);
+            healthFill.style.width = `${healthPercent}%`;
+        }
+
+        // 自动瞄准系统
+        function findNearestEnemy() {
+            const player = gameState.players.find(p => !p.isAI);
+            if (!player) return null;
+
+            let nearestEnemy = null;
+            let minDistance = CONFIG.AUTO_AIM_RANGE;
+
+            gameState.players.forEach(enemy => {
+                if (enemy.isAI && enemy.health > 0) {
+                    const distance = getDistance(player, enemy);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        nearestEnemy = enemy;
+                    }
+                }
+            });
+
+            return nearestEnemy;
+        }
+
+        function updateAutoAim() {
+            const player = gameState.players.find(p => !p.isAI);
+            const crosshair = document.getElementById('crosshair');
+            
+            if (!gameState.autoAim || !player) {
+                crosshair.classList.remove('auto-aim');
+                if (gameState.targetLine) {
+                    gameState.targetLine.remove();
+                    gameState.targetLine = null;
+                }
+                return;
+            }
+
+            const target = findNearestEnemy();
+            crosshair.classList.add('auto-aim');
+
+            if (target) {
+                // 更新准星位置到目标
+                const targetCenterX = target.x + 15;
+                const targetCenterY = target.y + 15;
+                
+                crosshair.style.left = targetCenterX + 'px';
+                crosshair.style.top = targetCenterY + 'px';
+                
+                // 显示瞄准线
+                updateTargetLine(player, target);
+                
+                // 更新虚拟鼠标位置用于射击
+                gameState.mouseX = targetCenterX;
+                gameState.mouseY = targetCenterY;
+            } else {
+                // 没有目标时移除瞄准线
+                if (gameState.targetLine) {
+                    gameState.targetLine.remove();
+                    gameState.targetLine = null;
+                }
+            }
+        }
+
+        function updateTargetLine(player, target) {
+            if (!gameState.targetLine) {
+                gameState.targetLine = document.createElement('div');
+                gameState.targetLine.className = 'target-line';
+                document.getElementById('game-container').appendChild(gameState.targetLine);
+            }
+
+            const playerCenterX = player.x + 15;
+            const playerCenterY = player.y + 15;
+            const targetCenterX = target.x + 15;
+            const targetCenterY = target.y + 15;
+
+            const dx = targetCenterX - playerCenterX;
+            const dy = targetCenterY - playerCenterY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx);
+
+            gameState.targetLine.style.width = distance + 'px';
+            gameState.targetLine.style.left = playerCenterX + 'px';
+            gameState.targetLine.style.top = playerCenterY + 'px';
+            gameState.targetLine.style.transform = `rotate(${angle}rad)`;
+            gameState.targetLine.style.transformOrigin = '0 0';
+        }
+
+        function toggleAutoAim() {
+            gameState.autoAim = !gameState.autoAim;
+            updateAutoAimDisplay();
+        }
+
+        function updateAutoAimDisplay() {
+            const toggle = document.getElementById('auto-aim-toggle');
+            const status = document.getElementById('auto-aim-status');
+            
+            if (gameState.autoAim) {
+                toggle.classList.add('active');
+                status.textContent = '开启';
+            } else {
+                toggle.classList.remove('active');
+                status.textContent = '关闭';
+            }
+        }
+
+        // 绑定事件
+        function bindEvents() {
+            // 键盘事件
+            document.addEventListener('keydown', (e) => {
+                gameState.keys[e.key.toLowerCase()] = true;
+                
+                if (e.key.toLowerCase() === 'r') {
+                    reload();
+                } else if (e.key.toLowerCase() === 't') {
+                    toggleAutoAim();
+                } else if (e.code === 'Space') {
+                    e.preventDefault();
+                    togglePause();
+                }
+            });
+
+            document.addEventListener('keyup', (e) => {
+                gameState.keys[e.key.toLowerCase()] = false;
+            });
+
+            // 鼠标事件
+            document.addEventListener('mousemove', (e) => {
+                if (!gameState.autoAim) {
+                    gameState.mouseX = e.clientX;
+                    gameState.mouseY = e.clientY;
+                    
+                    const crosshair = document.getElementById('crosshair');
+                    crosshair.style.left = e.clientX + 'px';
+                    crosshair.style.top = e.clientY + 'px';
+                }
+            });
+
+            document.addEventListener('mousedown', (e) => {
+                if (e.button === 0) { // 左键
+                    e.preventDefault();
+                    shoot();
+                }
+            });
+
+            // 窗口大小改变
+            window.addEventListener('resize', () => {
+                CONFIG.CANVAS_WIDTH = window.innerWidth;
+                CONFIG.CANVAS_HEIGHT = window.innerHeight;
+            });
+        }
+
+        // 玩家移动
+        function updatePlayerMovement() {
+            const player = gameState.players.find(p => !p.isAI && p.health > 0);
+            if (!player) return;
+
+            if (gameState.keys['w']) player.y -= player.speed;
+            if (gameState.keys['s']) player.y += player.speed;
+            if (gameState.keys['a']) player.x -= player.speed;
+            if (gameState.keys['d']) player.x += player.speed;
+
+            // 边界限制
+            player.x = Math.max(15, Math.min(player.x, CONFIG.CANVAS_WIDTH - 45));
+            player.y = Math.max(15, Math.min(player.y, CONFIG.CANVAS_HEIGHT - 45));
+        }
+
+        // AI行为
+        function updateAI() {
+            const player = gameState.players.find(p => !p.isAI && p.health > 0);
+            if (!player) return;
+
+            gameState.players.filter(p => p.isAI && p.health > 0).forEach(ai => {
+                // 寻找目标
+                const distToPlayer = getDistance(ai, player);
+                
+                if (ai.movePattern === 'aggressive') {
+                    // 攻击性AI：追击玩家
+                    if (distToPlayer > 100) {
+                        moveTowards(ai, player);
+                    } else {
+                        // 近距离时保持距离并射击
+                        moveAway(ai, player, 80);
+                        if (Date.now() - ai.lastShot > 800) {
+                            aiShoot(ai, player);
+                        }
+                    }
+                } else {
+                    // 防御性AI：保持距离
+                    if (distToPlayer < 150) {
+                        moveAway(ai, player, 150);
+                    } else {
+                        // 随机移动
+                        randomMove(ai);
+                    }
+                    
+                    if (Date.now() - ai.lastShot > 1200 && distToPlayer < 200) {
+                        aiShoot(ai, player);
+                    }
+                }
+
+                // 边界限制
+                ai.x = Math.max(15, Math.min(ai.x, CONFIG.CANVAS_WIDTH - 45));
+                ai.y = Math.max(15, Math.min(ai.y, CONFIG.CANVAS_HEIGHT - 45));
+            });
+        }
+
+        // 移动函数
+        function moveTowards(ai, target) {
+            const angle = Math.atan2(target.y - ai.y, target.x - ai.x);
+            ai.x += Math.cos(angle) * ai.speed;
+            ai.y += Math.sin(angle) * ai.speed;
+        }
+
+        function moveAway(ai, target, minDistance) {
+            const dist = getDistance(ai, target);
+            if (dist < minDistance) {
+                const angle = Math.atan2(ai.y - target.y, ai.x - target.x);
+                ai.x += Math.cos(angle) * ai.speed;
+                ai.y += Math.sin(angle) * ai.speed;
+            }
+        }
+
+        function randomMove(ai) {
+            const angle = Math.random() * Math.PI * 2;
+            ai.x += Math.cos(angle) * ai.speed * 0.5;
+            ai.y += Math.sin(angle) * ai.speed * 0.5;
+        }
+
+        function getDistance(a, b) {
+            return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+        }
+
+        // 射击系统
+        function shoot() {
+            if (gameState.currentAmmo <= 0 || gameState.isPaused || gameState.isGameOver) return;
+            
+            const player = gameState.players.find(p => !p.isAI && p.health > 0);
+            if (!player || Date.now() - player.lastShot < CONFIG.PLAYER_FIRE_RATE) return;
+
+            gameState.currentAmmo--;
+            player.lastShot = Date.now();
+
+            const angle = Math.atan2(
+                gameState.mouseY - (player.y + 15),
+                gameState.mouseX - (player.x + 15)
+            );
+
+            createBullet(player, angle, CONFIG.PLAYER_DAMAGE, 'player');
+            updateUI();
+        }
+
+        function aiShoot(ai, target) {
+            ai.lastShot = Date.now();
+            
+            // 添加一些瞄准误差
+            const baseAngle = Math.atan2(target.y - ai.y, target.x - ai.x);
+            const accuracy = 0.9; // 90% 准确度
+            const angle = baseAngle + (Math.random() - 0.5) * (1 - accuracy);
+
+            createBullet(ai, angle, CONFIG.AI_DAMAGE, 'ai');
+        }
+
+        function createBullet(shooter, angle, damage, type) {
+            const bullet = document.createElement('div');
+            bullet.className = `bullet bullet-${type}`;
+            bullet.style.left = (shooter.x + 15) + 'px';
+            bullet.style.top = (shooter.y + 15) + 'px';
+            
+            document.getElementById('game-container').appendChild(bullet);
+
+            gameState.bullets.push({
+                element: bullet,
+                x: shooter.x + 15,
+                y: shooter.y + 15,
+                velocityX: Math.cos(angle) * CONFIG.BULLET_SPEED,
+                velocityY: Math.sin(angle) * CONFIG.BULLET_SPEED,
+                damage: damage,
+                shooter: shooter,
+                type: type
+            });
+        }
+
+        // 子弹更新
+        function updateBullets() {
+            gameState.bullets = gameState.bullets.filter(bullet => {
+                bullet.x += bullet.velocityX;
+                bullet.y += bullet.velocityY;
+                
+                bullet.element.style.left = bullet.x + 'px';
+                bullet.element.style.top = bullet.y + 'px';
+
+                // 边界检查
+                if (bullet.x < 0 || bullet.x > CONFIG.CANVAS_WIDTH || 
+                    bullet.y < 0 || bullet.y > CONFIG.CANVAS_HEIGHT) {
+                    bullet.element.remove();
+                    return false;
+                }
+
+                // 碰撞检测
+                for (let player of gameState.players) {
+                    if (player === bullet.shooter || player.health <= 0) continue;
+                    
+                    const dist = Math.sqrt(
+                        (bullet.x - (player.x + 15)) ** 2 + 
+                        (bullet.y - (player.y + 15)) ** 2
+                    );
+                    
+                    if (dist < 20) {
+                        // 命中
+                        player.health -= bullet.damage;
+                        createHitEffect(player.x + 15, player.y + 15);
+                        
+                        // 确保生命值不低于0
+                        if (player.health <= 0) {
+                            player.health = 0;
+                            handlePlayerDeath(player, bullet.shooter);
+                        }
+                        
+                        bullet.element.remove();
+                        return false;
+                    }
+                }
+
+                return true;
+            });
+        }
+
+        // 处理玩家死亡
+        function handlePlayerDeath(deadPlayer, killer) {
+            createExplosion(deadPlayer.x + 15, deadPlayer.y + 15);
+            
+            const elem = document.getElementById(deadPlayer.id);
+            if (elem) elem.remove();
+            
+            gameState.players = gameState.players.filter(p => p !== deadPlayer);
+
+            if (!deadPlayer.isAI) {
+                // 玩家死亡
+                endGame('defeat');
+            } else if (!killer.isAI) {
+                // 玩家击杀AI
+                gameState.score += 100;
+                gameState.kills++;
+                updateUI();
+                
+                // 生成新的AI
+                setTimeout(() => {
+                    if (!gameState.isGameOver) {
+                        createAI(Date.now());
+                    }
+                }, 2000);
+            }
+
+            // 检查胜利条件
+            if (gameState.kills >= 20) {
+                endGame('victory');
+            }
+        }
+
+        // 特效
+        function createHitEffect(x, y) {
+            const effect = document.createElement('div');
+            effect.className = 'hit-effect';
+            effect.style.left = (x - 20) + 'px';
+            effect.style.top = (y - 20) + 'px';
+            document.getElementById('game-container').appendChild(effect);
+            
+            setTimeout(() => effect.remove(), 500);
+        }
+
+        function createExplosion(x, y) {
+            const explosion = document.createElement('div');
+            explosion.className = 'explosion';
+            explosion.style.left = (x - 30) + 'px';
+            explosion.style.top = (y - 30) + 'px';
+            document.getElementById('game-container').appendChild(explosion);
+            
+            setTimeout(() => explosion.remove(), 600);
+        }
+
+        // 游戏功能
+        function reload() {
+            gameState.currentAmmo += CONFIG.RELOAD_AMOUNT;
+            updateUI();
+        }
+
+        function togglePause() {
+            gameState.isPaused = !gameState.isPaused;
+        }
+
+        function updateUI() {
+            const player = gameState.players.find(p => !p.isAI);
+            document.getElementById('player-health').textContent = player ? Math.max(0, Math.round(player.health)) : 0;
+            document.getElementById('score').textContent = gameState.score;
+            document.getElementById('ammo').textContent = gameState.currentAmmo;
+            document.getElementById('kills').textContent = gameState.kills;
+        }
+
+        function endGame(result) {
+            gameState.isGameOver = true;
+            document.getElementById('game-result').textContent = result === 'victory' ? '胜利！' : '失败！';
+            document.getElementById('final-score').textContent = gameState.score;
+            document.getElementById('final-kills').textContent = gameState.kills;
+            document.getElementById('game-over').style.display = 'flex';
+        }
+
+        function restartGame() {
+            // 清理游戏状态
+            gameState.bullets.forEach(bullet => bullet.element.remove());
+            gameState.players.forEach(player => {
+                const elem = document.getElementById(player.id);
+                if (elem) elem.remove();
+            });
+            
+            if (gameState.targetLine) {
+                gameState.targetLine.remove();
+            }
+            
+            // 重置状态
+            gameState = {
+                players: [],
+                bullets: [],
+                score: 0,
+                kills: 0,
+                currentAmmo: 30,
+                isPaused: false,
+                isGameOver: false,
+                mouseX: 0,
+                mouseY: 0,
+                keys: {},
+                lastAISpawn: 0,
+                autoAim: false,
+                targetLine: null
+            };
+            
+            document.getElementById('game-over').style.display = 'none';
+            updateAutoAimDisplay();
+            initGame();
+        }
+
+        // 游戏循环
+        function gameLoop() {
+            if (!gameState.isPaused && !gameState.isGameOver) {
+                updatePlayerMovement();
+                updateAI();
+                updateBullets();
+                updateAutoAim();
+                
+                // 渲染所有玩家
+                gameState.players.forEach(renderPlayer);
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 启动游戏
+        initGame();
+        updateAutoAimDisplay();
+    </script>
+</body>
+</html>
