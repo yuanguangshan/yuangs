@@ -24,11 +24,11 @@
     
     <div class="container">
         <div class="editor">
-            <h2>Editor</h2>
+            <h2>Editor <button id="pasteBtn" style="margin-left:10px;">从剪切板加载</button></h2>
             <textarea id="documentContent"></textarea>
         </div>
         <div class="preview">
-            <h2>Markdown Preview</h2>
+            <h2>Markdown Preview <button id="copyBtn" style="margin-left:10px;">复制内容</button></h2>
             <div id="previewContent"></div>
         </div>
     </div>
@@ -60,8 +60,10 @@
 
             // --- WebSocket 事件处理 ---
             // 当连接成功建立时调用
+            // 在WebSocket连接成功后添加初始渲染
             ws.onopen = () => {
                 statusDiv.textContent = 'Connected!';
+                previewContent.innerHTML = marked.parse(documentContent.value || '等待输入...');
             };
 
             // 当从服务器（Durable Object）收到消息时调用
@@ -109,6 +111,33 @@
 
         // 页面加载时，立即开始连接 WebSocket
         connectWebSocket();
+        // 在script标签末尾添加
+        const pasteBtn = document.getElementById('pasteBtn');
+        const copyBtn = document.getElementById('copyBtn');
+        
+        pasteBtn.addEventListener('click', async () => {
+            try {
+                const text = await navigator.clipboard.readText();
+                documentContent.value = text;
+                previewContent.innerHTML = marked.parse(text);
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(text);
+                }
+            } catch (err) {
+                alert('无法访问剪切板，请检查浏览器权限设置');
+                console.error('Failed to read clipboard:', err);
+            }
+        });
+        
+        copyBtn.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(documentContent.value);
+                alert('内容已复制到剪切板');
+            } catch (err) {
+                alert('复制失败，请检查浏览器权限设置');
+                console.error('Failed to copy:', err);
+            }
+        });
     </script>
 </body>
 </html>
