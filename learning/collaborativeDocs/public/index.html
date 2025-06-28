@@ -11,6 +11,24 @@
         textarea { width: 95%; height: 250px; padding: 10px; font-size: 16px; border: 1px solid #ccc; }
         #previewContent { border: 1px solid #ccc; padding: 10px; height: 250px; overflow-y: auto; }
         #status { margin-top: 10px; color: green; }
+        .editor-header, .preview-header {
+            display: flex;
+            align-items: center;
+            gap: 10px; /* 按钮之间的间距 */
+            margin-bottom: 10px;
+        }
+        .control-button {
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #f0f0f0;
+            transition: background-color 0.3s ease;
+        }
+        .control-button:hover {
+            background-color: #e0e0e0;
+        }
         @media (max-width: 768px) {
             .container { flex-direction: column; }
             .editor, .preview { width: 98%; }
@@ -25,12 +43,20 @@
     
     <div class="container">
         <div class="editor">
-            <h2>Editor <button id="pasteBtn" style="margin-left:10px;">从剪切板加载</button></h2>
-            <textarea id="documentContent"></textarea>
+            <div class="editor-header">
+                <h2>Editor</h2>
+                <button id="selectAllBtn" class="control-button">全选</button>
+                <button id="pasteBtn" class="control-button">粘贴</button>
+            </div>
+            <textarea id="documentContent" class="editor-textarea" placeholder="开始输入..."></textarea>
         </div>
+
         <div class="preview">
-            <h2>Markdown Preview <button id="copyBtn" style="margin-left:10px;">复制内容</button></h2>
-            <div id="previewContent"></div>
+            <div class="preview-header">
+                <h2>Preview</h2>
+                <button id="copyBtn" class="control-button">复制内容</button>
+            </div>
+            <div id="previewContent" class="preview-content">等待输入...</div>
         </div>
     </div>
     
@@ -38,6 +64,27 @@
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
+        // 消息提示函数
+        function showUserMessage(message, type) {
+            const messageDiv = document.createElement('div');
+            messageDiv.textContent = message;
+            messageDiv.className = `user-message ${type}`;
+            document.body.appendChild(messageDiv);
+
+            // 动画效果
+            setTimeout(() => {
+                messageDiv.classList.add('show');
+            }, 10);
+
+            setTimeout(() => {
+                messageDiv.classList.remove('show');
+                messageDiv.classList.add('hide');
+                messageDiv.addEventListener('transitionend', () => {
+                    messageDiv.remove();
+                }, { once: true });
+            }, 3000);
+        }
+
         const docIdDisplay = document.getElementById('docIdDisplay');
         const documentContent = document.getElementById('documentContent');
         const previewContent = document.getElementById('previewContent');
@@ -118,30 +165,55 @@
         // 页面加载时，立即开始连接 WebSocket
         connectWebSocket();
         // 在script标签末尾添加
+        const selectAllBtn = document.getElementById('selectAllBtn');
         const pasteBtn = document.getElementById('pasteBtn');
         const copyBtn = document.getElementById('copyBtn');
         
+        selectAllBtn.addEventListener('click', () => {
+            documentContent.select();
+            documentContent.focus();
+            showUserMessage('已全选编辑器内容！', 'success');
+        });
+
         pasteBtn.addEventListener('click', async () => {
             try {
-                const text = await navigator.clipboard.readText();
-                documentContent.value = text;
-                previewContent.innerHTML = marked.parse(text);
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(text);
+                // 尝试请求剪贴板读取权限
+                const permissionStatus = await navigator.permissions.query({ name: 'clipboard-read' });
+                if (permissionStatus.state === 'granted' || permissionStatus.state === 'prompt') {
+                    const text = await navigator.clipboard.readText();
+                    documentContent.value = text;
+                    // 触发输入事件，以便WebSocket同步
+                    documentContent.dispatchEvent(new Event('input'));
+                    showUserMessage('已从剪贴板粘贴内容！', 'success');
+                } else {
+                    showUserMessage('粘贴失败：没有剪贴板读取权限，请手动粘贴。', 'error');
                 }
             } catch (err) {
-                alert('无法访问剪切板，请检查浏览器权限设置');
-                console.error('Failed to read clipboard:', err);
+                console.error('粘贴失败:', err);
+                showUserMessage('粘贴失败，请检查剪贴板权限或手动粘贴。', 'error');
             }
         });
-        
+
         copyBtn.addEventListener('click', async () => {
             try {
-                await navigator.clipboard.writeText(documentContent.value);
-                alert('内容已复制到剪切板');
+                const textToCopy = previewContent.innerText;
+                await navigator.clipboard.writeText(textToCopy);
+                showUserMessage('已复制预览内容到剪贴板！', 'success');
             } catch (err) {
-                alert('复制失败，请检查浏览器权限设置');
-                console.error('Failed to copy:', err);
+                console.error('复制失败:', err);
+                // 降级方案：如果navigator.clipboard.writeText失败，尝试execCommand
+                const textarea = document.createElement('textarea');
+                textarea.value = previewContent.innerText;
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    showUserMessage('已复制预览内容到剪贴板！', 'success');
+                } catch (execErr) {
+                    console.error('execCommand 复制失败:', execErr);
+                    showUserMessage('复制失败，请手动复制。', 'error');
+                }
+                document.body.removeChild(textarea);
             }
         });
     </script>
