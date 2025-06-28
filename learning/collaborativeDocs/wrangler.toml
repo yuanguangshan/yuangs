@@ -1,0 +1,36 @@
+# wrangler.toml
+
+# Worker 的名称，将成为 URL 的一部分
+name = "my-collaborative-doc"
+
+# Worker 的主入口文件路径
+main = "src/worker.js"
+
+# 兼容性日期，确保 Worker 在一个可预测的环境中运行
+compatibility_date = "2023-10-26"
+
+# --- Durable Object 绑定定义 ---
+# 这部分将代码中的一个类与一个可以在 Worker 中访问的绑定名称关联起来
+<a href="durable_objects.bindings">durable_objects.bindings</a>
+# 在 worker.js 中，我们将通过 env.DOCUMENT_DO 来访问这个 Durable Object
+name = "DOCUMENT_DO" 
+# 这个绑定对应于在代码中导出的类的名称
+class_name = "DocumentDurableObject" 
+
+# --- Durable Object 迁移配置 (关键修正 #1) ---
+# 每次部署新的或修改 Durable Object 类时，都需要一个迁移条目
+<a href="migrations">migrations</a>
+# 一个用于标识此次迁移的版本标签，可以是任意字符串
+tag = "v1" 
+# 关键修正：对于免费计划，必须使用 new_sqlite_classes 来创建基于 SQLite 的新存储。
+# 这取代了旧的 new_classes，解决了部署时的 API 错误 (code: 10097)。
+new_sqlite_classes = ["DocumentDurableObject"]
+
+# --- 资源导入规则 (关键修正 #2) ---
+# 这部分告诉 Wrangler 如何处理非 JavaScript 文件的导入
+<a href="rules">rules</a>
+# 将匹配的文件类型定义为 "Text"，意味着它们将被作为纯文本字符串导入
+type = "Text"
+# "globs" 是一个文件匹配模式。这个模式表示匹配任何目录下所有以 .html 结尾的文件。
+# 这解决了在 worker.js 中 `import html from '../public/index.html'` 导致的运行时错误。
+globs = ["**/*.html"]

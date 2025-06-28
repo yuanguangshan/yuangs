@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collaborative Document</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        textarea { width: 80%; height: 400px; padding: 10px; font-size: 16px; border: 1px solid #ccc; }
+        #status { margin-top: 10px; color: green; }
+    </style>
+</head>
+<body>
+    <h1>Collaborative Document</h1>
+    <p>Open this page in multiple tabs/browsers to see real-time collaboration.</p>
+    <p>Document ID: <span id="docIdDisplay"></span></p>
+    <textarea id="documentContent"></textarea>
+    <div id="status">Connecting...</div>
+
+    <script>
+        const docIdDisplay = document.getElementById('docIdDisplay');
+        const documentContent = document.getElementById('documentContent');
+        const statusDiv = document.getElementById('status');
+
+        // 从浏览器地址栏的路径中提取文档 ID
+        const pathParts = window.location.pathname.split('/');
+        const documentId = pathParts[2] || 'default-doc'; // 如果 URL 中没有，则使用默认 ID
+        docIdDisplay.textContent = documentId;
+
+        // 根据当前页面的协议 (http/https) 构建 WebSocket URL (ws/wss)
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}/docs/${documentId}/websocket`;
+
+        let ws;
+        let debounceTimeout;
+
+        function connectWebSocket() {
+            statusDiv.textContent = 'Connecting...';
+            ws = new WebSocket(wsUrl);
+
+            // --- WebSocket 事件处理 ---
+            // 当连接成功建立时调用
+            ws.onopen = () => {
+                statusDiv.textContent = 'Connected!';
+            };
+
+            // 当从服务器（Durable Object）收到消息时调用
+            ws.onmessage = (event) => {
+                const receivedContent = event.data;
+                // 只有当内容确实发生变化时才更新，避免不必要的光标跳动
+                if (documentContent.value !== receivedContent) {
+                    // 保存当前光标位置，以提供更好的用户体验
+                    const cursorStart = documentContent.selectionStart;
+                    const cursorEnd = documentContent.selectionEnd;
+                    documentContent.value = receivedContent;
+                    // 尝试恢复光标位置
+                    documentContent.setSelectionRange(cursorStart, cursorEnd);
+                }
+            };
+
+            // 当连接关闭时调用
+            ws.onclose = (event) => {
+                statusDiv.textContent = `Disconnected. Reconnecting in 3s...`;
+                // 实现简单的自动重连机制
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            // 当发生错误时调用
+            ws.onerror = (error) => {
+                statusDiv.textContent = 'WebSocket error. Reconnecting...';
+                ws.close(); // 触发 onclose 事件，从而启动重连逻辑
+            };
+        }
+
+        // --- 用户输入处理 ---
+        // 监听 textarea 的输入事件
+        documentContent.addEventListener('input', () => {
+            // 使用防抖 (debounce) 技术来优化性能
+            // 清除上一个计时器
+            clearTimeout(debounceTimeout);
+            // 设置一个新的计时器，在用户停止输入 200 毫秒后才发送更新
+            // 这可以避免在用户快速打字时发送大量不必要的消息
+            debounceTimeout = setTimeout(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    // 将 textarea 的当前全部内容发送给 Durable Object
+                    ws.send(documentContent.value);
+                }
+            }, 200);
+        });
+
+        // 页面加载时，立即开始连接 WebSocket
+        connectWebSocket();
+    </script>
+</body>
+</html>
