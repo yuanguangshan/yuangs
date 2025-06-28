@@ -6,20 +6,40 @@
     <title>Collaborative Document</title>
     <style>
         body { font-family: sans-serif; margin: 20px; }
-        textarea { width: 80%; height: 400px; padding: 10px; font-size: 16px; border: 1px solid #ccc; }
+        .container { display: flex; flex-direction: row; }
+        .editor, .preview { width: 48%; margin: 1%; }
+        textarea { width: 100%; height: 400px; padding: 10px; font-size: 16px; border: 1px solid #ccc; }
+        #previewContent { border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: auto; }
         #status { margin-top: 10px; color: green; }
+        @media (max-width: 768px) {
+            .container { flex-direction: column; }
+            .editor, .preview { width: 98%; }
+        }
     </style>
 </head>
 <body>
-    <h1>Collaborative Document</h1>
+    <h1>全球文档同步！</h1>
     <p>Open this page in multiple tabs/browsers to see real-time collaboration.</p>
     <p>Document ID: <span id="docIdDisplay"></span></p>
-    <textarea id="documentContent"></textarea>
+    
+    <div class="container">
+        <div class="editor">
+            <h2>Editor</h2>
+            <textarea id="documentContent"></textarea>
+        </div>
+        <div class="preview">
+            <h2>Markdown Preview</h2>
+            <div id="previewContent"></div>
+        </div>
+    </div>
+    
     <div id="status">Connecting...</div>
 
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
         const docIdDisplay = document.getElementById('docIdDisplay');
         const documentContent = document.getElementById('documentContent');
+        const previewContent = document.getElementById('previewContent');
         const statusDiv = document.getElementById('status');
 
         // 从浏览器地址栏的路径中提取文档 ID
@@ -73,16 +93,15 @@
         }
 
         // --- 用户输入处理 ---
-        // 监听 textarea 的输入事件
+        // 添加Markdown预览功能
         documentContent.addEventListener('input', () => {
-            // 使用防抖 (debounce) 技术来优化性能
-            // 清除上一个计时器
+            // 更新Markdown预览
+            previewContent.innerHTML = marked.parse(documentContent.value);
+            
+            // 保留原有的防抖逻辑
             clearTimeout(debounceTimeout);
-            // 设置一个新的计时器，在用户停止输入 200 毫秒后才发送更新
-            // 这可以避免在用户快速打字时发送大量不必要的消息
             debounceTimeout = setTimeout(() => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
-                    // 将 textarea 的当前全部内容发送给 Durable Object
                     ws.send(documentContent.value);
                 }
             }, 200);
