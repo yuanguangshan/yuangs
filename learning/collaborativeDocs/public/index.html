@@ -64,20 +64,25 @@
             // 在WebSocket连接成功后添加初始渲染
             ws.onopen = () => {
                 statusDiv.textContent = 'Connected!';
-                previewContent.innerHTML = marked.parse(documentContent.value || '等待输入...');
+                // 初始化时立即请求当前文档内容
+                ws.send('get_content');
             };
-
-            // 当从服务器（Durable Object）收到消息时调用
+            
             ws.onmessage = (event) => {
                 const receivedContent = event.data;
-                // 只有当内容确实发生变化时才更新，避免不必要的光标跳动
+                
+                // 处理服务器返回的初始内容
+                if (receivedContent.startsWith('content:')) {
+                    const content = receivedContent.substring(8);
+                    documentContent.value = content;
+                    previewContent.innerHTML = marked.parse(content || '等待输入...');
+                    return;
+                }
+                
+                // 只有当内容确实发生变化时才更新
                 if (documentContent.value !== receivedContent) {
-                    // 保存当前光标位置，以提供更好的用户体验
-                    const cursorStart = documentContent.selectionStart;
-                    const cursorEnd = documentContent.selectionEnd;
                     documentContent.value = receivedContent;
-                    // 尝试恢复光标位置
-                    documentContent.setSelectionRange(cursorStart, cursorEnd);
+                    previewContent.innerHTML = marked.parse(receivedContent);
                 }
             };
 
