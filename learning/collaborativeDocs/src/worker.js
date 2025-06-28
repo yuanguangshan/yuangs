@@ -18,14 +18,14 @@ export default {
         const pathParts = url.pathname.split('/');
 
         // --- 路由逻辑 ---
-        // 我们期望的 URL 格式是 /docs/<document-id>/...
-        if (pathParts[1] !== 'docs' || !pathParts[2]) {
-            return new Response('Not Found. Please access /docs/<document-name>', { status: 404 });
+        // 我们期望的 URL 格式是 /<document-id>/... (旧的 /docs/<document-id>/...)
+        if (!pathParts[1]) {
+            return new Response('Not Found. Please access /<document-name>', { status: 404 });
         }
-        const documentId = pathParts[2]; // 例如 "my-first-doc"
+        const documentId = pathParts[1]; // 例如 "my-first-doc"
 
         // 提取子路径，例如 "/websocket"
-        const subPath = '/' + pathParts.slice(3).join('/');
+        const subPath = '/' + pathParts.slice(2).join('/');
 
         // --- 决策：转发给 DO 还是提供 HTML ---
         // 如果有子路径（如 /websocket），说明请求是针对 DO 的 API
