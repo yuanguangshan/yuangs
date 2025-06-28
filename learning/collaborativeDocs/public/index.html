@@ -5,103 +5,492 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Collaborative Document</title>
     <style>
-        body { font-family: sans-serif; margin: 20px; }
-        .container { display: flex; flex-direction: row; }
-        .editor, .preview { width: 100%; margin: 1%; }
-        textarea { width: “95%; height: 400px; padding: 10px; font-size: 16px; border: 1px solid #ccc; }
-        #previewContent { border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: auto; }
-        #status { margin-top: 10px; color: green; }
+        * {
+            box-sizing: border-box;
+        }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+        }
+        
+        .header-container {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 24px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header-left h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header-left p {
+            margin: 8px 0 0 0;
+            opacity: 0.9;
+            font-size: 16px;
+        }
+        
+        .status-container {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: rgba(255, 255, 255, 0.15);
+            padding: 12px 20px;
+            border-radius: 25px;
+            backdrop-filter: blur(10px);
+        }
+        
+        #status {
+            font-size: 14px;
+            font-weight: 600;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ff4757;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-indicator.connected {
+            background: #2ed573;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        #docIdDisplay {
+            font-weight: 700;
+            font-size: 16px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .workspace {
+            padding: 32px;
+        }
+        
+        .container { 
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            height: 500px;
+        }
+        
+        .editor, .preview {
+            background: #fafbfc;
+            border-radius: 8px;
+            border: 1px solid #e1e8ed;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .editor:hover, .preview:hover {
+            border-color: #4facfe;
+            box-shadow: 0 8px 25px rgba(79, 172, 254, 0.15);
+        }
+        
+        .editor-header, .preview-header {
+            background: white;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e1e8ed;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .editor-header h2, .preview-header h2 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            flex: 1;
+        }
+        
+        .control-button {
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid #d1d9e0;
+            border-radius: 6px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .control-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .control-button:active {
+            transform: translateY(0);
+        }
+        
+        textarea {
+            flex: 1;
+            padding: 20px;
+            font-size: 15px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            border: none;
+            background: white;
+            resize: none;
+            outline: none;
+            line-height: 1.6;
+            color: #333;
+        }
+        
+        textarea::placeholder {
+            color: #999;
+            font-style: italic;
+        }
+        
+        #previewContent {
+            flex: 1;
+            padding: 20px;
+            background: white;
+            overflow-y: auto;
+            line-height: 1.6;
+            color: #333;
+        }
+        
+        /* Markdown 样式美化 */
+        #previewContent h1, #previewContent h2, #previewContent h3 {
+            color: #2c3e50;
+            margin-top: 24px;
+            margin-bottom: 16px;
+        }
+        
+        #previewContent h1 {
+            border-bottom: 2px solid #4facfe;
+            padding-bottom: 8px;
+        }
+        
+        #previewContent p {
+            margin-bottom: 16px;
+        }
+        
+        #previewContent code {
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            color: #e83e8c;
+        }
+        
+        #previewContent pre {
+            background: #f8f9fa;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            border-left: 4px solid #4facfe;
+        }
+        
+        #previewContent blockquote {
+            border-left: 4px solid #4facfe;
+            margin: 16px 0;
+            padding: 8px 16px;
+            background: #f8f9fa;
+            font-style: italic;
+        }
+        
+        .user-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            z-index: 1000;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            font-weight: 500;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            max-width: 300px;
+        }
+        
+        .user-message.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        
+        .user-message.error {
+            background: linear-gradient(135deg, #ff4757 0%, #ff3742 100%);
+        }
+        
+        .user-message.success {
+            background: linear-gradient(135deg, #2ed573 0%, #17c671 100%);
+        }
+        
+        /* 滚动条美化 */
+        #previewContent::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        #previewContent::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+        
+        #previewContent::-webkit-scrollbar-thumb {
+            background: #4facfe;
+            border-radius: 3px;
+        }
+        
+        #previewContent::-webkit-scrollbar-thumb:hover {
+            background: #2980b9;
+        }
+        
         @media (max-width: 768px) {
-            .container { flex-direction: column; }
-            .editor, .preview { width: 98%; }
+            body {
+                padding: 10px;
+            }
+            
+            .header-container {
+                flex-direction: column;
+                gap: 16px;
+                text-align: center;
+                padding: 20px;
+            }
+            
+            .status-container {
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .workspace {
+                padding: 16px;
+            }
+            
+            .container { 
+                grid-template-columns: 1fr;
+                gap: 16px;
+                height: auto;
+            }
+            
+            .editor, .preview {
+                height: 300px;
+            }
+            
+            .user-message {
+                right: 10px;
+                left: 10px;
+                max-width: none;
+            }
+            
+            .editor-header, .preview-header {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            
+            .control-button {
+                font-size: 12px;
+                padding: 6px 12px;
+            }
+        }
+        
+        /* 加载动画 */
+        .loading {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
-   <div id="status">Connecting...</div>
-
-    <h1>全球文档同步！</h1>
-    <p>Open this page in multiple tabs/browsers to see real-time collaboration.</p>
-    <p>Document ID: <span id="docIdDisplay"></span></p>
-    
-    <div class="container">
-        <div class="editor">
-            <h2>Editor <button id="pasteBtn" style="margin-left:10px;">从剪切板加载</button></h2>
-            <textarea id="documentContent"></textarea>
+    <div class="main-container">
+        <div class="header-container">
+            <div class="header-left">
+                <h1>📝 全球文档同步</h1>
+                <p>多端实时协作，畅享无缝体验</p>
+            </div>
+            <div class="status-container">
+                <div id="status">
+                    <span class="status-indicator"></span>
+                    <span class="status-text">连接中...</span>
+                </div>
+                <div id="docIdDisplay">文档加载中...</div>
+            </div>
         </div>
-        <div class="preview">
-            <h2>Markdown Preview <button id="copyBtn" style="margin-left:10px;">复制内容</button></h2>
-            <div id="previewContent"></div>
+        
+        <div class="workspace">
+            <div class="container">
+                <div class="editor">
+                    <div class="editor-header">
+                        <h2>✏️ 编辑器</h2>
+                        <button id="selectAllBtn" class="control-button">全选</button>
+                        <button id="pasteBtn" class="control-button">粘贴</button>
+                    </div>
+                    <textarea id="documentContent" class="editor-textarea" placeholder="开始创作你的文档...支持 Markdown 语法"></textarea>
+                </div>
+
+                <div class="preview">
+                    <div class="preview-header">
+                        <h2>👁️ 实时预览</h2>
+                        <button id="copyBtn" class="control-button">复制</button>
+                    </div>
+                    <div id="previewContent" class="preview-content">
+                        <p style="color: #999; text-align: center; margin-top: 80px;">
+                            <em>等待输入内容...</em>
+                        </p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-    
-  
+
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
+        // 消息提示函数
+        function showUserMessage(message, type = 'info') {
+            const messageDiv = document.createElement('div');
+            messageDiv.textContent = message;
+            messageDiv.className = `user-message ${type}`;
+            document.body.appendChild(messageDiv);
+
+            // 动画效果
+            setTimeout(() => {
+                messageDiv.classList.add('show');
+            }, 10);
+
+            setTimeout(() => {
+                messageDiv.classList.remove('show');
+                setTimeout(() => {
+                    messageDiv.remove();
+                }, 300);
+            }, 2000);
+        }
+
         const docIdDisplay = document.getElementById('docIdDisplay');
         const documentContent = document.getElementById('documentContent');
         const previewContent = document.getElementById('previewContent');
         const statusDiv = document.getElementById('status');
+        const statusIndicator = document.querySelector('.status-indicator');
+        const statusText = document.querySelector('.status-text');
 
         // 从浏览器地址栏的路径中提取文档 ID
         const pathParts = window.location.pathname.split('/');
-        const documentId = pathParts[2] || 'default-doc'; // 如果 URL 中没有，则使用默认 ID
-        docIdDisplay.textContent = documentId;
+        const documentId = pathParts[1] || 'default-doc';
+        
+        // 美化文档 ID 显示
+        const displayId = documentId.length > 15 ? documentId.substring(0, 15) + '...' : documentId;
+        docIdDisplay.textContent = `📄 ${displayId}`;
 
-        // 根据当前页面的协议 (http/https) 构建 WebSocket URL (ws/wss)
+        // 根据当前页面的协议构建 WebSocket URL
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${wsProtocol}//${window.location.host}/docs/${documentId}/websocket`;
+        const wsUrl = `${wsProtocol}//${window.location.host}/${documentId}/websocket`;
 
         let ws;
         let debounceTimeout;
 
+        function updateConnectionStatus(connected, message) {
+            statusText.textContent = message;
+            if (connected) {
+                statusIndicator.classList.add('connected');
+            } else {
+                statusIndicator.classList.remove('connected');
+            }
+        }
+
         function connectWebSocket() {
-            statusDiv.textContent = 'Connecting...';
+            updateConnectionStatus(false, '连接中...');
+            statusText.innerHTML = '<span class="loading"></span> 连接中...';
+            
             ws = new WebSocket(wsUrl);
 
-            // --- WebSocket 事件处理 ---
-            // 当连接成功建立时调用
-            // 在WebSocket连接成功后添加初始渲染
             ws.onopen = () => {
-                statusDiv.textContent = 'Connected!';
-                previewContent.innerHTML = marked.parse(documentContent.value || '等待输入...');
+                updateConnectionStatus(true, '已连接');
+                // 初始化时立即请求当前文档内容
+                ws.send('暂无内容');
             };
-
-            // 当从服务器（Durable Object）收到消息时调用
+            
             ws.onmessage = (event) => {
                 const receivedContent = event.data;
-                // 只有当内容确实发生变化时才更新，避免不必要的光标跳动
+                
+                // 处理服务器返回的初始内容
+                if (receivedContent.startsWith('content:')) {
+                    const content = receivedContent.substring(8);
+                    documentContent.value = content;
+                    updatePreview(content);
+                    return;
+                }
+                
+                // 只有当内容确实发生变化时才更新
                 if (documentContent.value !== receivedContent) {
-                    // 保存当前光标位置，以提供更好的用户体验
-                    const cursorStart = documentContent.selectionStart;
-                    const cursorEnd = documentContent.selectionEnd;
                     documentContent.value = receivedContent;
-                    // 尝试恢复光标位置
-                    documentContent.setSelectionRange(cursorStart, cursorEnd);
+                    updatePreview(receivedContent);
                 }
             };
 
-            // 当连接关闭时调用
             ws.onclose = (event) => {
-                statusDiv.textContent = `Disconnected. Reconnecting in 3s...`;
-                // 实现简单的自动重连机制
+                updateConnectionStatus(false, '连接断开');
+                statusText.innerHTML = '<span class="loading"></span> 3秒后重连...';
                 setTimeout(connectWebSocket, 3000);
             };
 
-            // 当发生错误时调用
             ws.onerror = (error) => {
-                statusDiv.textContent = 'WebSocket error. Reconnecting...';
-                ws.close(); // 触发 onclose 事件，从而启动重连逻辑
+                updateConnectionStatus(false, '连接错误');
+                ws.close();
             };
         }
 
-        // --- 用户输入处理 ---
-        // 添加Markdown预览功能
+        function updatePreview(content) {
+            if (content && content.trim()) {
+                previewContent.innerHTML = marked.parse(content);
+            } else {
+                previewContent.innerHTML = '<p style="color: #999; text-align: center; margin-top: 80px;"><em>等待输入内容...</em></p>';
+            }
+        }
+
+        // 用户输入处理
         documentContent.addEventListener('input', () => {
-            // 更新Markdown预览
-            previewContent.innerHTML = marked.parse(documentContent.value);
+            updatePreview(documentContent.value);
             
-            // 保留原有的防抖逻辑
+            // 防抖逻辑
             clearTimeout(debounceTimeout);
             debounceTimeout = setTimeout(() => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
@@ -110,33 +499,69 @@
             }, 200);
         });
 
-        // 页面加载时，立即开始连接 WebSocket
-        connectWebSocket();
-        // 在script标签末尾添加
+        // 按钮事件处理
+        const selectAllBtn = document.getElementById('selectAllBtn');
         const pasteBtn = document.getElementById('pasteBtn');
         const copyBtn = document.getElementById('copyBtn');
         
+        selectAllBtn.addEventListener('click', () => {
+            documentContent.select();
+            documentContent.focus();
+            showUserMessage('✅ 已全选编辑器内容', 'success');
+        });
+
         pasteBtn.addEventListener('click', async () => {
             try {
-                const text = await navigator.clipboard.readText();
-                documentContent.value = text;
-                previewContent.innerHTML = marked.parse(text);
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(text);
+                const permissionStatus = await navigator.permissions.query({ name: 'clipboard-read' });
+                if (permissionStatus.state === 'granted' || permissionStatus.state === 'prompt') {
+                    const text = await navigator.clipboard.readText();
+                    documentContent.value = text;
+                    documentContent.dispatchEvent(new Event('input'));
+                    showUserMessage('✅ 内容已粘贴', 'success');
+                } else {
+                    showUserMessage('❌ 无剪贴板权限，请手动粘贴', 'error');
                 }
             } catch (err) {
-                alert('无法访问剪切板，请检查浏览器权限设置');
-                console.error('Failed to read clipboard:', err);
+                console.error('粘贴失败:', err);
+                showUserMessage('❌ 粘贴失败，请手动操作', 'error');
             }
         });
-        
+
         copyBtn.addEventListener('click', async () => {
             try {
-                await navigator.clipboard.writeText(documentContent.value);
-                alert('内容已复制到剪切板');
+                const textToCopy = documentContent.value;
+                if (!textToCopy.trim()) {
+                    showUserMessage('⚠️ 没有内容可复制', 'error');
+                    return;
+                }
+                
+                await navigator.clipboard.writeText(textToCopy);
+                showUserMessage('✅ 内容已复制到剪贴板', 'success');
             } catch (err) {
-                alert('复制失败，请检查浏览器权限设置');
-                console.error('Failed to copy:', err);
+                console.error('复制失败:', err);
+                // 降级方案
+                const textarea = document.createElement('textarea');
+                textarea.value = documentContent.value;
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    showUserMessage('✅ 内容已复制到剪贴板', 'success');
+                } catch (execErr) {
+                    console.error('execCommand 复制失败:', execErr);
+                    showUserMessage('❌ 复制失败，请手动复制', 'error');
+                }
+                document.body.removeChild(textarea);
+            }
+        });
+
+        // 页面加载时连接 WebSocket
+        connectWebSocket();
+
+        // 页面可见性变化时重连
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && (!ws || ws.readyState !== WebSocket.OPEN)) {
+                connectWebSocket();
             }
         });
     </script>
