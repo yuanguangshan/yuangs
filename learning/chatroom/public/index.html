@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Real-time Chat Room</title>
     <style>
         /* --- BASE STYLES --- */
@@ -288,11 +288,31 @@
             transform: translateY(0);
         }
 
+        /* 输入法遮罩 */
+        .keyboard-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 50;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .keyboard-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
         /* --- RESPONSIVE STYLES --- */
         @media (max-width: 768px) {
             .chat-container {
                 width: 100vw;
                 height: 100vh;
+                height: 100dvh; /* 动态视口高度 */
             }
             
             .sidebar {
@@ -323,16 +343,18 @@
             }
             
             .chat-header {
-                padding-left: 60px;
                 padding: 15px 20px 15px 60px;
             }
             
             #chat-window {
                 padding: 15px 20px;
+                padding-bottom: 20px;
             }
             
             #message-form {
                 padding: 15px 20px;
+                /* 考虑安全区域 */
+                padding-bottom: calc(15px + env(safe-area-inset-bottom, 0px));
             }
             
             .overlay {
@@ -350,37 +372,58 @@
                 display: block;
             }
             
-            /* 移动端输入法适配 */
+            /* 移动端输入框位置优化 */
             .input-container {
-                position: absolute;
+                position: fixed;
                 bottom: 0;
                 left: 0;
                 right: 0;
+                /* 考虑安全区域，确保不被底部操作区遮挡 */
+                bottom: env(safe-area-inset-bottom, 0px);
                 transition: transform 0.3s ease;
+                z-index: 101;
+            }
+            
+            /* 为固定输入框预留空间 */
+            .main-chat {
+                padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px));
             }
             
             /* 确保聊天窗口可以正常滚动 */
-            .main-chat {
-                height: 100vh;
-                display: flex;
-                flex-direction: column;
-            }
-            
             #chat-window {
                 flex: 1;
                 overflow-y: auto;
-                -webkit-overflow-scrolling: touch; /* iOS 平滑滚动 */
+                -webkit-overflow-scrolling: touch;
             }
         }
         
         .sidebar-toggle {
             display: none;
         }
+
+        /* iOS 特定优化 */
+        @supports (-webkit-touch-callout: none) {
+            @media (max-width: 768px) {
+                .chat-container {
+                    height: -webkit-fill-available;
+                }
+                
+                /* 处理 iOS Safari 地址栏收缩 */
+                .input-container {
+                    bottom: max(env(safe-area-inset-bottom, 0px), 20px);
+                }
+                
+                .main-chat {
+                    padding-bottom: calc(90px + max(env(safe-area-inset-bottom, 0px), 20px));
+                }
+            }
+        }
     </style>
 </head>
 <body>
     <div class="chat-container">
         <div class="overlay" id="overlay"></div>
+        <div class="keyboard-overlay" id="keyboard-overlay"></div>
         
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
@@ -402,16 +445,16 @@
             </header>
             
             <div id="chat-window"></div>
-            
-            <div class="input-container">
-                <form id="message-form">
-                    <div class="input-wrapper">
-                        <textarea id="message-input" placeholder="Type a message..." rows="1"></textarea>
-                    </div>
-                    <button id="send-button" type="submit">Send</button>
-                </form>
-            </div>
         </main>
+        
+        <div class="input-container">
+            <form id="message-form">
+                <div class="input-wrapper">
+                    <textarea id="message-input" placeholder="Type a message..." rows="1"></textarea>
+                </div>
+                <button id="send-button" type="submit">Send</button>
+            </form>
+        </div>
     </div>
 
     <script type="module">
@@ -419,6 +462,7 @@
         const sidebarToggle = document.getElementById('sidebar-toggle');
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('overlay');
+        const keyboardOverlay = document.getElementById('keyboard-overlay');
         
         sidebarToggle.addEventListener('click', () => {
             sidebar.classList.toggle('open');
@@ -438,43 +482,75 @@
             this.style.height = Math.min(this.scrollHeight, 120) + 'px';
         });
         
-        // --- 处理移动端输入法（改进版本）---
+        // --- 改进的移动端输入法处理 ---
         let initialViewportHeight = window.innerHeight;
         let isInputFocused = false;
+        let keyboardHeight = 0;
+        
+        // 检测是否为移动设备
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         
         messageInput.addEventListener('focus', () => {
             isInputFocused = true;
-            // 延迟处理，等待输入法完全弹出
-            setTimeout(handleViewportChange, 300);
+            if (isMobile) {
+                keyboardOverlay.classList.add('show');
+                // 延迟处理，等待输入法完全弹出
+                setTimeout(() => {
+                    handleViewportChange();
+                }, 300);
+            }
         });
         
         messageInput.addEventListener('blur', () => {
             isInputFocused = false;
-            const inputContainer = document.querySelector('.input-container');
-            inputContainer.style.transform = 'translateY(0)';
+            keyboardOverlay.classList.remove('show');
+            
+            if (isMobile) {
+                const inputContainer = document.querySelector('.input-container');
+                inputContainer.style.transform = 'translateY(0)';
+            }
         });
         
         function handleViewportChange() {
-            if (!isInputFocused) return;
+            if (!isInputFocused || !isMobile) return;
             
             const currentHeight = window.innerHeight;
-            const inputContainer = document.querySelector('.input-container');
             const heightDiff = initialViewportHeight - currentHeight;
+            keyboardHeight = heightDiff;
+            
+            const inputContainer = document.querySelector('.input-container');
             
             if (heightDiff > 150) { // 输入法显示
-                const translateY = Math.min(heightDiff - 100, 250);
+                // 计算合适的上移距离，确保输入框在可见区域
+                const translateY = Math.min(heightDiff * 0.6, 200);
                 inputContainer.style.transform = `translateY(-${translateY}px)`;
             } else {
                 inputContainer.style.transform = 'translateY(0)';
             }
         }
         
-        window.addEventListener('resize', handleViewportChange);
+        // 监听视口变化
+        window.addEventListener('resize', () => {
+            if (isMobile) {
+                // 防抖处理
+                clearTimeout(window.resizeTimer);
+                window.resizeTimer = setTimeout(handleViewportChange, 100);
+            }
+        });
+        
+        // 处理设备旋转
         window.addEventListener('orientationchange', () => {
             setTimeout(() => {
                 initialViewportHeight = window.innerHeight;
-                handleViewportChange();
+                if (isInputFocused) {
+                    handleViewportChange();
+                }
             }, 500);
+        });
+        
+        // 点击遮罩取消输入焦点
+        keyboardOverlay.addEventListener('click', () => {
+            messageInput.blur();
         });
 
         // --- 原有的聊天功能代码 ---
