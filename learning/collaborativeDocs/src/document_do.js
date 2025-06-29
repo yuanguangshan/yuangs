@@ -1,8 +1,8 @@
 // src/document_do.js
 
 import * as Y from 'yjs';
-import * as encoding from 'yjs/encoding';
-import * as decoding from 'yjs/decoding';
+import * as encoding from 'lib0/encoding';
+import * as decoding from 'lib0/decoding';
 import {
     Awareness,
     applyAwarenessUpdate,
