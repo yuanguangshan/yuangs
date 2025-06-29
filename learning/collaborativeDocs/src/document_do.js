@@ -7,7 +7,9 @@ export class DocumentDurableObject {
         this.state = state; // `state` 对象用于访问存储和管理并发
         this.env = env;     // `env` 对象包含环境变量和绑定
         this.content = "";  // 在内存中维护文档的当前内容，以实现快速访问
-        this.websockets = new Set(); // 使用 Set 存储所有连接到此对象的 WebSocket 客户端
+        // 将 `websockets` Set 更改为 `sessions` Map
+        // Map 的键是 WebSocket 对象，值是包含连接信息的对象（例如 IP 地址）
+        this.sessions = new Map();
 
         // 从持久化存储中异步加载之前保存的文档内容
         // 这确保了即使 Durable Object 被销毁并重建，文档内容也不会丢失
@@ -21,7 +23,7 @@ export class DocumentDurableObject {
     // fetch 方法是 Durable Object 的主入口点，处理所有传入的 HTTP 和 WebSocket 请求
     async fetch(request) {
         // **极其重要**: `blockConcurrencyWhile` 确保所有对该实例的操作都是串行执行的。
-        // 这意味着我们不需要担心多个请求同时读写 this.content 或 this.websockets 导致的竞态条件，
+        // 这意味着我们不需要担心多个请求同时读写 this.content 或 this.sessions 导致的竞态条件，
         // 极大地简化了状态管理。
         return this.state.blockConcurrencyWhile(async () => {
             const url = new URL(request.url);
@@ -33,11 +35,14 @@ export class DocumentDurableObject {
                     return new Response("Expected Upgrade: websocket", { status: 426 });
                 }
 
+                // 从请求头中获取客户端 IP 地址
+                const ip = request.headers.get("CF-Connecting-IP") || "Unknown";
+
                 // 创建一个 WebSocket 对，一个用于客户端，一个用于服务器端（即此 DO 内部）
                 const { 0: client, 1: server } = new WebSocketPair();
 
-                // 将服务器端 WebSocket 添加到我们的集合中，以便后续广播
-                this.websockets.add(server);
+                // 将新的会话信息存储到 Map 中
+                this.sessions.set(server, { ip });
 
                 // --- WebSocket 事件监听 ---
                 // 监听来自客户端的消息
@@ -55,12 +60,12 @@ export class DocumentDurableObject {
 
                 // 监听连接关闭事件
                 server.addEventListener("close", evt => {
-                    this.websockets.delete(server); // 从集合中移除，停止向其发送消息
+                    this.sessions.delete(server); // 从 Map 中移除会话
                 });
 
                 // 监听错误事件
                 server.addEventListener("error", err => {
-                    this.websockets.delete(server); // 发生错误时也移除
+                    this.sessions.delete(server); // 发生错误时也移除
                 });
 
                 // 接受 WebSocket 连接
@@ -70,6 +75,15 @@ export class DocumentDurableObject {
 
                 // 返回客户端 WebSocket，完成 WebSocket 升级握手
                 return new Response(null, { status: 101, webSocket: client });
+
+            // --- 新增 API 端点：获取连接信息 ---
+            } else if (url.pathname === "/api/connections") {
+                // 从 sessions Map 中提取所有 IP 地址
+                const ips = Array.from(this.sessions.values()).map(session => session.ip);
+                // 以 JSON 格式返回 IP 地址列表
+                return new Response(JSON.stringify(ips), {
+                    headers: { "Content-Type": "application/json" },
+                });
 
             // --- 可选的 HTTP 接口 ---
             } else if (url.pathname === "/content") {
@@ -84,14 +98,15 @@ export class DocumentDurableObject {
 
     // 辅助方法：向所有连接的 WebSocket 广播消息
     broadcast(message, sender = null) {
-        this.websockets.forEach(ws => {
+        // 遍历 sessions Map 中的所有 WebSocket 连接
+        this.sessions.forEach((data, ws) => {
             // 避免将消息发回给刚刚发送更新的客户端
             if (ws !== sender) {
                 try {
                     ws.send(message);
                 } catch (err) {
-                    // 如果发送失败（例如，客户端已意外断开），则将其从集合中移除
-                    this.websockets.delete(ws);
+                    // 如果发送失败（例如，客户端已意外断开），则将其从 Map 中移除
+                    this.sessions.delete(ws);
                 }
             }
         });

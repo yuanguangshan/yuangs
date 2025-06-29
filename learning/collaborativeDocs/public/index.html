@@ -339,6 +339,41 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        .connections-container {
+            margin-top: 24px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e1e8ed;
+        }
+
+        .connections-container h2 {
+            margin-top: 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            border-bottom: 1px solid #e1e8ed;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+
+        #connectionsList {
+            list-style-type: none;
+            padding-left: 0;
+            margin: 0;
+            font-size: 14px;
+            color: #555;
+        }
+
+        #connectionsList li {
+            padding: 8px 0;
+            border-bottom: 1px solid #e1e8ed;
+        }
+
+        #connectionsList li:last-child {
+            border-bottom: none;
+        }
     </style>
 </head>
 <body>
@@ -380,6 +415,10 @@
                     </div>
                 </div>
             </div>
+             <div id="connections" class="connections-container">
+                <h2>👥 当前连接的客户端</h2>
+                <ul id="connectionsList"></ul>
+            </div>
         </div>
     </div>
 
@@ -411,6 +450,7 @@
         const statusDiv = document.getElementById('status');
         const statusIndicator = document.querySelector('.status-indicator');
         const statusText = document.querySelector('.status-text');
+        const connectionsList = document.getElementById('connectionsList');
 
         // 从浏览器地址栏的路径中提取文档 ID
         const pathParts = window.location.pathname.split('/');
@@ -423,6 +463,7 @@
         // 根据当前页面的协议构建 WebSocket URL
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${wsProtocol}//${window.location.host}/${documentId}/websocket`;
+        const apiUrl = `${window.location.protocol}//${window.location.host}/${documentId}/api/connections`;
 
         let ws;
         let debounceTimeout;
@@ -444,22 +485,12 @@
 
             ws.onopen = () => {
                 updateConnectionStatus(true, '已连接');
-                // 初始化时立即请求当前文档内容
-                //ws.send('暂无内容');
+                updateConnectionsList(); // 连接成功后立即更新一次
             };
             
             ws.onmessage = (event) => {
                 const receivedContent = event.data;
                 
-                // 处理服务器返回的初始内容
-                if (receivedContent.startsWith('content:')) {
-                    const content = receivedContent.substring(8);
-                    documentContent.value = content;
-                    updatePreview(content);
-                    return;
-                }
-                
-                // 只有当内容确实发生变化时才更新
                 if (documentContent.value !== receivedContent) {
                     documentContent.value = receivedContent;
                     updatePreview(receivedContent);
@@ -486,11 +517,33 @@
             }
         }
 
+        async function updateConnectionsList() {
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const ips = await response.json();
+                connectionsList.innerHTML = ''; // 清空旧列表
+                if (ips.length > 0) {
+                    ips.forEach(ip => {
+                        const li = document.createElement('li');
+                        li.textContent = `IP: ${ip}`;
+                        connectionsList.appendChild(li);
+                    });
+                } else {
+                    connectionsList.innerHTML = '<li>当前没有其他连接</li>';
+                }
+            } catch (error) {
+                console.error('Could not fetch connections:', error);
+                connectionsList.innerHTML = '<li>无法加载连接列表</li>';
+            }
+        }
+
         // 用户输入处理
         documentContent.addEventListener('input', () => {
             updatePreview(documentContent.value);
             
-            // 防抖逻辑
             clearTimeout(debounceTimeout);
             debounceTimeout = setTimeout(() => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
@@ -539,7 +592,6 @@
                 showUserMessage('✅ 内容已复制到剪贴板', 'success');
             } catch (err) {
                 console.error('复制失败:', err);
-                // 降级方案
                 const textarea = document.createElement('textarea');
                 textarea.value = documentContent.value;
                 document.body.appendChild(textarea);
@@ -557,6 +609,9 @@
 
         // 页面加载时连接 WebSocket
         connectWebSocket();
+        
+        // 定期更新连接列表
+        setInterval(updateConnectionsList, 3000); // 每 3 秒更新一次
 
         // 页面可见性变化时重连
         document.addEventListener('visibilitychange', () => {
