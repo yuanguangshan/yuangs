@@ -141,7 +141,7 @@ export class DocumentDurableObject {
         this.sendMessage(ws, syncStep1);
 
         // 2. 发送 Sync Step 2 (如果文档已有内容)
-        if (this.ydoc.toJSON() !== {}) {
+        if (this.ydoc.share.size > 0) {
             const syncStep2 = writeSyncStep2(this.ydoc);
             this.sendMessage(ws, syncStep2);
         }
