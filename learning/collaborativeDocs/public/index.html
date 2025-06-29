@@ -460,9 +460,27 @@
         const displayId = documentId.length > 15 ? documentId.substring(0, 15) + '...' : documentId;
         docIdDisplay.textContent = `📄 ${displayId}`;
 
-        // 根据当前页面的协议构建 WebSocket URL
+        // 新增：获取客户端信息
+        function getClientInfo() {
+            const ua = navigator.userAgent;
+            let os = "Unknown OS";
+            let device = "Desktop";
+
+            if (/Android/i.test(ua)) { os = "Android"; device = "Mobile"; }
+            else if (/iPhone|iPad|iPod/i.test(ua)) { os = "iOS"; device = "Mobile"; }
+            else if (/Windows NT/i.test(ua)) { os = "Windows"; }
+            else if (/Mac OS X/i.test(ua)) { os = "macOS"; }
+            else if (/Linux/i.test(ua)) { os = "Linux"; }
+
+            if (/Mobi/i.test(ua)) { device = "Mobile"; }
+
+            return `${os} (${device})`;
+        }
+
+        // 根据当前页面的协议构建 WebSocket URL，并附带客户端信息
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${wsProtocol}//${window.location.host}/${documentId}/websocket`;
+        const clientInfo = encodeURIComponent(getClientInfo());
+        const wsUrl = `${wsProtocol}//${window.location.host}/${documentId}/websocket?clientInfo=${clientInfo}`;
         const apiUrl = `${window.location.protocol}//${window.location.host}/${documentId}/api/connections`;
 
         let ws;
@@ -523,12 +541,12 @@
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
-                const ips = await response.json();
+                const connections = await response.json();
                 connectionsList.innerHTML = ''; // 清空旧列表
-                if (ips.length > 0) {
-                    ips.forEach(ip => {
+                if (connections.length > 0) {
+                    connections.forEach(conn => {
                         const li = document.createElement('li');
-                        li.textContent = `IP: ${ip}`;
+                        li.textContent = `📍 IP: ${conn.ip} | 💻: ${conn.info}`;
                         connectionsList.appendChild(li);
                     });
                 } else {

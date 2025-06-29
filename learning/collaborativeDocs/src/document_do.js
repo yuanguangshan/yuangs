@@ -8,7 +8,7 @@ export class DocumentDurableObject {
         this.env = env;     // `env` 对象包含环境变量和绑定
         this.content = "";  // 在内存中维护文档的当前内容，以实现快速访问
         // 将 `websockets` Set 更改为 `sessions` Map
-        // Map 的键是 WebSocket 对象，值是包含连接信息的对象（例如 IP 地址）
+        // Map 的键是 WebSocket 对象，值是包含连接信息的对象（例如 IP 地址和客户端信息）
         this.sessions = new Map();
 
         // 从持久化存储中异步加载之前保存的文档内容
@@ -37,12 +37,14 @@ export class DocumentDurableObject {
 
                 // 从请求头中获取客户端 IP 地址
                 const ip = request.headers.get("CF-Connecting-IP") || "Unknown";
+                // 从 URL 查询参数中获取客户端信息
+                const clientInfo = url.searchParams.get("clientInfo") || "Unknown Device";
 
                 // 创建一个 WebSocket 对，一个用于客户端，一个用于服务器端（即此 DO 内部）
                 const { 0: client, 1: server } = new WebSocketPair();
 
                 // 将新的会话信息存储到 Map 中
-                this.sessions.set(server, { ip });
+                this.sessions.set(server, { ip, info: clientInfo });
 
                 // --- WebSocket 事件监听 ---
                 // 监听来自客户端的消息
@@ -78,10 +80,10 @@ export class DocumentDurableObject {
 
             // --- 新增 API 端点：获取连接信息 ---
             } else if (url.pathname === "/api/connections") {
-                // 从 sessions Map 中提取所有 IP 地址
-                const ips = Array.from(this.sessions.values()).map(session => session.ip);
+                // 从 sessions Map 中提取所有会话信息
+                const connections = Array.from(this.sessions.values());
                 // 以 JSON 格式返回 IP 地址列表
-                return new Response(JSON.stringify(ips), {
+                return new Response(JSON.stringify(connections), {
                     headers: { "Content-Type": "application/json" },
                 });
 
