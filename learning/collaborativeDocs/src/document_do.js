@@ -1,116 +1,268 @@
-// src/document_do.js
+"""// src/document_do.js
 
-// 导出 DocumentDurableObject 类，以便 worker.js 可以导入并再次导出它
+import * as Y from 'yjs';
+import {
+    Awareness,
+    applyAwarenessUpdate,
+    removeAwarenessStates
+} from 'y-protocols/awareness.js';
+import {
+    readSyncMessage,
+    readMessage,
+    writeSyncStep1,
+    writeUpdate,
+    writeSyncStep2,
+} from 'y-protocols/sync.js';
+
+// 定义消息类型常量，与 y-websocket 客户端保持一致
+const MESSAGE_SYNC = 0;
+const MESSAGE_AWARENESS = 1;
+
+// 定义 WebSocket 关闭代码
+const CLOSE_REASON_DUPLICATE_CONNECTION = 4001;
+
 export class DocumentDurableObject {
-    // 构造函数在 Durable Object 首次被创建时调用
     constructor(state, env) {
-        this.state = state; // `state` 对象用于访问存储和管理并发
-        this.env = env;     // `env` 对象包含环境变量和绑定
-        this.content = "";  // 在内存中维护文档的当前内容，以实现快速访问
-        // 将 `websockets` Set 更改为 `sessions` Map
-        // Map 的键是 WebSocket 对象，值是包含连接信息的对象（例如 IP 地址和客户端信息）
-        this.sessions = new Map();
+        this.state = state;
+        this.env = env;
+        this.sessions = new Map(); // 存储 WebSocket 会话
+        this.ydoc = null; // Y.Doc 实例
+        this.awareness = null; // Awareness 实例
+        this.lastSave = 0; // 上次保存到持久化存储的时间戳
 
-        // 从持久化存储中异步加载之前保存的文档内容
-        // 这确保了即使 Durable Object 被销毁并重建，文档内容也不会丢失
-        this.state.storage.get("content").then(storedContent => {
-            if (storedContent) {
-                this.content = storedContent;
+        // 初始化 Promise，确保在处理任何请求前，Y.Doc 已从存储中加载完毕
+        this.initializePromise = this.loadYDoc();
+    }
+
+    // 从持久化存储中加载 Y.Doc
+    async loadYDoc() {
+        // 使用事务确保原子性
+        await this.state.storage.transaction(async (txn) => {
+            // 从键 "ydoc" 中获取存储的文档状态
+            const storedYDoc = await txn.get("ydoc");
+
+            // 创建 Y.Doc 实例
+            this.ydoc = new Y.Doc();
+            // 创建 Awareness 实例
+            this.awareness = new Awareness(this.ydoc);
+
+            // 如果存在已存储的文档，则应用更新
+            if (storedYDoc) {
+                Y.applyUpdate(this.ydoc, new Uint8Array(storedYDoc));
             }
+
+            // 监听 Y.Doc 的更新事件
+            this.ydoc.on('update', (update, origin) => {
+                // 将更新广播给所有连接的客户端
+                this.broadcast(update, origin);
+                // 触发保存操作
+                this.scheduleSave();
+            });
+
+            // 监听 Awareness 的更新事件
+            this.awareness.on('update', (update, origin) => {
+                // 将 Awareness 更新广播给所有连接的客户端
+                this.broadcastAwareness(update, origin);
+            });
         });
     }
 
-    // fetch 方法是 Durable Object 的主入口点，处理所有传入的 HTTP 和 WebSocket 请求
+    // 安排 Y.Doc 的保存操作，使用节流防止频繁写入
+    scheduleSave() {
+        const now = Date.now();
+        // 每隔 2 秒最多保存一次
+        if (now - this.lastSave > 2000) {
+            this.lastSave = now;
+            // 在后台执行保存，不阻塞当前操作
+            this.state.waitUntil(this.saveYDoc());
+        }
+    }
+
+    // 将 Y.Doc 的状态保存到持久化存储
+    async saveYDoc() {
+        // 使用事务确保写入的原子性
+        await this.state.storage.transaction(async (txn) => {
+            // 将 Y.Doc 编码为二进制格式并存储
+            const docState = Y.encodeStateAsUpdate(this.ydoc);
+            await txn.put("ydoc", docState);
+        });
+    }
+
+    // 处理传入的请求 (HTTP / WebSocket)
     async fetch(request) {
-        // **极其重要**: `blockConcurrencyWhile` 确保所有对该实例的操作都是串行执行的。
-        // 这意味着我们不需要担心多个请求同时读写 this.content 或 this.sessions 导致的竞态条件，
-        // 极大地简化了状态管理。
+        // 确保 Y.Doc 初始化完成
+        await this.initializePromise;
+
+        // 使用 blockConcurrencyWhile 保证所有操作的串行执行，避免竞态条件
         return this.state.blockConcurrencyWhile(async () => {
             const url = new URL(request.url);
 
-            // --- WebSocket 连接处理 ---
             if (url.pathname === "/websocket") {
+                // 处理 WebSocket 升级请求
                 const upgradeHeader = request.headers.get("Upgrade");
                 if (!upgradeHeader || upgradeHeader !== "websocket") {
-                    return new Response("Expected Upgrade: websocket", { status: 426 });
+                    return new Response("Expected Upgrade: websocket", {
+                        status: 426
+                    });
                 }
 
-                // 从请求头中获取客户端 IP 地址
-                const ip = request.headers.get("CF-Connecting-IP") || "Unknown";
-                // 从 URL 查询参数中获取客户端信息
-                const clientInfo = url.searchParams.get("clientInfo") || "Unknown Device";
+                const {
+                    0: client,
+                    1: server
+                } = new WebSocketPair();
+                await this.handleSession(server);
 
-                // 创建一个 WebSocket 对，一个用于客户端，一个用于服务器端（即此 DO 内部）
-                const { 0: client, 1: server } = new WebSocketPair();
-
-                // 将新的会话信息存储到 Map 中
-                this.sessions.set(server, { ip, info: clientInfo });
-
-                // --- WebSocket 事件监听 ---
-                // 监听来自客户端的消息
-                server.addEventListener("message", async event => {
-                    // 当收到客户端发送的文档更新时...
-                    const newContent = event.data;
-                    this.content = newContent; // 1. 更新内存中的内容
-
-                    // 2. 将新内容持久化到存储中
-                    await this.state.storage.put("content", this.content);
-
-                    // 3. 将更新广播给所有其他连接的客户端
-                    this.broadcast(this.content, server);
+                return new Response(null, {
+                    status: 101,
+                    webSocket: client
                 });
-
-                // 监听连接关闭事件
-                server.addEventListener("close", evt => {
-                    this.sessions.delete(server); // 从 Map 中移除会话
-                });
-
-                // 监听错误事件
-                server.addEventListener("error", err => {
-                    this.sessions.delete(server); // 发生错误时也移除
-                });
-
-                // 接受 WebSocket 连接
-                server.accept();
-                // 首次连接时，立即将当前文档的完整内容发送给新客户端
-                server.send(this.content);
-
-                // 返回客户端 WebSocket，完成 WebSocket 升级握手
-                return new Response(null, { status: 101, webSocket: client });
-
-            // --- 新增 API 端点：获取连接信息 ---
-            } else if (url.pathname === "/api/connections") {
-                // 从 sessions Map 中提取所有会话信息
-                const connections = Array.from(this.sessions.values());
-                // 以 JSON 格式返回 IP 地址列表
-                return new Response(JSON.stringify(connections), {
-                    headers: { "Content-Type": "application/json" },
-                });
-
-            // --- 可选的 HTTP 接口 ---
-            } else if (url.pathname === "/content") {
-                if (request.method === "GET") {
-                    return new Response(this.content, { headers: { "Content-Type": "text/plain" } });
-                }
             }
 
-            return new Response("Not Found in Durable Object", { status: 404 });
+            return new Response("Not Found", {
+                status: 404
+            });
         });
     }
 
-    // 辅助方法：向所有连接的 WebSocket 广播消息
-    broadcast(message, sender = null) {
-        // 遍历 sessions Map 中的所有 WebSocket 连接
-        this.sessions.forEach((data, ws) => {
-            // 避免将消息发回给刚刚发送更新的客户端
-            if (ws !== sender) {
-                try {
-                    ws.send(message);
-                } catch (err) {
-                    // 如果发送失败（例如，客户端已意外断开），则将其从 Map 中移除
-                    this.sessions.delete(ws);
+    // 处理单个 WebSocket 会话
+    async handleSession(ws) {
+        ws.accept();
+
+        // 创建会话对象
+        const session = {
+            ws,
+            awareness: new Set(),
+        };
+        this.sessions.set(ws, session);
+
+        // --- 发送初始同步数据 ---
+        // 1. 发送 Sync Step 1
+        const syncStep1 = writeSyncStep1(this.ydoc);
+        this.sendMessage(ws, syncStep1);
+
+        // 2. 发送 Sync Step 2 (如果文档已有内容)
+        if (this.ydoc.toJSON() !== {}) {
+            const syncStep2 = writeSyncStep2(this.ydoc);
+            this.sendMessage(ws, syncStep2);
+        }
+
+        // 3. 发送当前 Awareness 状态
+        const awarenessStates = this.awareness.getStates();
+        if (awarenessStates.size > 0) {
+            const awarenessUpdate = Y.encodeAwarenessUpdate(this.awareness, Array.from(awarenessStates.keys()));
+            this.sendAwareness(ws, awarenessUpdate);
+        }
+
+        // 监听来自客户端的消息
+        ws.addEventListener("message", (event) => {
+            try {
+                const message = new Uint8Array(event.data);
+                this.handleMessage(ws, message);
+            } catch (err) {
+                console.error("Failed to handle message:", err);
+                ws.close(1011, "Error handling message");
+            }
+        });
+
+        // 监听关闭事件
+        ws.addEventListener("close", () => {
+            this.handleClose(ws);
+        });
+
+        // 监听错误事件
+        ws.addEventListener("error", (err) => {
+            console.error("WebSocket error:", err);
+            this.handleClose(ws);
+        });
+    }
+
+    // 处理来自客户端的 Y.js 消息
+    handleMessage(ws, message) {
+        const session = this.sessions.get(ws);
+        if (!session) return;
+
+        const decoder = new Y.encoding.createDecoder(message);
+        const messageType = Y.encoding.readVarUint(decoder);
+
+        switch (messageType) {
+            case MESSAGE_SYNC:
+                {
+                    const syncMessage = readSyncMessage(decoder, this.ydoc);
+                    // 将客户端的更新应用到服务端的 Y.Doc
+                    Y.applyUpdate(this.ydoc, syncMessage, ws);
+                    break;
                 }
+            case MESSAGE_AWARENESS:
+                {
+                    const awarenessUpdate = Y.decoding.readVarUint8Array(decoder);
+                    // 将客户端的 Awareness 更新应用到服务端的 Awareness 实例
+                    applyAwarenessUpdate(this.awareness, awarenessUpdate, ws);
+                    break;
+                }
+            default:
+                console.warn("Unknown message type:", messageType);
+        }
+    }
+
+    // 处理 WebSocket 连接关闭
+    handleClose(ws) {
+        const session = this.sessions.get(ws);
+        if (!session) return;
+
+        // 从 Awareness 中移除该会话的状态
+        removeAwarenessStates(this.awareness, Array.from(session.awareness), ws);
+        // 从会话列表中删除
+        this.sessions.delete(ws);
+    }
+
+    // 向单个 WebSocket 发送 Y.js 消息
+    sendMessage(ws, message) {
+        try {
+            ws.send(message);
+        } catch (err) {
+            console.error("Failed to send message:", err);
+            this.handleClose(ws);
+        }
+    }
+
+    // 向单个 WebSocket 发送 Awareness 消息
+    sendAwareness(ws, message) {
+        const envelope = new Y.encoding.createEncoder();
+        Y.encoding.writeVarUint(envelope, MESSAGE_AWARENESS);
+        Y.encoding.writeVarUint8Array(envelope, message);
+        this.sendMessage(ws, Y.encoding.toUint8Array(envelope));
+    }
+
+    // 广播 Y.Doc 更新给所有客户端
+    broadcast(update, origin) {
+        const envelope = new Y.encoding.createEncoder();
+        Y.encoding.writeVarUint(envelope, MESSAGE_SYNC);
+        writeUpdate(envelope, update);
+        const message = Y.encoding.toUint8Array(envelope);
+
+        this.sessions.forEach((session, ws) => {
+            // 不把消息发回给源头
+            if (ws !== origin) {
+                this.sendMessage(ws, message);
+            }
+        });
+    }
+
+
+
+    // 广播 Awareness 更新给所有客户端
+    broadcastAwareness(update, origin) {
+        const envelope = new Y.encoding.createEncoder();
+        Y.encoding.writeVarUint(envelope, MESSAGE_AWARENESS);
+        Y.encoding.writeVarUint8Array(envelope, update);
+        const message = Y.encoding.toUint8Array(envelope);
+
+        this.sessions.forEach((session, ws) => {
+            // 不把消息发回给源头
+            if (ws !== origin) {
+                this.sendMessage(ws, message);
             }
         });
     }
 }
+""
