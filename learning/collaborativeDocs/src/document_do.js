@@ -1,4 +1,4 @@
-"""// src/document_do.js
+// src/document_do.js
 
 import * as Y from 'yjs';
 import {
@@ -265,4 +265,3 @@ export class DocumentDurableObject {
         });
     }
 }
-""
