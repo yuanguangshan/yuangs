@@ -59,8 +59,14 @@ export class ChatRoomDurableObject {
     // 上传图片到 R2
     async uploadImageToR2(imageData, filename) {
         try {
+            console.log('开始上传图片到 R2...', filename);
+            
             // 从 base64 数据中提取实际的图片数据
             const base64Data = imageData.split(',')[1];
+            if (!base64Data) {
+                throw new Error('无效的图片数据');
+            }
+            
             const imageBuffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
             
             // 生成唯一文件名
@@ -69,18 +75,29 @@ export class ChatRoomDurableObject {
             const fileExtension = filename.split('.').pop() || 'jpg';
             const key = `chat-images/${timestamp}-${randomId}.${fileExtension}`;
 
+            console.log('上传文件路径:', key);
+
             // 上传到 R2
-            await this.env.R2_BUCKET.put(key, imageBuffer, {
+            const putResult = await this.env.R2_BUCKET.put(key, imageBuffer, {
                 httpMetadata: {
                     contentType: this.getContentType(fileExtension),
+                    cacheControl: 'public, max-age=31536000', // 缓存一年
                 },
             });
 
-            // 返回 R2 的公开 URL
-            return `https://pub-your-r2-domain.r2.dev/${key}`;  // 替换为您的 R2 公开域名
+            if (!putResult) {
+                throw new Error('R2 上传返回空结果');
+            }
+
+            // 使用您的 R2 公开域名
+            const imageUrl = `https://pub-8dfbdda6df204465aae771b4c080140b.r2.dev/${key}`;
+            
+            console.log('图片上传成功:', imageUrl);
+            return imageUrl;
+            
         } catch (error) {
-            console.error('Failed to upload image to R2:', error);
-            throw error;
+            console.error('R2 上传失败:', error);
+            throw new Error(`图片上传失败: ${error.message}`);
         }
     }
 
@@ -152,6 +169,11 @@ export class ChatRoomDurableObject {
                 }
             } catch (err) {
                 console.error('Failed to handle message:', err);
+                // 发送错误消息给客户端
+                this.sendMessage(user.ws, {
+                    type: 'error',
+                    payload: { message: '消息处理失败' }
+                });
             }
         });
 
@@ -168,9 +190,11 @@ export class ChatRoomDurableObject {
             timestamp: Date.now(),
         };
 
-        // 判断是文本消息还是图片消息
-        if (payload.type === 'image') {
-            try {
+        try {
+            // 判断是文本消息还是图片消息
+            if (payload.type === 'image') {
+                console.log('处理图片消息:', payload.filename);
+                
                 // 上传图片到 R2
                 const imageUrl = await this.uploadImageToR2(payload.image, payload.filename);
                 
@@ -182,34 +206,36 @@ export class ChatRoomDurableObject {
                     size: payload.size,
                     caption: payload.caption || ''
                 };
-            } catch (error) {
-                console.error('Failed to upload image:', error);
-                // 如果上传失败，发送错误消息
-                this.sendMessage(user.ws, {
-                    type: 'error',
-                    payload: { message: '图片上传失败，请重试' }
-                });
-                return;
+                
+                console.log('图片消息处理完成:', imageUrl);
+            } else {
+                // 文本消息
+                message.text = payload.text;
             }
-        } else {
-            // 文本消息
-            message.text = payload.text;
+
+            this.messages.push(message);
+            // 限制内存中消息的数量，防止无限增长
+            if (this.messages.length > 100) {
+                this.messages.shift();
+            }
+
+            // 广播新消息给所有用户
+            this.broadcast({
+                type: MSG_TYPE_CHAT,
+                payload: message
+            });
+
+            // 安排保存
+            this.scheduleSave();
+            
+        } catch (error) {
+            console.error('处理聊天消息失败:', error);
+            // 发送错误消息给发送者
+            this.sendMessage(user.ws, {
+                type: 'error',
+                payload: { message: `消息发送失败: ${error.message}` }
+            });
         }
-
-        this.messages.push(message);
-        // 限制内存中消息的数量，防止无限增长
-        if (this.messages.length > 100) {
-            this.messages.shift();
-        }
-
-        // 广播新消息给所有用户
-        this.broadcast({
-            type: MSG_TYPE_CHAT,
-            payload: message
-        });
-
-        // 安排保存
-        this.scheduleSave();
     }
 
     // 处理 WebSocket 连接关闭
