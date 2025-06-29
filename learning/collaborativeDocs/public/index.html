@@ -512,16 +512,27 @@
         // 新增：监听 awareness 变化来更新用户列表
         provider.awareness.on('change', () => {
             const states = Array.from(provider.awareness.getStates().values());
-            const connections = states.map(state => state.user);
 
             connectionsList.innerHTML = ''; // 清空旧列表
-            if (connections.length > 0) {
-                connections.forEach(conn => {
-                    if (conn && conn.name) {
+            if (states.length > 0) {
+                states.forEach(state => {
+                    const user = state.user;
+                    if (user && user.name) {
                         const li = document.createElement('li');
-                        // 这里不再显示 IP，因为 awareness 协议通常不暴露 IP
-                        li.textContent = `💻: ${conn.name}`;
+                        let displayText = `💻: ${user.name}`;
+                        
+                        // 检查光标状态
+                        if (state.cursor) {
+                            displayText += ' ✍️ (正在输入...)';
+                            li.style.fontWeight = 'bold';
+                            li.style.color = '#667eea';
+                        }
+
+                        li.textContent = displayText;
                         connectionsList.appendChild(li);
+                    } else {
+                        // 处理一些可能没有 user 信息的旧状态
+                        console.log("Awareness state without user info:", state);
                     }
                 });
             } else {
@@ -585,6 +596,24 @@
                 previewContent.innerHTML = '<p style="color: #999; text-align: center; margin-top: 80px;"><em>等待输入内容...</em></p>';
             }
         }
+
+        // 新增：广播光标和焦点状态
+        const broadcastCursor = () => {
+            // 只有当窗口聚焦且输入框是活动元素时才广播
+            if (document.hasFocus() && document.activeElement === documentContent) {
+                provider.awareness.setLocalStateField('cursor', {
+                    start: documentContent.selectionStart,
+                    end: documentContent.selectionEnd
+                });
+            }
+        };
+
+        documentContent.addEventListener('focus', broadcastCursor);
+        documentContent.addEventListener('blur', () => {
+            // 当用户离开输入框时，清除光标状态
+            provider.awareness.setLocalStateField('cursor', null);
+        });
+        document.addEventListener('selectionchange', broadcastCursor);
 
         // 按钮事件处理
         const selectAllBtn = document.getElementById('selectAllBtn');
