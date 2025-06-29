@@ -8,6 +8,7 @@ const MSG_TYPE_HISTORY = 'history';
 export class ChatRoomDurableObject {
     constructor(state, env) {
         this.state = state;
+        this.env = env;  // 添加 env 引用
         // `users` 用于存储所有连接到此聊天室的 WebSocket 会话
         // Map 的键是 WebSocket 对象，值是包含用户信息的对象
         this.users = new Map();
@@ -53,6 +54,46 @@ export class ChatRoomDurableObject {
         } catch (error) {
             console.error('Failed to save chat history:', error);
         }
+    }
+
+    // 上传图片到 R2
+    async uploadImageToR2(imageData, filename) {
+        try {
+            // 从 base64 数据中提取实际的图片数据
+            const base64Data = imageData.split(',')[1];
+            const imageBuffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+            
+            // 生成唯一文件名
+            const timestamp = Date.now();
+            const randomId = crypto.randomUUID();
+            const fileExtension = filename.split('.').pop() || 'jpg';
+            const key = `chat-images/${timestamp}-${randomId}.${fileExtension}`;
+
+            // 上传到 R2
+            await this.env.R2_BUCKET.put(key, imageBuffer, {
+                httpMetadata: {
+                    contentType: this.getContentType(fileExtension),
+                },
+            });
+
+            // 返回 R2 的公开 URL
+            return `https://pub-your-r2-domain.r2.dev/${key}`;  // 替换为您的 R2 公开域名
+        } catch (error) {
+            console.error('Failed to upload image to R2:', error);
+            throw error;
+        }
+    }
+
+    // 获取文件的 Content-Type
+    getContentType(extension) {
+        const contentTypes = {
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'gif': 'image/gif',
+            'webp': 'image/webp'
+        };
+        return contentTypes[extension.toLowerCase()] || 'image/jpeg';
     }
 
     // Durable Object 的主入口点
@@ -103,11 +144,11 @@ export class ChatRoomDurableObject {
         this.broadcastSystemState();
         
         // 监听来自客户端的消息
-        ws.addEventListener("message", (event) => {
+        ws.addEventListener("message", async (event) => {
             try {
                 const data = JSON.parse(event.data);
                 if (data.type === MSG_TYPE_CHAT) {
-                    this.handleChatMessage(user, data.payload);
+                    await this.handleChatMessage(user, data.payload);
                 }
             } catch (err) {
                 console.error('Failed to handle message:', err);
@@ -120,13 +161,40 @@ export class ChatRoomDurableObject {
     }
 
     // 处理从客户端收到的聊天消息
-    handleChatMessage(user, payload) {
-        const message = {
+    async handleChatMessage(user, payload) {
+        let message = {
             id: crypto.randomUUID(),
             username: user.username,
-            text: payload.text,
             timestamp: Date.now(),
         };
+
+        // 判断是文本消息还是图片消息
+        if (payload.type === 'image') {
+            try {
+                // 上传图片到 R2
+                const imageUrl = await this.uploadImageToR2(payload.image, payload.filename);
+                
+                message = {
+                    ...message,
+                    type: 'image',
+                    imageUrl: imageUrl,
+                    filename: payload.filename,
+                    size: payload.size,
+                    caption: payload.caption || ''
+                };
+            } catch (error) {
+                console.error('Failed to upload image:', error);
+                // 如果上传失败，发送错误消息
+                this.sendMessage(user.ws, {
+                    type: 'error',
+                    payload: { message: '图片上传失败，请重试' }
+                });
+                return;
+            }
+        } else {
+            // 文本消息
+            message.text = payload.text;
+        }
 
         this.messages.push(message);
         // 限制内存中消息的数量，防止无限增长
