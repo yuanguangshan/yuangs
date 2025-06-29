@@ -13,7 +13,6 @@ import {
     readSyncMessage,
     writeSyncStep1,
     writeUpdate,
-    writeSyncStep2,
 } from 'y-protocols/sync.js';
 
 // 定义消息类型常量
@@ -40,10 +39,14 @@ export class DocumentDurableObject {
             this.awareness = new Awareness(this.ydoc);
 
             if (storedYDoc) {
+                console.log('Loading existing document from storage');
                 Y.applyUpdate(this.ydoc, new Uint8Array(storedYDoc));
+            } else {
+                console.log('Creating new document');
             }
 
             this.ydoc.on('update', (update, origin) => {
+                console.log('Document updated, broadcasting to', this.sessions.size, 'clients');
                 this.broadcast(update, origin);
                 this.scheduleSave();
             });
@@ -51,6 +54,7 @@ export class DocumentDurableObject {
             this.awareness.on('update', ({ added, updated, removed }, origin) => {
                 const changedClients = added.concat(updated, removed);
                 if (changedClients.length > 0) {
+                    console.log('Awareness updated for clients:', changedClients);
                     const update = encodeAwarenessUpdate(this.awareness, changedClients);
                     this.broadcastAwareness(update, origin);
                 }
@@ -67,59 +71,81 @@ export class DocumentDurableObject {
     }
 
     async saveYDoc() {
-        await this.state.storage.transaction(async (txn) => {
-            const docState = Y.encodeStateAsUpdate(this.ydoc);
-            await txn.put("ydoc", docState);
-        });
+        try {
+            await this.state.storage.transaction(async (txn) => {
+                const docState = Y.encodeStateAsUpdate(this.ydoc);
+                await txn.put("ydoc", docState);
+                console.log('Document saved to storage');
+            });
+        } catch (error) {
+            console.error('Failed to save document:', error);
+        }
     }
 
     async fetch(request) {
+        console.log('DO fetch called:', request.url);
+        console.log('Headers:', Object.fromEntries(request.headers.entries()));
+        
         await this.initializePromise;
 
         return this.state.blockConcurrencyWhile(async () => {
-            const url = new URL(request.url);
             const upgradeHeader = request.headers.get("Upgrade");
-            if (upgradeHeader === "websocket") {
-                if (!upgradeHeader || upgradeHeader !== "websocket") {
-                    return new Response("Expected Upgrade: websocket", {
-                        status: 426
-                    });
-                }
+            console.log('Upgrade header:', upgradeHeader);
+            
+            if (upgradeHeader !== "websocket") {
+                console.log('Not a WebSocket request, returning 426');
+                return new Response("Expected Upgrade: websocket", { status: 426 });
+            }
 
-                const { 0: client, 1: server } = new WebSocketPair();
+            console.log('Creating WebSocket pair');
+            const { 0: client, 1: server } = new WebSocketPair();
+            
+            try {
                 await this.handleSession(server);
-
+                console.log('WebSocket session created successfully');
+                
                 return new Response(null, {
                     status: 101,
                     webSocket: client
                 });
+            } catch (error) {
+                console.error('Error creating WebSocket session:', error);
+                return new Response("Error creating WebSocket session", { status: 500 });
             }
-
-            return new Response("Not Found", { status: 404 });
         });
     }
 
     async handleSession(ws) {
+        console.log('Handling new WebSocket session');
         ws.accept();
 
+        const sessionId = Math.random().toString(36).substr(2, 9);
         const session = {
+            id: sessionId,
             ws,
             awareness: new Set(),
         };
         this.sessions.set(ws, session);
+        console.log('Session', sessionId, 'added. Total sessions:', this.sessions.size);
 
         // 发送初始同步数据
-        // 1. 发送 Sync Step 1
-        const encoder1 = encoding.createEncoder();
-        encoding.writeVarUint(encoder1, MESSAGE_SYNC);
-        writeSyncStep1(encoder1, this.ydoc);
-        this.sendMessage(ws, encoding.toUint8Array(encoder1));
+        try {
+            // 1. 发送 Sync Step 1
+            const encoder1 = encoding.createEncoder();
+            encoding.writeVarUint(encoder1, MESSAGE_SYNC);
+            writeSyncStep1(encoder1, this.ydoc);
+            this.sendMessage(ws, encoding.toUint8Array(encoder1));
+            console.log('Sent sync step 1 to session', sessionId);
 
-        // 2. 发送当前 Awareness 状态
-        const awarenessStates = this.awareness.getStates();
-        if (awarenessStates.size > 0) {
-            const awarenessUpdate = encodeAwarenessUpdate(this.awareness, Array.from(awarenessStates.keys()));
-            this.sendAwareness(ws, awarenessUpdate);
+            // 2. 发送当前 Awareness 状态
+            const awarenessStates = this.awareness.getStates();
+            if (awarenessStates.size > 0) {
+                const awarenessUpdate = encodeAwarenessUpdate(this.awareness, Array.from(awarenessStates.keys()));
+                this.sendAwareness(ws, awarenessUpdate);
+                console.log('Sent awareness state to session', sessionId);
+            }
+        } catch (error) {
+            console.error('Error sending initial data to session', sessionId, ':', error);
         }
 
         // 监听消息
@@ -128,45 +154,58 @@ export class DocumentDurableObject {
                 const message = new Uint8Array(event.data);
                 this.handleMessage(ws, message);
             } catch (err) {
-                console.error("Failed to handle message:", err);
+                console.error('Failed to handle message for session', sessionId, ':', err);
                 ws.close(1011, "Error handling message");
             }
         });
 
         // 监听关闭和错误事件
-        ws.addEventListener("close", () => this.handleClose(ws));
+        ws.addEventListener("close", (event) => {
+            console.log('Session', sessionId, 'closed:', event.code, event.reason);
+            this.handleClose(ws);
+        });
+        
         ws.addEventListener("error", (err) => {
-            console.error("WebSocket error:", err);
+            console.error('WebSocket error for session', sessionId, ':', err);
             this.handleClose(ws);
         });
     }
 
     handleMessage(ws, message) {
         const session = this.sessions.get(ws);
-        if (!session) return;
+        if (!session) {
+            console.warn('Received message from unknown session');
+            return;
+        }
 
-        const decoder = decoding.createDecoder(message);
-        const messageType = decoding.readVarUint(decoder);
+        try {
+            const decoder = decoding.createDecoder(message);
+            const messageType = decoding.readVarUint(decoder);
 
-        switch (messageType) {
-            case MESSAGE_SYNC: {
-                const encoder = encoding.createEncoder();
-                encoding.writeVarUint(encoder, MESSAGE_SYNC);
-                readSyncMessage(decoder, encoder, this.ydoc, ws);
-                
-                const response = encoding.toUint8Array(encoder);
-                if (response.length > 1) {
-                    this.sendMessage(ws, response);
+            switch (messageType) {
+                case MESSAGE_SYNC: {
+                    console.log('Handling sync message from session', session.id);
+                    const encoder = encoding.createEncoder();
+                    encoding.writeVarUint(encoder, MESSAGE_SYNC);
+                    readSyncMessage(decoder, encoder, this.ydoc, ws);
+                    
+                    const response = encoding.toUint8Array(encoder);
+                    if (response.length > 1) {
+                        this.sendMessage(ws, response);
+                    }
+                    break;
                 }
-                break;
+                case MESSAGE_AWARENESS: {
+                    console.log('Handling awareness message from session', session.id);
+                    const awarenessUpdate = decoding.readVarUint8Array(decoder);
+                    applyAwarenessUpdate(this.awareness, awarenessUpdate, ws);
+                    break;
+                }
+                default:
+                    console.warn('Unknown message type:', messageType, 'from session', session.id);
             }
-            case MESSAGE_AWARENESS: {
-                const awarenessUpdate = decoding.readVarUint8Array(decoder);
-                applyAwarenessUpdate(this.awareness, awarenessUpdate, ws);
-                break;
-            }
-            default:
-                console.warn("Unknown message type:", messageType);
+        } catch (error) {
+            console.error('Error handling message from session', session.id, ':', error);
         }
     }
 
@@ -174,28 +213,37 @@ export class DocumentDurableObject {
         const session = this.sessions.get(ws);
         if (!session) return;
 
+        console.log('Cleaning up session', session.id);
+
         // 从 Awareness 中移除该会话的状态
-        const awarenessStates = this.awareness.getStates();
-        const clientIds = [];
-        
-        for (const [id, state] of awarenessStates.entries()) {
-            if (state.origin === ws) {
-                clientIds.push(id);
+        try {
+            const awarenessStates = this.awareness.getStates();
+            const clientIds = [];
+            
+            for (const [id, state] of awarenessStates.entries()) {
+                // 检查状态是否属于这个连接
+                if (state && (state.origin === ws || state.clientID === session.id)) {
+                    clientIds.push(id);
+                }
             }
-        }
-        
-        if (clientIds.length > 0) {
-            removeAwarenessStates(this.awareness, clientIds, ws);
+            
+            if (clientIds.length > 0) {
+                removeAwarenessStates(this.awareness, clientIds, ws);
+                console.log('Removed awareness states for session', session.id);
+            }
+        } catch (error) {
+            console.error('Error removing awareness states for session', session.id, ':', error);
         }
         
         this.sessions.delete(ws);
+        console.log('Session', session.id, 'removed. Total sessions:', this.sessions.size);
     }
 
     sendMessage(ws, message) {
         try {
             ws.send(message);
         } catch (err) {
-            console.error("Failed to send message:", err);
+            console.error('Failed to send message:', err);
             this.handleClose(ws);
         }
     }
@@ -208,28 +256,40 @@ export class DocumentDurableObject {
     }
 
     broadcast(update, origin) {
+        if (this.sessions.size === 0) return;
+
         const envelope = encoding.createEncoder();
         encoding.writeVarUint(envelope, MESSAGE_SYNC);
         writeUpdate(envelope, update);
         const message = encoding.toUint8Array(envelope);
 
+        let sentCount = 0;
         this.sessions.forEach((session, ws) => {
             if (ws !== origin) {
                 this.sendMessage(ws, message);
+                sentCount++;
             }
         });
+        
+        console.log('Broadcasted sync update to', sentCount, 'sessions');
     }
 
     broadcastAwareness(update, origin) {
+        if (this.sessions.size === 0) return;
+
         const envelope = encoding.createEncoder();
         encoding.writeVarUint(envelope, MESSAGE_AWARENESS);
         encoding.writeVarUint8Array(envelope, update);
         const message = encoding.toUint8Array(envelope);
 
+        let sentCount = 0;
         this.sessions.forEach((session, ws) => {
             if (ws !== origin) {
                 this.sendMessage(ws, message);
+                sentCount++;
             }
         });
+        
+        console.log('Broadcasted awareness update to', sentCount, 'sessions');
     }
 }
