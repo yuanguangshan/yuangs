@@ -1,6 +1,8 @@
 // src/document_do.js
 
 import * as Y from 'yjs';
+import * as encoding from 'yjs/encoding';
+import * as decoding from 'yjs/decoding';
 import {
     Awareness,
     applyAwarenessUpdate,
@@ -8,7 +10,6 @@ import {
 } from 'y-protocols/awareness.js';
 import {
     readSyncMessage,
-    readMessage,
     writeSyncStep1,
     writeUpdate,
     writeSyncStep2,
@@ -181,24 +182,22 @@ export class DocumentDurableObject {
         const session = this.sessions.get(ws);
         if (!session) return;
 
-        const decoder = new Y.encoding.createDecoder(message);
-        const messageType = Y.encoding.readVarUint(decoder);
+        const decoder = new decoding.createDecoder(message);
+        const messageType = decoding.readVarUint(decoder);
 
         switch (messageType) {
-            case MESSAGE_SYNC:
-                {
-                    const syncMessage = readSyncMessage(decoder, this.ydoc);
-                    // 将客户端的更新应用到服务端的 Y.Doc
-                    Y.applyUpdate(this.ydoc, syncMessage, ws);
-                    break;
-                }
-            case MESSAGE_AWARENESS:
-                {
-                    const awarenessUpdate = Y.decoding.readVarUint8Array(decoder);
-                    // 将客户端的 Awareness 更新应用到服务端的 Awareness 实例
-                    applyAwarenessUpdate(this.awareness, awarenessUpdate, ws);
-                    break;
-                }
+            case MESSAGE_SYNC: {
+                const syncMessage = readSyncMessage(decoder, this.ydoc);
+                // 将客户端的更新应用到服务端的 Y.Doc
+                Y.applyUpdate(this.ydoc, syncMessage, ws);
+                break;
+            }
+            case MESSAGE_AWARENESS: {
+                const awarenessUpdate = decoding.readVarUint8Array(decoder);
+                // 将客户端的 Awareness 更新应用到服务端的 Awareness 实例
+                applyAwarenessUpdate(this.awareness, awarenessUpdate, ws);
+                break;
+            }
             default:
                 console.warn("Unknown message type:", messageType);
         }
@@ -227,18 +226,18 @@ export class DocumentDurableObject {
 
     // 向单个 WebSocket 发送 Awareness 消息
     sendAwareness(ws, message) {
-        const envelope = new Y.encoding.createEncoder();
-        Y.encoding.writeVarUint(envelope, MESSAGE_AWARENESS);
-        Y.encoding.writeVarUint8Array(envelope, message);
-        this.sendMessage(ws, Y.encoding.toUint8Array(envelope));
+        const envelope = new encoding.createEncoder();
+        encoding.writeVarUint(envelope, MESSAGE_AWARENESS);
+        encoding.writeVarUint8Array(envelope, message);
+        this.sendMessage(ws, encoding.toUint8Array(envelope));
     }
 
     // 广播 Y.Doc 更新给所有客户端
     broadcast(update, origin) {
-        const envelope = new Y.encoding.createEncoder();
-        Y.encoding.writeVarUint(envelope, MESSAGE_SYNC);
+        const envelope = new encoding.createEncoder();
+        encoding.writeVarUint(envelope, MESSAGE_SYNC);
         writeUpdate(envelope, update);
-        const message = Y.encoding.toUint8Array(envelope);
+        const message = encoding.toUint8Array(envelope);
 
         this.sessions.forEach((session, ws) => {
             // 不把消息发回给源头
@@ -248,14 +247,12 @@ export class DocumentDurableObject {
         });
     }
 
-
-
     // 广播 Awareness 更新给所有客户端
     broadcastAwareness(update, origin) {
-        const envelope = new Y.encoding.createEncoder();
-        Y.encoding.writeVarUint(envelope, MESSAGE_AWARENESS);
-        Y.encoding.writeVarUint8Array(envelope, update);
-        const message = Y.encoding.toUint8Array(envelope);
+        const envelope = new encoding.createEncoder();
+        encoding.writeVarUint(envelope, MESSAGE_AWARENESS);
+        encoding.writeVarUint8Array(envelope, update);
+        const message = encoding.toUint8Array(envelope);
 
         this.sessions.forEach((session, ws) => {
             // 不把消息发回给源头
