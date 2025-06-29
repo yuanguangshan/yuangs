@@ -98,7 +98,10 @@ export class DocumentDurableObject {
         return this.state.blockConcurrencyWhile(async () => {
             const url = new URL(request.url);
 
-            if (url.pathname === "/websocket") {
+            // 从完整的 URL 中提取路径的最后一部分作为路由依据
+            const path = url.pathname.split('/').pop();
+
+            if (path === "websocket") {
                 // 处理 WebSocket 升级请求
                 const upgradeHeader = request.headers.get("Upgrade");
                 if (!upgradeHeader || upgradeHeader !== "websocket") {

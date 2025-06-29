@@ -35,17 +35,8 @@ export default {
             // 获取 DO 的 "存根 (stub)"，它是一个可以与之通信的代理对象
             const stub = env.DOCUMENT_DO.get(doId);
 
-            // --- 请求转发 (关键修正) ---
-            // 创建一个新的 URL，只包含 DO 关心的路径部分（例如 /websocket）
-            const doUrl = new URL(request.url);
-            doUrl.pathname = subPath;
-            
-            // 创建一个全新的请求对象。这是转发请求的推荐方式，因为它避免了直接修改
-            // 传入的 request 对象，更加健壮，解决了之前的运行时错误。
-            const doRequest = new Request(doUrl, request);
-
-            // 将新请求转发给获取到的 DO 实例
-            return stub.fetch(doRequest);
+            // 将原始请求直接转发给 DO 实例，保留 WebSocket 升级所需的所有头部和内部状态
+            return stub.fetch(request);
 
         } else {
             // 如果没有子路径，说明用户正在访问文档本身，我们提供 HTML 前端页面
