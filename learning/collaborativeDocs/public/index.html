@@ -485,7 +485,6 @@
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const clientInfo = encodeURIComponent(getClientInfo());
         const wsUrl = `${wsProtocol}//${window.location.host}/${documentId}/websocket?clientInfo=${clientInfo}`;
-        const apiUrl = `${window.location.protocol}//${window.location.host}/${documentId}/api/connections`;
 
         // 2. 初始化 Yjs 文档和文本类型
         const ydoc = new Y.Doc();
@@ -501,11 +500,32 @@
             if (event.status === 'connected') {
                 statusText.textContent = '已连接';
                 statusIndicator.classList.add('connected');
-                updateConnectionsList(); // 连接成功后立即更新一次
+                // 连接成功后，通过 awareness 协议广播自己的信息
+                provider.awareness.setLocalStateField('user', { name: getClientInfo() });
             } else {
                 statusText.textContent = '连接中...';
                 statusIndicator.classList.remove('connected');
                 statusText.innerHTML = '<span class="loading"></span> 连接中...';
+            }
+        });
+
+        // 新增：监听 awareness 变化来更新用户列表
+        provider.awareness.on('change', () => {
+            const states = Array.from(provider.awareness.getStates().values());
+            const connections = states.map(state => state.user);
+
+            connectionsList.innerHTML = ''; // 清空旧列表
+            if (connections.length > 0) {
+                connections.forEach(conn => {
+                    if (conn && conn.name) {
+                        const li = document.createElement('li');
+                        // 这里不再显示 IP，因为 awareness 协议通常不暴露 IP
+                        li.textContent = `💻: ${conn.name}`;
+                        connectionsList.appendChild(li);
+                    }
+                });
+            } else {
+                connectionsList.innerHTML = '<li>当前没有其他连接</li>';
             }
         });
 
@@ -550,29 +570,6 @@
             }
         }
 
-        async function updateConnectionsList() {
-            try {
-                const response = await fetch(apiUrl);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const connections = await response.json();
-                connectionsList.innerHTML = ''; // 清空旧列表
-                if (connections.length > 0) {
-                    connections.forEach(conn => {
-                        const li = document.createElement('li');
-                        li.textContent = `📍 IP: ${conn.ip} | 💻: ${conn.info}`;
-                        connectionsList.appendChild(li);
-                    });
-                } else {
-                    connectionsList.innerHTML = '<li>当前没有其他连接</li>';
-                }
-            } catch (error) {
-                console.error('Could not fetch connections:', error);
-                connectionsList.innerHTML = '<li>无法加载连接列表</li>';
-            }
-        }
-
         // 按钮事件处理
         const selectAllBtn = document.getElementById('selectAllBtn');
         const pasteBtn = document.getElementById('pasteBtn');
@@ -589,9 +586,11 @@
                 const permissionStatus = await navigator.permissions.query({ name: 'clipboard-read' });
                 if (permissionStatus.state === 'granted' || permissionStatus.state === 'prompt') {
                     const text = await navigator.clipboard.readText();
-                    // Directly update ytext via the binding
-                    ytext.delete(0, ytext.length);
-                    ytext.insert(0, text);
+                    // 在光标位置插入文本，而不是替换所有内容
+                    const startPos = documentContent.selectionStart;
+                    const endPos = documentContent.selectionEnd;
+                    ytext.delete(startPos, endPos - startPos); // 如果有选中文本，先删除
+                    ytext.insert(startPos, text);
                     showUserMessage('✅ 内容已粘贴', 'success');
                 } else {
                     showUserMessage('❌ 无剪贴板权限，请手动粘贴', 'error');
@@ -633,9 +632,6 @@
         // 页面加载时连接 WebSocket
         provider.connect();
         
-        // 定期更新连接列表
-        setInterval(updateConnectionsList, 3000); // 每 3 秒更新一次
-
         // 页面可见性变化时重连
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden && !provider.wsconnected) {
