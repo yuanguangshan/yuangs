@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Chat Room</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; background-color: #f4f7f9; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .chat-container { width: 90%; max-width: 800px; height: 90vh; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; overflow: hidden; }
+        .sidebar { width: 200px; background: #3a3f44; color: white; padding: 20px; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
+        .sidebar h2 { margin-top: 0; font-size: 1.2em; border-bottom: 1px solid #555; padding-bottom: 10px; }
+        #user-list { list-style: none; padding: 0; margin: 0; }
+        #user-list li { padding: 8px 0; font-size: 0.9em; opacity: 0.8; }
+        .main-chat { flex: 1; display: flex; flex-direction: column; }
+        .chat-header { padding: 15px 20px; border-bottom: 1px solid #e0e0e0; background: #f9f9f9; }
+        .chat-header h1 { margin: 0; font-size: 1.5em; }
+        .chat-header p { margin: 5px 0 0; color: #666; }
+        #chat-window { flex: 1; padding: 20px; overflow-y: auto; }
+        .message { margin-bottom: 15px; display: flex; flex-direction: column; }
+        .message .info { font-size: 0.8em; color: #999; margin-bottom: 5px; }
+        .message .info .username { font-weight: bold; color: #333; }
+        .message .text { padding: 10px 15px; background: #e9eaec; border-radius: 18px; max-width: 70%; line-height: 1.4; }
+        .message.self { align-items: flex-end; }
+        .message.self .text { background: #0084ff; color: white; }
+        #message-form { display: flex; padding: 20px; border-top: 1px solid #e0e0e0; background: #f9f9f9; }
+        #message-input { flex: 1; padding: 10px 15px; border: 1px solid #ccc; border-radius: 20px; outline: none; font-size: 1em; }
+        #message-input:focus { border-color: #0084ff; }
+        #send-button { padding: 10px 20px; margin-left: 10px; border: none; background: #0084ff; color: white; border-radius: 20px; cursor: pointer; font-size: 1em; font-weight: bold; }
+        #send-button:hover { background: #0073e6; }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <aside class="sidebar">
+            <h2>在线用户</h2>
+            <ul id="user-list"></ul>
+        </aside>
+        <main class="main-chat">
+            <header class="chat-header">
+                <h1 id="room-name">Chat Room</h1>
+                <p id="status">Connecting...</p>
+            </header>
+            <div id="chat-window"></div>
+            <form id="message-form">
+                <input id="message-input" type="text" placeholder="Type a message..." autocomplete="off" required>
+                <button id="send-button" type="submit">Send</button>
+            </form>
+        </main>
+    </div>
+
+    <script type="module">
+        const roomNameEl = document.getElementById('room-name');
+        const statusEl = document.getElementById('status');
+        const userListEl = document.getElementById('user-list');
+        const chatWindowEl = document.getElementById('chat-window');
+        const messageForm = document.getElementById('message-form');
+        const messageInput = document.getElementById('message-input');
+
+        // --- 1. 初始化 ---
+        let username = sessionStorage.getItem('chat_username');
+        if (!username) {
+            username = prompt("Please enter your username:") || "Anonymous";
+            sessionStorage.setItem('chat_username', username);
+        }
+
+        const pathParts = window.location.pathname.split('/');
+        const roomName = pathParts[1] || 'general';
+        roomNameEl.textContent = `Room: ${roomName}`;
+
+        // --- 2. 建立 WebSocket 连接 ---
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}/${roomName}?username=${encodeURIComponent(username)}`;
+        const socket = new WebSocket(wsUrl);
+
+        // --- 3. WebSocket 事件监听 ---
+        socket.onopen = () => {
+            statusEl.textContent = `Connected as: ${username}`;
+        };
+
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            switch (data.type) {
+                case 'history':
+                    chatWindowEl.innerHTML = ''; // 清空旧消息
+                    data.payload.forEach(msg => appendChatMessage(msg));
+                    break;
+                case 'chat':
+                    appendChatMessage(data.payload);
+                    break;
+                case 'system_state':
+                    updateUserList(data.payload.users);
+                    break;
+            }
+        };
+
+        socket.onclose = () => {
+            statusEl.textContent = "Connection lost. Please refresh.";
+        };
+
+        socket.onerror = (error) => {
+            console.error("WebSocket Error:", error);
+            statusEl.textContent = "Connection error.";
+        };
+
+        // --- 4. 表单提交事件 ---
+        messageForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = messageInput.value.trim();
+            if (text && socket.readyState === WebSocket.OPEN) {
+                const message = {
+                    type: 'chat',
+                    payload: { text }
+                };
+                socket.send(JSON.stringify(message));
+                messageInput.value = '';
+            }
+        });
+
+        // --- 5. DOM 操作辅助函数 ---
+        function appendChatMessage(msg) {
+            const msgEl = document.createElement('div');
+            msgEl.classList.add('message');
+            if (msg.username === username) {
+                msgEl.classList.add('self');
+            }
+
+            const localTime = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            msgEl.innerHTML = `
+                <div class="info">
+                    <span class="username">${msg.username}</span> at <span class="timestamp">${localTime}</span>
+                </div>
+                <div class="text">${escapeHTML(msg.text)}</div>
+            `;
+            chatWindowEl.appendChild(msgEl);
+            // 自动滚动到底部
+            chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
+        }
+
+        function updateUserList(users) {
+            userListEl.innerHTML = '';
+            users.forEach(user => {
+                const li = document.createElement('li');
+                li.textContent = user;
+                userListEl.appendChild(li);
+            });
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>"']/g, function(match) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#39;'
+                }[match];
+            });
+        }
+    </script>
+</body>
+</html>
