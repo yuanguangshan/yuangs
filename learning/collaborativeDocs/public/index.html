@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <link rel="icon" href="favicon.ico" type="image/x-icon">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yuan's Collaborative Document</title>
+    <title>Collaborative Document</title>
     <style>
         * {
             box-sizing: border-box;
@@ -424,7 +424,10 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script>
+    <script type="module">
+        import * as Y from 'https://esm.sh/yjs@13.6.27';
+        import { WebsocketProvider } from 'https://esm.sh/y-websocket@1.5.4';
+
         // 消息提示函数
         function showUserMessage(message, type = 'info') {
             const messageDiv = document.createElement('div');
@@ -484,49 +487,60 @@
         const wsUrl = `${wsProtocol}//${window.location.host}/${documentId}/websocket?clientInfo=${clientInfo}`;
         const apiUrl = `${window.location.protocol}//${window.location.host}/${documentId}/api/connections`;
 
-        let ws;
-        let debounceTimeout;
+        // 2. 初始化 Yjs 文档和文本类型
+        const ydoc = new Y.Doc();
+        const ytext = ydoc.getText('document-content');
 
-        function updateConnectionStatus(connected, message) {
-            statusText.textContent = message;
-            if (connected) {
+        // 3. 初始化 WebsocketProvider
+        const provider = new WebsocketProvider(wsUrl, documentId, ydoc, {
+            connect: false // 初始不连接，手动控制连接
+        });
+
+        // 4. 监听连接状态
+        provider.on('status', event => {
+            if (event.status === 'connected') {
+                statusText.textContent = '已连接';
                 statusIndicator.classList.add('connected');
-            } else {
-                statusIndicator.classList.remove('connected');
-            }
-        }
-
-        function connectWebSocket() {
-            updateConnectionStatus(false, '连接中...');
-            statusText.innerHTML = '<span class="loading"></span> 连接中...';
-            
-            ws = new WebSocket(wsUrl);
-
-            ws.onopen = () => {
-                updateConnectionStatus(true, '已连接');
                 updateConnectionsList(); // 连接成功后立即更新一次
-            };
-            
-            ws.onmessage = (event) => {
-                const receivedContent = event.data;
-                
-                if (documentContent.value !== receivedContent) {
-                    documentContent.value = receivedContent;
-                    updatePreview(receivedContent);
+            } else {
+                statusText.textContent = '连接中...';
+                statusIndicator.classList.remove('connected');
+                statusText.innerHTML = '<span class="loading"></span> 连接中...';
+            }
+        });
+
+        // 5. 将 textarea 和 Y.Text 实例双向绑定
+        // YTextareaBinding is not available via CDN, so we use a custom binding
+        let isUpdating = false;
+        ytext.observe(() => {
+            if (!isUpdating) {
+                isUpdating = true;
+                const newValue = ytext.toString();
+                if (documentContent.value !== newValue) {
+                    const cursorPos = documentContent.selectionStart;
+                    documentContent.value = newValue;
+                    documentContent.setSelectionRange(cursorPos, cursorPos);
                 }
-            };
+                isUpdating = false;
+            }
+        });
+        
+        documentContent.addEventListener('input', () => {
+            if (!isUpdating) {
+                isUpdating = true;
+                const currentText = ytext.toString();
+                const newText = documentContent.value;
+                
+                if (currentText !== newText) {
+                    ytext.delete(0, ytext.length);
+                    ytext.insert(0, newText);
+                }
+                isUpdating = false;
+            }
+        });
 
-            ws.onclose = (event) => {
-                updateConnectionStatus(false, '连接断开');
-                statusText.innerHTML = '<span class="loading"></span> 3秒后重连...';
-                setTimeout(connectWebSocket, 3000);
-            };
-
-            ws.onerror = (error) => {
-                updateConnectionStatus(false, '连接错误');
-                ws.close();
-            };
-        }
+        // 6. 监听 Y.Text 的变化并更新预览
+        ytext.observe(() => updatePreview(ytext.toString()));
 
         function updatePreview(content) {
             if (content && content.trim()) {
@@ -559,18 +573,6 @@
             }
         }
 
-        // 用户输入处理
-        documentContent.addEventListener('input', () => {
-            updatePreview(documentContent.value);
-            
-            clearTimeout(debounceTimeout);
-            debounceTimeout = setTimeout(() => {
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(documentContent.value);
-                }
-            }, 200);
-        });
-
         // 按钮事件处理
         const selectAllBtn = document.getElementById('selectAllBtn');
         const pasteBtn = document.getElementById('pasteBtn');
@@ -587,8 +589,9 @@
                 const permissionStatus = await navigator.permissions.query({ name: 'clipboard-read' });
                 if (permissionStatus.state === 'granted' || permissionStatus.state === 'prompt') {
                     const text = await navigator.clipboard.readText();
-                    documentContent.value = text;
-                    documentContent.dispatchEvent(new Event('input'));
+                    // Directly update ytext via the binding
+                    ytext.delete(0, ytext.length);
+                    ytext.insert(0, text);
                     showUserMessage('✅ 内容已粘贴', 'success');
                 } else {
                     showUserMessage('❌ 无剪贴板权限，请手动粘贴', 'error');
@@ -596,12 +599,12 @@
             } catch (err) {
                 console.error('粘贴失败:', err);
                 showUserMessage('❌ 粘贴失败，请手动操作', 'error');
-            }
+                }
         });
 
         copyBtn.addEventListener('click', async () => {
             try {
-                const textToCopy = documentContent.value;
+                const textToCopy = ytext.toString(); // 从 ytext 获取内容
                 if (!textToCopy.trim()) {
                     showUserMessage('⚠️ 没有内容可复制', 'error');
                     return;
@@ -612,13 +615,14 @@
             } catch (err) {
                 console.error('复制失败:', err);
                 const textarea = document.createElement('textarea');
-                textarea.value = documentContent.value;
+                textarea.value = ytext.toString();
                 document.body.appendChild(textarea);
                 textarea.select();
                 try {
                     document.execCommand('copy');
                     showUserMessage('✅ 内容已复制到剪贴板', 'success');
-                } catch (execErr) {
+                }
+                catch (execErr) {
                     console.error('execCommand 复制失败:', execErr);
                     showUserMessage('❌ 复制失败，请手动复制', 'error');
                 }
@@ -627,17 +631,18 @@
         });
 
         // 页面加载时连接 WebSocket
-        connectWebSocket();
+        provider.connect();
         
         // 定期更新连接列表
         setInterval(updateConnectionsList, 3000); // 每 3 秒更新一次
 
         // 页面可见性变化时重连
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden && (!ws || ws.readyState !== WebSocket.OPEN)) {
-                connectWebSocket();
+            if (!document.hidden && !provider.wsconnected) {
+                provider.connect();
             }
         });
     </script>
+</body>
 </body>
 </html>
