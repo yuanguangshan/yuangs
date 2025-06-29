@@ -481,18 +481,23 @@
             return `${os} (${device})`;
         }
 
-        // 根据当前页面的协议构建 WebSocket URL，并附带客户端信息
+        // 根据当前页面的协议构建 WebSocket URL
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const clientInfo = encodeURIComponent(getClientInfo());
-        const wsUrl = `${wsProtocol}//${window.location.host}/${documentId}/websocket?clientInfo=${clientInfo}`;
-
+        const serverUrl = `${wsProtocol}//${window.location.host}`;
+        // y-websocket 会自动将 "房间名" (我们这里用作路径) 附加到 serverUrl 后面
+        const roomName = `${documentId}/websocket`; 
+        
         // 2. 初始化 Yjs 文档和文本类型
         const ydoc = new Y.Doc();
         const ytext = ydoc.getText('document-content');
 
-        // 3. 初始化 WebsocketProvider
-        const provider = new WebsocketProvider(wsUrl, documentId, ydoc, {
-            connect: false // 初始不连接，手动控制连接
+        // 3. 初始化 WebsocketProvider，并将 clientInfo 作为参数传递
+        // 库会自动生成最终 URL: serverUrl + '/' + roomName + '?' + params
+        const provider = new WebsocketProvider(serverUrl, roomName, ydoc, {
+            connect: false, // 初始不连接，手动控制连接
+            params: {
+                clientInfo: getClientInfo()
+            }
         });
 
         // 4. 监听连接状态
