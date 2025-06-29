@@ -6,100 +6,461 @@
     <title>Real-time Chat Room</title>
     <style>
         /* --- BASE STYLES --- */
-        html, body { height: 100%; overflow: hidden; /* 防止 body 滚动 */ }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; background-color: #f4f7f9; display: flex; justify-content: center; align-items: center; }
-        .chat-container { width: 90%; max-width: 800px; height: 90vh; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; overflow: hidden; }
-        .sidebar { width: 200px; background: #3a3f44; color: white; padding: 20px; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; flex-shrink: 0; }
-        .sidebar h2 { margin-top: 0; font-size: 1.2em; border-bottom: 1px solid #555; padding-bottom: 10px; }
-        #user-list { list-style: none; padding: 0; margin: 0; }
-        #user-list li { padding: 8px 0; font-size: 0.9em; opacity: 0.8; word-break: break-all; }
+        html, body { 
+            height: 100%; 
+            overflow: hidden; 
+            margin: 0; 
+            padding: 0;
+        }
         
-        /* --- CORE LAYOUT CHANGE --- */
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+        }
+        
+        .chat-container { 
+            width: 100vw; 
+            height: 100vh; 
+            background: white; 
+            display: flex; 
+            overflow: hidden; 
+            position: relative;
+        }
+        
+        .sidebar { 
+            width: 280px; 
+            background: linear-gradient(180deg, #2c3e50 0%, #3498db 100%);
+            color: white; 
+            padding: 0;
+            border-right: none;
+            display: flex; 
+            flex-direction: column; 
+            flex-shrink: 0;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar-header {
+            padding: 25px 20px;
+            background: rgba(0,0,0,0.1);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .sidebar h2 { 
+            margin: 0; 
+            font-size: 1.3em; 
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .online-indicator {
+            width: 8px;
+            height: 8px;
+            background: #2ecc71;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .user-list-container {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        #user-list { 
+            list-style: none; 
+            padding: 0; 
+            margin: 0; 
+        }
+        
+        #user-list li { 
+            padding: 12px 16px; 
+            font-size: 0.95em; 
+            margin-bottom: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        #user-list li:hover {
+            background: rgba(255,255,255,0.2);
+            transform: translateX(5px);
+        }
+        
+        #user-list li::before {
+            content: '👤';
+            font-size: 14px;
+        }
+        
+        /* --- MAIN CHAT AREA --- */
         .main-chat { 
             flex: 1; 
             display: flex; 
             flex-direction: column; 
             min-width: 0;
-            height: 100%; /* 关键改动 1: 让主聊天区占满父容器高度 */
+            height: 100vh;
+            position: relative;
         }
         
-        .chat-header { padding: 15px 20px; border-bottom: 1px solid #e0e0e0; background: #f9f9f9; }
-        .chat-header h1 { margin: 0; font-size: 1.5em; }
-        .chat-header p { margin: 5px 0 0; color: #666; }
-
-        /* 关键改动 2: 让聊天窗口填充剩余空间并自己滚动 */
-        #chat-window { 
-            flex: 1; 
-            padding: 20px; 
-            overflow-y: auto; 
-            min-height: 0; /* Flexbox 修正，防止溢出 */
+        .chat-header { 
+            padding: 20px 30px; 
+            background: linear-gradient(90deg, #f8f9fa 0%, #e9ecef 100%);
+            border-bottom: 1px solid #dee2e6;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        .chat-header h1 { 
+            margin: 0; 
+            font-size: 1.6em; 
+            color: #2c3e50;
+            font-weight: 700;
+        }
+        
+        .chat-header p { 
+            margin: 8px 0 0; 
+            color: #6c757d; 
+            font-size: 0.9em;
+            font-weight: 500;
         }
 
-        .message { margin-bottom: 15px; display: flex; flex-direction: column; }
-        .message .info { font-size: 0.8em; color: #999; margin-bottom: 5px; }
-        .message .info .username { font-weight: bold; color: #333; }
-        .message .text { padding: 10px 15px; background: #e9eaec; border-radius: 18px; max-width: 80%; line-height: 1.4; word-wrap: break-word; }
-        .message.self { align-items: flex-end; }
-        .message.self .text { background: #0084ff; color: white; }
+        /* --- CHAT WINDOW --- */
+        #chat-window { 
+            flex: 1; 
+            padding: 20px 30px; 
+            overflow-y: auto; 
+            min-height: 0;
+            background: #f8f9fa;
+            scroll-behavior: smooth;
+        }
+        
+        /* 自定义滚动条 */
+        #chat-window::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        #chat-window::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        #chat-window::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 3px;
+        }
+        
+        #chat-window::-webkit-scrollbar-thumb:hover {
+            background: #999;
+        }
+
+        /* --- MESSAGE STYLES --- */
+        .message { 
+            margin-bottom: 20px; 
+            display: flex; 
+            flex-direction: column; 
+            animation: fadeInUp 0.3s ease;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .message .info { 
+            font-size: 0.8em; 
+            color: #6c757d; 
+            margin-bottom: 6px; 
+            font-weight: 500;
+        }
+        
+        .message .info .username { 
+            font-weight: 600; 
+            color: #495057; 
+        }
+        
+        .message .text { 
+            padding: 12px 18px; 
+            background: white;
+            border-radius: 18px; 
+            max-width: 75%; 
+            line-height: 1.5; 
+            word-wrap: break-word;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 1px solid #e9ecef;
+            position: relative;
+        }
+        
+        .message.self { 
+            align-items: flex-end; 
+        }
+        
+        .message.self .text { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; 
+            border: none;
+        }
+        
+        .message.self .info {
+            text-align: right;
+        }
+
+        /* --- INPUT AREA --- */
+        .input-container {
+            position: sticky;
+            bottom: 0;
+            background: white;
+            border-top: 1px solid #e9ecef;
+            box-shadow: 0 -2px 20px rgba(0,0,0,0.1);
+            z-index: 100;
+        }
         
         #message-form { 
             display: flex; 
-            padding: 20px; 
-            border-top: 1px solid #e0e0e0; 
-            background: #f9f9f9; 
+            padding: 20px 30px; 
+            gap: 15px;
+            align-items: flex-end;
         }
-        #message-input { flex: 1; padding: 10px 15px; border: 1px solid #ccc; border-radius: 20px; outline: none; font-size: 1em; }
-        #message-input:focus { border-color: #0084ff; }
-        #send-button { padding: 10px 20px; margin-left: 10px; border: none; background: #0084ff; color: white; border-radius: 20px; cursor: pointer; font-size: 1em; font-weight: bold; }
-        #send-button:hover { background: #0073e6; }
+        
+        .input-wrapper {
+            flex: 1;
+            position: relative;
+        }
+        
+        #message-input { 
+            width: 100%;
+            padding: 15px 20px; 
+            border: 2px solid #e9ecef; 
+            border-radius: 25px; 
+            outline: none; 
+            font-size: 1em;
+            font-family: inherit;
+            resize: none;
+            min-height: 20px;
+            max-height: 120px;
+            line-height: 1.4;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+        }
+        
+        #message-input:focus { 
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        #send-button { 
+            padding: 15px 25px; 
+            border: none; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; 
+            border-radius: 25px; 
+            cursor: pointer; 
+            font-size: 1em; 
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            min-width: 80px;
+        }
+        
+        #send-button:hover { 
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        #send-button:active {
+            transform: translateY(0);
+        }
 
         /* --- RESPONSIVE STYLES --- */
         @media (max-width: 768px) {
-            html, body { overflow: visible; } /* 在移动端恢复 body 的默认行为 */
-            body { align-items: flex-start; }
             .chat-container {
-                width: 100%;
+                width: 100vw;
                 height: 100vh;
-                border-radius: 0;
-                box-shadow: none;
             }
+            
             .sidebar {
+                position: absolute;
+                left: -280px;
+                top: 0;
+                height: 100%;
+                z-index: 1000;
+                transition: left 0.3s ease;
+            }
+            
+            .sidebar.open {
+                left: 0;
+            }
+            
+            .sidebar-toggle {
+                display: block;
+                position: absolute;
+                left: 15px;
+                top: 50%;
+                transform: translateY(-50%);
+                background: none;
+                border: none;
+                font-size: 1.5em;
+                color: #495057;
+                cursor: pointer;
+                z-index: 10;
+            }
+            
+            .chat-header {
+                padding-left: 60px;
+            }
+            
+            #chat-window {
+                padding: 15px 20px;
+            }
+            
+            #message-form {
+                padding: 15px 20px;
+            }
+            
+            .overlay {
                 display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.5);
+                z-index: 999;
+            }
+            
+            .overlay.show {
+                display: block;
+            }
+        }
+        
+        .sidebar-toggle {
+            display: none;
+        }
+
+        /* --- 输入法适配 --- */
+        @media (max-width: 768px) {
+            .input-container {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                transition: transform 0.3s ease;
+            }
+            
+            .main-chat {
+                padding-bottom: 80px; /* 为固定输入框预留空间 */
             }
         }
     </style>
 </head>
 <body>
-    <!-- HTML 结构保持不变 -->
     <div class="chat-container">
-        <aside class="sidebar">
-            <h2>在线用户</h2>
-            <ul id="user-list"></ul>
+        <div class="overlay" id="overlay"></div>
+        
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h2>
+                    <span class="online-indicator"></span>
+                    Online Users
+                </h2>
+            </div>
+            <div class="user-list-container">
+                <ul id="user-list"></ul>
+            </div>
         </aside>
+        
         <main class="main-chat">
             <header class="chat-header">
+                <button class="sidebar-toggle" id="sidebar-toggle">☰</button>
                 <h1 id="room-name">Chat Room</h1>
                 <p id="status">Connecting...</p>
             </header>
+            
             <div id="chat-window"></div>
-            <form id="message-form">
-                <input id="message-input" type="text" placeholder="Type a message..." autocomplete="off" required>
-                <button id="send-button" type="submit">Send</button>
-            </form>
+            
+            <div class="input-container">
+                <form id="message-form">
+                    <div class="input-wrapper">
+                        <textarea id="message-input" placeholder="Type a message..." rows="1"></textarea>
+                    </div>
+                    <button id="send-button" type="submit">Send</button>
+                </form>
+            </div>
         </main>
     </div>
 
-    <!-- JavaScript 脚本保持不变 -->
     <script type="module">
-        // ... 您的所有 JavaScript 代码都保持原样，无需改动 ...
+        // --- 移动端侧边栏控制 ---
+        const sidebarToggle = document.getElementById('sidebar-toggle');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('overlay');
+        
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('show');
+        });
+        
+        overlay.addEventListener('click', () => {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('show');
+        });
+
+        // --- 输入框自适应高度 ---
+        const messageInput = document.getElementById('message-input');
+        
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+        
+        // --- 处理移动端输入法 ---
+        let initialViewportHeight = window.innerHeight;
+        
+        function handleViewportChange() {
+            const currentHeight = window.innerHeight;
+            const inputContainer = document.querySelector('.input-container');
+            const heightDiff = initialViewportHeight - currentHeight;
+            
+            if (heightDiff > 150) { // 输入法显示
+                inputContainer.style.transform = `translateY(-${Math.min(heightDiff - 150, 200)}px)`;
+            } else {
+                inputContainer.style.transform = 'translateY(0)';
+            }
+        }
+        
+        window.addEventListener('resize', handleViewportChange);
+        window.addEventListener('orientationchange', () => {
+            setTimeout(() => {
+                initialViewportHeight = window.innerHeight;
+                handleViewportChange();
+            }, 500);
+        });
+
+        // --- 原有的聊天功能代码 ---
         const roomNameEl = document.getElementById('room-name');
         const statusEl = document.getElementById('status');
         const userListEl = document.getElementById('user-list');
         const chatWindowEl = document.getElementById('chat-window');
         const messageForm = document.getElementById('message-form');
-        const messageInput = document.getElementById('message-input');
 
-        // --- 1. 初始化 ---
+        // 初始化
         let username = sessionStorage.getItem('chat_username');
         if (!username) {
             username = prompt("Please enter your username:") || "Anonymous";
@@ -110,12 +471,11 @@
         const roomName = pathParts[1] || 'general';
         roomNameEl.textContent = `Room: ${roomName}`;
 
-        // --- 2. 建立 WebSocket 连接 ---
+        // WebSocket 连接
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${wsProtocol}//${window.location.host}/${roomName}?username=${encodeURIComponent(username)}`;
         const socket = new WebSocket(wsUrl);
 
-        // --- 3. WebSocket 事件监听 ---
         socket.onopen = () => {
             statusEl.textContent = `Connected as: ${username}`;
         };
@@ -124,7 +484,7 @@
             const data = JSON.parse(event.data);
             switch (data.type) {
                 case 'history':
-                    chatWindowEl.innerHTML = ''; // 清空旧消息
+                    chatWindowEl.innerHTML = '';
                     data.payload.forEach(msg => appendChatMessage(msg));
                     break;
                 case 'chat':
@@ -145,7 +505,7 @@
             statusEl.textContent = "Connection error.";
         };
 
-        // --- 4. 表单提交事件 ---
+        // 表单提交
         messageForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const text = messageInput.value.trim();
@@ -156,10 +516,19 @@
                 };
                 socket.send(JSON.stringify(message));
                 messageInput.value = '';
+                messageInput.style.height = 'auto';
             }
         });
 
-        // --- 5. DOM 操作辅助函数 ---
+        // Enter 键发送，Shift+Enter 换行
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                messageForm.dispatchEvent(new Event('submit'));
+            }
+        });
+
+        // 辅助函数
         function appendChatMessage(msg) {
             const msgEl = document.createElement('div');
             msgEl.classList.add('message');
@@ -176,7 +545,6 @@
                 <div class="text">${escapeHTML(msg.text)}</div>
             `;
             chatWindowEl.appendChild(msgEl);
-            // 自动滚动到底部
             chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
         }
 
