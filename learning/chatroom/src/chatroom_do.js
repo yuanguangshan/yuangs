@@ -114,6 +114,41 @@ export class ChatRoomDurableObject {
         return contentTypes[extension.toLowerCase()] || 'image/jpeg';
     }
 
+    // 上传音频到 R2
+    async uploadAudioToR2(audioData, filename, mimeType) {
+        try {
+            console.log('开始上传音频到 R2...', filename, mimeType);
+            
+            const base64Data = audioData.split(',')[1];
+            if (!base64Data) {
+                throw new Error('无效的音频数据');
+            }
+            
+            const audioBuffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+            
+            const fileExtension = filename.split('.').pop() || 'bin';
+            const key = `chat-audio/${Date.now()}-${crypto.randomUUID()}.${fileExtension}`;
+
+            console.log('上传文件路径:', key);
+
+            await this.env.R2_BUCKET.put(key, audioBuffer, {
+                httpMetadata: {
+                    contentType: mimeType || 'application/octet-stream',
+                    cacheControl: 'public, max-age=31536000',
+                },
+            });
+
+            const audioUrl = `https://pub-8dfbdda6df204465aae771b4c080140b.r2.dev/${key}`;
+            
+            console.log('音频上传成功:', audioUrl);
+            return audioUrl;
+            
+        } catch (error) {
+            console.error('R2 音频上传失败:', error);
+            throw new Error(`音频上传失败: ${error.message}`);
+        }
+    }
+
     // Durable Object 的主入口点
     async fetch(request) {
         // 确保初始化完成
@@ -211,6 +246,20 @@ export class ChatRoomDurableObject {
                 };
                 
                 console.log('图片消息处理完成:', imageUrl);
+            } else if (payload.type === 'audio') {
+                console.log('处理音频消息:', payload.filename);
+                
+                const audioUrl = await this.uploadAudioToR2(payload.audio, payload.filename, payload.mimeType);
+                
+                message = {
+                    ...message,
+                    type: 'audio',
+                    audioUrl: audioUrl,
+                    filename: payload.filename,
+                    size: payload.size,
+                };
+                
+                console.log('音频消息处理完成:', audioUrl);
             } else {
                 // 文本消息
                 message.text = payload.text;

@@ -457,6 +457,26 @@
             border: none;
         }
 
+        /* --- 语音消息样式 --- */
+        .message-audio {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            background: #f1f3f5;
+            border-radius: 16px;
+            border: 1px solid #e9ecef;
+        }
+
+        .message.self .message-audio {
+            background: #7783EA;
+            border: none;
+        }
+
+        .message-audio audio {
+            outline: none;
+        }
+
         /* --- 图片预览模态框 --- */
         .image-modal {
             display: none;
@@ -531,7 +551,7 @@
         
         #message-input {
             width: 100%;
-            padding: 12px 45px 12px 18px; /* 为附件按钮留空间 */
+            padding: 12px 85px 12px 18px; /* 为附件按钮留空间 */
             border: 2px solid #e9ecef;
             border-radius: 22px;
             outline: none;
@@ -890,6 +910,7 @@
                         </div>
                     </div>
                     <textarea id="message-input" placeholder="请输入..." rows="1"></textarea>
+                    <button type="button" class="attachment-btn" id="record-button" style="right: 45px;">🎤</button>
                     <button type="button" class="attachment-btn" id="attachment-btn">📎</button>
                     <input type="file" id="image-input" accept="image/*">
                 </div>
@@ -942,8 +963,12 @@
         const imageModal = document.getElementById('image-modal');
         const modalImage = document.getElementById('modal-image');
         const modalClose = document.getElementById('modal-close');
+        const recordButton = document.getElementById('record-button');
         
         let selectedFile = null;
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
         
         // --- 图片压缩功能 ---
         function compressImage(file, maxWidth = 800, maxHeight = 600, quality = 0.8) {
@@ -1069,6 +1094,49 @@
         imageModal.addEventListener('click', (e) => {
             if (e.target === imageModal) {
                 imageModal.classList.remove('show');
+            }
+        });
+
+        // --- 语音消息功能 ---
+        recordButton.addEventListener('click', async () => {
+            if (isRecording) {
+                mediaRecorder.stop();
+                recordButton.textContent = '🎤';
+                isRecording = false;
+            } else {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    
+                    // 动态检测支持的MIME类型
+                    const mimeTypes = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'];
+                    const supportedType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type));
+
+                    if (!supportedType) {
+                        alert('您的浏览器不支持录音功能。');
+                        return;
+                    }
+
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: supportedType });
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = (e) => {
+                        audioChunks.push(e.data);
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: supportedType });
+                        sendAudioMessage(audioBlob, supportedType);
+                        audioChunks = [];
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+
+                    mediaRecorder.start();
+                    recordButton.textContent = '🛑';
+                    isRecording = true;
+                } catch (error) {
+                    console.error('无法访问麦克风:', error);
+                    alert('无法访问麦克风，请检查权限。');
+                }
             }
         });
 
@@ -1221,6 +1289,30 @@
             });
         }
 
+        // 发送语音消息
+        async function sendAudioMessage(blob, mimeType) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const fileExtension = mimeType.split('/')[1].split(';')[0];
+                    const message = {
+                        type: 'chat',
+                        payload: {
+                            type: 'audio',
+                            audio: e.target.result, // base64 数据
+                            filename: `voice-${Date.now()}.${fileExtension}`,
+                            size: blob.size,
+                            mimeType: mimeType
+                        }
+                    };
+                    socket.send(JSON.stringify(message));
+                    resolve();
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        }
+
         // Enter 键发送，Shift+Enter 换行
         messageInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -1294,6 +1386,16 @@
                 <img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy">
             </div>
             ${msg.caption ? `<div class="text" style="margin-top: 8px;">${escapeHTML(msg.caption)}</div>` : ''}
+        `;
+    } else if (msg.type === 'audio') {
+        // 语音消息
+        content = `
+            <div class="info">
+                <span class="username">${escapeHTML(msg.username)}</span> at<span class="timestamp">${localTime}</span>
+            </div>
+            <div class="message-audio">
+                <audio controls src="${msg.audioUrl}"></audio>
+            </div>
         `;
     } else {
         // 文本消息
