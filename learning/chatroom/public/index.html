@@ -1321,6 +1321,29 @@
             }
         });
 
+        // --- 辅助函数：将 URL 转换为可点击的链接 ---
+        function convertUrlsToLinks(text) {
+            // Regex to find URLs (http, https, www)
+            // It captures the full URL or the www. prefix + rest of the URL
+            const urlRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)/g;
+
+            return text.replace(urlRegex, (match) => {
+                let url = match;
+                // If the match starts with 'www.', prepend 'https://' to make it a valid URL
+                if (url.startsWith('www.')) {
+                    url = 'https://' + url;
+                }
+
+                // Escape the URL for the href attribute and the display text to prevent XSS
+                // The escapeHTML function is defined at the end of the script.
+                const escapedUrl = escapeHTML(url);
+                const escapedDisplayUrl = escapeHTML(match); // Use the original match for display
+
+                // Return an anchor tag
+                return `<a href="${escapedUrl}" target="_blank" rel="noopener noreferrer">${escapedDisplayUrl}</a>`;
+            });
+        }
+
         // --- 更新用户列表函数 ---
         function updateUserList(users) {
             // 侧边栏 & 小角标
@@ -1363,103 +1386,97 @@
             });
         }
 
-        // 辅助函数
-   function appendChatMessage(msg) {
-    const msgEl = document.createElement('div');
-    msgEl.classList.add('message');
-    msgEl.dataset.id = msg.id;
-    if (msg.username === username) {
-        msgEl.classList.add('self');
-    }
-
-    const localTime = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    let content = '';
-    
-    if (msg.type === 'image') {
-        // 图片消息 - 使用 R2 URL
-        content = `
-            <div class="info">
-                <span class="username">${escapeHTML(msg.username)}</span>   <span class="timestamp">${localTime}</span>
-            </div>
-            <div class="message-image" onclick="showImageModal('${msg.imageUrl}')">
-                <img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy">
-            </div>
-            ${msg.caption ? `<div class="text" style="margin-top: 8px;">${escapeHTML(msg.caption)}</div>` : ''}
-        `;
-    } else if (msg.type === 'audio') {
-        // 语音消息
-        content = `
-            <div class="info">
-                <span class="username">${escapeHTML(msg.username)}</span>   <span class="timestamp">${localTime}</span>
-            </div>
-            <div class="message-audio">
-                <audio controls src="${msg.audioUrl}"></audio>
-            </div>
-        `;
-    } else {
-        // 文本消息
-        content = `
-            <div class="info">
-                <span class="username">${escapeHTML(msg.username)}</span>   <span class="timestamp">${localTime}</span>
-            </div>
-            <div class="text">${escapeHTML(msg.text)}</div>
-        `;
-    }
-    
-    msgEl.innerHTML = content;
-
-    // 添加长按删除事件 - 修复版本
-    let pressTimer;
-    
-    // 鼠标按下事件
-    msgEl.addEventListener('mousedown', (e) => {
-        pressTimer = window.setTimeout(() => {
-            if (confirm('要删除这条信息吗？')) {
-                deleteMessage(msg.id);
+        // --- 渲染聊天消息 ---
+        function appendChatMessage(msg) {
+            const msgEl = document.createElement('div');
+            msgEl.classList.add('message');
+            msgEl.dataset.id = msg.id;
+            if (msg.username === username) {
+                msgEl.classList.add('self');
             }
-        }, 1000); // 1秒后触发
-    });
 
-    // 触摸开始事件 - 添加 passive: true
-    msgEl.addEventListener('touchstart', (e) => {
-        pressTimer = window.setTimeout(() => {
-            if (confirm('要删除这条信息吗？')) {
-                deleteMessage(msg.id);
+            const localTime = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            let content = '';
+            
+            if (msg.type === 'image') {
+                // 图片消息
+                content = `
+                    <div class="info">
+                        <span class="username">${escapeHTML(msg.username)}</span>   <span class="timestamp">${localTime}</span>
+                    </div>
+                    <div class="message-image" onclick="showImageModal('${msg.imageUrl}')">
+                        <img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy">
+                    </div>
+                    ${msg.caption ? `<div class="text">${convertUrlsToLinks(msg.caption)}</div>` : ''}
+                `;
+            } else if (msg.type === 'audio') {
+                // 语音消息
+                content = `
+                    <div class="info">
+                        <span class="username">${escapeHTML(msg.username)}</span>   <span class="timestamp">${localTime}</span>
+                    </div>
+                    <div class="message-audio">
+                        <audio controls src="${msg.audioUrl}"></audio>
+                    </div>
+                `;
+            } else {
+                // 文本消息
+                // 调用 convertUrlsToLinks 函数处理文本，将 URL 转换为链接
+                const processedText = convertUrlsToLinks(msg.text);
+                content = `
+                    <div class="info">
+                        <span class="username">${escapeHTML(msg.username)}</span>   <span class="timestamp">${localTime}</span>
+                    </div>
+                    <div class="text">${processedText}</div>
+                `;
             }
-        }, 1000); // 1秒后触发
-    }, { passive: true });
+            
+            msgEl.innerHTML = content;
 
-    // 鼠标释放事件
-    msgEl.addEventListener('mouseup', () => {
-        clearTimeout(pressTimer);
-    });
+            // 添加长按删除事件
+            let pressTimer;
+            
+            msgEl.addEventListener('mousedown', (e) => {
+                pressTimer = window.setTimeout(() => {
+                    if (confirm('要删除这条信息吗？')) {
+                        deleteMessage(msg.id);
+                    }
+                }, 1000); // 1秒后触发
+            });
 
-    // 触摸结束事件 - 添加 passive: true
-    msgEl.addEventListener('touchend', () => {
-        clearTimeout(pressTimer);
-    }, { passive: true });
+            msgEl.addEventListener('touchstart', (e) => {
+                pressTimer = window.setTimeout(() => {
+                    if (confirm('要删除这条信息吗？')) {
+                        deleteMessage(msg.id);
+                    }
+                }, 1000); // 1秒后触发
+            }, { passive: true });
 
-    // 触摸取消事件 - 添加 passive: true
-    msgEl.addEventListener('touchcancel', () => {
-        clearTimeout(pressTimer);
-    }, { passive: true });
-    
-    // 鼠标离开事件
-    msgEl.addEventListener('mouseleave', () => {
-        clearTimeout(pressTimer);
-    });
-    
-    // 将消息添加到聊天窗口
-    chatWindowEl.appendChild(msgEl);
-    
-    // 自动滚动到底部
-    chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
-}
+            msgEl.addEventListener('mouseup', () => {
+                clearTimeout(pressTimer);
+            });
+
+            msgEl.addEventListener('touchend', () => {
+                clearTimeout(pressTimer);
+            }, { passive: true });
+
+            msgEl.addEventListener('touchcancel', () => {
+                clearTimeout(pressTimer);
+            }, { passive: true });
+            
+            msgEl.addEventListener('mouseleave', () => {
+                clearTimeout(pressTimer);
+            });
+            
+            chatWindowEl.appendChild(msgEl);
+            
+            // 自动滚动到底部
+            chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
+        }
         
 
-
-    function deleteMessage(id) {
+        function deleteMessage(id) {
             if (socket.readyState === WebSocket.OPEN) {
                 const message = {
                     type: 'delete',
@@ -1476,7 +1493,12 @@
             }
         }
 
+        // --- HTML 转义函数 ---
         function escapeHTML(str) {
+            // 确保传入的是字符串，否则返回空字符串
+            if (typeof str !== 'string') {
+                return '';
+            }
             return str.replace(/[&<>"']/g, function(match) {
                 return {
                     '&': '&amp;',
