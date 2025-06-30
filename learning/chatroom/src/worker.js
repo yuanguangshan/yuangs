@@ -29,33 +29,22 @@ export default {
             }
         }
 
-        // 处理图片上传
-        if (url.pathname === '/upload' && request.method === 'POST') {
-            try {
-                const filename = request.headers.get('X-Filename') || `upload-${Date.now()}`;
-                const object = await env.R2_BUCKET.put(filename, request.body, {
-                    httpMetadata: request.headers,
-                });
-                // 构造可公开访问的 URL
-                const publicUrl = `${new URL(request.url).origin}/${object.key}`;
-                return new Response(JSON.stringify({ url: publicUrl }), {
-                    headers: { 'Content-Type': 'application/json' },
-                });
-            } catch (error) {
-                console.error('Upload error:', error);
-                return new Response('Error uploading file.', { status: 500 });
-            }
-        }
-
         // 处理 AI 解释请求
         if (url.pathname === '/ai-explain' && request.method === 'POST') {
             try {
                 const { text } = await request.json();
                 if (!text) {
+                    console.error('AI explanation: Missing text in request body.');
                     return new Response('Missing text in request body.', { status: 400 });
                 }
 
                 const GEMINI_API_KEY = env.GEMINI_API_KEY; // 从环境变量获取 API 密钥
+                if (!GEMINI_API_KEY) {
+                    console.error('AI explanation: GEMINI_API_KEY is not set in environment variables.');
+                    return new Response('Server configuration error: GEMINI_API_KEY is not set.', { status: 500 });
+                }
+                console.log('AI explanation: GEMINI_API_KEY loaded.');
+
                 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" + GEMINI_API_KEY;
 
                 const geminiResponse = await fetch(GEMINI_API_URL, {
@@ -74,18 +63,23 @@ export default {
 
                 if (!geminiResponse.ok) {
                     const errorText = await geminiResponse.text();
-                    console.error('Gemini API error:', errorText);
+                    console.error(`AI explanation: Gemini API error: ${geminiResponse.status} - ${errorText}`);
                     return new Response(`Gemini API error: ${errorText}`, { status: geminiResponse.status });
                 }
 
                 const geminiData = await geminiResponse.json();
+                // 检查 geminiData 结构，确保 explanation 存在
+                if (!geminiData || !geminiData.candidates || !geminiData.candidates[0] || !geminiData.candidates[0].content || !geminiData.candidates[0].content.parts || !geminiData.candidates[0].content.parts[0] || !geminiData.candidates[0].content.parts[0].text) {
+                    console.error('AI explanation: Unexpected Gemini API response structure:', JSON.stringify(geminiData));
+                    return new Response('Unexpected AI response format.', { status: 500 });
+                }
                 const explanation = geminiData.candidates[0].content.parts[0].text;
 
                 return new Response(JSON.stringify({ explanation }), {
                     headers: { 'Content-Type': 'application/json' },
                 });
             } catch (error) {
-                console.error('AI explanation request error:', error);
+                console.error('AI explanation request error:', error.stack); // Log full stack trace
                 return new Response('Error processing AI explanation request.', { status: 500 });
             }
         }
