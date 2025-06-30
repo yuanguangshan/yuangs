@@ -6,130 +6,175 @@ import html from '../public/index.html';
 // Export Durable Object class for Cloudflare platform instantiation
 export { ChatRoomDurableObject };
 
+// --- 新增：模块化的AI服务调用函数 ---
+
+/**
+ * 调用 DeepSeek API 获取解释
+ * @param {string} text - 需要解释的文本
+ * @param {object} env - Cloudflare环境变量
+ * @returns {Promise<string>} - AI返回的解释文本
+ */
+async function getDeepSeekExplanation(text, env) {
+    const DEEPSEEK_API_KEY = env.DEEPSEEK_API_KEY;
+    if (!DEEPSEEK_API_KEY) {
+        throw new Error('Server configuration error: DEEPSEEK_API_KEY is not set.');
+    }
+
+    const response = await fetch("https://api.deepseek.com/chat/completions", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
+        },
+        body: JSON.stringify({
+            model: "deepseek-chat",
+            messages: [
+                { role: "system", content: "You are a helpful assistant that explains text concisely and clearly in Markdown format." },
+                { role: "user", content: `Explain the following text:\n\n${text}` }
+            ]
+        })
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`DeepSeek API error: ${response.status} - ${errorText}`);
+        throw new Error(`DeepSeek API error: ${errorText}`);
+    }
+
+    const data = await response.json();
+    const explanation = data?.choices?.[0]?.message?.content;
+
+    if (!explanation) {
+        console.error('Unexpected DeepSeek API response structure:', JSON.stringify(data));
+        throw new Error('Unexpected AI response format from DeepSeek.');
+    }
+
+    return explanation;
+}
+
+/**
+ * 调用 Google Gemini API 获取解释
+ * @param {string} text - 需要解释的文本
+ * @param {object} env - Cloudflare环境变量
+ * @returns {Promise<string>} - AI返回的解释文本
+ */
+async function getGeminiExplanation(text, env) {
+    const GEMINI_API_KEY = env.GEMINI_API_KEY;
+    if (!GEMINI_API_KEY) {
+        throw new Error('Server configuration error: GEMINI_API_KEY is not set.');
+    }
+    
+    // Google Gemini API v1beta endpoint for text generation
+    const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
+    
+    const response = await fetch(GEMINI_API_URL, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            contents: [{
+                parts: [{
+                    text: `Explain the following text concisely and clearly in Markdown format:\n\n${text}`
+                }]
+            }]
+        })
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Gemini API error: ${response.status} - ${errorText}`);
+        throw new Error(`Gemini API error: ${errorText}`);
+    }
+
+    const data = await response.json();
+    // Gemini的响应结构不同，需要这样提取
+    const explanation = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    if (!explanation) {
+        console.error('Unexpected Gemini API response structure:', JSON.stringify(data));
+        throw new Error('Unexpected AI response format from Gemini.');
+    }
+
+    return explanation;
+}
+
+
+// --- 主Worker逻辑 ---
+
 export default {
     async fetch(request, env, ctx) {
         const url = new URL(request.url);
         
-        // Normalize path to remove trailing slash for consistent matching
         let pathname = url.pathname;
         if (pathname.endsWith('/') && pathname.length > 1) {
             pathname = pathname.slice(0, -1);
         }
         const pathParts = pathname.split('/').filter(part => part);
 
-        // Handle image upload
+        // Handle image upload (no changes here)
         if (pathname === '/upload' && request.method === 'POST') {
+            // ... 你的上传逻辑保持不变 ...
             try {
                 if (!env.R2_BUCKET) {
-                    console.error('R2_BUCKET is not bound in environment.');
                     return new Response('Server configuration error: R2_BUCKET not bound.', { status: 500 });
                 }
                 const filename = request.headers.get('X-Filename') || `upload-${Date.now()}`;
-                
-                const object = await env.R2_BUCKET.put(filename, request.body, {
-                    httpMetadata: request.headers,
-                });
-                
+                const object = await env.R2_BUCKET.put(filename, request.body, { httpMetadata: request.headers });
                 const publicUrl = `${new URL(request.url).origin}/${object.key}`;
-                
-                return new Response(JSON.stringify({ url: publicUrl }), {
-                    headers: { 'Content-Type': 'application/json' },
-                });
+                return new Response(JSON.stringify({ url: publicUrl }), { headers: { 'Content-Type': 'application/json' } });
             } catch (error) {
                 console.error('Upload error:', error.stack);
                 return new Response('Error uploading file.', { status: 500 });
             }
         }
 
-        // Handle AI explanation request using DeepSeek API
+        // --- 更新后的AI解释请求处理逻辑 ---
         if (pathname === '/ai-explain' && request.method === 'POST') {
             try {
                 const requestBody = await request.json();
                 const text = requestBody.text;
+                // 从请求中获取模型名称，如果前端没传，则默认为 'gemini'
+                const model = requestBody.model || 'gemini'; 
 
                 if (!text) {
-                    console.error('AI explanation: Missing text in request body.');
                     return new Response('Missing text in request body.', { status: 400 });
                 }
 
-                // Use DEEPSEEK_API_KEY from environment variables
-                const DEEPSEEK_API_KEY = env.DEEPSEEK_API_KEY; 
-                if (!DEEPSEEK_API_KEY) {
-                    console.error('AI explanation: DEEPSEEK_API_KEY is not set in environment variables.');
-                    return new Response('Server configuration error: DEEPSEEK_API_KEY is not set.', { status: 500 });
-                }
-                console.log('AI explanation: DEEPSEEK_API_KEY loaded.');
-
-                // DeepSeek API endpoint for chat completions
-                const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
-
-                const deepseekResponse = await fetch(DEEPSEEK_API_URL, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        // Add authorization header with DeepSeek API key
-                        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
-                    },
-                    body: JSON.stringify({
-                        // Use the recommended model for chat
-                        model: "deepseek-chat", 
-                        messages: [
-                            {
-                                // System message to guide the AI
-                                role: "system",
-                                content: "You are a helpful assistant that explains text concisely and clearly."
-                            },
-                            {
-                                // User message containing the text to explain
-                                role: "user",
-                                content: `解释以下文本：${text}`
-                            }
-                        ],
-                        // Optional: control creativity and length
-                        // temperature: 0.7, 
-                        // max_tokens: 500 
-                    })
-                });
-
-                if (!deepseekResponse.ok) {
-                    const errorText = await deepseekResponse.text();
-                    console.error(`AI explanation: DeepSeek API error: ${deepseekResponse.status} - ${errorText}`);
-                    return new Response(`DeepSeek API error: ${errorText}`, { status: deepseekResponse.status });
-                }
-
-                const deepseekData = await deepseekResponse.json();
+                let explanation = "";
                 
-                // Extract the explanation from the response, using optional chaining for safety
-                const explanation = deepseekData?.choices?.[0]?.message?.content;
-
-                if (!explanation) {
-                    console.error('AI explanation: Unexpected DeepSeek API response structure or missing explanation:', JSON.stringify(deepseekData));
-                    return new Response('Unexpected AI response format.', { status: 500 });
+                // 根据模型名称，调用相应的函数
+                console.log(`Routing AI request to model: ${model}`);
+                if (model === 'gemini') {
+                    explanation = await getGeminiExplanation(text, env);
+                } else if (model === 'deepseek') {
+                    explanation = await getDeepSeekExplanation(text, env);
+                } else {
+                    return new Response(`Unknown AI model: ${model}`, { status: 400 });
                 }
 
                 return new Response(JSON.stringify({ explanation }), {
                     headers: { 'Content-Type': 'application/json' },
                 });
+
             } catch (error) {
-                console.error('AI explanation request error:', error.stack); 
-                return new Response('Error processing AI explanation request.', { status: 500 });
+                console.error('AI explanation request error:', error.message);
+                // 将具体的错误信息返回给前端，方便调试
+                return new Response(`Error processing AI request: ${error.message}`, { status: 500 });
             }
         }
-
-        // If the root path is accessed, guide the user to join a room.
+        
+        // --- 剩余的路由逻辑保持不变 ---
+        
         if (pathParts.length === 0) {
-            return new Response('Welcome! Please access /&lt;room-name&gt; to join a chat room.', { status: 200 });
+            return new Response('Welcome! Please access /<room-name> to join a chat room.', { status: 200 });
         }
 
-        // Use the first path segment as the chat room's unique ID
         const roomName = pathParts[0];
 
-        // Check if the request is a WebSocket upgrade request
         const upgradeHeader = request.headers.get("Upgrade");
         if (upgradeHeader === "websocket") {
-            console.log(`Routing WebSocket for room [${roomName}] to Durable Object...`);
             if (!env.CHAT_ROOM_DO) {
-                console.error('CHAT_ROOM_DO is not bound in environment.');
                 return new Response('Server configuration error: CHAT_ROOM_DO not bound.', { status: 500 });
             }
             const doId = env.CHAT_ROOM_DO.idFromName(roomName);
@@ -137,8 +182,6 @@ export default {
             return stub.fetch(request);
         }
 
-        // For all other GET requests that haven't matched specific API routes or WebSocket upgrades,
-        // serve the single-page application HTML.
         return new Response(html, {
             headers: { 'Content-Type': 'text/html;charset=UTF-8' },
         });

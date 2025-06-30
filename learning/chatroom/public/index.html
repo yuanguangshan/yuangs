@@ -905,6 +905,43 @@
 .ai-explanation .markdown-content a:hover {
     text-decoration: underline;
 }
+/* --- 右键菜单子菜单样式 --- */
+.context-menu .ai-option-parent {
+    position: relative; /* 关键：为了定位子菜单 */
+}
+
+/* 子菜单默认隐藏 */
+.context-menu .ai-submenu {
+    display: none;
+    position: absolute;
+    left: 100%; /* 从父菜单右侧弹出 */
+    top: -5px;   /* 垂直位置微调 */
+    background-color: #f1f1f1;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+    z-index: 1001; /* 确保在其他元素之上 */
+    list-style: none;
+    padding: 5px 0;
+    margin: 0;
+    min-width: 150px; /* 确保子菜单有足够宽度 */
+}
+
+/* 当鼠标悬浮在父菜单项上时，显示子菜单 */
+.context-menu .ai-option-parent:hover > .ai-submenu {
+    display: block;
+}
+
+/* 子菜单项样式 */
+.context-menu .ai-submenu li {
+    padding: 8px 15px;
+    cursor: pointer;
+    white-space: nowrap; /* 防止文字换行 */
+}
+
+.context-menu .ai-submenu li:hover {
+    background-color: #ddd;
+}
         }
     </style>
 </head>
@@ -994,13 +1031,22 @@
         </main>
     </div>
 
-    <div id="context-menu" class="context-menu">
-        <ul>
-            <li id="copy-option">复制</li>
-            <li id="delete-option">删除</li>
-            <li id="ai-explain-option">问AI</li>
-        </ul>
-    </div>
+<!-- 更新后的右键菜单 -->
+<div id="context-menu" class="context-menu">
+    <ul>
+        <li id="copy-option">复制</li>
+        <li id="delete-option">删除</li>
+        <!-- AI 解释选项 -->
+        <li class="ai-option-parent">
+            <span>问AI</span>
+            <!-- 子菜单 -->
+            <ul class="ai-submenu">
+                <li class="ai-explain-option" data-ai="gemini">用 Gemini (默认)</li>
+                <li class="ai-explain-option" data-ai="deepseek">用 DeepSeek</li>
+            </ul>
+        </li>
+    </ul>
+</div>
 
     <style>
         .context-menu {
@@ -1610,31 +1656,49 @@ function appendChatMessage(msg) {
             contextMenu.style.display = 'none';
         });
 
-aiExplainOption.addEventListener('click', async () => {
+
+        // --- 更新后的AI解释逻辑，支持多模型 ---
+
+// 使用事件委托来处理所有AI选项的点击
+contextMenu.addEventListener('click', async (e) => {
+    // 检查点击的目标是否是一个AI选项
+    if (!e.target.classList.contains('ai-explain-option')) {
+        return; // 如果不是，则不做任何事
+    }
+    
+    // 确保有选中的消息
     if (!currentMessageElement || !currentMessageElement.dataset.messageText) {
         contextMenu.style.display = 'none';
         return;
     }
-
+    
+    // 从 data-ai 属性获取AI模型的名字
+    const model = e.target.dataset.ai;
     const textToExplain = currentMessageElement.dataset.messageText;
     const existingExplanation = currentMessageElement.nextElementSibling;
 
     if (existingExplanation && existingExplanation.classList.contains('ai-explanation')) {
         existingExplanation.remove();
     }
-
+    
     contextMenu.style.display = 'none';
 
     const explanationEl = document.createElement('div');
     explanationEl.className = 'ai-explanation';
-    explanationEl.innerHTML = '<p>🤖 AI 正在思考中...</p>';
+    // 在加载提示中也显示模型名称
+    explanationEl.innerHTML = `<p>🤖 正在通过 ${model} 模型思考中...</p>`;
     currentMessageElement.insertAdjacentElement('afterend', explanationEl);
 
     try {
+        // 向新的后端API端点发送请求
+        // 我们假设后端有一个统一的 /ai-explain 端点，通过 model 字段区分
         const response = await fetch('/ai-explain', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: textToExplain })
+            body: JSON.stringify({
+                text: textToExplain,
+                model: model // 关键：将所选模型发送给后端
+            })
         });
 
         if (!response.ok) {
@@ -1644,39 +1708,30 @@ aiExplainOption.addEventListener('click', async () => {
 
         const { explanation } = await response.json();
 
-        // 请求成功，更新解释框内容
-        explanationEl.innerHTML = ''; // 清空加载提示
+        explanationEl.innerHTML = ''; 
 
         const closeBtn = document.createElement('button');
         closeBtn.className = 'ai-explanation-close';
         closeBtn.innerHTML = '×';
         closeBtn.onclick = () => explanationEl.remove();
 
-        // --- 核心改动在这里 ---
-        // 创建一个容器来存放渲染后的 Markdown 内容
         const markdownContainer = document.createElement('div');
-        markdownContainer.className = 'markdown-content'; // 应用我们刚刚添加的CSS
+        markdownContainer.className = 'markdown-content';
 
-        // 使用 marked.parse() 将 Markdown 字符串转换为 HTML
-        // 为了安全，我们开启 sanitize 选项（尽管新版marked推荐使用DOMPurify等库）
-        // 对于简单的场景，marked自带的转义已经足够
         const renderedHtml = marked.parse(explanation, {
-            gfm: true, // 启用 GitHub Flavored Markdown
-            breaks: true, // 将换行符渲染为 <br>
-            sanitize: true // 对HTML进行转义，防止XSS攻击
+            gfm: true,
+            breaks: true,
+            sanitize: true
         });
         
-        // 将渲染后的HTML注入到容器中
         markdownContainer.innerHTML = renderedHtml;
         
-        // 将关闭按钮和 Markdown 容器添加到解释框中
         explanationEl.appendChild(closeBtn);
         explanationEl.appendChild(markdownContainer);
-        // --- 核心改动结束 ---
 
     } catch (error) {
-        console.error('请求AI解释失败:', error);
-        explanationEl.innerHTML = '<p>😞 抱歉，无法获取AI解释。</p>';
+        console.error(`请求${model}解释失败:`, error);
+        explanationEl.innerHTML = `<p>😞 抱歉，无法从 ${model} 获取解释。</p>`;
         setTimeout(() => {
             if (explanationEl.parentNode) {
                 explanationEl.remove();
@@ -1684,7 +1739,9 @@ aiExplainOption.addEventListener('click', async () => {
         }, 4000);
     }
 });
-        function deleteMessage(id) {
+
+
+function deleteMessage(id) {
             if (socket.readyState === WebSocket.OPEN) {
                 const message = {
                     type: 'delete',
