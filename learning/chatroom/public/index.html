@@ -1425,72 +1425,101 @@
                 menuListEl.appendChild(mli);
             });
         }
+// --- 辅助函数：显示上下文菜单 ---
+function showContextMenu(element, x, y) {
+    currentMessageElement = element; // 存储被长按或右键点击的消息元素
+    contextMenu.style.display = 'block';
+    contextMenu.style.left = `${x}px`;
+    contextMenu.style.top = `${y}px`;
 
+    // (可选) 为移动设备提供触觉反馈，提升用户体验
+    if (navigator.vibrate) {
+        navigator.vibrate(50); // 震动50毫秒
+    }
+}
         // --- 渲染聊天消息 ---
-        function appendChatMessage(msg) {
-            const msgEl = document.createElement('div');
-            msgEl.classList.add('message');
-            msgEl.dataset.id = msg.id;
-            // Store the raw message text for copy/AI explanation
-            msgEl.dataset.messageText = msg.text; // Added this line
-            if (msg.username === username) {
-                msgEl.classList.add('self');
-            }
+// --- 渲染聊天消息（已更新，支持移动端长按）---
+function appendChatMessage(msg) {
+    const msgEl = document.createElement('div');
+    msgEl.classList.add('message');
+    msgEl.dataset.id = msg.id;
+    msgEl.dataset.messageText = msg.text || (msg.caption || ''); // 存储原始文本，用于复制/AI
+    if (msg.username === username) {
+        msgEl.classList.add('self');
+    }
 
-            const localTime = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const localTime = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            let content = '';
+    let content = '';
+    // ... (你原来的消息内容生成逻辑保持不变)
+    if (msg.type === 'image') {
+        content = `
+            <div class="info">
+                <span class="username">${escapeHTML(msg.username)}</span>   <span class="timestamp">${localTime}</span>
+            </div>
+            <div class="message-image" onclick="showImageModal('${msg.imageUrl}')">
+                <img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy">
+            </div>
+            ${msg.caption ? `<div class="text">${convertUrlsToLinks(escapeHTML(msg.caption))}</div>` : ''}
+        `;
+    } else if (msg.type === 'audio') {
+        content = `
+            <div class="info">
+                <span class="username">${escapeHTML(msg.username)}</span>   <span class="timestamp">${localTime}</span>
+            </div>
+            <div class="message-audio">
+                <audio controls src="${msg.audioUrl}"></audio>
+            </div>
+        `;
+    } else {
+        const processedText = convertUrlsToLinks(escapeHTML(msg.text));
+        content = `
+            <div class="info">
+                <span class="username">${escapeHTML(msg.username)}</span>   <span class="timestamp">${localTime}</span>
+            </div>
+            <div class="text">${processedText}</div>
+        `;
+    }
 
-            if (msg.type === 'image') {
-                // 图片消息
-                content = `
-                    <div class="info">
-                        <span class="username">${escapeHTML(msg.username)}</span>   <span class="timestamp">${localTime}</span>
-                    </div>
-                    <div class="message-image" onclick="showImageModal('${msg.imageUrl}')">
-                        <img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy">
-                    </div>
-                    ${msg.caption ? `<div class="text">${convertUrlsToLinks(msg.caption)}</div>` : ''}
-                `;
-            } else if (msg.type === 'audio') {
-                // 语音消息
-                content = `
-                    <div class="info">
-                        <span class="username">${escapeHTML(msg.username)}</span>   <span class="timestamp">${localTime}</span>
-                    </div>
-                    <div class="message-audio">
-                        <audio controls src="${msg.audioUrl}"></audio>
-                    </div>
-                `;
-            } else {
-                // 文本消息
-                // 调用 convertUrlsToLinks 函数处理文本，将 URL 转换为链接
-                const processedText = convertUrlsToLinks(msg.text);
-                content = `
-                    <div class="info">
-                        <span class="username">${escapeHTML(msg.username)}</span>   <span class="timestamp">${localTime}</span>
-                    </div>
-                    <div class="text">${processedText}</div>
-                `;
-            }
+    msgEl.innerHTML = content;
 
-            msgEl.innerHTML = content;
+    // --- 新增：上下文菜单事件处理 ---
 
-            // Add context menu event listener
-            msgEl.addEventListener('contextmenu', (e) => {
-                e.preventDefault(); // Prevent default browser context menu
-                currentMessageElement = msgEl; // Store reference to the clicked message
-                contextMenu.style.display = 'block';
-                contextMenu.style.left = `${e.pageX}px`;
-                contextMenu.style.top = `${e.pageY}px`;
-            });
+    let longPressTimer;
+    const longPressDuration = 500; // 500毫秒定义为长按
 
-            chatWindowEl.appendChild(msgEl);
+    // 1. 为桌面端保留右键单击事件
+    msgEl.addEventListener('contextmenu', (e) => {
+        e.preventDefault(); // 阻止浏览器默认的右键菜单
+        showContextMenu(msgEl, e.pageX, e.pageY);
+    });
 
-            // 自动滚动到底部
-            chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
-        }
+    // 2. 为移动端添加长按事件
+    msgEl.addEventListener('touchstart', (e) => {
+        // e.preventDefault(); // 注意：不要在这里阻止默认行为，否则会禁用滚动！
+        longPressTimer = setTimeout(() => {
+            // 当计时器触发时，显示菜单
+            // e.touches[0] 包含第一个触摸点的位置信息
+            showContextMenu(msgEl, e.touches[0].pageX, e.touches[0].pageY);
+        }, longPressDuration);
+    }, { passive: true }); // 使用 passive: true 提升滚动性能
 
+    // 3. 如果手指抬起，取消计时器（说明不是长按）
+    msgEl.addEventListener('touchend', () => {
+        clearTimeout(longPressTimer);
+    });
+
+    // 4. 如果手指移动，也取消计时器（说明是滑动，不是长按）
+    msgEl.addEventListener('touchmove', () => {
+        clearTimeout(longPressTimer);
+    });
+
+
+    chatWindowEl.appendChild(msgEl);
+
+    // 自动滚动到底部
+    chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
+}
         // Context menu actions
         copyOption.addEventListener('click', () => {
             if (currentMessageElement && currentMessageElement.dataset.messageText) {
