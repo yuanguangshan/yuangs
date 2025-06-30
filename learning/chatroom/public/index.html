@@ -1535,28 +1535,74 @@ function appendChatMessage(msg) {
             contextMenu.style.display = 'none';
         });
 
-        aiExplainOption.addEventListener('click', async () => {
-            if (currentMessageElement && currentMessageElement.dataset.messageText) {
-                const textToExplain = currentMessageElement.dataset.messageText;
-                try {
-                    const response = await fetch('/ai-explain', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ text: textToExplain })
-                    });
-                    if (!response.ok) {
-                        throw new Error('AI explanation failed.');
-                    }
-                    const { explanation } = await response.json();
-                    alert(`AI解释: ${explanation}`);
-                } catch (error) {
-                    console.error('请求AI解释失败:', error);
-                    alert('抱歉，无法从AI获取解释。');
-                }
-            }
-            contextMenu.style.display = 'none';
+aiExplainOption.addEventListener('click', async () => {
+    // 确保有选中的消息元素和文本
+    if (!currentMessageElement || !currentMessageElement.dataset.messageText) {
+        contextMenu.style.display = 'none';
+        return;
+    }
+
+    const textToExplain = currentMessageElement.dataset.messageText;
+    const existingExplanation = currentMessageElement.nextElementSibling;
+
+    // 如果已经有一个解释框，先移除它，避免重复
+    if (existingExplanation && existingExplanation.classList.contains('ai-explanation')) {
+        existingExplanation.remove();
+    }
+
+    // 先隐藏右键菜单
+    contextMenu.style.display = 'none';
+
+    // 创建一个"加载中"的占位符，并插入到消息下方
+    const explanationEl = document.createElement('div');
+    explanationEl.className = 'ai-explanation';
+    explanationEl.innerHTML = '<p>🤖 AI 正在思考中...</p>';
+    // insertAdjacentElement 是一个很好的方法，可以精确地将元素插入到指定位置
+    currentMessageElement.insertAdjacentElement('afterend', explanationEl);
+
+    try {
+        const response = await fetch('/ai-explain', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: textToExplain })
         });
 
+        if (!response.ok) {
+            const errorData = await response.text();
+            throw new Error(`AI 服务返回错误: ${errorData}`);
+        }
+
+        const { explanation } = await response.json();
+
+        // 请求成功，更新解释框内容
+        explanationEl.innerHTML = ''; // 清空加载提示
+
+        // 创建关闭按钮
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'ai-explanation-close';
+        closeBtn.innerHTML = '×';
+        closeBtn.onclick = () => explanationEl.remove(); // 点击关闭按钮时移除解释框
+
+        // 创建解释文本的段落
+        const textParagraph = document.createElement('p');
+        textParagraph.textContent = explanation;
+
+        // 将关闭按钮和文本添加到解释框中
+        explanationEl.appendChild(closeBtn);
+        explanationEl.appendChild(textParagraph);
+
+    } catch (error) {
+        console.error('请求AI解释失败:', error);
+        // 如果出错，显示错误信息，并在几秒后自动消失
+        explanationEl.innerHTML = '<p>😞 抱歉，无法获取AI解释。</p>';
+        setTimeout(() => {
+            // 检查元素是否还在DOM中，避免意外错误
+            if (explanationEl.parentNode) {
+                explanationEl.remove();
+            }
+        }, 4000);
+    }
+});
 
         function deleteMessage(id) {
             if (socket.readyState === WebSocket.OPEN) {
