@@ -29,7 +29,7 @@ async function getDeepSeekExplanation(text, env) {
         body: JSON.stringify({
             model: "deepseek-chat",
             messages: [
-                { role: "system", content: "You are a helpful assistant that explains text concisely and clearly in Markdown format." },
+                { role: "system", content: "你是一个有用助于，善于用简洁的markdown语言来解释下面的文本." },
                 { role: "user", content: `Explain the following text:\n\n${text}` }
             ]
         })
@@ -75,7 +75,7 @@ async function getGeminiExplanation(text, env) {
         body: JSON.stringify({
             contents: [{
                 parts: [{
-                    text: `Explain the following text concisely and clearly in Markdown format:\n\n${text}`
+                    text: `用简洁精确的markdown格式文字来解释下面的文本：:\n\n${text}`
                 }]
             }]
         })
