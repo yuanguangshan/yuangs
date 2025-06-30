@@ -5,6 +5,9 @@
     <!-- iOS 安全区支持 -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>实时聊天室</title>
+    <!-- 新增：引入 marked 库 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
     <style>
         /* --- BASE STYLES --- */
         html, body {
@@ -830,6 +833,78 @@
                 flex: none;
                 width: 100%;
             }
+            /* --- AI 解释中 Markdown 渲染的样式 --- */
+.ai-explanation .markdown-content {
+    /* 基础样式 */
+    font-size: 0.9em;
+    line-height: 1.6;
+}
+
+.ai-explanation .markdown-content p {
+    margin-bottom: 12px; /* 段落间距 */
+}
+.ai-explanation .markdown-content p:last-child {
+    margin-bottom: 0;
+}
+
+/* 标题 */
+.ai-explanation .markdown-content h1,
+.ai-explanation .markdown-content h2,
+.ai-explanation .markdown-content h3 {
+    margin-top: 16px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #d1d9e6;
+    padding-bottom: 4px;
+}
+
+/* 代码块 */
+.ai-explanation .markdown-content pre {
+    background-color: #2d2d2d; /* 暗色背景 */
+    color: #f8f8f2; /* 亮色文字 */
+    padding: 12px;
+    border-radius: 8px;
+    overflow-x: auto; /* 水平滚动 */
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.85em;
+}
+
+.ai-explanation .markdown-content code {
+    background-color: #e8e8e8; /* 行内代码背景 */
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.ai-explanation .markdown-content pre code {
+    background-color: transparent; /* 代码块内的code标签不需要背景 */
+    padding: 0;
+}
+
+/* 列表 */
+.ai-explanation .markdown-content ul,
+.ai-explanation .markdown-content ol {
+    padding-left: 20px;
+    margin-top: 8px;
+    margin-bottom: 12px;
+}
+
+/* 引用 */
+.ai-explanation .markdown-content blockquote {
+    border-left: 4px solid #b0c4de; /* 引用块左边框 */
+    padding-left: 12px;
+    margin: 12px 0;
+    color: #556;
+    background-color: #f9f9f9;
+}
+
+/* 链接 */
+.ai-explanation .markdown-content a {
+    color: #007bff;
+    text-decoration: none;
+}
+.ai-explanation .markdown-content a:hover {
+    text-decoration: underline;
+}
         }
     </style>
 </head>
@@ -1536,7 +1611,6 @@ function appendChatMessage(msg) {
         });
 
 aiExplainOption.addEventListener('click', async () => {
-    // 确保有选中的消息元素和文本
     if (!currentMessageElement || !currentMessageElement.dataset.messageText) {
         contextMenu.style.display = 'none';
         return;
@@ -1545,19 +1619,15 @@ aiExplainOption.addEventListener('click', async () => {
     const textToExplain = currentMessageElement.dataset.messageText;
     const existingExplanation = currentMessageElement.nextElementSibling;
 
-    // 如果已经有一个解释框，先移除它，避免重复
     if (existingExplanation && existingExplanation.classList.contains('ai-explanation')) {
         existingExplanation.remove();
     }
 
-    // 先隐藏右键菜单
     contextMenu.style.display = 'none';
 
-    // 创建一个"加载中"的占位符，并插入到消息下方
     const explanationEl = document.createElement('div');
     explanationEl.className = 'ai-explanation';
     explanationEl.innerHTML = '<p>🤖 AI 正在思考中...</p>';
-    // insertAdjacentElement 是一个很好的方法，可以精确地将元素插入到指定位置
     currentMessageElement.insertAdjacentElement('afterend', explanationEl);
 
     try {
@@ -1577,33 +1647,43 @@ aiExplainOption.addEventListener('click', async () => {
         // 请求成功，更新解释框内容
         explanationEl.innerHTML = ''; // 清空加载提示
 
-        // 创建关闭按钮
         const closeBtn = document.createElement('button');
         closeBtn.className = 'ai-explanation-close';
         closeBtn.innerHTML = '×';
-        closeBtn.onclick = () => explanationEl.remove(); // 点击关闭按钮时移除解释框
+        closeBtn.onclick = () => explanationEl.remove();
 
-        // 创建解释文本的段落
-        const textParagraph = document.createElement('p');
-        textParagraph.textContent = explanation;
+        // --- 核心改动在这里 ---
+        // 创建一个容器来存放渲染后的 Markdown 内容
+        const markdownContainer = document.createElement('div');
+        markdownContainer.className = 'markdown-content'; // 应用我们刚刚添加的CSS
 
-        // 将关闭按钮和文本添加到解释框中
+        // 使用 marked.parse() 将 Markdown 字符串转换为 HTML
+        // 为了安全，我们开启 sanitize 选项（尽管新版marked推荐使用DOMPurify等库）
+        // 对于简单的场景，marked自带的转义已经足够
+        const renderedHtml = marked.parse(explanation, {
+            gfm: true, // 启用 GitHub Flavored Markdown
+            breaks: true, // 将换行符渲染为 <br>
+            sanitize: true // 对HTML进行转义，防止XSS攻击
+        });
+        
+        // 将渲染后的HTML注入到容器中
+        markdownContainer.innerHTML = renderedHtml;
+        
+        // 将关闭按钮和 Markdown 容器添加到解释框中
         explanationEl.appendChild(closeBtn);
-        explanationEl.appendChild(textParagraph);
+        explanationEl.appendChild(markdownContainer);
+        // --- 核心改动结束 ---
 
     } catch (error) {
         console.error('请求AI解释失败:', error);
-        // 如果出错，显示错误信息，并在几秒后自动消失
         explanationEl.innerHTML = '<p>😞 抱歉，无法获取AI解释。</p>';
         setTimeout(() => {
-            // 检查元素是否还在DOM中，避免意外错误
             if (explanationEl.parentNode) {
                 explanationEl.remove();
             }
         }, 4000);
     }
 });
-
         function deleteMessage(id) {
             if (socket.readyState === WebSocket.OPEN) {
                 const message = {
