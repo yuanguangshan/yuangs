@@ -11,6 +11,24 @@ export default {
         const url = new URL(request.url);
         const pathParts = url.pathname.split('/').filter(part => part);
 
+        // 处理图片上传
+        if (url.pathname === '/upload' && request.method === 'POST') {
+            try {
+                const filename = request.headers.get('X-Filename') || `upload-${Date.now()}`;
+                const object = await env.R2_BUCKET.put(filename, request.body, {
+                    httpMetadata: request.headers,
+                });
+                // 构造可公开访问的 URL
+                const publicUrl = `${new URL(request.url).origin}/${object.key}`;
+                return new Response(JSON.stringify({ url: publicUrl }), {
+                    headers: { 'Content-Type': 'application/json' },
+                });
+            } catch (error) {
+                console.error('Upload error:', error);
+                return new Response('Error uploading file.', { status: 500 });
+            }
+        }
+
         // 如果路径为空，引导用户访问一个房间
         if (pathParts.length === 0) {
             return new Response('Welcome! Please access /<room-name> to join a chat room.', { status: 404 });

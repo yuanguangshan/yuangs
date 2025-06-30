@@ -2,6 +2,7 @@
 
 // 定义应用层协议的消息类型
 const MSG_TYPE_CHAT = 'chat';
+const MSG_TYPE_DELETE = 'delete';
 const MSG_TYPE_SYSTEM_STATE = 'system_state';
 const MSG_TYPE_HISTORY = 'history';
 
@@ -166,6 +167,8 @@ export class ChatRoomDurableObject {
                 const data = JSON.parse(event.data);
                 if (data.type === MSG_TYPE_CHAT) {
                     await this.handleChatMessage(user, data.payload);
+                } else if (data.type === MSG_TYPE_DELETE) {
+                    this.handleDeleteMessage(data.payload);
                 }
             } catch (err) {
                 console.error('Failed to handle message:', err);
@@ -236,6 +239,20 @@ export class ChatRoomDurableObject {
                 payload: { message: `消息发送失败: ${error.message}` }
             });
         }
+    }
+
+    // 处理从客户端收到的删除消息
+    handleDeleteMessage(payload) {
+        this.messages = this.messages.filter(m => m.id !== payload.id);
+
+        // 广播删除消息给所有用户
+        this.broadcast({
+            type: MSG_TYPE_DELETE,
+            payload: payload
+        });
+
+        // 安排保存
+        this.scheduleSave();
     }
 
     // 处理 WebSocket 连接关闭
