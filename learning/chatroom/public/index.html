@@ -75,38 +75,108 @@
             flex: 1;
             padding: 20px;
             overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* --- 用户列表布局 --- */
+        .user-list-section {
+            margin-bottom: 24px;
+        }
+        
+        .user-list-title {
+            font-size: 0.9em;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: rgba(255, 255, 255, 0.9);
+            padding-bottom: 6px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
         
         #user-list {
             list-style: none;
             padding: 0;
             margin: 0;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px; /* Add gap for spacing between items */
         }
         
-        #user-list li {
-            padding: 8px 12px;
-            font-size: 0.9em;
+        .user-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        /* 左侧用户名区域 - 占一半宽度 */
+        .user-names {
+            width: 50%;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+        }
+        
+        .user-names .user-item {
+            padding: 4px 8px;
+            font-size: 0.85em;
             background: rgba(255,255,255,0.1);
-            border-radius: 6px;
+            border-radius: 4px;
             backdrop-filter: blur(10px);
             transition: all 0.3s ease;
             display: flex;
             align-items: center;
-            gap: 6px; /* Adjust gap for internal spacing */
-            
+            gap: 4px;
+            white-space: nowrap;
         }
         
-        #user-list li:hover {
-            background: rgba(255,255,255,0.2);
-            transform: translateX(5px);
-        }
-        
-        #user-list li::before {
+        .user-names .user-item::before {
             content: '👤';
-            font-size: 12px;
+            font-size: 10px;
+        }
+        
+        .user-names .user-item:hover {
+            background: rgba(255,255,255,0.2);
+            transform: scale(1.05);
+        }
+        
+        /* 右侧信息区域 - 占一半宽度 */
+        .user-info {
+            width: 50%;
+            padding-left: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 0.8em;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 8px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+        
+        .info-row:hover {
+            background: rgba(255,255,255,0.1);
+        }
+        
+        .info-label {
+            color: rgba(255,255,255,0.7);
+            font-weight: 500;
+        }
+        
+        .info-value {
+            color: white;
+            font-weight: 600;
+        }
+        
+        .info-value.online-count {
+            color: #2ecc71;
+        }
+        
+        .info-value.room-name {
+            color: #f39c12;
         }
         
         /* --- MAIN CHAT AREA --- */
@@ -669,6 +739,22 @@
             .overlay.show {
                 display: block;
             }
+            
+            /* 移动端侧边栏布局调整 */
+            .user-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .user-names,
+            .user-info {
+                width: 100%;
+            }
+            
+            .user-info {
+                padding-left: 0;
+                margin-top: 8px;
+            }
         }
         
         .sidebar-toggle {
@@ -694,7 +780,28 @@
                 </h2>
             </div>
             <div class="user-list-container">
-                <ul id="user-list"></ul>
+                <!-- 用户列表区域 -->
+                <div class="user-list-section">
+                    <div class="user-list-title">在线用户</div>
+                    <div class="user-row">
+                        <div class="user-names" id="user-names">
+                            <!-- 用户名会在这里动态添加 -->
+                        </div>
+                        <div class="user-info">
+                            <div class="info-row">
+                                <span class="info-label">在线人数</span>
+                                <span class="info-value online-count" id="online-count">0</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">当前房间</span>
+                                <span class="info-value room-name" id="sidebar-room-name">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 保留原有的列表结构作为备用 -->
+                <ul id="user-list" style="display: none;"></ul>
             </div>
         </aside>
         
@@ -924,6 +1031,7 @@
         const pathParts = window.location.pathname.split('/');
         const roomName = pathParts[1] || 'general';
         roomNameEl.textContent = roomName;
+        document.getElementById('sidebar-room-name').textContent = roomName;
 
         // WebSocket 连接
         let socket;
@@ -1058,7 +1166,6 @@
             const msgEl = document.createElement('div');
             msgEl.classList.add('message');
             msgEl.dataset.id = msg.id;
-            msgEl.dataset.id = msg.id; // 添加 data-id 属性
             if (msg.username === username) {
                 msgEl.classList.add('self');
             }
@@ -1145,7 +1252,25 @@
         }
 
         function updateUserList(users) {
-            // Update sidebar user list
+            // 更新新的用户显示区域
+            const userNamesEl = document.getElementById('user-names');
+            const onlineCountEl = document.getElementById('online-count');
+            
+            // 清空用户名区域
+            userNamesEl.innerHTML = '';
+            
+            // 添加用户名标签
+            users.forEach(user => {
+                const userItem = document.createElement('div');
+                userItem.className = 'user-item';
+                userItem.textContent = escapeHTML(user);
+                userNamesEl.appendChild(userItem);
+            });
+            
+            // 更新在线人数
+            onlineCountEl.textContent = users.length;
+
+            // Update sidebar user list (备用)
             userListEl.innerHTML = '';
             users.forEach(user => {
                 const li = document.createElement('li');
