@@ -29,6 +29,67 @@ export default {
             }
         }
 
+        // 处理图片上传
+        if (url.pathname === '/upload' && request.method === 'POST') {
+            try {
+                const filename = request.headers.get('X-Filename') || `upload-${Date.now()}`;
+                const object = await env.R2_BUCKET.put(filename, request.body, {
+                    httpMetadata: request.headers,
+                });
+                // 构造可公开访问的 URL
+                const publicUrl = `${new URL(request.url).origin}/${object.key}`;
+                return new Response(JSON.stringify({ url: publicUrl }), {
+                    headers: { 'Content-Type': 'application/json' },
+                });
+            } catch (error) {
+                console.error('Upload error:', error);
+                return new Response('Error uploading file.', { status: 500 });
+            }
+        }
+
+        // 处理 AI 解释请求
+        if (url.pathname === '/ai-explain' && request.method === 'POST') {
+            try {
+                const { text } = await request.json();
+                if (!text) {
+                    return new Response('Missing text in request body.', { status: 400 });
+                }
+
+                const GEMINI_API_KEY = env.GEMINI_API_KEY; // 从环境变量获取 API 密钥
+                const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" + GEMINI_API_KEY;
+
+                const geminiResponse = await fetch(GEMINI_API_URL, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: `解释以下文本：${text}`
+                            }]
+                        }]
+                    })
+                });
+
+                if (!geminiResponse.ok) {
+                    const errorText = await geminiResponse.text();
+                    console.error('Gemini API error:', errorText);
+                    return new Response(`Gemini API error: ${errorText}`, { status: geminiResponse.status });
+                }
+
+                const geminiData = await geminiResponse.json();
+                const explanation = geminiData.candidates[0].content.parts[0].text;
+
+                return new Response(JSON.stringify({ explanation }), {
+                    headers: { 'Content-Type': 'application/json' },
+                });
+            } catch (error) {
+                console.error('AI explanation request error:', error);
+                return new Response('Error processing AI explanation request.', { status: 500 });
+            }
+        }
+
         // 如果路径为空，引导用户访问一个房间
         if (pathParts.length === 0) {
             return new Response('Welcome! Please access /<room-name> to join a chat room.', { status: 404 });

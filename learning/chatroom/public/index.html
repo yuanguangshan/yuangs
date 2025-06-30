@@ -919,17 +919,49 @@
         </main>
     </div>
 
+    <div id="context-menu" class="context-menu">
+        <ul>
+            <li id="copy-option">复制</li>
+            <li id="delete-option">删除</li>
+            <li id="ai-explain-option">问AI</li>
+        </ul>
+    </div>
+
+    <style>
+        .context-menu {
+            display: none;
+            position: absolute;
+            background-color: #f1f1f1;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+            z-index: 1000;
+        }
+        .context-menu ul {
+            list-style: none;
+            padding: 5px 0;
+            margin: 0;
+        }
+        .context-menu ul li {
+            padding: 8px 15px;
+            cursor: pointer;
+        }
+        .context-menu ul li:hover {
+            background-color: #ddd;
+        }
+    </style>
+
     <script type="module">
         // --- 移动端侧边栏控制 ---
         const sidebarToggle = document.getElementById('sidebar-toggle');
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('overlay');
-        
+
         sidebarToggle.addEventListener('click', () => {
             sidebar.classList.toggle('open');
             overlay.classList.toggle('show');
         });
-        
+
         overlay.addEventListener('click', () => {
             sidebar.classList.remove('open');
             overlay.classList.remove('show');
@@ -938,17 +970,18 @@
         // --- 弹出在线用户菜单 ---
         const onlineDisplay = document.getElementById('online-users-display');
         const usersMenu = document.getElementById('users-menu');
-        
+
         onlineDisplay.addEventListener('click', (e) => {
             e.stopPropagation();
             usersMenu.classList.toggle('show');
         });
-        
+
         // 点击空白处关闭
         document.addEventListener('click', () => {
             usersMenu.classList.remove('show');
+            contextMenu.style.display = 'none'; // Close context menu on general click
         });
-        
+
         usersMenu.addEventListener('click', e => e.stopPropagation());
 
         // --- 图片功能 ---
@@ -964,39 +997,39 @@
         const modalImage = document.getElementById('modal-image');
         const modalClose = document.getElementById('modal-close');
         const recordButton = document.getElementById('record-button');
-        
+
         let selectedFile = null;
         let mediaRecorder;
         let audioChunks = [];
         let isRecording = false;
-        
+
         // --- 图片压缩功能 ---
         function compressImage(file, maxWidth = 800, maxHeight = 600, quality = 0.8) {
             return new Promise((resolve, reject) => {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 const img = new Image();
-                
+
                 img.onload = () => {
                     let { width, height } = img;
-                    
+
                     // 计算压缩后的尺寸
                     if (width > maxWidth) {
                         height = (height * maxWidth) / width;
                         width = maxWidth;
                     }
-                    
+
                     if (height > maxHeight) {
                         width = (width * maxHeight) / height;
                         height = maxHeight;
                     }
-                    
+
                     canvas.width = width;
                     canvas.height = height;
-                    
+
                     // 绘制压缩后的图片
                     ctx.drawImage(img, 0, 0, width, height);
-                    
+
                     // 转换为 blob
                     canvas.toBlob((blob) => {
                         if (blob) {
@@ -1006,7 +1039,7 @@
                         }
                     }, 'image/jpeg', quality);
                 };
-                
+
                 img.onerror = () => reject(new Error('图片加载失败'));
                 img.src = URL.createObjectURL(file);
             });
@@ -1020,12 +1053,12 @@
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
-        
+
         // 点击附件按钮触发文件选择
         attachmentBtn.addEventListener('click', () => {
             imageInput.click();
         });
-        
+
         // 处理文件选择
         imageInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
@@ -1035,18 +1068,18 @@
                     uploadProgress.style.display = 'block';
                     imagePreview.classList.add('show');
                     imagePreview.classList.add('uploading');
-                    
+
                     // 压缩图片
                     const compressedBlob = await compressImage(file);
-                    
+
                     // 创建新的 File 对象
                     selectedFile = new File([compressedBlob], file.name, {
                         type: 'image/jpeg',
                         lastModified: Date.now()
                     });
-                    
+
                     showImagePreview(selectedFile);
-                    
+
                     // 隐藏处理进度
                     uploadProgress.style.display = 'none';
                     imagePreview.classList.remove('uploading');
@@ -1058,7 +1091,7 @@
                 }
             }
         });
-        
+
         // 显示图片预览
         function showImagePreview(file) {
             const reader = new FileReader();
@@ -1070,27 +1103,27 @@
             };
             reader.readAsDataURL(file);
         }
-        
+
         // 移除图片预览
         previewRemove.addEventListener('click', () => {
             selectedFile = null;
             imagePreview.classList.remove('show');
             imageInput.value = '';
         });
-        
+
         // 图片模态框功能
         function showImageModal(src) {
             modalImage.src = src;
             imageModal.classList.add('show');
         }
-        
+
         // 将函数暴露到全局作用域，供 onclick 使用
         window.showImageModal = showImageModal;
-        
+
         modalClose.addEventListener('click', () => {
             imageModal.classList.remove('show');
         });
-        
+
         imageModal.addEventListener('click', (e) => {
             if (e.target === imageModal) {
                 imageModal.classList.remove('show');
@@ -1106,7 +1139,7 @@
             } else {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    
+
                     // 动态检测支持的MIME类型
                     const mimeTypes = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'];
                     const supportedType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type));
@@ -1142,7 +1175,7 @@
 
         // --- 输入框自适应高度 ---
         const messageInput = document.getElementById('message-input');
-        
+
         messageInput.addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 100) + 'px';
@@ -1156,6 +1189,13 @@
         const chatWindowEl = document.getElementById('chat-window');
         const messageForm = document.getElementById('message-form');
         const sendButton = document.getElementById('send-button');
+
+        // Context Menu elements
+        const contextMenu = document.getElementById('context-menu');
+        const copyOption = document.getElementById('copy-option');
+        const deleteOption = document.getElementById('delete-option');
+        const aiExplainOption = document.getElementById('ai-explain-option');
+        let currentMessageElement = null; // To store the message element that was right-clicked
 
         // 初始化
         let username = sessionStorage.getItem('chat_username');
@@ -1230,15 +1270,15 @@
         // 表单提交
         messageForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             const text = messageInput.value.trim();
-            
+
             // 检查是否有文本或图片
             if (!text && !selectedFile) return;
             if (socket.readyState !== WebSocket.OPEN) return;
-            
+
             sendButton.disabled = true;
-            
+
             try {
                 if (selectedFile) {
                     // 发送图片
@@ -1251,7 +1291,7 @@
                     };
                     socket.send(JSON.stringify(message));
                 }
-                
+
                 // 清空输入
                 messageInput.value = '';
                 messageInput.style.height = 'auto';
@@ -1265,7 +1305,7 @@
                 sendButton.disabled = false;
             }
         });
-        
+
         // 发送图片消息
         async function sendImageMessage(file, caption = '') {
             return new Promise((resolve, reject) => {
@@ -1360,7 +1400,7 @@
 
             users.forEach(user => {
                 const safe = escapeHTML(user);
-                
+
                 // 侧边栏用户列表
                 const userListEl = document.getElementById('user-list');
                 if (userListEl) {
@@ -1391,6 +1431,8 @@
             const msgEl = document.createElement('div');
             msgEl.classList.add('message');
             msgEl.dataset.id = msg.id;
+            // Store the raw message text for copy/AI explanation
+            msgEl.dataset.messageText = msg.text; // Added this line
             if (msg.username === username) {
                 msgEl.classList.add('self');
             }
@@ -1398,7 +1440,7 @@
             const localTime = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             let content = '';
-            
+
             if (msg.type === 'image') {
                 // 图片消息
                 content = `
@@ -1431,50 +1473,61 @@
                     <div class="text">${processedText}</div>
                 `;
             }
-            
+
             msgEl.innerHTML = content;
 
-            // 添加长按删除事件
-            let pressTimer;
-            
-            msgEl.addEventListener('mousedown', (e) => {
-                pressTimer = window.setTimeout(() => {
-                    if (confirm('要删除这条信息吗？')) {
-                        deleteMessage(msg.id);
-                    }
-                }, 1000); // 1秒后触发
+            // Add context menu event listener
+            msgEl.addEventListener('contextmenu', (e) => {
+                e.preventDefault(); // Prevent default browser context menu
+                currentMessageElement = msgEl; // Store reference to the clicked message
+                contextMenu.style.display = 'block';
+                contextMenu.style.left = `${e.pageX}px`;
+                contextMenu.style.top = `${e.pageY}px`;
             });
 
-            msgEl.addEventListener('touchstart', (e) => {
-                pressTimer = window.setTimeout(() => {
-                    if (confirm('要删除这条信息吗？')) {
-                        deleteMessage(msg.id);
-                    }
-                }, 1000); // 1秒后触发
-            }, { passive: true });
-
-            msgEl.addEventListener('mouseup', () => {
-                clearTimeout(pressTimer);
-            });
-
-            msgEl.addEventListener('touchend', () => {
-                clearTimeout(pressTimer);
-            }, { passive: true });
-
-            msgEl.addEventListener('touchcancel', () => {
-                clearTimeout(pressTimer);
-            }, { passive: true });
-            
-            msgEl.addEventListener('mouseleave', () => {
-                clearTimeout(pressTimer);
-            });
-            
             chatWindowEl.appendChild(msgEl);
-            
+
             // 自动滚动到底部
             chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
         }
-        
+
+        // Context menu actions
+        copyOption.addEventListener('click', () => {
+            if (currentMessageElement && currentMessageElement.dataset.messageText) {
+                navigator.clipboard.writeText(currentMessageElement.dataset.messageText);
+            }
+            contextMenu.style.display = 'none';
+        });
+
+        deleteOption.addEventListener('click', () => {
+            if (currentMessageElement && currentMessageElement.dataset.id) {
+                deleteMessage(currentMessageElement.dataset.id);
+            }
+            contextMenu.style.display = 'none';
+        });
+
+        aiExplainOption.addEventListener('click', async () => {
+            if (currentMessageElement && currentMessageElement.dataset.messageText) {
+                const textToExplain = currentMessageElement.dataset.messageText;
+                try {
+                    const response = await fetch('/ai-explain', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: textToExplain })
+                    });
+                    if (!response.ok) {
+                        throw new Error('AI explanation failed.');
+                    }
+                    const { explanation } = await response.json();
+                    alert(`AI解释: ${explanation}`);
+                } catch (error) {
+                    console.error('请求AI解释失败:', error);
+                    alert('抱歉，无法从AI获取解释。');
+                }
+            }
+            contextMenu.style.display = 'none';
+        });
+
 
         function deleteMessage(id) {
             if (socket.readyState === WebSocket.OPEN) {
@@ -1499,13 +1552,12 @@
             if (typeof str !== 'string') {
                 return '';
             }
-            return str.replace(/[&<>"']/g, function(match) {
+            return str.replace(/[&<>"]/g, function(match) {
                 return {
                     '&': '&amp;',
                     '<': '&lt;',
                     '>': '&gt;',
-                    '"': '&quot;',
-                    "'": '&#39;'
+                    '"': '&quot;'
                 }[match];
             });
         }
