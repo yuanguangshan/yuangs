@@ -3,42 +3,62 @@
 import { ChatRoomDurableObject } from './chatroom_do.js';
 import html from '../public/index.html';
 
-// 导出 Durable Object 类，以便 Cloudflare 平台可以实例化它
+// Export Durable Object class for Cloudflare platform instantiation
 export { ChatRoomDurableObject };
 
 export default {
     async fetch(request, env, ctx) {
         const url = new URL(request.url);
-        const pathParts = url.pathname.split('/').filter(part => part);
+        
+        // Normalize path to remove trailing slash for consistent matching
+        // This helps ensure that /ai-explain and /ai-explain/ are treated the same.
+        let pathname = url.pathname;
+        if (pathname.endsWith('/') && pathname.length > 1) {
+            pathname = pathname.slice(0, -1);
+        }
+        const pathParts = pathname.split('/').filter(part => part);
 
-        // 处理图片上传
-        if (url.pathname === '/upload' && request.method === 'POST') {
+        // Handle image upload
+        if (pathname === '/upload' && request.method === 'POST') {
             try {
+                // Ensure R2_BUCKET is bound in wrangler.toml
+                if (!env.R2_BUCKET) {
+                    console.error('R2_BUCKET is not bound in environment.');
+                    return new Response('Server configuration error: R2_BUCKET not bound.', { status: 500 });
+                }
                 const filename = request.headers.get('X-Filename') || `upload-${Date.now()}`;
+                
+                // The request.body is a ReadableStream, which `put` can directly consume.
                 const object = await env.R2_BUCKET.put(filename, request.body, {
-                    httpMetadata: request.headers,
+                    httpMetadata: request.headers, // Pass original headers for metadata like Content-Type
                 });
-                // 构造可公开访问的 URL
+                
+                // Construct publicly accessible URL. Cloudflare R2 makes objects accessible via their key.
+                // The origin should be the worker's origin.
                 const publicUrl = `${new URL(request.url).origin}/${object.key}`;
+                
                 return new Response(JSON.stringify({ url: publicUrl }), {
                     headers: { 'Content-Type': 'application/json' },
                 });
             } catch (error) {
-                console.error('Upload error:', error);
+                console.error('Upload error:', error.stack); // Log full stack trace for debugging
                 return new Response('Error uploading file.', { status: 500 });
             }
         }
 
-        // 处理 AI 解释请求
-        if (url.pathname === '/ai-explain' && request.method === 'POST') {
+        // Handle AI explanation request
+        // This check now uses the normalized 'pathname'
+        if (pathname === '/ai-explain' && request.method === 'POST') {
             try {
-                const { text } = await request.json();
+                const requestBody = await request.json(); // Parse the JSON body
+                const text = requestBody.text;
+
                 if (!text) {
                     console.error('AI explanation: Missing text in request body.');
                     return new Response('Missing text in request body.', { status: 400 });
                 }
 
-                const GEMINI_API_KEY = env.GEMINI_API_KEY; // 从环境变量获取 API 密钥
+                const GEMINI_API_KEY = env.GEMINI_API_KEY; // Get API key from environment variables
                 if (!GEMINI_API_KEY) {
                     console.error('AI explanation: GEMINI_API_KEY is not set in environment variables.');
                     return new Response('Server configuration error: GEMINI_API_KEY is not set.', { status: 500 });
@@ -68,42 +88,56 @@ export default {
                 }
 
                 const geminiData = await geminiResponse.json();
-                // 检查 geminiData 结构，确保 explanation 存在
-                if (!geminiData || !geminiData.candidates || !geminiData.candidates[0] || !geminiData.candidates[0].content || !geminiData.candidates[0].content.parts || !geminiData.candidates[0].content.parts[0] || !geminiData.candidates[0].content.parts[0].text) {
-                    console.error('AI explanation: Unexpected Gemini API response structure:', JSON.stringify(geminiData));
+                
+                // Robustly access the explanation text using optional chaining
+                const explanation = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!explanation) {
+                    // Log the structure if explanation is missing, to help debug unexpected API responses
+                    console.error('AI explanation: Unexpected Gemini API response structure or missing explanation:', JSON.stringify(geminiData));
                     return new Response('Unexpected AI response format.', { status: 500 });
                 }
-                const explanation = geminiData.candidates[0].content.parts[0].text;
 
                 return new Response(JSON.stringify({ explanation }), {
                     headers: { 'Content-Type': 'application/json' },
                 });
             } catch (error) {
-                console.error('AI explanation request error:', error.stack); // Log full stack trace
+                console.error('AI explanation request error:', error.stack); // Log full stack trace for debugging
                 return new Response('Error processing AI explanation request.', { status: 500 });
             }
         }
 
-        // 如果路径为空，引导用户访问一个房间
+        // If the root path is accessed, guide the user to join a room.
+        // This check should ideally happen after specific API routes are checked.
         if (pathParts.length === 0) {
-            return new Response('Welcome! Please access /<room-name> to join a chat room.', { status: 404 });
+            // Changed from 404 to a more user-friendly message for root access.
+            // A 404 for the root path might be confusing if the intention is to serve index.html.
+            // However, if the user expects to *start* a chat room from the root, this message is appropriate.
+            return new Response('Welcome! Please access /&lt;room-name&gt; to join a chat room.', { status: 200 });
         }
 
-        // 使用第一个路径段作为聊天室的唯一ID
+        // Use the first path segment as the chat room's unique ID
         const roomName = pathParts[0];
 
-        // 检查请求是否是 WebSocket 升级请求
+        // Check if the request is a WebSocket upgrade request
         const upgradeHeader = request.headers.get("Upgrade");
         if (upgradeHeader === "websocket") {
-            // 如果是 WebSocket 请求，将其路由到对应的 Durable Object 实例
+            // If it's a WebSocket request, route it to the corresponding Durable Object instance
             console.log(`Routing WebSocket for room [${roomName}] to Durable Object...`);
+            // Ensure CHAT_ROOM_DO is bound in wrangler.toml
+            if (!env.CHAT_ROOM_DO) {
+                console.error('CHAT_ROOM_DO is not bound in environment.');
+                return new Response('Server configuration error: CHAT_ROOM_DO not bound.', { status: 500 });
+            }
             const doId = env.CHAT_ROOM_DO.idFromName(roomName);
             const stub = env.CHAT_ROOM_DO.get(doId);
-            // 将请求和响应的控制权完全交给 Durable Object
+            // Pass the request and response control entirely to the Durable Object
             return stub.fetch(request);
         }
 
-        // 对于所有非 WebSocket 的 GET 请求，返回我们的单页应用 HTML
+        // For all other GET requests that haven't matched specific API routes or WebSocket upgrades,
+        // serve the single-page application HTML. This acts as a catch-all for frontend routes.
+        // This means accessing /some/other/path (that is not /upload or /ai-explain) will serve index.html.
         return new Response(html, {
             headers: { 'Content-Type': 'text/html;charset=UTF-8' },
         });
