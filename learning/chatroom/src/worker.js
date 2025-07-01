@@ -100,6 +100,76 @@ async function getGeminiExplanation(text, env) {
 }
 
 
+// --- 新增：AI图片描述服务 ---
+
+async function fetchImageAsBase64(imageUrl) {
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+    }
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    const buffer = await response.arrayBuffer();
+    
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
+    
+    return { base64, contentType };
+}
+
+async function getGeminiImageDescription(imageUrl, env) {
+    const GEMINI_API_KEY = env.GEMINI_API_KEY;
+    if (!GEMINI_API_KEY) {
+        throw new Error('Server configuration error: GEMINI_API_KEY is not set.');
+    }
+
+    const { base64, contentType } = await fetchImageAsBase64(imageUrl);
+
+    const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+    
+    const prompt = "请仔细描述图片的内容，如果图片中识别出有文字，则在回复的内容中返回这些文字，并且这些文字支持复制，之后是对文字的仔细描述，格式为：图片中包含文字：{文字内容}；图片的描述：{图片描述}";
+
+    const response = await fetch(GEMINI_API_URL, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            contents: [{
+                parts: [
+                    { text: prompt },
+                    {
+                        inline_data: {
+                            mime_type: contentType,
+                            data: base64
+                        }
+                    }
+                ]
+            }]
+        })
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Gemini Vision API error: ${response.status} - ${errorText}`);
+        throw new Error(`Gemini Vision API error: ${errorText}`);
+    }
+
+    const data = await response.json();
+    const description = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    if (!description) {
+        console.error('Unexpected Gemini Vision API response structure:', JSON.stringify(data));
+        throw new Error('Unexpected AI response format from Gemini Vision.');
+    }
+
+    return description;
+}
+
+
 // --- 主Worker逻辑 ---
 
 export default {
@@ -161,6 +231,28 @@ export default {
                 console.error('AI explanation request error:', error.message);
                 // 将具体的错误信息返回给前端，方便调试
                 return new Response(`Error processing AI request: ${error.message}`, { status: 500 });
+            }
+        }
+
+        // --- 新增：AI图片描述请求处理逻辑 ---
+        if (pathname === '/ai-describe-image' && request.method === 'POST') {
+            try {
+                const requestBody = await request.json();
+                const imageUrl = requestBody.imageUrl;
+
+                if (!imageUrl) {
+                    return new Response('Missing imageUrl in request body.', { status: 400 });
+                }
+
+                const description = await getGeminiImageDescription(imageUrl, env);
+
+                return new Response(JSON.stringify({ description }), {
+                    headers: { 'Content-Type': 'application/json' },
+                });
+
+            } catch (error) {
+                console.error('AI image description request error:', error.message);
+                return new Response(`Error processing AI image description request: ${error.message}`, { status: 500 });
             }
         }
         

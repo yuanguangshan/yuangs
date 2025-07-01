@@ -179,6 +179,7 @@
 
         /* --- Code Block Styles (Dark Theme) --- */
         .message .text pre {
+            position: relative; /* Required for button positioning */
             background-color: #2d2d2d; /* Dark background */
             color: #f8f8f2; /* Light text */
             font-family: 'Fira Code', Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
@@ -188,6 +189,26 @@
             overflow-x: auto;
             white-space: pre;
             -webkit-overflow-scrolling: touch;
+        }
+        .message .text pre:hover .copy-code-btn { 
+            opacity: 1; /* Show button on hover */
+        }
+        .copy-code-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: #555;
+            color: #fff;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8em;
+            opacity: 0; /* Hidden by default */
+            transition: opacity 0.2s ease-in-out;
+        }
+        .copy-code-btn:hover {
+            background: #777;
         }
         .message .text code {
             background-color: #444; /* Slightly lighter dark for inline code */
@@ -208,6 +229,27 @@
         /* --- MEDIA MESSAGE STYLES --- */
         .message-image { padding: 4px; background: white; border-radius: 16px; max-width: 300px; box-shadow: 0 1px 6px rgba(0,0,0,0.08); border: 1px solid #e9ecef; overflow: hidden; cursor: pointer; transition: all 0.3s ease; position: relative; }
         .message-image:hover { transform: scale(1.02); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .message-image .ask-gemini-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+        }
+        .message-image:hover .ask-gemini-btn {
+            opacity: 1;
+        }
         .message-image img { width: 100%; height: auto; border-radius: 12px; display: block; }
         .message.self .message-image { background: rgba(255,255,255,0.1); border: none; }
         .message-audio { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #f1f3f5; border-radius: 16px; border: 1px solid #e9ecef; }
@@ -731,7 +773,10 @@
             let contentHTML = `<div class="info"><span class="username">${msg.username.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m])}</span> <span class="timestamp">${localTime}</span></div>`;
 
             if (msg.type === 'image') {
-                contentHTML += `<div class="message-image" onclick="showImageModal('${msg.imageUrl}')"><img src="${msg.imageUrl}" alt="${(msg.filename || 'Image').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m])}" loading="lazy"></div>`;
+                contentHTML += `<div class="message-image" onclick="showImageModal('${msg.imageUrl}')">
+                                    <img src="${msg.imageUrl}" alt="${(msg.filename || 'Image').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m])}" loading="lazy">
+                                    <button class="ask-gemini-btn" onclick="askGeminiAboutImage(event, '${msg.imageUrl}')">🤖</button>
+                               </div>`;
                 if (msg.caption) contentHTML += `<div class="text">${marked.parse(msg.caption, { gfm: true, breaks: true, sanitize: true })}</div>`;
             } else if (msg.type === 'audio') {
                 contentHTML += `<div class="message-audio"><audio controls src="${msg.audioUrl}"></audio></div>`;
@@ -750,6 +795,23 @@
             msgEl.addEventListener('touchend', () => clearTimeout(longPressTimer));
             msgEl.addEventListener('touchmove', () => clearTimeout(longPressTimer));
             
+            // Add copy buttons to code blocks
+            const codeBlocks = msgEl.querySelectorAll('pre');
+            codeBlocks.forEach(pre => {
+                const code = pre.querySelector('code');
+                const btn = document.createElement('button');
+                btn.className = 'copy-code-btn';
+                btn.textContent = '复制';
+                btn.onclick = () => {
+                    navigator.clipboard.writeText(code.innerText);
+                    btn.textContent = '已复制!';
+                    setTimeout(() => {
+                        btn.textContent = '复制';
+                    }, 2000);
+                };
+                pre.appendChild(btn);
+            });
+
             chatWindowEl.appendChild(msgEl);
             chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
         }
@@ -786,6 +848,69 @@
         function deleteChatMessage(id) {
             const msgEl = chatWindowEl.querySelector(`[data-id="${id}"]`);
             if (msgEl) msgEl.remove();
+        }
+
+        window.askGeminiAboutImage = async function(event, imageUrl) {
+            event.stopPropagation(); // Prevent opening the image modal
+            const messageEl = event.target.closest('.message');
+            const existingExplanation = messageEl.querySelector('.ai-explanation');
+            if (existingExplanation) {
+                existingExplanation.remove();
+            }
+
+            const explanationEl = document.createElement('div');
+            explanationEl.className = 'ai-explanation';
+            explanationEl.innerHTML = `<p>🤖 正在请 Gemini 描述图片...</p>`;
+            messageEl.appendChild(explanationEl);
+
+            try {
+                const response = await fetch('/ai-describe-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ imageUrl })
+                });
+                if (!response.ok) throw new Error(await response.text());
+                
+                const { description } = await response.json();
+                
+                explanationEl.innerHTML = '';
+                const closeBtn = document.createElement('button');
+                closeBtn.className = 'ai-explanation-close';
+                closeBtn.innerHTML = '×';
+                closeBtn.onclick = () => explanationEl.remove();
+
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'ai-explanation-copy';
+                copyBtn.innerHTML = '📋';
+                copyBtn.title = '复制描述';
+                copyBtn.onclick = () => {
+                    navigator.clipboard.writeText(description);
+                    const toast = document.createElement('div');
+                    toast.className = 'copy-feedback-toast';
+                    toast.textContent = '已复制!';
+                    explanationEl.appendChild(toast);
+                    setTimeout(() => {
+                        toast.classList.add('show');
+                        setTimeout(() => {
+                            toast.classList.remove('show');
+                            setTimeout(() => toast.remove(), 300);
+                        }, 1500);
+                    }, 10);
+                };
+
+                const markdownContainer = document.createElement('div');
+                markdownContainer.className = 'markdown-content';
+                markdownContainer.innerHTML = marked.parse(description, { gfm: true, breaks: true, sanitize: true });
+                
+                explanationEl.appendChild(closeBtn);
+                explanationEl.appendChild(copyBtn);
+                explanationEl.appendChild(markdownContainer);
+
+            } catch (error) {
+                console.error(`请求 Gemini 描述失败:`, error);
+                explanationEl.innerHTML = `<p>😞 抱歉，无法从 Gemini 获取图片描述。</p>`;
+                setTimeout(() => { if (explanationEl.parentNode) explanationEl.remove(); }, 4000);
+            }
         }
 
         contextMenu.addEventListener('click', async (e) => {
