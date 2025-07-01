@@ -3,107 +3,185 @@
 import { ChatRoomDurableObject } from './chatroom_do.js';
 import html from '../public/index.html';
 
-// 导出 Durable Object 类，以便 Cloudflare 平台可以实例化它
+// Export Durable Object class for Cloudflare platform instantiation
 export { ChatRoomDurableObject };
+
+// --- 新增：模块化的AI服务调用函数 ---
+
+/**
+ * 调用 DeepSeek API 获取解释
+ * @param {string} text - 需要解释的文本
+ * @param {object} env - Cloudflare环境变量
+ * @returns {Promise<string>} - AI返回的解释文本
+ */
+async function getDeepSeekExplanation(text, env) {
+    const DEEPSEEK_API_KEY = env.DEEPSEEK_API_KEY;
+    if (!DEEPSEEK_API_KEY) {
+        throw new Error('Server configuration error: DEEPSEEK_API_KEY is not set.');
+    }
+
+    const response = await fetch("https://api.deepseek.com/chat/completions", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
+        },
+        body: JSON.stringify({
+            model: "deepseek-chat",
+            messages: [
+                { role: "system", content: "你是一个有用助于，善于用简洁的markdown语言来解释下面的文本." },
+                { role: "user", content: `Explain the following text:\n\n${text}` }
+            ]
+        })
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`DeepSeek API error: ${response.status} - ${errorText}`);
+        throw new Error(`DeepSeek API error: ${errorText}`);
+    }
+
+    const data = await response.json();
+    const explanation = data?.choices?.[0]?.message?.content;
+
+    if (!explanation) {
+        console.error('Unexpected DeepSeek API response structure:', JSON.stringify(data));
+        throw new Error('Unexpected AI response format from DeepSeek.');
+    }
+
+    return explanation;
+}
+
+/**
+ * 调用 Google Gemini API 获取解释
+ * @param {string} text - 需要解释的文本
+ * @param {object} env - Cloudflare环境变量
+ * @returns {Promise<string>} - AI返回的解释文本
+ */
+async function getGeminiExplanation(text, env) {
+    const GEMINI_API_KEY = env.GEMINI_API_KEY;
+    if (!GEMINI_API_KEY) {
+        throw new Error('Server configuration error: GEMINI_API_KEY is not set.');
+    }
+    
+    // Google Gemini API v1beta endpoint for text generation
+    const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GEMINI_API_KEY}`;
+    
+    const response = await fetch(GEMINI_API_URL, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            contents: [{
+                parts: [{
+                    text: `用简洁精确的markdown格式文字来解释下面的文本：:\n\n${text}`
+                }]
+            }]
+        })
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Gemini API error: ${response.status} - ${errorText}`);
+        throw new Error(`Gemini API error: ${errorText}`);
+    }
+
+    const data = await response.json();
+    // Gemini的响应结构不同，需要这样提取
+    const explanation = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    if (!explanation) {
+        console.error('Unexpected Gemini API response structure:', JSON.stringify(data));
+        throw new Error('Unexpected AI response format from Gemini.');
+    }
+
+    return explanation;
+}
+
+
+// --- 主Worker逻辑 ---
 
 export default {
     async fetch(request, env, ctx) {
         const url = new URL(request.url);
-        const pathParts = url.pathname.split('/').filter(part => part);
+        
+        let pathname = url.pathname;
+        if (pathname.endsWith('/') && pathname.length > 1) {
+            pathname = pathname.slice(0, -1);
+        }
+        const pathParts = pathname.split('/').filter(part => part);
 
-        // 处理图片上传
-        if (url.pathname === '/upload' && request.method === 'POST') {
+        // Handle image upload (no changes here)
+        if (pathname === '/upload' && request.method === 'POST') {
+            // ... 你的上传逻辑保持不变 ...
             try {
+                if (!env.R2_BUCKET) {
+                    return new Response('Server configuration error: R2_BUCKET not bound.', { status: 500 });
+                }
                 const filename = request.headers.get('X-Filename') || `upload-${Date.now()}`;
-                const object = await env.R2_BUCKET.put(filename, request.body, {
-                    httpMetadata: request.headers,
-                });
-                // 构造可公开访问的 URL
+                const object = await env.R2_BUCKET.put(filename, request.body, { httpMetadata: request.headers });
                 const publicUrl = `${new URL(request.url).origin}/${object.key}`;
-                return new Response(JSON.stringify({ url: publicUrl }), {
-                    headers: { 'Content-Type': 'application/json' },
-                });
+                return new Response(JSON.stringify({ url: publicUrl }), { headers: { 'Content-Type': 'application/json' } });
             } catch (error) {
-                console.error('Upload error:', error);
+                console.error('Upload error:', error.stack);
                 return new Response('Error uploading file.', { status: 500 });
             }
         }
 
-        // 处理 AI 解释请求
-        if (url.pathname === '/ai-explain' && request.method === 'POST') {
+        // --- 更新后的AI解释请求处理逻辑 ---
+        if (pathname === '/ai-explain' && request.method === 'POST') {
             try {
-                const { text } = await request.json();
+                const requestBody = await request.json();
+                const text = requestBody.text;
+                // 从请求中获取模型名称，如果前端没传，则默认为 'gemini'
+                const model = requestBody.model || 'gemini'; 
+
                 if (!text) {
-                    console.error('AI explanation: Missing text in request body.');
                     return new Response('Missing text in request body.', { status: 400 });
                 }
 
-                const GEMINI_API_KEY = env.GEMINI_API_KEY; // 从环境变量获取 API 密钥
-                if (!GEMINI_API_KEY) {
-                    console.error('AI explanation: GEMINI_API_KEY is not set in environment variables.');
-                    return new Response('Server configuration error: GEMINI_API_KEY is not set.', { status: 500 });
+                let explanation = "";
+                
+                // 根据模型名称，调用相应的函数
+                console.log(`Routing AI request to model: ${model}`);
+                if (model === 'gemini') {
+                    explanation = await getGeminiExplanation(text, env);
+                } else if (model === 'deepseek') {
+                    explanation = await getDeepSeekExplanation(text, env);
+                } else {
+                    return new Response(`Unknown AI model: ${model}`, { status: 400 });
                 }
-                console.log('AI explanation: GEMINI_API_KEY loaded.');
-
-                const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" + GEMINI_API_KEY;
-
-                const geminiResponse = await fetch(GEMINI_API_URL, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [{
-                                text: `解释以下文本：${text}`
-                            }]
-                        }]
-                    })
-                });
-
-                if (!geminiResponse.ok) {
-                    const errorText = await geminiResponse.text();
-                    console.error(`AI explanation: Gemini API error: ${geminiResponse.status} - ${errorText}`);
-                    return new Response(`Gemini API error: ${errorText}`, { status: geminiResponse.status });
-                }
-
-                const geminiData = await geminiResponse.json();
-                // 检查 geminiData 结构，确保 explanation 存在
-                if (!geminiData || !geminiData.candidates || !geminiData.candidates[0] || !geminiData.candidates[0].content || !geminiData.candidates[0].content.parts || !geminiData.candidates[0].content.parts[0] || !geminiData.candidates[0].content.parts[0].text) {
-                    console.error('AI explanation: Unexpected Gemini API response structure:', JSON.stringify(geminiData));
-                    return new Response('Unexpected AI response format.', { status: 500 });
-                }
-                const explanation = geminiData.candidates[0].content.parts[0].text;
 
                 return new Response(JSON.stringify({ explanation }), {
                     headers: { 'Content-Type': 'application/json' },
                 });
+
             } catch (error) {
-                console.error('AI explanation request error:', error.stack); // Log full stack trace
-                return new Response('Error processing AI explanation request.', { status: 500 });
+                console.error('AI explanation request error:', error.message);
+                // 将具体的错误信息返回给前端，方便调试
+                return new Response(`Error processing AI request: ${error.message}`, { status: 500 });
             }
         }
-
-        // 如果路径为空，引导用户访问一个房间
+        
+        // --- 剩余的路由逻辑保持不变 ---
+        
         if (pathParts.length === 0) {
-            return new Response('Welcome! Please access /<room-name> to join a chat room.', { status: 404 });
+            return new Response('Welcome! Please access /<room-name> to join a chat room.', { status: 200 });
         }
 
-        // 使用第一个路径段作为聊天室的唯一ID
         const roomName = pathParts[0];
 
-        // 检查请求是否是 WebSocket 升级请求
         const upgradeHeader = request.headers.get("Upgrade");
         if (upgradeHeader === "websocket") {
-            // 如果是 WebSocket 请求，将其路由到对应的 Durable Object 实例
-            console.log(`Routing WebSocket for room [${roomName}] to Durable Object...`);
+            if (!env.CHAT_ROOM_DO) {
+                return new Response('Server configuration error: CHAT_ROOM_DO not bound.', { status: 500 });
+            }
             const doId = env.CHAT_ROOM_DO.idFromName(roomName);
             const stub = env.CHAT_ROOM_DO.get(doId);
-            // 将请求和响应的控制权完全交给 Durable Object
             return stub.fetch(request);
         }
 
-        // 对于所有非 WebSocket 的 GET 请求，返回我们的单页应用 HTML
         return new Response(html, {
             headers: { 'Content-Type': 'text/html;charset=UTF-8' },
         });
