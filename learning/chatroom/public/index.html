@@ -170,6 +170,41 @@
         .message.self .text { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; }
         .message.self .info { text-align: right; }
 
+        .message .text h1, .message .text h2, .message .text h3 { margin-top: 1em; margin-bottom: 0.5em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; line-height: 1.2; }
+        .message .text p { margin-top: 0; margin-bottom: 1em; }
+        .message .text ul, .message .text ol { margin-top: 0; margin-bottom: 1em; padding-left: 2em; }
+        .message .text blockquote { margin: 0 0 1em; padding: 0 1em; color: #6a737d; border-left: .25em solid #dfe2e5; }
+        .message .text a { color: #0366d6; text-decoration: none; }
+        .message .text a:hover { text-decoration: underline; }
+
+        /* --- Code Block Styles (Dark Theme) --- */
+        .message .text pre {
+            background-color: #2d2d2d; /* Dark background */
+            color: #f8f8f2; /* Light text */
+            font-family: 'Fira Code', Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+            font-size: 0.9em;
+            padding: 1em;
+            border-radius: 8px;
+            overflow-x: auto;
+            white-space: pre;
+            -webkit-overflow-scrolling: touch;
+        }
+        .message .text code {
+            background-color: #444; /* Slightly lighter dark for inline code */
+            color: #f8f8f2;
+            padding: .2em .4em;
+            margin: 0;
+            font-size: 85%;
+            border-radius: 3px;
+        }
+        .message .text pre code {
+            background: none;
+            padding: 0;
+            margin: 0;
+            font-size: inherit;
+            color: inherit;
+        }
+
         /* --- MEDIA MESSAGE STYLES --- */
         .message-image { padding: 4px; background: white; border-radius: 16px; max-width: 300px; box-shadow: 0 1px 6px rgba(0,0,0,0.08); border: 1px solid #e9ecef; overflow: hidden; cursor: pointer; transition: all 0.3s ease; position: relative; }
         .message-image:hover { transform: scale(1.02); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
@@ -666,19 +701,6 @@
         }
 
         // --- UI Rendering ---
-        function escapeHTML(str) {
-            if (typeof str !== 'string') return '';
-            return str.replace(/[&<>"]/g, m => ({'&':'&','<':'<','>':'>','"':'"'})[m]);
-        }
-        
-        function convertUrlsToLinks(text) {
-            const urlRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)/g;
-            return text.replace(urlRegex, match => {
-                let url = match.startsWith('www.') ? `https://${match}` : match;
-                return `<a href="${escapeHTML(url)}" target="_blank" rel="noopener noreferrer">${escapeHTML(match)}</a>`;
-            });
-        }
-        
         function updateUserList(users) {
             const userNamesEl = document.getElementById('user-names');
             const onlineCountEl = document.getElementById('online-count');
@@ -690,7 +712,7 @@
             onlineCountEl.textContent = users.length;
             onlineDisplay.textContent = `在线: ${users.length}`;
             users.forEach(user => {
-                const safeName = escapeHTML(user);
+                const safeName = user.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]);
                 userNamesEl.insertAdjacentHTML('beforeend', `<div class="user-item">${safeName}</div>`);
                 headerUsersEl.insertAdjacentHTML('beforeend', `<div class="user-item">${safeName}</div>`);
                 menuListEl.insertAdjacentHTML('beforeend', `<li>${safeName}</li>`);
@@ -706,15 +728,16 @@
 
             const localTime = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             
-            let contentHTML = `<div class="info"><span class="username">${escapeHTML(msg.username)}</span> <span class="timestamp">${localTime}</span></div>`;
+            let contentHTML = `<div class="info"><span class="username">${msg.username.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m])}</span> <span class="timestamp">${localTime}</span></div>`;
 
             if (msg.type === 'image') {
-                contentHTML += `<div class="message-image" onclick="showImageModal('${msg.imageUrl}')"><img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy"></div>`;
-                if (msg.caption) contentHTML += `<div class="text">${convertUrlsToLinks(escapeHTML(msg.caption))}</div>`;
+                contentHTML += `<div class="message-image" onclick="showImageModal('${msg.imageUrl}')"><img src="${msg.imageUrl}" alt="${(msg.filename || 'Image').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m])}" loading="lazy"></div>`;
+                if (msg.caption) contentHTML += `<div class="text">${marked.parse(msg.caption, { gfm: true, breaks: true, sanitize: true })}</div>`;
             } else if (msg.type === 'audio') {
                 contentHTML += `<div class="message-audio"><audio controls src="${msg.audioUrl}"></audio></div>`;
             } else {
-                contentHTML += `<div class="text">${convertUrlsToLinks(escapeHTML(msg.text))}</div>`;
+                const sanitizedHtml = marked.parse(msg.text, { gfm: true, breaks: true, sanitize: true });
+                contentHTML += `<div class="text">${sanitizedHtml}</div>`;
             }
             msgEl.innerHTML = contentHTML;
 
