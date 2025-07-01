@@ -71,8 +71,7 @@ async function getGeminiExplanation(text, env) {
         throw new Error('Server configuration error: GEMINI_API_KEY is not set.');
     }
     
-async function explainForElementary(text) {
-  const GEMINI_API_KEY = 'YOUR_KEY';
+
   const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
   // 构造一个更“有角色”、“有流程”的超强 Prompt
