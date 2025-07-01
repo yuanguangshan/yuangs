@@ -257,8 +257,11 @@
         .message.self .ai-explanation { align-self: flex-end; }
         .ai-explanation::before { content: '🤖 AI 解释:'; font-weight: 600; color: #556; display: block; margin-bottom: 6px; font-size: 0.9em; }
         .ai-explanation p { margin: 0; }
-        .ai-explanation-close { position: absolute; top: 6px; right: 6px; background: none; border: none; color: #889; font-size: 16px; cursor: pointer; width: 24px; height: 24px; line-height: 24px; text-align: center; border-radius: 50%; transition: all 0.2s ease; }
+        .ai-explanation-close { background: none; border: none; color: #889; font-size: 16px; cursor: pointer; width: 24px; height: 24px; line-height: 24px; text-align: center; border-radius: 50%; transition: all 0.2s ease; }
         .ai-explanation-close:hover { background-color: #e1e5e9; color: #333; }
+        .ai-explanation-copy { background: none; border: none; color: #889; font-size: 16px; cursor: pointer; width: 24px; height: 24px; line-height: 24px; text-align: center; border-radius: 50%; transition: all 0.2s ease; margin-right: 5px; }
+        .ai-explanation-copy:hover { background-color: #e1e5e9; color: #333; }
+        .ai-explanation-buttons { position: absolute; top: 6px; right: 6px; display: flex; gap: 5px; }
         
         .ai-explanation .markdown-content { font-size: 0.9em; line-height: 1.6; text-align: left; }
         .ai-explanation .markdown-content p { margin-bottom: 12px; }
@@ -271,6 +274,30 @@
         .ai-explanation .markdown-content blockquote { border-left: 4px solid #b0c4de; padding-left: 12px; margin: 12px 0; color: #556; background-color: #f9f9f9; }
         .ai-explanation .markdown-content a { color: #007bff; text-decoration: none; }
         .ai-explanation .markdown-content a:hover { text-decoration: underline; }
+
+        .loading-dots {
+            display: inline-block;
+            width: 1.5em;
+            text-align: left;
+        }
+        .loading-dots::after {
+            content: '.';
+            animation: dots 1s steps(5, end) infinite;
+        }
+        @keyframes dots {
+            0%, 20% { color: rgba(0,0,0,0); text-shadow:
+                .25em 0 0 rgba(0,0,0,0),
+                .5em 0 0 rgba(0,0,0,0); }
+            40% { color: black; text-shadow:
+                .25em 0 0 rgba(0,0,0,0),
+                .5em 0 0 rgba(0,0,0,0); }
+            60% { text-shadow:
+                .25em 0 0 black,
+                .5em 0 0 rgba(0,0,0,0); }
+            80%, 100% { text-shadow:
+                .25em 0 0 black,
+                .5em 0 0 black; }
+        }
 
         /* --- RESPONSIVE --- */
         @media (max-width: 768px) {
@@ -382,11 +409,10 @@
 <!-- 更新后的、并列显示的右键菜单 -->
 <div id="context-menu" class="context-menu">
     <ul>
-       
-        <!-- 直接将AI选项并列出来 -->
-        <li class="ai-explain-option" data-ai="gemini">问Gemini</li>
-        <li class="ai-explain-option" data-ai="deepseek">DeepSeek</li>
-         <li id="copy-option">📝 复 制</li>
+        <li class="ai-explain-option" data-ai="gemini" data-action="text-explain">问Gemini</li>
+        <li class="ai-explain-option" data-ai="deepseek" data-action="text-explain">DeepSeek</li>
+        <li class="ai-explain-option" data-ai="gemini" data-action="image-describe">问Gemini (图片)</li>
+        <li id="copy-option">📝 复 制</li>
         <li id="delete-option">❌ 删 除</li>
     </ul>
 </div>
@@ -715,6 +741,7 @@
             msgEl.dataset.id = msg.id;
             msgEl.dataset.messageText = msg.text || (msg.caption || '');
             if (msg.username === username) msgEl.classList.add('self');
+            msgEl.dataset.messageType = msg.type; // Add message type to dataset
 
             const localTime = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             
@@ -723,6 +750,7 @@
             if (msg.type === 'image') {
                 contentHTML += `<div class="message-image" onclick="showImageModal('${msg.imageUrl}')"><img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy"></div>`;
                 if (msg.caption) contentHTML += `<div class="text">${convertUrlsToLinks(escapeHTML(msg.caption))}</div>`;
+                msgEl.dataset.imageUrl = msg.imageUrl; // Ensure imageUrl is stored in dataset
             } else if (msg.type === 'audio') {
                 contentHTML += `<div class="message-audio"><audio controls src="${msg.audioUrl}"></audio></div>`;
             } else {
@@ -748,6 +776,27 @@
             contextMenu.style.top = `${y}px`;
             contextMenu.style.left = `${x}px`;
             contextMenu.style.display = 'block';
+
+            const messageType = element.dataset.messageType;
+
+            const geminiTextOption = contextMenu.querySelector('[data-ai="gemini"][data-action="text-explain"]');
+            const deepseekTextOption = contextMenu.querySelector('[data-ai="deepseek"][data-action="text-explain"]');
+            const geminiImageOption = contextMenu.querySelector('[data-ai="gemini"][data-action="image-describe"]');
+
+            if (messageType === 'image') {
+                // For image messages: only show "问Gemini (图片)" and "删除"
+                geminiTextOption.style.display = 'none';
+                deepseekTextOption.style.display = 'none';
+                geminiImageOption.style.display = 'flex';
+                copyOption.style.display = 'none';
+            } else {
+                // For text and audio messages: show "问Gemini (文本)", "DeepSeek (文本)", "复制", and "删除"
+                geminiTextOption.style.display = 'flex';
+                deepseekTextOption.style.display = 'flex';
+                geminiImageOption.style.display = 'none';
+                copyOption.style.display = 'flex';
+            }
+
             if (navigator.vibrate) navigator.vibrate(50);
         }
 
@@ -778,39 +827,65 @@
         }
 
         contextMenu.addEventListener('click', async (e) => {
-            if (!e.target.classList.contains('ai-explain-option')) return;
-            if (!currentMessageElement?.dataset.messageText) {
+            const clickedOption = e.target;
+            if (!clickedOption.classList.contains('ai-explain-option')) return;
+
+            const action = clickedOption.dataset.action;
+            const model = clickedOption.dataset.ai;
+
+            let explanationText = "";
+            let requestBody = {};
+            let apiUrl = '';
+
+            if (action === 'image-describe') {
+                if (!currentMessageElement.dataset.imageUrl) {
+                    contextMenu.style.display = 'none';
+                    return;
+                }
+                apiUrl = '/ai-describe-image';
+                requestBody = { imageUrl: currentMessageElement.dataset.imageUrl };
+                explanationText = "正在通过AI模型解读图片...";
+            } else if (action === 'text-explain') {
+                if (!currentMessageElement.dataset.messageText) {
+                    contextMenu.style.display = 'none';
+                    return;
+                }
+                apiUrl = '/ai-explain';
+                requestBody = { text: currentMessageElement.dataset.messageText, model: model };
+                explanationText = `正在通过 ${model} 模型思考中...`;
+            } else {
                 contextMenu.style.display = 'none';
                 return;
             }
 
-            // [THE BUG FIX IS HERE]
             // Use querySelector to find an existing explanation *inside* the message element
             const existingExplanation = currentMessageElement.querySelector('.ai-explanation');
             if (existingExplanation) {
                 existingExplanation.remove();
             }
 
-            const model = e.target.dataset.ai;
-            const textToExplain = currentMessageElement.dataset.messageText;
             contextMenu.style.display = 'none';
             
             const explanationEl = document.createElement('div');
             explanationEl.className = 'ai-explanation';
-            explanationEl.innerHTML = `<p>🤖 正在通过 ${model} 模型思考中...</p>`;
+            explanationEl.innerHTML = `<p>🤖 ${explanationText}<span class="loading-dots"></span></p>`;
             currentMessageElement.appendChild(explanationEl);
 
             try {
-                const response = await fetch('/ai-explain', {
+                const response = await fetch(apiUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: textToExplain, model: model })
+                    body: JSON.stringify(requestBody)
                 });
                 if (!response.ok) throw new Error(await response.text());
                 
-                const { explanation } = await response.json();
+                const data = await response.json();
+                const explanation = data.explanation || data.description; // Handle both text and image responses
                 
                 explanationEl.innerHTML = '';
+                const buttonContainer = document.createElement('div');
+                buttonContainer.className = 'ai-explanation-buttons';
+
                 const closeBtn = document.createElement('button');
                 closeBtn.className = 'ai-explanation-close';
                 closeBtn.innerHTML = '×';
@@ -835,17 +910,20 @@
                     }, 10);
                 };
 
+                buttonContainer.appendChild(copyBtn);
+                buttonContainer.appendChild(closeBtn);
+
                 const markdownContainer = document.createElement('div');
                 markdownContainer.className = 'markdown-content';
                 markdownContainer.innerHTML = marked.parse(explanation, { gfm: true, breaks: true, sanitize: true });
                 
-                explanationEl.appendChild(closeBtn);
-                explanationEl.appendChild(copyBtn);
+                explanationEl.appendChild(buttonContainer);
                 explanationEl.appendChild(markdownContainer);
 
             } catch (error) {
-                console.error(`请求${model}解释失败:`, error);
-                explanationEl.innerHTML = `<p>😞 抱歉，无法从 ${model} 获取解释。</p>`;
+                console.error(`请求AI解释失败:`, error);
+                const errorModelName = (action === 'image-describe') ? 'AI图片描述' : model;
+                explanationEl.innerHTML = `<p>😞 抱歉，无法从 ${errorModelName} 获取解释。</p>`;
                 setTimeout(() => { if (explanationEl.parentNode) explanationEl.remove(); }, 4000);
             }
         });
