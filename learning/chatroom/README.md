@@ -1,6 +1,6 @@
 # 实时聊天室应用
 
-这是一个基于 Cloudflare Workers 和 Durable Objects 构建的实时聊天室应用。它提供了一个高性能、低延迟的聊天体验，支持文本消息和图片消息的发送与接收，并能实时显示在线用户。test
+这是一个基于 Cloudflare Workers 和 Durable Objects 构建的实时聊天室应用。它提供了一个高性能、低延迟的聊天体验，支持文本消息和图片消息的发送与接收，并能实时显示在线用户。
 
 ## 🚀 功能特性
 
@@ -10,6 +10,11 @@
 *   **历史消息加载**：新用户加入时自动加载聊天历史记录。
 *   **图片消息**：支持发送图片，并在客户端进行压缩优化，图片存储在 Cloudflare R2。
 *   **消息删除**：支持长按消息进行删除操作。
+*   **AI 文本解释**：支持对聊天消息进行 AI 解释，可选择 Gemini 或 DeepSeek 模型，并以 Markdown 格式渲染解释内容。
+*   **AI 图片描述**：支持对图片内容进行 AI 描述，可识别图片中的文字，并提供详细的图片描述。
+*   **用户名管理**：首次进入自动填充默认用户名，支持本地保存，并允许用户随时点击修改用户名。
+*   **代码块优化**：聊天消息中的代码块支持深色主题高亮，提高可读性。
+*   **代码块复制**：代码块右上角提供一键复制按钮，方便复制代码内容。
 *   **持久化存储**：聊天记录和图片通过 Cloudflare Durable Objects 和 R2 进行持久化存储。
 *   **响应式设计**：前端界面适配桌面和移动设备。
 *   **自动重连**：WebSocket 连接断开后自动尝试重连。
@@ -20,10 +25,13 @@
     *   **Cloudflare Workers**：作为无服务器函数，处理 HTTP 请求和 WebSocket 升级。
     *   **Cloudflare Durable Objects**：用于管理每个聊天室的独立状态、WebSocket 连接和消息持久化。
     *   **Cloudflare R2**：对象存储服务，用于存储用户上传的图片。
+    *   **Google Gemini API**：用于文本解释和图片描述。
+    *   **DeepSeek API**：用于文本解释。
 *   **前端**：
     *   **HTML5**
     *   **CSS3**
     *   **JavaScript (ES6+)**：原生 JavaScript 实现 WebSocket 客户端和 UI 交互。
+    *   **marked.js**：用于 Markdown 文本的解析和渲染。
     *   **客户端图片压缩**：在上传前对图片进行压缩处理，优化性能。
 
 ## ⚙️ 设置与运行
@@ -49,7 +57,7 @@
     npm install
     ```
 3.  **配置 `wrangler.toml`**：
-    打开 `wrangler.toml` 文件，根据您的 Cloudflare 账户信息进行配置：
+    打开 `wrangler.toml` 文件，根据您的 Cloudflare 账户信息进行配置，并添加 AI 服务的 API Key：
     *   `name`: 您的 Worker 名称。
     *   `account_id`: 您的 Cloudflare 账户 ID。
     *   `[[r2_buckets]]`：
@@ -58,6 +66,12 @@
         *   `name`: 保持 `CHAT_ROOM_DO`。
         *   `class_name`: 保持 `ChatRoomDurableObject`。
     *   `[[migrations]]`：确保 `tag` 和 `new_sqlite_classes` 配置正确，这对于 Durable Objects 的持久化至关重要。
+    *   **AI API Keys**：
+        ```toml
+        [vars]
+        GEMINI_API_KEY = "您的 Google Gemini API Key"
+        DEEPSEEK_API_KEY = "您的 DeepSeek API Key"
+        ```
 
     **重要提示**：在本地开发时，`wrangler dev` 会自动模拟 R2 和 Durable Objects 的行为，并将数据持久化到 `.wrangler/state/v3` 目录。
 
@@ -87,28 +101,35 @@
     *   `http://localhost:8787/my-private-room`
     *   `http://localhost:8787/developers`
 
-    首次访问时，会提示您输入用户名。
+    首次访问时，会提示您输入用户名。如果您不输入，将默认使用“～苑广山”。您的用户名将保存在浏览器本地存储中，下次无需重复输入。
 
-2.  **发送文本消息**：
-    在底部的输入框中输入文本，按 `Enter` 键发送。按 `Shift + Enter` 键可以换行。
+2.  **修改用户名**：
+    进入聊天室后，点击页面顶部显示您当前用户名的位置（例如“正在连接... 用户名”），会弹出一个输入框，您可以输入新的用户名并确认。系统将自动保存并使用新用户名重新连接。
 
-3.  **发送图片消息**：
+3.  **发送文本消息**：
+    在底部的输入框中输入文本，按 `Enter` 键发送。按 `Shift + Enter` 键可以换行。文本消息支持 Markdown 格式，发送后会自动渲染。
+
+4.  **发送图片消息**：
     点击输入框旁边的 `📎` (附件) 按钮，选择一张图片。图片会在发送前进行压缩和预览。确认后，点击 `Send` 按钮发送。
 
-4.  **删除消息**：
+5.  **删除消息**：
     长按您发送的消息（在移动设备上是长按，在桌面设备上是鼠标长按），会弹出确认删除的提示。确认后，消息将被删除。
 
-5.  **查看在线用户**：
+6.  **AI 解释文本消息**：
+    长按任意文本消息，会弹出上下文菜单。选择“问 Gemini”或“DeepSeek”，AI 将对该消息内容进行解释，并在消息下方显示解释结果。解释结果支持复制。
+
+7.  **AI 描述图片内容**：
+    将鼠标悬停在图片消息上，图片右上角会出现一个“🤖”图标。点击该图标，AI 将对图片内容进行详细描述，包括识别出的文字和图片描述，并在图片下方显示结果。描述结果支持复制。
+
+8.  **复制代码块**：
+    将鼠标悬停在聊天消息中的代码块上，代码块右上角会出现一个“复制”按钮。点击该按钮即可将代码内容复制到剪贴板。
+
+9.  **查看在线用户**：
     左侧的侧边栏会显示当前聊天室的在线用户列表。在移动设备上，点击左上角的 `☰` 按钮可以展开侧边栏。
 
 ## 🌐 API / 架构概览
 
 本应用采用以下架构和通信协议：
-
-## 🚀 核心技术点、实现效果与开发启示
-
-本项目充分利用了 Cloudflare 的 Serverless 生态系统，构建了一个功能丰富、高性能且可伸缩的实时聊天应用。以下是其核心技术点、实现效果以及对未来开发的启示。
-
 
 ### 整体架构
 
@@ -131,14 +152,14 @@
 ```
 
 *   **Frontend**：用户界面，通过 WebSocket 与 Cloudflare Worker 建立连接，发送和接收消息。在发送图片前进行客户端压缩。
-*   **Cloudflare Worker**：作为入口点，处理所有 HTTP 请求。对于 WebSocket 升级请求，它会将请求路由到对应的 Durable Object 实例。对于其他请求（如加载 `index.html`），它会直接响应。
+*   **Cloudflare Worker**：作为入口点，处理所有 HTTP 请求。对于 WebSocket 升级请求，它会将请求路由到对应的 Durable Object 实例。对于其他请求（如加载 `index.html`），它会直接响应。同时，它还代理了对 AI 服务的请求。
 *   **Cloudflare Durable Object (ChatRoomDurableObject)**：每个聊天室对应一个 Durable Object 实例。它维护聊天室的实时状态（在线用户、消息历史），处理 WebSocket 消息，并将消息广播给所有连接的用户。同时，它负责将图片上传到 Cloudflare R2。
 *   **Cloudflare R2**：用于存储用户上传的图片，提供可公开访问的 URL。
 
 ### 核心技术点
 
 1.  **Cloudflare Workers (JavaScript/ESM):**
-    *   **边缘计算入口:** 作为所有 HTTP 请求的统一入口，处理静态文件服务、WebSocket 升级代理、AI 服务代理 (`/ai-explain`) 和文件上传代理 (`/upload`)。
+    *   **边缘计算入口:** 作为所有 HTTP 请求的统一入口，处理静态文件服务、WebSocket 升级代理、AI 服务代理 (`/ai-explain`, `/ai-describe-image`) 和文件上传代理 (`/upload`)。
     *   **API Key 安全:** AI 服务的 API Key 通过 Worker 的环境变量安全获取和使用，避免在客户端暴露。
 2.  **Cloudflare Durable Objects (DO):**
     *   **有状态的单例:** 每个聊天室（由 `roomName` 标识）对应一个 Durable Object 实例，负责管理该聊天室的在线用户列表和聊天记录。
@@ -153,7 +174,7 @@
     *   **单页应用 (SPA):** `index.html` 提供了完整的 UI 结构和样式。
     *   **WebSocket API:** 客户端通过 WebSocket 与 Durable Object 建立实时连接。
     *   **媒体处理:** 客户端实现了图片压缩和音频录制功能，优化了上传体验。
-    *   **AI 集成:** 通过 `/ai-explain` 端点调用后端 AI 服务，并使用 `marked.js` 渲染 AI 返回的 Markdown 格式解释。
+    *   **AI 集成:** 通过 `/ai-explain` 和 `/ai-describe-image` 端点调用后端 AI 服务，并使用 `marked.js` 渲染 AI 返回的 Markdown 格式解释。
 
 ### 实现效果
 
@@ -164,13 +185,16 @@
 2.  **实时交互与富媒体支持:**
     *   **即时消息:** WebSocket 实现了消息的实时发送和接收，用户体验流畅。
     *   **多媒体消息:** 支持图片和音频的发送，丰富了聊天内容。
+    *   **智能辅助:** 集成 AI 解释和图片描述功能，提升了应用的智能性和用户体验。
 3.  **安全与可维护性:**
     *   **API Key 隐藏:** AI 服务的 API Key 存储在 Worker 的环境变量中，并通过 Worker 进行代理调用，避免了在客户端暴露敏感信息。
     *   **模块化设计:** 前后端分离，Worker 和 Durable Object 各司其职，AI 逻辑也进行了模块化，提高了代码的可读性和可维护性。
     *   **数据持久化:** 聊天记录的自动持久化确保了数据的可靠性。
 4.  **用户体验:**
     *   **响应式 UI:** 适配不同设备尺寸。
-    *   **AI 辅助功能:** 提供了消息解释功能，增加了应用的智能性和趣味性。
+    *   **AI 辅助功能:** 提供了消息解释和图片描述功能，增加了应用的智能性和趣味性。
+    *   **用户名持久化与修改**：优化了用户首次进入和后续使用的体验。
+    *   **代码块可读性与复制**：提升了技术交流的便利性。
 
 ### 对开发的启示
 
@@ -302,6 +326,59 @@
         "payload": {
             "message": "Failed to process your message."
         }
+    }
+    ```
+
+### HTTP API 端点
+
+除了 WebSocket 协议，Worker 还提供了以下 HTTP API 端点：
+
+*   **`/upload` (POST)**：
+    用于上传图片文件到 Cloudflare R2。客户端通过 `X-Filename` 头提供文件名，请求体为图片二进制数据。
+    **请求示例**：
+    ```http
+    POST /upload HTTP/1.1
+    Host: your-worker-url.workers.dev
+    X-Filename: my_image.jpg
+    Content-Type: image/jpeg
+
+    [图片二进制数据]
+    ```
+    **响应示例**：
+    ```json
+    {
+        "url": "https://pub-xxxxxxxx.r2.dev/my_image.jpg"
+    }
+    ```
+
+*   **`/ai-explain` (POST)**：
+    用于请求 AI 对文本进行解释。支持 `gemini` 和 `deepseek` 模型。
+    **请求示例**：
+    ```json
+    {
+        "text": "要解释的文本内容",
+        "model": "gemini" // 或 "deepseek"
+    }
+    ```
+    **响应示例**：
+    ```json
+    {
+        "explanation": "AI 解释后的 Markdown 格式文本"
+    }
+    ```
+
+*   **`/ai-describe-image` (POST)**：
+    用于请求 AI 对图片进行描述。目前仅支持 Gemini Vision 模型。
+    **请求示例**：
+    ```json
+    {
+        "imageUrl": "https://pub-xxxxxxxx.r2.dev/path/to/image.jpg"
+    }
+    ```
+    **响应示例**：
+    ```json
+    {
+        "description": "图片中包含文字：{文字内容}；图片的描述：{图片描述}"
     }
     ```
 
