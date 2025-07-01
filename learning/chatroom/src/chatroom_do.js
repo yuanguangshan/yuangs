@@ -7,6 +7,13 @@ const MSG_TYPE_RENAME = 'rename';
 const MSG_TYPE_SYSTEM_STATE = 'system_state';
 const MSG_TYPE_HISTORY = 'history';
 
+// 新增的实时通话信令类型
+const MSG_TYPE_OFFER = 'offer';
+const MSG_TYPE_ANSWER = 'answer';
+const MSG_TYPE_CANDIDATE = 'candidate';
+const MSG_TYPE_CALL_END = 'call_end';
+
+
 export class ChatRoomDurableObject {
     constructor(state, env) {
         this.state = state;
@@ -229,12 +236,30 @@ export class ChatRoomDurableObject {
         ws.addEventListener("message", async (event) => {
             try {
                 const data = JSON.parse(event.data);
-                if (data.type === MSG_TYPE_CHAT) {
-                    await this.handleChatMessage(user, data.payload);
-                } else if (data.type === MSG_TYPE_DELETE) {
-                    this.handleDeleteMessage(data.payload);
-                } else if (data.type === MSG_TYPE_RENAME) {
-                    this.handleRename(user, data.payload);
+                switch (data.type) {
+                    case MSG_TYPE_CHAT:
+                        await this.handleChatMessage(user, data.payload);
+                        break;
+                    case MSG_TYPE_DELETE:
+                        this.handleDeleteMessage(data.payload);
+                        break;
+                    case MSG_TYPE_RENAME:
+                        this.handleRename(user, data.payload);
+                        break;
+                    case MSG_TYPE_OFFER:
+                        this.handleOffer(user, data.payload);
+                        break;
+                    case MSG_TYPE_ANSWER:
+                        this.handleAnswer(user, data.payload);
+                        break;
+                    case MSG_TYPE_CANDIDATE:
+                        this.handleCandidate(user, data.payload);
+                        break;
+                    case MSG_TYPE_CALL_END:
+                        this.handleCallEnd(user, data.payload);
+                        break;
+                    default:
+                         console.warn('Unknown message type:', data.type);
                 }
             } catch (err) {
                 console.error('Failed to handle message:', err);
@@ -249,6 +274,37 @@ export class ChatRoomDurableObject {
         // 监听连接关闭事件
         ws.addEventListener("close", () => this.handleClose(ws));
         ws.addEventListener("error", () => this.handleClose(ws));
+    }
+
+    getWsByUsername(username) {
+        for (const user of this.users.values()) {
+            if (user.username === username) return user.ws;
+        }
+        return null;
+    }
+
+    handleOffer(fromUser, payload) {
+        const targetWs = this.getWsByUsername(payload.target);
+        if (!targetWs) return console.warn(`用户 ${payload.target} 不在线，无法转发 offer`);
+        this.sendMessage(targetWs, { type: MSG_TYPE_OFFER, payload: { from: fromUser.username, sdp: payload.sdp } });
+    }
+
+    handleAnswer(fromUser, payload) {
+        const targetWs = this.getWsByUsername(payload.target);
+        if (!targetWs) return console.warn(`用户 ${payload.target} 不在线，无法转发 answer`);
+        this.sendMessage(targetWs, { type: MSG_TYPE_ANSWER, payload: { from: fromUser.username, sdp: payload.sdp } });
+    }
+
+    handleCandidate(fromUser, payload) {
+        const targetWs = this.getWsByUsername(payload.target);
+        if (!targetWs) return console.warn(`用户 ${payload.target} 不在线，无法转发 candidate`);
+        this.sendMessage(targetWs, { type: MSG_TYPE_CANDIDATE, payload: { from: fromUser.username, candidate: payload.candidate } });
+    }
+    
+    handleCallEnd(fromUser, payload) {
+        const targetWs = this.getWsByUsername(payload.target);
+        if (!targetWs) return console.warn(`用户 ${payload.target} 不在线，无法转发 call_end`);
+        this.sendMessage(targetWs, { type: MSG_TYPE_CALL_END, payload: { from: fromUser.username } });
     }
 
     // 处理从客户端收到的聊天消息

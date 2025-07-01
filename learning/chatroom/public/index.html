@@ -359,6 +359,59 @@
         .context-menu ul li { padding: 8px 15px; cursor: pointer; }
         .context-menu ul li:hover { background-color: #ddd; }
 
+        /* Call Controls */
+        #call-controls-container {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 1001;
+        }
+        .call-control-panel {
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .hang-up-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .user-menu-item-with-call {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .call-btn {
+            background: #2ecc71;
+            color: white;
+            border: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        .unmute-notice {
+            background: #f39c12;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
         /* (可选) 为AI菜单项添加图标 */
         .context-menu .ai-explain-option {
             display: flex;
@@ -534,6 +587,8 @@
         <li id="delete-option">❌ 删 除</li>
     </ul>
 </div>
+<div id="call-controls-container"></div>
+<div id="remote-audio-container"></div>
 
     <script type="module">
         // --- DOM Elements ---
@@ -566,6 +621,8 @@
         const copyOption = document.getElementById('copy-option');
         const deleteOption = document.getElementById('delete-option');
         const userStatsListEl = document.getElementById('user-stats-list');
+        const callControlsContainer = document.getElementById('call-controls-container');
+        const remoteAudioContainer = document.getElementById('remote-audio-container');
 
         // --- State Variables ---
         let selectedFile = null;
@@ -576,6 +633,9 @@
         let socket;
         let reconnectInterval = 1000;
         const maxReconnectInterval = 30000;
+        let localStream = null;
+        const peerConnections = {};
+        const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
         // --- Initialization ---
         let username = localStorage.getItem('chat_username');
@@ -758,7 +818,7 @@
             reconnectInterval = 1000;
         }
 
-        function onSocketMessage(event) {
+        async function onSocketMessage(event) {
             const data = JSON.parse(event.data);
             switch (data.type) {
                 case 'history':
@@ -772,6 +832,10 @@
                     sendButton.disabled = false;
                     break;
                 case 'delete': deleteChatMessage(data.payload.id); break;
+                case 'offer': await handleOffer(data.payload); break;
+                case 'answer': await handleAnswer(data.payload); break;
+                case 'candidate': await handleCandidate(data.payload); break;
+                case 'call_end': handleCallEnd(data.payload); break;
             }
         }
         
@@ -863,7 +927,18 @@
                 const safeName = escapeHTML(user);
                 userNamesEl.insertAdjacentHTML('beforeend', `<div class="user-item">${safeName}</div>`);
                 headerUsersEl.insertAdjacentHTML('beforeend', `<div class="user-item">${safeName}</div>`);
-                menuListEl.insertAdjacentHTML('beforeend', `<li>${safeName}</li>`);
+                if (user === username) {
+                    menuListEl.insertAdjacentHTML('beforeend', `<li>${safeName} (你)</li>`);
+                } else {
+                    menuListEl.insertAdjacentHTML('beforeend', `<li class="user-menu-item-with-call"><span>${safeName}</span><button class="call-btn" data-username="${safeName}">📞</button></li>`);
+                }
+            });
+            document.querySelectorAll('.call-btn').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    startCall(btn.dataset.username);
+                    usersMenu.classList.remove('show');
+                };
             });
         }
         
@@ -1121,11 +1196,139 @@
             });
         }
 
-        // Fetch stats initially and then every 10 seconds
-        fetchUserStats();
         setInterval(fetchUserStats, 10000);
 
+        // --- WebRTC Core Functions ---
+        function unlockAudioContext() {
+            const ac = new (window.AudioContext || window.webkitAudioContext)();
+            if (ac.state === 'suspended') {
+                ac.resume().then(() => console.log("AudioContext resumed on user gesture."));
+            }
+            const sound = new Audio("data:audio/mp3;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTG93ZXN0bGV2ZWxCZWF0LmNvbQ");
+            sound.volume = 0;
+            sound.play().catch(() => {});
+            console.log("Audio unlock attempted.");
+            document.body.removeEventListener('click', unlockAudioContext);
+            document.body.removeEventListener('touchstart', unlockAudioContext);
+        }
+        document.body.addEventListener('click', unlockAudioContext, { once: true });
+        document.body.addEventListener('touchstart', unlockAudioContext, { once: true });
+
+        async function initLocalMedia() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            } catch (err) {
+                alert('无法获取麦克风，通话功��不可用。请检查权限。');
+            }
+        }
+
+        function showCallUI(targetUsername) {
+            if (document.getElementById(`call-control-${targetUsername}`)) return;
+            const panel = document.createElement('div');
+            panel.id = `call-control-${targetUsername}`;
+            panel.className = 'call-control-panel';
+            panel.innerHTML = `<span>与 ${escapeHTML(targetUsername)} 通话中...</span><button class="hang-up-btn" data-username="${targetUsername}">📞</button>`;
+            callControlsContainer.appendChild(panel);
+            panel.querySelector('.hang-up-btn').onclick = () => endCall(targetUsername);
+        }
+
+        function hideCallUI(targetUsername) {
+            const panel = document.getElementById(`call-control-${targetUsername}`);
+            if (panel) panel.remove();
+            const audioEl = document.getElementById(`audio-${targetUsername}`);
+            if (audioEl) audioEl.remove();
+        }
+
+        async function startCall(target) {
+            if (!localStream) return alert('本地音频未就绪，请检查麦克风权限。');
+            if (peerConnections[target]) return;
+            showCallUI(target);
+            const pc = new RTCPeerConnection(rtcConfig);
+            peerConnections[target] = pc;
+            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+            pc.ontrack = event => playRemoteStream(target, event.streams[0]);
+            pc.onicecandidate = event => { if (event.candidate) socket.send(JSON.stringify({ type: 'candidate', payload: { target, candidate: event.candidate } })); };
+            pc.onconnectionstatechange = () => { if (['disconnected', 'closed', 'failed'].includes(pc.connectionState)) endCall(target); };
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            socket.send(JSON.stringify({ type: 'offer', payload: { target, sdp: pc.localDescription } }));
+        }
+
+        async function handleOffer({ from, sdp }) {
+            if (!localStream) return;
+            if (peerConnections[from]) return;
+            if (!window.confirm(`${from} 正在呼叫您，是否接听？`)) return;
+            showCallUI(from);
+            const pc = new RTCPeerConnection(rtcConfig);
+            peerConnections[from] = pc;
+            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+            pc.ontrack = event => playRemoteStream(from, event.streams[0]);
+            pc.onicecandidate = event => { if (event.candidate) socket.send(JSON.stringify({ type: 'candidate', payload: { target: from, candidate: event.candidate } })); };
+            pc.onconnectionstatechange = () => { if (['disconnected', 'closed', 'failed'].includes(pc.connectionState)) endCall(from); };
+            await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            socket.send(JSON.stringify({ type: 'answer', payload: { target: from, sdp: pc.localDescription } }));
+        }
+
+        async function handleAnswer({ from, sdp }) {
+            const pc = peerConnections[from];
+            if (!pc) return;
+            await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        }
+
+        async function handleCandidate({ from, candidate }) {
+            const pc = peerConnections[from];
+            if (!pc) return;
+            await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error('Add ICE candidate failed:', e));
+        }
+
+        function handleCallEnd({ from }) {
+            const pc = peerConnections[from];
+            if (pc) { pc.close(); delete peerConnections[from]; }
+            hideCallUI(from);
+        }
+
+        function endCall(target) {
+            if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'call_end', payload: { target } }));
+            handleCallEnd({ from: target });
+        }
+        
+        function playRemoteStream(username, stream) {
+            let audioEl = document.getElementById(`audio-${username}`);
+            if (!audioEl) {
+                audioEl = document.createElement('audio');
+                audioEl.id = `audio-${username}`;
+                audioEl.autoplay = true;
+                audioEl.playsInline = true;
+                remoteAudioContainer.appendChild(audioEl);
+            }
+            audioEl.srcObject = stream;
+            audioEl.muted = true;
+            const playPromise = audioEl.play();
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    audioEl.muted = false;
+                    console.log(`Audio for ${username} started successfully.`);
+                }).catch(error => {
+                    console.error(`Autoplay for ${username} failed:`, error);
+                    const panel = document.getElementById(`call-control-${username}`);
+                    if (panel && !panel.querySelector('.unmute-notice')) {
+                        const unmuteNotice = document.createElement('button');
+                        unmuteNotice.className = 'unmute-notice';
+                        unmuteNotice.textContent = '🔇 点此开启声音';
+                        unmuteNotice.onclick = () => {
+                            audioEl.muted = false;
+                            audioEl.play().then(() => unmuteNotice.remove()).catch(err => alert('还是无法播放声音: ' + err));
+                        };
+                        panel.appendChild(unmuteNotice);
+                    }
+                });
+            }
+        }
+
         // --- Initial Connection ---
+        initLocalMedia();
         connectWebSocket();
     </script>
 </body>
