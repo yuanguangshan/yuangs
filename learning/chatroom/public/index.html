@@ -129,6 +129,31 @@
         .online-count { color: #2ecc71; font-size: 1.1em; }
         .room-name-sidebar { color: #f39c12; font-size: 0.9em; }
 
+        .user-stats-container {
+            padding: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            margin-top: auto; /* Push to bottom */
+        }
+        .user-stats-item {
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+            color: white;
+            font-size: 0.85em;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .user-stats-item:last-child { margin-bottom: 0; }
+        .user-stats-item strong { color: #f39c12; }
+        .user-stats-item span { display: block; margin-top: 4px; }
+        .user-stats-item .stat-label { opacity: 0.8; font-size: 0.9em; }
+        .user-stats-item .stat-value { font-weight: 600; }
+        .user-stats-item .stat-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+        .user-stats-item .stat-row:last-child { margin-bottom: 0; }
+        .user-stats-item .online-status { color: #2ecc71; font-weight: 600; }
+        .user-stats-item .offline-status { color: #e74c3c; font-weight: 600; }
+        .user-stats-item .room-link { color: #3498db; text-decoration: underline; cursor: pointer; }
+
         /* --- MAIN CHAT AREA --- */
         .main-chat { flex: 1; display: flex; flex-direction: column; min-width: 0; height: 100%; }
         .chat-header { padding: 12px 25px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; box-shadow: 0 2px 15px rgba(102, 126, 234, 0.2); position: relative; }
@@ -303,6 +328,10 @@
                 </div>
                 <ul id="user-list" style="display: none;"></ul>
             </div>
+            <div class="user-stats-container">
+                <div class="user-list-title">用户统计</div>
+                <div id="user-stats-list"></div>
+            </div>
         </aside>
 
         <main class="main-chat">
@@ -391,6 +420,7 @@
         const contextMenu = document.getElementById('context-menu');
         const copyOption = document.getElementById('copy-option');
         const deleteOption = document.getElementById('delete-option');
+        const userStatsListEl = document.getElementById('user-stats-list');
 
         // --- State Variables ---
         let selectedFile = null;
@@ -786,11 +816,31 @@
                 closeBtn.innerHTML = '×';
                 closeBtn.onclick = () => explanationEl.remove();
 
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'ai-explanation-copy';
+                copyBtn.innerHTML = '📋';
+                copyBtn.title = '复制内容';
+                copyBtn.onclick = () => {
+                    navigator.clipboard.writeText(explanation);
+                    const toast = document.createElement('div');
+                    toast.className = 'copy-feedback-toast';
+                    toast.textContent = '已复制!';
+                    explanationEl.appendChild(toast);
+                    setTimeout(() => {
+                        toast.classList.add('show');
+                        setTimeout(() => {
+                            toast.classList.remove('show');
+                            setTimeout(() => toast.remove(), 300);
+                        }, 1500);
+                    }, 10);
+                };
+
                 const markdownContainer = document.createElement('div');
                 markdownContainer.className = 'markdown-content';
                 markdownContainer.innerHTML = marked.parse(explanation, { gfm: true, breaks: true, sanitize: true });
                 
                 explanationEl.appendChild(closeBtn);
+                explanationEl.appendChild(copyBtn);
                 explanationEl.appendChild(markdownContainer);
 
             } catch (error) {
@@ -799,6 +849,71 @@
                 setTimeout(() => { if (explanationEl.parentNode) explanationEl.remove(); }, 4000);
             }
         });
+
+        // --- User Stats Functions ---
+        async function fetchUserStats() {
+            try {
+                const response = await fetch(`/room-user-stats?roomName=${roomName}`);
+                if (!response.ok) throw new Error(`Failed to fetch user stats: ${response.statusText}`);
+                const stats = await response.json();
+                renderUserStats(stats);
+            } catch (error) {
+                console.error('Error fetching user stats:', error);
+            }
+        }
+
+        function renderUserStats(stats) {
+            userStatsListEl.innerHTML = '';
+            if (stats.length === 0) {
+                userStatsListEl.innerHTML = '<p style="color: rgba(255,255,255,0.7); font-size: 0.8em;">暂无用户统计数据。</p>';
+                return;
+            }
+
+            stats.sort((a, b) => b.isOnline - a.isOnline || b.messageCount - a.messageCount);
+
+            stats.forEach(userStat => {
+                const item = document.createElement('div');
+                item.className = 'user-stats-item';
+                
+                const lastSeenDate = new Date(userStat.lastSeen);
+                const lastSeenString = lastSeenDate.toLocaleString();
+
+                let onlineDurationString = '-';
+                if (userStat.isOnline) {
+                    const durationSeconds = Math.floor(userStat.totalOnlineDuration / 1000);
+                    const hours = Math.floor(durationSeconds / 3600);
+                    const minutes = Math.floor((durationSeconds % 3600) / 60);
+                    const seconds = durationSeconds % 60;
+                    onlineDurationString = `${hours}h ${minutes}m ${seconds}s`;
+                }
+
+                item.innerHTML = `
+                    <div class="stat-row">
+                        <strong>${userStat.username}</strong>
+                        <span class="${userStat.isOnline ? 'online-status' : 'offline-status'}">
+                            ${userStat.isOnline ? '在线' : '离线'}
+                        </span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">发言:</span>
+                        <span class="stat-value">${userStat.messageCount}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">在线时长:</span>
+                        <span class="stat-value">${onlineDurationString}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">最近登录:</span>
+                        <span class="stat-value">${lastSeenString}</span>
+                    </div>
+                `;
+                userStatsListEl.appendChild(item);
+            });
+        }
+
+        // Fetch stats initially and then every 10 seconds
+        fetchUserStats();
+        setInterval(fetchUserStats, 10000);
 
         // --- Initial Connection ---
         connectWebSocket();

@@ -256,6 +256,40 @@ export default {
             }
         }
         
+        // --- 新增：获取房间用户统计数据的请求处理逻辑 ---
+        if (pathname === '/room-user-stats' && request.method === 'GET') {
+            try {
+                const roomName = url.searchParams.get('roomName');
+                if (!roomName) {
+                    return new Response('Missing roomName in query parameters.', { status: 400 });
+                }
+
+                if (!env.CHAT_ROOM_DO) {
+                    return new Response('Server configuration error: CHAT_ROOM_DO not bound.', { status: 500 });
+                }
+                const doId = env.CHAT_ROOM_DO.idFromName(roomName);
+                const stub = env.CHAT_ROOM_DO.get(doId);
+
+                // 向 Durable Object 发送内部请求获取统计数据
+                const doResponse = await stub.fetch(new Request(`${url.origin}/user-stats`, { method: 'GET' }));
+                
+                if (!doResponse.ok) {
+                    const errorText = await doResponse.text();
+                    console.error(`Failed to fetch user stats from DO: ${doResponse.status} - ${errorText}`);
+                    return new Response(`Error fetching user stats: ${errorText}`, { status: 500 });
+                }
+
+                const stats = await doResponse.json();
+                return new Response(JSON.stringify(stats), {
+                    headers: { 'Content-Type': 'application/json' },
+                });
+
+            } catch (error) {
+                console.error('User stats request error:', error.message);
+                return new Response(`Error processing user stats request: ${error.message}`, { status: 500 });
+            }
+        }
+        
         // --- 剩余的路由逻辑保持不变 ---
         
         if (pathParts.length === 0) {

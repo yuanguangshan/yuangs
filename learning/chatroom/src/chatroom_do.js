@@ -13,6 +13,8 @@ export class ChatRoomDurableObject {
         // `users` 用于存储所有连接到此聊天室的 WebSocket 会话
         // Map 的键是 WebSocket 对象，值是包含用户信息的对象
         this.users = new Map();
+        // `userStats` 用于存储每个用户的统计数据
+        this.userStats = new Map(); // Map<username, { messageCount: number, lastSeen: number, sessionStart: number | null }>
         // `messages` 用于存储聊天记录
         this.messages = [];
         // `lastSave` 用于实现对存储的节流写入
@@ -154,6 +156,28 @@ export class ChatRoomDurableObject {
         // 确保初始化完成
         await this.initializePromise;
 
+        const url = new URL(request.url);
+
+        // 处理获取用户统计数据的请求
+        if (url.pathname === '/user-stats') {
+            // 返回所有用户的统计数据
+            const statsArray = Array.from(this.userStats.entries()).map(([username, stats]) => {
+                // 计算当前在线时长
+                const userSession = Array.from(this.users.values()).find(u => u.username === username);
+                const currentOnlineDuration = userSession && userSession.sessionStart ? Date.now() - userSession.sessionStart : 0;
+                return {
+                    username,
+                    messageCount: stats.messageCount,
+                    lastSeen: stats.lastSeen,
+                    totalOnlineDuration: stats.totalOnlineDuration + currentOnlineDuration,
+                    isOnline: !!userSession
+                };
+            });
+            return new Response(JSON.stringify(statsArray), {
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
         // 使用 blockConcurrencyWhile 保证所有操作串行执行，避免竞态条件
         return this.state.blockConcurrencyWhile(async () => {
             const upgradeHeader = request.headers.get("Upgrade");
@@ -162,7 +186,6 @@ export class ChatRoomDurableObject {
             }
 
             // 从 URL 中获取用户名
-            const url = new URL(request.url);
             const username = url.searchParams.get("username") || "Anonymous";
 
             // 创建 WebSocket 对
@@ -184,8 +207,13 @@ export class ChatRoomDurableObject {
         ws.accept();
 
         // 存储会话信息
-        const user = { ws, username };
+        const user = { ws, username, sessionStart: Date.now() };
         this.users.set(ws, user);
+
+        // 更新用户统计
+        let stats = this.userStats.get(username) || { messageCount: 0, lastSeen: 0, totalOnlineDuration: 0 };
+        stats.lastSeen = Date.now();
+        this.userStats.set(username, stats);
 
         // 1. 向新用户发送完整的聊天记录
         this.sendMessage(ws, {
@@ -262,11 +290,18 @@ export class ChatRoomDurableObject {
                 console.log('音频消息处理完成:', audioUrl);
             } else {
                 // 文本消息
-                message.text = payload.text;
-            }
+            message.text = payload.text;
+        }
 
-            this.messages.push(message);
-            // 限制内存中消息的数量，防止无限增长
+        this.messages.push(message);
+        // 更新用户发言次数
+        let stats = this.userStats.get(user.username);
+        if (stats) {
+            stats.messageCount = (stats.messageCount || 0) + 1;
+            this.userStats.set(user.username, stats);
+        }
+
+        // 限制内存中消息的数量，防止无限增长
             if (this.messages.length > 100) {
                 this.messages.shift();
             }
@@ -307,6 +342,15 @@ export class ChatRoomDurableObject {
     // 处理 WebSocket 连接关闭
     handleClose(ws) {
         if (this.users.has(ws)) {
+            const user = this.users.get(ws);
+            if (user.sessionStart) {
+                let stats = this.userStats.get(user.username);
+                if (stats) {
+                    stats.totalOnlineDuration += (Date.now() - user.sessionStart);
+                    stats.lastSeen = Date.now();
+                    this.userStats.set(user.username, stats);
+                }
+            }
             this.users.delete(ws);
             // 广播用户列表变更
             this.broadcastSystemState();
