@@ -6,6 +6,15 @@ const MSG_TYPE_DELETE = 'delete';
 const MSG_TYPE_SYSTEM_STATE = 'system_state';
 const MSG_TYPE_HISTORY = 'history';
 
+// WebRTC 信令消息类型 (已补全)
+const MSG_TYPE_WEBRTC_CALL_REQUEST = 'webrtc_call_request';
+const MSG_TYPE_WEBRTC_CALL_ACCEPTED = 'webrtc_call_accepted'; // 新增
+const MSG_TYPE_WEBRTC_CALL_REJECTED = 'webrtc_call_rejected'; // 新增
+const MSG_TYPE_WEBRTC_OFFER = 'webrtc_offer';
+const MSG_TYPE_WEBRTC_ANSWER = 'webrtc_answer';
+const MSG_TYPE_WEBRTC_ICE_CANDIDATE = 'webrtc_ice_candidate';
+const MSG_TYPE_WEBRTC_CALL_HANGUP = 'webrtc_call_hangup';
+
 export class ChatRoomDurableObject {
     constructor(state, env) {
         this.state = state;
@@ -19,6 +28,9 @@ export class ChatRoomDurableObject {
         this.messages = [];
         // `lastSave` 用于实现对存储的节流写入
         this.lastSave = 0;
+        // `callState` 用于存储当前房间内的通话状态
+        // Map 的键是发起呼叫的用户名，值是包含目标用户名的对象
+        this.callState = new Map();
 
         // 异步初始化工作，加载历史聊天记录
         this.initializePromise = this.loadHistory();
@@ -156,28 +168,6 @@ export class ChatRoomDurableObject {
         // 确保初始化完成
         await this.initializePromise;
 
-        const url = new URL(request.url);
-
-        // 处理获取用户统计数据的请求
-        if (url.pathname === '/user-stats') {
-            // 返回所有用户的统计数据
-            const statsArray = Array.from(this.userStats.entries()).map(([username, stats]) => {
-                // 计算当前在线时长
-                const userSession = Array.from(this.users.values()).find(u => u.username === username);
-                const currentOnlineDuration = userSession && userSession.sessionStart ? Date.now() - userSession.sessionStart : 0;
-                return {
-                    username,
-                    messageCount: stats.messageCount,
-                    lastSeen: stats.lastSeen,
-                    totalOnlineDuration: stats.totalOnlineDuration + currentOnlineDuration,
-                    isOnline: !!userSession
-                };
-            });
-            return new Response(JSON.stringify(statsArray), {
-                headers: { 'Content-Type': 'application/json' }
-            });
-        }
-
         // 使用 blockConcurrencyWhile 保证所有操作串行执行，避免竞态条件
         return this.state.blockConcurrencyWhile(async () => {
             const upgradeHeader = request.headers.get("Upgrade");
@@ -186,6 +176,7 @@ export class ChatRoomDurableObject {
             }
 
             // 从 URL 中获取用户名
+            const url = new URL(request.url);
             const username = url.searchParams.get("username") || "Anonymous";
 
             // 创建 WebSocket 对
@@ -207,13 +198,8 @@ export class ChatRoomDurableObject {
         ws.accept();
 
         // 存储会话信息
-        const user = { ws, username, sessionStart: Date.now() };
+        const user = { ws, username };
         this.users.set(ws, user);
-
-        // 更新用户统计
-        let stats = this.userStats.get(username) || { messageCount: 0, lastSeen: 0, totalOnlineDuration: 0 };
-        stats.lastSeen = Date.now();
-        this.userStats.set(username, stats);
 
         // 1. 向新用户发送完整的聊天记录
         this.sendMessage(ws, {
@@ -221,7 +207,16 @@ export class ChatRoomDurableObject {
             payload: this.messages
         });
 
-        // 2. 广播最新的系统状态（用户列表）给所有人
+        // 初始化或更新用户统计数据
+        let stats = this.userStats.get(username);
+        if (!stats) {
+            stats = { messageCount: 0, lastSeen: Date.now(), sessionStart: Date.now() };
+        } else {
+            stats.lastSeen = Date.now();
+        }
+        this.userStats.set(username, stats);
+
+        // 2. 广播最新的系统状态（用户列表和统计）给所有人
         this.broadcastSystemState();
         
         // 监听来自客户端的消息
@@ -232,6 +227,8 @@ export class ChatRoomDurableObject {
                     await this.handleChatMessage(user, data.payload);
                 } else if (data.type === MSG_TYPE_DELETE) {
                     this.handleDeleteMessage(data.payload);
+                } else if (data.type.startsWith('webrtc_')) {
+                    this.handleWebRTCMessage(user, data);
                 }
             } catch (err) {
                 console.error('Failed to handle message:', err);
@@ -290,20 +287,20 @@ export class ChatRoomDurableObject {
                 console.log('音频消息处理完成:', audioUrl);
             } else {
                 // 文本消息
-            message.text = payload.text;
-        }
+                message.text = payload.text;
+            }
 
-        this.messages.push(message);
-        // 更新用户发言次数
-        let stats = this.userStats.get(user.username);
-        if (stats) {
-            stats.messageCount = (stats.messageCount || 0) + 1;
-            this.userStats.set(user.username, stats);
-        }
-
-        // 限制内存中消息的数量，防止无限增长
+            this.messages.push(message);
+            // 限制内存中消息的数量，防止无限增长
             if (this.messages.length > 100) {
                 this.messages.shift();
+            }
+
+            // 更新用户统计：消息计数
+            let stats = this.userStats.get(user.username);
+            if (stats) {
+                stats.messageCount = (stats.messageCount || 0) + 1;
+                this.userStats.set(user.username, stats);
             }
 
             // 广播新消息给所有用户
@@ -341,16 +338,20 @@ export class ChatRoomDurableObject {
 
     // 处理 WebSocket 连接关闭
     handleClose(ws) {
-        if (this.users.has(ws)) {
-            const user = this.users.get(ws);
-            if (user.sessionStart) {
-                let stats = this.userStats.get(user.username);
-                if (stats) {
-                    stats.totalOnlineDuration += (Date.now() - user.sessionStart);
-                    stats.lastSeen = Date.now();
-                    this.userStats.set(user.username, stats);
+        const user = this.users.get(ws);
+        if (user) {
+             // 如果用户正在通话，向对方发送挂断信号
+            const call = this.callState.get(user.username);
+            if (call && call.target) {
+                const targetUser = Array.from(this.users.values()).find(u => u.username === call.target);
+                if (targetUser) {
+                    this.sendMessage(targetUser.ws, {
+                        type: MSG_TYPE_WEBRTC_CALL_HANGUP,
+                        payload: { reason: "disconnected" }
+                    });
                 }
             }
+            this.callState.delete(user.username);
             this.users.delete(ws);
             // 广播用户列表变更
             this.broadcastSystemState();
@@ -379,11 +380,53 @@ export class ChatRoomDurableObject {
     // 广播最新的系统状态（如用户列表）
     broadcastSystemState() {
         const userList = Array.from(this.users.values()).map(u => u.username);
+        const userStatsData = {};
+        this.userStats.forEach((stats, username) => {
+            userStatsData[username] = stats;
+        });
+
         this.broadcast({
             type: MSG_TYPE_SYSTEM_STATE,
             payload: {
                 users: userList,
+                userStats: userStatsData,
             }
         });
+    }
+
+    // 处理 WebRTC 信令消息
+    handleWebRTCMessage(sender, message) {
+        const targetUsername = message.payload.targetUsername;
+        const targetUser = Array.from(this.users.values()).find(u => u.username === targetUsername);
+
+        // 如果目标用户是广播 (例如，群呼), 这里可以添加逻辑
+        // 但对于 1v1, 必须有目标用户
+        if (!targetUser) {
+            // 对于挂断等消息，可能目标用户已下线，这是正常情况，无需报错
+            if(message.type !== MSG_TYPE_WEBRTC_CALL_HANGUP) {
+                this.sendMessage(sender.ws, {
+                    type: 'error',
+                    payload: { message: `用户 ${targetUsername} 不在线或不存在。` }
+                });
+            }
+            return;
+        }
+
+        // 简单地将信令消息转发给目标用户
+        this.sendMessage(targetUser.ws, message);
+
+        // 更新通话状态 (可选，但有助于管理服务器状态)
+        const senderUsername = sender.username;
+        if (message.type === MSG_TYPE_WEBRTC_CALL_REQUEST) {
+            this.callState.set(senderUsername, { target: targetUsername, status: 'calling' });
+        } else if (message.type === MSG_TYPE_WEBRTC_CALL_ACCEPTED) {
+            // 当B接受A的呼叫时，双方都进入通话状态
+            this.callState.set(senderUsername, { target: targetUsername, status: 'in_call' });
+            this.callState.set(targetUsername, { target: senderUsername, status: 'in_call' });
+        } else if (message.type === MSG_TYPE_WEBRTC_CALL_REJECTED || message.type === MSG_TYPE_WEBRTC_CALL_HANGUP) {
+            // 清理双方的通话状态
+            this.callState.delete(senderUsername);
+            this.callState.delete(targetUsername);
+        }
     }
 }
