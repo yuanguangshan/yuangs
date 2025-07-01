@@ -64,41 +64,49 @@ async function getGeminiExplanation(text, env) {
         throw new Error('Server configuration error: GEMINI_API_KEY is not set.');
     }
     
-    // Google Gemini API v1beta endpoint for text generation
-    const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-    
-    const response = await fetch(GEMINI_API_URL, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-            contents: [{
-                parts: [{
-                    text: `用简洁精确的markdown格式文字来解释下面的文本：:\n\n${text}`
-                }]
-            }]
-        })
-    });
+async function explainForElementary(text) {
+  const GEMINI_API_KEY = 'YOUR_KEY';
+  const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Gemini API error: ${response.status} - ${errorText}`);
-        throw new Error(`Gemini API error: ${errorText}`);
-    }
+  // 构造一个更“有角色”、“有流程”的超强 Prompt
+  const prompt = `
+你是一位非常耐心的小学老师，专门给小学生讲解新知识。  
+我是一名小学三年级学生，我特别渴望弄明白事物的含义。  
+请你用精准、简洁的 Markdown 格式：
+1. 用通俗易懂的语言解释下面这段文字
+2. 给出关键概念的定义
+3. 用生活中的比喻或小故事帮助理解
+4. 举一个具体例子，并示范“举一反三”的思考方法
+5. 最后用一至两个问题来引导我延伸思考
 
-    const data = await response.json();
-    // Gemini的响应结构不同，需要这样提取
-    const explanation = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    if (!explanation) {
-        console.error('Unexpected Gemini API response structure:', JSON.stringify(data));
-        throw new Error('Unexpected AI response format from Gemini.');
-    }
+—— 以下是需要解释的文本 ——  
+${text}
+`;
 
-    return explanation;
+  const response = await fetch(GEMINI_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{
+        parts: [{ text: prompt }]
+      }]
+    })
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    console.error(`Gemini API error: ${response.status} - ${err}`);
+    throw new Error(`Gemini API error: ${err}`);
+  }
+
+  const data = await response.json();
+  const explanation = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!explanation) {
+    console.error('Unexpected Gemini API response structure:', JSON.stringify(data));
+    throw new Error('Unexpected AI response format from Gemini.');
+  }
+  return explanation;
 }
-
 
 // --- 主Worker逻辑 ---
 
