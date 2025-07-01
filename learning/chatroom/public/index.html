@@ -164,6 +164,16 @@
         .chat-details { display: flex; flex-direction: column; min-width: 0; }
         .room-name { font-size: 1.1em; font-weight: 700; margin: 0; color: white; text-shadow: 0 1px 3px rgba(0,0,0,0.3); }
         .user-status { font-size: 0.8em; opacity: 0.9; margin: 2px 0 0 0; display: flex; align-items: center; gap: 6px; }
+        #username-display {
+            cursor: pointer;
+            text-decoration: underline;
+            text-decoration-style: dotted;
+            text-underline-offset: 3px;
+            transition: color 0.3s;
+        }
+        #username-display:hover {
+            color: #f39c12;
+        }
         .connection-dot { width: 6px; height: 6px; background: #2ecc71; border-radius: 50%; animation: pulse 2s infinite; }
         .connection-dot.disconnected { background: #e74c3c; animation: none; }
         .header-users { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 15px; max-width: 50%; overflow-x: auto; }
@@ -478,6 +488,7 @@
                         <p class="user-status">
                             <span class="connection-dot" id="connection-dot"></span>
                             <span id="status">正在连接...</span>
+                            <span id="username-display" title="点击修改用户名"></span>
                         </p>
                     </div>
                 </div>
@@ -546,6 +557,7 @@
         const messageInput = document.getElementById('message-input');
         const roomNameEl = document.getElementById('room-name');
         const statusEl = document.getElementById('status');
+        const usernameDisplayEl = document.getElementById('username-display');
         const connectionDot = document.getElementById('connection-dot');
         const chatWindowEl = document.getElementById('chat-window');
         const messageForm = document.getElementById('message-form');
@@ -566,15 +578,28 @@
         const maxReconnectInterval = 30000;
 
         // --- Initialization ---
-        let username = sessionStorage.getItem('chat_username');
+        let username = localStorage.getItem('chat_username');
         if (!username) {
             username = prompt("请输入您的姓名:") || "～苑广山";
-            sessionStorage.setItem('chat_username', username);
+            localStorage.setItem('chat_username', username);
         }
         const pathParts = window.location.pathname.split('/');
         const roomName = pathParts.find(p => p) || 'general';
         roomNameEl.textContent = roomName;
         document.getElementById('sidebar-room-name').textContent = roomName;
+
+        usernameDisplayEl.textContent = username;
+        usernameDisplayEl.addEventListener('click', () => {
+            const newUsername = prompt("请输入新的用户名:", username);
+            if (newUsername && newUsername !== username) {
+                username = newUsername;
+                localStorage.setItem('chat_username', username);
+                usernameDisplayEl.textContent = username;
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({ type: 'rename', payload: { newUsername: username } }));
+                }
+            }
+        });
 
         // --- UI Event Listeners ---
         sidebarToggle.addEventListener('click', () => {
