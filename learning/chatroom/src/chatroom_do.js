@@ -3,6 +3,7 @@
 // 定义应用层协议的消息类型
 const MSG_TYPE_CHAT = 'chat';
 const MSG_TYPE_DELETE = 'delete';
+const MSG_TYPE_RENAME = 'rename';
 const MSG_TYPE_SYSTEM_STATE = 'system_state';
 const MSG_TYPE_HISTORY = 'history';
 
@@ -232,6 +233,8 @@ export class ChatRoomDurableObject {
                     await this.handleChatMessage(user, data.payload);
                 } else if (data.type === MSG_TYPE_DELETE) {
                     this.handleDeleteMessage(data.payload);
+                } else if (data.type === MSG_TYPE_RENAME) {
+                    this.handleRename(user, data.payload);
                 }
             } catch (err) {
                 console.error('Failed to handle message:', err);
@@ -336,6 +339,42 @@ export class ChatRoomDurableObject {
         });
 
         // 安排保存
+        this.scheduleSave();
+    }
+
+    // 处理用户名更改
+    handleRename(user, payload) {
+        const oldUsername = user.username;
+        const newUsername = payload.newUsername;
+
+        if (oldUsername === newUsername) {
+            return; // No change
+        }
+
+        // Update the username in the current session
+        user.username = newUsername;
+
+        // Transfer stats from old username to new username
+        if (this.userStats.has(oldUsername)) {
+            const stats = this.userStats.get(oldUsername);
+            this.userStats.set(newUsername, stats);
+            this.userStats.delete(oldUsername);
+        }
+
+        // Update username in past messages
+        this.messages.forEach(msg => {
+            if (msg.username === oldUsername) {
+                msg.username = newUsername;
+            }
+        });
+
+        // Broadcast the updated user list and send updated history to all users
+        this.broadcastSystemState();
+        this.broadcast({
+            type: MSG_TYPE_HISTORY,
+            payload: this.messages
+        });
+
         this.scheduleSave();
     }
 
