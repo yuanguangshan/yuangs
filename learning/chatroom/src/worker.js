@@ -37,7 +37,7 @@ async function getDeepSeekExplanation(text, env) {
 3. 用生活中的比喻或小故事帮助理解
 4. 举一个具体例子，并示范“举一反三”的思考方法
 5. 最后用一至两个问题来引导我延伸思考" },
-                { role: "user", content: `Explain the following text:\n\n${text}` }
+                { role: "user", content: `解释下面的文本:\n\n${text}` }
             ]
         })
     });
