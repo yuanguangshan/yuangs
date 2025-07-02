@@ -236,8 +236,9 @@
         /* --- MESSAGE STYLES --- */
         .message { margin-bottom: 16px; display: flex; flex-direction: column; animation: fadeInUp 0.3s ease; }
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
-        .message .info { font-size: 0.75em; color: #6c757d; margin-bottom: 5px; font-weight: 500; }
-        .message .info .username { font-weight: 600; color: #495057; }
+        .message .info { margin-bottom: 5px; }
+        .message .info .username { font-size: 0.85em; font-weight: 700; color: #495057; }
+        .message .info .timestamp { font-size: 0.65em; color: #999; }
         .message .text { padding: 10px 10px; background: white; border-radius: 16px; max-width: 75%; line-height: 1.4; word-wrap: break-word; box-shadow: 0 1px 6px rgba(0,0,0,0.08); border: 1px solid #e9ecef; position: relative; }
         .message.self { align-items: flex-end; }
         .message.self .text { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; }
@@ -350,7 +351,7 @@
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
         /* --- INPUT AREA --- */
-        #message-form { position: sticky; bottom: env(safe-area-inset-bottom, 0); display: flex; padding: 12px 15px; gap: 8px; align-items: flex-end; border-top: 1px solid #e9ecef; background: white; box-shadow: 0 -2px 15px rgba(0,0,0,0.08); z-index: 100; }
+        #message-form { position: sticky; bottom: env(safe-area-inset-bottom, 0); display: flex; padding: 12px 15px; gap: 8px; align-items: center; border-top: 1px solid #e9ecef; background: white; box-shadow: 0 -2px 15px rgba(0,0,0,0.08); z-index: 100; }
         .icon-btn {
             background: none;
             border: none;
@@ -610,7 +611,7 @@
                     <textarea id="message-input" placeholder="请输入..." rows="1"></textarea>
                 </div>
                 <button type="button" class="icon-btn" id="record-button">🎤</button>
-                <button id="send-button" type="submit">发送</button>
+                <button id="send-button" type="submit" disabled>发送</button>
             </form>
         </main>
     </div>
@@ -749,6 +750,7 @@
                 const compressedBlob = await compressImage(file);
                 selectedFile = new File([compressedBlob], file.name, { type: 'image/jpeg', lastModified: Date.now() });
                 showImagePreview(selectedFile);
+                checkSendButtonState();
             } catch (error) {
                 console.error('图片处理失败:', error);
                 alert('图片处理失败，请重试');
@@ -795,6 +797,7 @@
             selectedFile = null;
             imagePreview.classList.remove('show');
             imageInput.value = '';
+            checkSendButtonState();
         }
 
         async function handleRecordButtonClick() {
@@ -802,6 +805,7 @@
                 mediaRecorder.stop();
                 recordButton.textContent = '🎤';
                 isRecording = false;
+                checkSendButtonState();
                 return;
             }
             try {
@@ -818,10 +822,12 @@
                     const audioBlob = new Blob(audioChunks, { type: mimeType });
                     sendAudioMessage(audioBlob, mimeType);
                     stream.getTracks().forEach(track => track.stop());
+                    checkSendButtonState();
                 };
                 mediaRecorder.start();
                 recordButton.textContent = '🛑';
                 isRecording = true;
+                checkSendButtonState();
             } catch (error) {
                 console.error('无法访问麦克风:', error);
                 alert('无法访问麦克风，请检查权限。');
@@ -831,6 +837,7 @@
         messageInput.addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = `${Math.min(this.scrollHeight, 100)}px`;
+            checkSendButtonState();
         });
         
         messageInput.addEventListener('keydown', (e) => {
@@ -840,6 +847,10 @@
             }
         });
         
+        function checkSendButtonState() {
+            sendButton.disabled = (messageInput.value.trim() === '' && selectedFile === null) || isRecording;
+        }
+
         // --- WebSocket & Chat Logic ---
         function connectWebSocket() {
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -854,6 +865,7 @@
             statusEl.textContent = '已连接';
             connectionDot.classList.remove('disconnected');
             reconnectInterval = 1000;
+            checkSendButtonState(); // Initialize button state on connection
         }
 
         async function onSocketMessage(event) {
@@ -906,6 +918,7 @@
                 alert('发送失败，请重试');
             } finally {
                 sendButton.disabled = false;
+                checkSendButtonState(); // Update button state after sending
             }
         });
         
@@ -988,9 +1001,20 @@
             if (msg.username === username) msgEl.classList.add('self');
             msgEl.dataset.messageType = msg.type; // Add message type to dataset
 
-            const localTime = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const messageDate = new Date(msg.timestamp);
+            const now = new Date();
+            const diffMinutes = Math.floor((now - messageDate) / (1000 * 60));
+            let displayTime;
+
+            if (diffMinutes < 60) {
+                displayTime = `${diffMinutes}分钟前`;
+            } else if (diffMinutes < 24 * 60) {
+                displayTime = `${Math.floor(diffMinutes / 60)}小时前`;
+            } else {
+                displayTime = messageDate.toLocaleString([], { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            }
             
-            let contentHTML = `<div class="info"><span class="username">${escapeHTML(msg.username)}</span> <span class="timestamp">${localTime}</span></div>`;
+            let contentHTML = `<div class="info"><span class="username">${escapeHTML(msg.username)}</span> <span class="timestamp">${displayTime}</span></div>`;
 
             if (msg.type === 'image') {
                 contentHTML += `<div class="message-image" onclick="showImageModal('${msg.imageUrl}')"><img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy"></div>`;
