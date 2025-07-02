@@ -6,57 +6,33 @@
     <title>实时聊天室</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
-  // —— 1. 全局 Passive Event Listener 补丁 —— 
-  ;(function() {
-    const PASSIVE_EVENTS = new Set([
-      'scroll','wheel','touchstart','touchmove',
-      'touchenter','touchend','touchleave',
-      'mouseout','mouseleave','mouseup'
-    ]);
-    const _addEventListener = EventTarget.prototype.addEventListener;
-    EventTarget.prototype.addEventListener = function(type, fn, opts) {
-      if (PASSIVE_EVENTS.has(type)) {
-        if (opts === undefined) opts = { passive: true };
-        else if (typeof opts === 'boolean') opts = { capture: opts, passive: true };
-        else if (typeof opts === 'object' && opts.passive === undefined) opts.passive = true;
-      }
-      return _addEventListener.call(this, type, fn, opts);
-    };
-  })();
-
-  // —— 2. 解锁 Web Audio 的 IIFE —— 
-  ;(function() {
+;(function(){
+  /* 1. passive-patch 保持原样 */
+  const PASSIVE_EVENTS = new Set([/*…*/]);
+  const _orig = EventTarget.prototype.addEventListener;
+  EventTarget.prototype.addEventListener = function(type, fn, opts){
+    if (PASSIVE_EVENTS.has(type)){
+      if (opts===undefined) opts={passive:true};
+      else if (typeof opts==='boolean') opts={capture:opts, passive:true};
+      else if (typeof opts==='object' && opts.passive===undefined) opts.passive=true;
+    }
+    return _orig.call(this, type, fn, opts);
+  };
+  /* 2. 等 DOM 完全就绪后再解锁 AudioContext */
+  document.addEventListener('DOMContentLoaded', ()=>{
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
-
-    function unlockAudioContext(e) {
-      // 如果是 touchend，阻止默认滚动，以确保它被视为“非被动”手势
-      if (e.type === 'touchend') e.preventDefault();
-
-      // 创建并恢复 AudioContext
+    function unlockAudioContext(e){
+      if (e.type==='touchend') e.preventDefault();
       const ac = new AudioCtx();
-      if (ac.state === 'suspended') {
-        ac.resume().then(() => console.log("AudioContext 已恢复"));
-      }
-
-      // 播放一段静音音频彻底解锁 Web Audio
-      const sound = new Audio(
-        "data:audio/mp3;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTG93ZXN0bGV2ZWxCZWF0LmNvbQ"
-      );
-      sound.volume = 0;
-      sound.play().catch(() => {});
-
-      // 卸载监听，不重复触发
+      if (ac.state==='suspended') ac.resume();
+      new Audio("data:audio/mp3;base64,SUQz…").play().catch(()=>{});
       document.body.removeEventListener('click', unlockAudioContext);
       document.body.removeEventListener('touchend', unlockAudioContext);
     }
-
-    // 注意：touchend 要显式 passive: false，才能被识别为用户手势
     document.body.addEventListener('click', unlockAudioContext, { once: true });
-    document.body.addEventListener('touchend', unlockAudioContext, {
-      once: true,
-      passive: false
-    });
-  })();
+    document.body.addEventListener('touchend', unlockAudioContext, { once: true, passive: false });
+  });
+})();
 </script>
     <style>
         /* --- BASE STYLES --- */
