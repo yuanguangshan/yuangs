@@ -5,35 +5,44 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>实时聊天室</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<script>
-;(function(){
-  /* 1. passive-patch 保持原样 */
-  const PASSIVE_EVENTS = new Set([/*…*/]);
-  const _orig = EventTarget.prototype.addEventListener;
-  EventTarget.prototype.addEventListener = function(type, fn, opts){
-    if (PASSIVE_EVENTS.has(type)){
-      if (opts===undefined) opts={passive:true};
-      else if (typeof opts==='boolean') opts={capture:opts, passive:true};
-      else if (typeof opts==='object' && opts.passive===undefined) opts.passive=true;
-    }
-    return _orig.call(this, type, fn, opts);
-  };
-  /* 2. 等 DOM 完全就绪后再解锁 AudioContext */
-  document.addEventListener('DOMContentLoaded', ()=>{
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    function unlockAudioContext(e){
-      if (e.type==='touchend') e.preventDefault();
-      const ac = new AudioCtx();
-      if (ac.state==='suspended') ac.resume();
-      new Audio("data:audio/mp3;base64,SUQz…").play().catch(()=>{});
-      document.body.removeEventListener('click', unlockAudioContext);
-      document.body.removeEventListener('touchend', unlockAudioContext);
-    }
-    document.body.addEventListener('click', unlockAudioContext, { once: true });
-    document.body.addEventListener('touchend', unlockAudioContext, { once: true, passive: false });
-  });
-})();
-</script>
+<head>
+  <!-- ① 全局被动事件补丁：一定要最先加载 -->
+  <script>
+  ;(function(){
+    // 这些“会阻塞滚动”的事件，一律打成 passive:true
+    const PASSIVE_EVENTS = new Set([
+      'scroll',
+      'wheel',
+      'mousewheel',  // for older browsers
+      'touchstart',
+      'touchmove',
+      'touchenter',
+      'touchend',
+      'touchleave',
+      'touchcancel'
+    ]);
+    const _orig = EventTarget.prototype.addEventListener;
+    EventTarget.prototype.addEventListener = function(type, fn, options){
+      if (PASSIVE_EVENTS.has(type)) {
+        // 如果调用方没显式传 options 或者传布尔值
+        if (options === undefined) {
+          options = { passive: true };
+        } else if (typeof options === 'boolean') {
+          options = { capture: options, passive: true };
+        } else if (typeof options === 'object' && options.passive === undefined) {
+          options.passive = true;
+        }
+      }
+      return _orig.call(this, type, fn, options);
+    };
+  })();
+  </script>
+
+  <!-- ② 其余脚本……比如解锁 Web Audio、业务逻辑脚本等 -->
+  <script>
+    // …你的其它脚本…
+  </script>
+</head>
     <style>
         /* --- BASE STYLES --- */
         html, body {
