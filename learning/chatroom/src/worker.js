@@ -29,8 +29,8 @@ async function getDeepSeekExplanation(text, env) {
         body: JSON.stringify({
             model: "deepseek-chat",
             messages: [
-                { role: "system", content: "你是一个有用助于，善于用简洁的markdown语言来解释下面的文本." },
-                { role: "user", content: `Explain the following text:\n\n${text}` }
+                { role: "system", content: "你是一个有用的，善于用简洁的markdown语言来解释下面的文本." },
+                { role: "user", content: `你是一位非常耐心的小学老师，专门给小学生讲解新知识。  我是一名小学三年级学生，我特别渴望弄明白事物的含义。  请你用精准、详细的语言解释（Markdown 格式）：1. 用通俗易懂的语言解释下面这段文字。2. 给出关键概念的定义。3. 用生活中的比喻或小故事帮助理解。4. 举一个具体例子，并示范“举一反三”的思考方法。5. 最后用一至两个问题来引导我延伸思考。:\n\n${text}` }
             ]
         })
     });
@@ -75,7 +75,7 @@ async function getGeminiExplanation(text, env) {
         body: JSON.stringify({
             contents: [{
                 parts: [{
-                    text: `用简洁精确的markdown格式文字来解释下面的文本：:\n\n${text}`
+                    text: `你是一位非常耐心的小学老师，专门给小学生讲解新知识。  我是一名小学三年级学生，我特别渴望弄明白事物的含义。  请你用精准、详细的语言解释（Markdown 格式）：1. 用通俗易懂的语言解释下面这段文字。2. 给出关键概念的定义。3. 用生活中的比喻或小故事帮助理解。4. 举一个具体例子，并示范“举一反三”的思考方法。5. 最后用一至两个问题来引导我延伸思考。：:\n\n${text}`
                 }]
             }]
         })
