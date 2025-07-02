@@ -1,185 +1,854 @@
 See 'git help <command>' to read about a specific subcommand
 
-Main Porcelain Commands
-   add                     Add file contents to the index
-   am                      Apply a series of patches from a mailbox
-   archive                 Create an archive of files from a named tree
-   bisect                  Use binary search to find the commit that introduced a bug
-   branch                  List, create, or delete branches
-   bundle                  Move objects and refs by archive
-   checkout                Switch branches or restore working tree files
-   cherry-pick             Apply the changes introduced by some existing commits
-   citool                  Graphical alternative to git-commit
-   clean                   Remove untracked files from the working tree
-   clone                   Clone a repository into a new directory
-   commit                  Record changes to the repository
-   describe                Give an object a human readable name based on an available ref
-   diff                    Show changes between commits, commit and working tree, etc
-   fetch                   Download objects and refs from another repository
-   format-patch            Prepare patches for e-mail submission
-   gc                      Cleanup unnecessary files and optimize the local repository
-   gitk                    The Git repository browser
-   grep                    Print lines matching a pattern
-   gui                     A portable graphical interface to Git
-   init                    Create an empty Git repository or reinitialize an existing one
-   log                     Show commit logs
-   maintenance             Run tasks to optimize Git repository data
-   merge                   Join two or more development histories together
-   mv                      Move or rename a file, a directory, or a symlink
-   notes                   Add or inspect object notes
-   pull                    Fetch from and integrate with another repository or a local branch
-   push                    Update remote refs along with associated objects
-   range-diff              Compare two commit ranges (e.g. two versions of a branch)
-   rebase                  Reapply commits on top of another base tip
-   reset                   Reset current HEAD to the specified state
-   restore                 Restore working tree files
-   revert                  Revert some existing commits
-   rm                      Remove files from the working tree and from the index
-   scalar                  A tool for managing large Git repositories
-   shortlog                Summarize 'git log' output
-   show                    Show various types of objects
-   sparse-checkout         Reduce your working tree to a subset of tracked files
-   stash                   Stash the changes in a dirty working directory away
-   status                  Show the working tree status
-   submodule               Initialize, update or inspect submodules
-   switch                  Switch branches
-   tag                     Create, list, delete or verify a tag object signed with GPG
-   worktree                Manage multiple working trees
+---
 
-Ancillary Commands / Manipulators
-   config                  Get and set repository or global options
-   fast-export             Git data exporter
-   fast-import             Backend for fast Git data importers
-   filter-branch           Rewrite branches
-   mergetool               Run merge conflict resolution tools to resolve merge conflicts
-   pack-refs               Pack heads and tags for efficient repository access
-   prune                   Prune all unreachable objects from the object database
-   reflog                  Manage reflog information
-   remote                  Manage set of tracked repositories
-   repack                  Pack unpacked objects in a repository
-   replace                 Create, list, delete refs to replace objects
+**Git 命令详解**
 
-Ancillary Commands / Interrogators
-   annotate                Annotate file lines with commit information
-   blame                   Show what revision and author last modified each line of a file
-   bugreport               Collect information for user to file a bug report
-   count-objects           Count unpacked number of objects and their disk consumption
-   diagnose                Generate a zip archive of diagnostic information
-   difftool                Show changes using common diff tools
-   fsck                    Verifies the connectivity and validity of the objects in the database
-   gitweb                  Git web interface (web frontend to Git repositories)
-   help                    Display help information about Git
-   instaweb                Instantly browse your working repository in gitweb
-   merge-tree              Perform merge without touching index or working tree
-   rerere                  Reuse recorded resolution of conflicted merges
-   show-branch             Show branches and their commits
-   verify-commit           Check the GPG signature of commits
-   verify-tag              Check the GPG signature of tags
-   version                 Display version information about Git
-   whatchanged             Show logs with difference each commit introduces
+以下是 `git.md` 文件中列出的 Git 命令及其详细说明。
 
-Interacting with Others
-   archimport              Import a GNU Arch repository into Git
-   cvsexportcommit         Export a single commit to a CVS checkout
-   cvsimport               Salvage your data out of another SCM people love to hate
-   cvsserver               A CVS server emulator for Git
-   imap-send               Send a collection of patches from stdin to an IMAP folder
-   p4                      Import from and submit to Perforce repositories
-   quiltimport             Applies a quilt patchset onto the current branch
-   request-pull            Generates a summary of pending changes
-   send-email              Send a collection of patches as emails
-   svn                     Bidirectional operation between a Subversion repository and Git
+---
 
-Low-level Commands / Manipulators
-   apply                   Apply a patch to files and/or to the index
-   checkout-index          Copy files from the index to the working tree
-   commit-graph            Write and verify Git commit-graph files
-   commit-tree             Create a new commit object
-   hash-object             Compute object ID and optionally creates a blob from a file
-   index-pack              Build pack index file for an existing packed archive
-   merge-file              Run a three-way file merge
-   merge-index             Run a merge for files needing merging
-   mktag                   Creates a tag object with extra validation
-   mktree                  Build a tree-object from ls-tree formatted text
-   multi-pack-index        Write and verify multi-pack-indexes
-   pack-objects            Create a packed archive of objects
-   prune-packed            Remove extra objects that are already in pack files
-   read-tree               Reads tree information into the index
-   symbolic-ref            Read, modify and delete symbolic refs
-   unpack-objects          Unpack objects from a packed archive
-   update-index            Register file contents in the working tree to the index
-   update-ref              Update the object name stored in a ref safely
-   write-tree              Create a tree object from the current index
+### Main Porcelain Commands (主要常用命令)
 
-Low-level Commands / Interrogators
-   cat-file                Provide content or type and size information for repository objects
-   cherry                  Find commits yet to be applied to upstream
-   diff-files              Compares files in the working tree and the index
-   diff-index              Compare a tree to the working tree or index
-   diff-tree               Compares the content and mode of blobs found via two tree objects
-   for-each-ref            Output information on each ref
-   for-each-repo           Run a Git command on a list of repositories
-   get-tar-commit-id       Extract commit ID from an archive created using git-archive
-   ls-files                Show information about files in the index and the working tree
-   ls-remote               List references in a remote repository
-   ls-tree                 List the contents of a tree object
-   merge-base              Find as good common ancestors as possible for a merge
-   name-rev                Find symbolic names for given revs
-   pack-redundant          Find redundant pack files
-   rev-list                Lists commit objects in reverse chronological order
-   rev-parse               Pick out and massage parameters
-   show-index              Show packed archive index
-   show-ref                List references in a local repository
-   unpack-file             Creates a temporary file with a blob's contents
-   var                     Show a Git logical variable
-   verify-pack             Validate packed Git archive files
+这些是日常 Git 工作流中最常用的命令。
 
-Low-level Commands / Syncing Repositories
-   daemon                  A really simple server for Git repositories
-   fetch-pack              Receive missing objects from another repository
-   http-backend            Server side implementation of Git over HTTP
-   send-pack               Push objects over Git protocol to another repository
-   update-server-info      Update auxiliary info file to help dumb servers
+*   **`git add`**
+    *   **用法:** `git add <file>` 或 `git add .`
+    *   **说明:** 将文件内容添加到暂存区（index）。暂存区是 Git 准备提交的更改的区域。
+    *   **使用场景:** 在 `git commit` 之前，将你想要提交的更改（新文件、修改过的文件）添加到暂存区。
+    *   **注意事项:**
+        *   `git add .` 会将当前目录及其子目录下所有未暂存的更改（包括新文件和修改过的文件）添加到暂存区。
+        *   `git add -u` (或 `--update`) 只会暂存已跟踪文件的修改和删除，不会暂存新文件。
+        *   `git add -A` (或 `--all`) 会暂存所有更改，包括新文件、修改和删除。
 
-Low-level Commands / Internal Helpers
-   check-attr              Display gitattributes information
-   check-ignore            Debug gitignore / exclude files
-   check-mailmap           Show canonical names and email addresses of contacts
-   check-ref-format        Ensures that a reference name is well formed
-   column                  Display data in columns
-   credential              Retrieve and store user credentials
-   credential-cache        Helper to temporarily store passwords in memory
-   credential-store        Helper to store credentials on disk
-   fmt-merge-msg           Produce a merge commit message
-   hook                    Run git hooks
-   interpret-trailers      Add or parse structured information in commit messages
-   mailinfo                Extracts patch and authorship from a single e-mail message
-   mailsplit               Simple UNIX mbox splitter program
-   merge-one-file          The standard helper program to use with git-merge-index
-   patch-id                Compute unique ID for a patch
-   sh-i18n                 Git's i18n setup code for shell scripts
-   sh-setup                Common Git shell script setup code
-   stripspace              Remove unnecessary whitespace
+*   **`git am`**
+    *   **用法:** `git am <patch_file>`
+    *   **说明:** 应用来自邮箱（mailbox）的一系列补丁。通常用于接收通过邮件发送的补丁。
+    *   **使用场景:** 当你收到一个或多个 `.patch` 文件，并且希望将这些补丁应用到你的仓库时。
+    *   **注意事项:** 补丁文件通常由 `git format-patch` 命令生成。
 
-User-facing repository, command and file interfaces
-   attributes              Defining attributes per path
-   cli                     Git command-line interface and conventions
-   hooks                   Hooks used by Git
-   ignore                  Specifies intentionally untracked files to ignore
-   mailmap                 Map author/committer names and/or E-Mail addresses
-   modules                 Defining submodule properties
-   repository-layout       Git Repository Layout
-   revisions               Specifying revisions and ranges for Git
+*   **`git archive`**
+    *   **用法:** `git archive --format=zip --output=archive.zip master`
+    *   **说明:** 从指定树（tree）创建一个文件归档。
+    *   **使用场景:** 创建一个不包含 `.git` 目录的干净项目快照，例如发布版本或分享给不使用 Git 的人。
+    *   **注意事项:** 可以指定输出格式（如 zip, tar）和分支/标签。
 
-Developer-facing file formats, protocols and other interfaces
-   format-bundle           The bundle file format
-   format-chunk            Chunk-based file formats
-   format-commit-graph     Git commit-graph format
-   format-index            Git index format
-   format-pack             Git pack format
-   format-signature        Git cryptographic signature formats
-   protocol-capabilities   Protocol v0 and v1 capabilities
-   protocol-common         Things common to various protocols
-   protocol-http           Git HTTP-based protocols
-   protocol-pack           How packs are transferred over-the-wire
-   protocol-v2             Git Wire Protocol, Version 2
+*   **`git bisect`**
+    *   **用法:** `git bisect start` -> `git bisect bad` -> `git bisect good <commit>` -> ... -> `git bisect reset`
+    *   **说明:** 使用二分查找来定位引入 bug 的提交。
+    *   **使用场景:** 当你发现一个 bug，但不知道是哪个提交引入的，可以使用此命令快速定位。
+    *   **注意事项:** 需要手动标记每个提交是“好”的（没有 bug）还是“坏”的（有 bug）。
+
+*   **`git branch`**
+    *   **用法:**
+        *   `git branch`: 列出所有分支。
+        *   `git branch <new_branch_name>`: 创建新分支。
+        *   `git branch -d <branch_name>`: 删除分支。
+    *   **说明:** 列出、创建或删除分支。
+    *   **使用场景:** 管理你的开发分支，例如创建新功能分支、修复 bug 分支等。
+    *   **注意事项:**
+        *   `git branch -a` 可以查看所有本地和远程分支。
+        *   不能删除当前所在的分支。
+
+*   **`git bundle`**
+    *   **用法:** `git bundle create repo.bundle master`
+    *   **说明:** 通过归档移动对象和引用。
+    *   **使用场景:** 在没有网络连接的情况下，将一个 Git 仓库的全部或部分内容打包成一个文件，然后传输到另一个地方进行克隆或拉取。
+    *   **注意事项:** 接收方可以使用 `git clone repo.bundle` 或 `git pull repo.bundle` 来使用这个 bundle 文件。
+
+*   **`git checkout`**
+    *   **用法:**
+        *   `git checkout <branch_name>`: 切换分支。
+        *   `git checkout -b <new_branch_name>`: 创建并切换到新分支。
+        *   `git checkout <file_path>`: 恢复工作区文件到最新提交状态（慎用，会丢失未提交的更改）。
+        *   `git checkout <commit_hash> <file_path>`: 恢复指定文件到指定提交的状态。
+    *   **说明:** 切换分支或恢复工作区文件。
+    *   **使用场景:** 在不同分支之间切换进行开发，或者撤销对文件的修改。
+    *   **注意事项:**
+        *   切换分支前，请确保工作区是干净的，或者将更改暂存/提交。
+        *   `git checkout .` 会撤销工作区所有未暂存的更改。
+
+*   **`git cherry-pick`**
+    *   **用法:** `git cherry-pick <commit_hash>`
+    *   **说明:** 应用某些现有提交引入的更改。
+    *   **使用场景:** 将一个分支上的某个或某几个提交应用到另一个分支上，而不是合并整个分支。
+    *   **注意事项:** 会在当前分支上创建一个新的提交，其内容与被 cherry-pick 的提交相同，但哈希值不同。
+
+*   **`git citool`**
+    *   **说明:** `git-commit` 的图形化替代。
+    *   **使用场景:** 提供一个图形界面来帮助用户进行提交操作。
+
+*   **`git clean`**
+    *   **用法:** `git clean -n` (预览) -> `git clean -f` (强制删除)
+    *   **说明:** 从工作区中移除未跟踪的文件。
+    *   **使用场景:** 清理工作区，删除编译生成的文件、日志文件等未被 Git 跟踪的文件。
+    *   **注意事项:**
+        *   `git clean -n` 是一个“试运行”命令，它会告诉你哪些文件会被删除，但不会实际删除。
+        *   `git clean -f` 会强制删除未跟踪的文件。
+        *   `git clean -df` 会删除未跟踪的文件和目录。
+
+*   **`git clone`**
+    *   **用法:** `git clone <repository_url> [directory_name]`
+    *   **说明:** 将一个仓库克隆到一个新目录。
+    *   **使用场景:** 从远程仓库获取一个项目的完整副本到本地。
+    *   **注意事项:** 默认会在当前目录下创建一个与仓库同名的目录。
+
+*   **`git commit`**
+    *   **用法:** `git commit -m "Your commit message"` 或 `git commit`
+    *   **说明:** 记录对仓库的更改。
+    *   **使用场景:** 将暂存区中的更改保存为历史记录中的一个新提交。
+    *   **注意事项:**
+        *   `git commit -m` 用于直接在命令行中输入提交信息。
+        *   `git commit` 会打开一个文本编辑器让你输入提交信息。
+        *   `git commit -a -m "..."` 可以跳过 `git add` 步骤，直接提交已跟踪文件的修改。
+
+*   **`git describe`**
+    *   **用法:** `git describe --tags`
+    *   **说明:** 根据可用的引用（ref）给对象一个人类可读的名称。
+    *   **使用场景:** 生成一个简洁的、人类可读的提交名称，通常基于最近的标签和提交哈希。
+    *   **注意事项:** 常用在版本号的生成中。
+
+*   **`git diff`**
+    *   **用法:**
+        *   `git diff`: 显示工作区与暂存区之间的差异。
+        *   `git diff --cached`: 显示暂存区与最新提交之间的差异。
+        *   `git diff HEAD`: 显示工作区与最新提交之间的差异。
+        *   `git diff <commit1> <commit2>`: 比较两个提交之间的差异。
+    *   **说明:** 显示提交之间、提交与工作区之间等的更改。
+    *   **使用场景:** 查看代码修改，了解不同版本之间的变化。
+    *   **注意事项:** 这是一个非常强大的命令，有很多选项可以控制输出格式和比较范围。
+
+*   **`git fetch`**
+    *   **用法:** `git fetch origin`
+    *   **说明:** 从另一个仓库下载对象和引用。
+    *   **使用场景:** 从远程仓库获取最新的提交历史，但不会合并到当前分支。
+    *   **注意事项:** `git fetch` 只是下载，不会修改你的本地工作区或分支。
+
+*   **`git format-patch`**
+    *   **用法:** `git format-patch -1 HEAD`
+    *   **说明:** 准备补丁以供邮件提交。
+    *   **使用场景:** 将你的提交转换为 `.patch` 文件，以便通过邮件发送给其他人进行审查或应用。
+    *   **注意事项:** 可以指定要生成补丁的提交范围。
+
+*   **`git gc`**
+    *   **用法:** `git gc`
+    *   **说明:** 清理不必要的文件并优化本地仓库。
+    *   **使用场景:** 定期运行以保持仓库的整洁和高效。
+    *   **注意事项:** 通常在后台自动运行，但也可以手动触发。
+
+*   **`git gitk`**
+    *   **说明:** Git 仓库浏览器。
+    *   **使用场景:** 提供一个图形界面来浏览 Git 提交历史和分支。
+
+*   **`git grep`**
+    *   **用法:** `git grep "pattern" -- "*.c"`
+    *   **说明:** 打印匹配模式的行。
+    *   **使用场景:** 在 Git 仓库中搜索文件内容，类似于 `grep` 命令，但更专注于 Git 仓库。
+    *   **注意事项:** 可以搜索历史提交中的内容。
+
+*   **`git gui`**
+    *   **说明:** Git 的便携式图形界面。
+    *   **使用场景:** 提供一个图形界面来执行常见的 Git 操作。
+
+*   **`git init`**
+    *   **用法:** `git init`
+    *   **说明:** 创建一个空的 Git 仓库或重新初始化一个现有仓库。
+    *   **使用场景:** 在一个新项目或现有项目中开始使用 Git 进行版本控制。
+    *   **注意事项:** 会在当前目录创建一个 `.git` 子目录。
+
+*   **`git log`**
+    *   **用法:** `git log`
+    *   **说明:** 显示提交日志。
+    *   **使用场景:** 查看项目的提交历史，包括提交作者、日期、提交信息等。
+    *   **注意事项:**
+        *   `git log --oneline`: 以简洁的一行显示提交。
+        *   `git log --graph --decorate --all`: 以图形化方式显示所有分支的提交历史。
+
+*   **`git maintenance`**
+    *   **说明:** 运行任务以优化 Git 仓库数据。
+    *   **使用场景:** 维护 Git 仓库的健康和性能。
+
+*   **`git merge`**
+    *   **用法:** `git merge <branch_name>`
+    *   **说明:** 将两个或多个开发历史合并在一起。
+    *   **使用场景:** 将一个分支的更改合并到当前分支。
+    *   **注意事项:** 可能会产生合并冲突，需要手动解决。
+
+*   **`git mv`**
+    *   **用法:** `git mv <old_path> <new_path>`
+    *   **说明:** 移动或重命名文件、目录或符号链接。
+    *   **使用场景:** 在 Git 仓库中移动或重命名文件，同时保留其历史记录。
+    *   **注意事项:** 相当于 `mv` 命令加上 `git add` 和 `git rm`。
+
+*   **`git notes`**
+    *   **用法:** `git notes add -m "Note for this commit" <commit_hash>`
+    *   **说明:** 添加或检查对象注释。
+    *   **使用场景:** 为提交、标签等 Git 对象添加额外的、不属于提交信息本身的注释。
+    *   **注意事项:** 注释不会修改提交的哈希值。
+
+*   **`git pull`**
+    *   **用法:** `git pull origin master`
+    *   **说明:** 从另一个仓库或本地分支获取并集成。
+    *   **使用场景:** 从远程仓库获取最新更改并合并到当前分支。
+    *   **注意事项:** 相当于 `git fetch` 加上 `git merge`。
+
+*   **`git push`**
+    *   **用法:** `git push origin master`
+    *   **说明:** 更新远程引用以及相关对象。
+    *   **使用场景:** 将本地提交推送到远程仓库。
+    *   **注意事项:** 确保你有权限推送到远程仓库。
+
+*   **`git range-diff`**
+    *   **用法:** `git range-diff <commit_range1> <commit_range2>`
+    *   **说明:** 比较两个提交范围（例如，一个分支的两个版本）。
+    *   **使用场景:** 比较两个不同分支或同一分支不同时间段的提交集合之间的差异。
+
+*   **`git rebase`**
+    *   **用法:** `git rebase master`
+    *   **说明:** 将提交重新应用到另一个基础提示上。
+    *   **使用场景:** 整理提交历史，使提交历史更线性、更清晰。
+    *   **注意事项:**
+        *   `rebase` 会改写提交历史，慎用在已共享的公共分支上。
+        *   `git rebase -i` (交互式 rebase) 可以更精细地控制提交。
+
+*   **`git reset`**
+    *   **用法:**
+        *   `git reset --soft HEAD~1`: 撤销上一次提交，但保留更改在暂存区。
+        *   `git reset --mixed HEAD~1`: 撤销上一次提交，并取消暂存更改（默认）。
+        *   `git reset --hard HEAD~1`: 撤销上一次提交，并丢弃所有更改（慎用，会丢失数据）。
+    *   **说明:** 将当前 HEAD 重置到指定状态。
+    *   **使用场景:** 撤销提交、取消暂存、丢弃工作区更改。
+    *   **注意事项:** `--hard` 选项会永久丢失数据，请谨慎使用。
+
+*   **`git restore`**
+    *   **用法:**
+        *   `git restore <file_path>`: 恢复工作区文件到最新提交状态。
+        *   `git restore --staged <file_path>`: 取消暂存文件。
+    *   **说明:** 恢复工作区文件。
+    *   **使用场景:** 撤销对文件的修改，或者将文件从暂存区移回工作区。
+    *   **注意事项:** 这是 `git checkout` 命令在恢复文件方面的更安全、更明确的替代。
+
+*   **`git revert`**
+    *   **用法:** `git revert <commit_hash>`
+    *   **说明:** 撤销某些现有提交。
+    *   **使用场景:** 创建一个新的提交来撤销指定提交的更改，而不是删除历史记录。
+    *   **注意事项:** 不会改写历史，适用于已共享的公共分支。
+
+*   **`git rm`**
+    *   **用法:** `git rm <file_path>`
+    *   **说明:** 从工作区和暂存区中移除文件。
+    *   **使用场景:** 删除 Git 跟踪的文件。
+    *   **注意事项:** 相当于 `rm` 命令加上 `git add`。
+
+*   **`git scalar`**
+    *   **说明:** 用于管理大型 Git 仓库的工具。
+    *   **使用场景:** 优化大型仓库的性能。
+
+*   **`git shortlog`**
+    *   **用法:** `git shortlog`
+    *   **说明:** 总结 `git log` 输出。
+    *   **使用场景:** 快速查看每个作者的提交数量和提交信息摘要。
+
+*   **`git show`**
+    *   **用法:** `git show <commit_hash>`
+    *   **说明:** 显示各种类型的对象。
+    *   **使用场景:** 查看提交的详细信息，包括更改内容。
+
+*   **`git sparse-checkout`**
+    *   **说明:** 将工作区减少到跟踪文件的一个子集。
+    *   **使用场景:** 在大型仓库中，只克隆或检出部分目录，以节省磁盘空间和提高性能。
+
+*   **`git stash`**
+    *   **用法:**
+        *   `git stash save "message"`: 暂存当前工作区和暂存区的更改。
+        *   `git stash list`: 列出所有暂存。
+        *   `git stash pop`: 应用最近的暂存并删除它。
+        *   `git stash apply`: 应用最近的暂存但不删除它。
+        *   `git stash drop`: 删除最近的暂存。
+    *   **说明:** 暂存脏工作目录中的更改。
+    *   **使用场景:** 当你正在进行一些工作，但需要切换到另一个分支处理紧急任务时，可以将当前更改暂存起来，稍后再恢复。
+    *   **注意事项:** 暂存的更改不会被提交。
+
+*   **`git status`**
+    *   **用法:** `git status`
+    *   **说明:** 显示工作区状态。
+    *   **使用场景:** 查看当前工作区有哪些文件被修改、哪些文件已暂存、哪些文件未被跟踪等。
+    *   **注意事项:** 这是一个非常常用的命令，用于了解当前仓库的状态。
+
+*   **`git submodule`**
+    *   **用法:** `git submodule add <repository_url> <path>`
+    *   **说明:** 初始化、更新或检查子模块。
+    *   **使用场景:** 将一个 Git 仓库作为另一个 Git 仓库的子目录。
+    *   **注意事项:** 子模块有自己的独立历史记录。
+
+*   **`git switch`**
+    *   **用法:** `git switch <branch_name>`
+    *   **说明:** 切换分支。
+    *   **使用场景:** 切换到不同的分支进行开发。
+    *   **注意事项:** 这是 `git checkout` 命令在切换分支方面的更安全、更明确的替代。
+
+*   **`git tag`**
+    *   **用法:**
+        *   `git tag <tag_name>`: 创建轻量标签。
+        *   `git tag -a <tag_name> -m "message"`: 创建附注标签。
+        *   `git tag`: 列出所有标签。
+    *   **说明:** 创建、列出、删除或验证 GPG 签名的标签对象。
+    *   **使用场景:** 标记重要的版本发布点。
+    *   **注意事项:** 附注标签包含更多信息，并且可以被 GPG 签名。
+
+*   **`git worktree`**
+    *   **用法:** `git worktree add ../new_worktree master`
+    *   **说明:** 管理多个工作树。
+    *   **使用场景:** 在同一个仓库中同时处理多个分支，而无需频繁切换分支。
+
+---
+
+### Ancillary Commands / Manipulators (辅助命令 / 操作器)
+
+这些命令用于操作 Git 仓库的内部结构或执行更高级的任务。
+
+*   **`git config`**
+    *   **用法:** `git config --global user.name "Your Name"`
+    *   **说明:** 获取和设置仓库或全局选项。
+    *   **使用场景:** 配置 Git 的各种设置，例如用户名、邮箱、默认编辑器等。
+    *   **注意事项:**
+        *   `--global`: 配置全局设置。
+        *   `--local`: 配置当前仓库设置（默认）。
+        *   `--system`: 配置系统级设置。
+
+*   **`git fast-export`**
+    *   **说明:** Git 数据导出器。
+    *   **使用场景:** 将 Git 仓库的历史记录导出为一种可被其他版本控制系统导入的格式。
+
+*   **`git fast-import`**
+    *   **说明:** 快速 Git 数据导入器的后端。
+    *   **使用场景:** 将其他版本控制系统的数据快速导入到 Git 仓库中。
+
+*   **`git filter-branch`**
+    *   **用法:** `git filter-branch --tree-filter 'rm -rf some_dir'`
+    *   **说明:** 重写分支。
+    *   **使用场景:** 修改 Git 历史记录，例如删除大文件、修改作者信息等。
+    *   **注意事项:** 会改写历史，慎用在已共享的公共分支上。
+
+*   **`git mergetool`**
+    *   **用法:** `git mergetool`
+    *   **说明:** 运行合并冲突解决工具来解决合并冲突。
+    *   **使用场景:** 当 `git merge` 遇到冲突时，可以使用此命令启动外部合并工具来帮助解决冲突。
+
+*   **`git pack-refs`**
+    *   **说明:** 打包头和标签以实现高效的仓库访问。
+    *   **使用场景:** 优化 Git 仓库的存储和访问性能。
+
+*   **`git prune`**
+    *   **说明:** 从对象数据库中修剪所有不可达对象。
+    *   **使用场景:** 清理 Git 仓库中不再被引用的对象，释放磁盘空间。
+
+*   **`git reflog`**
+    *   **用法:** `git reflog`
+    *   **说明:** 管理引用日志信息。
+    *   **使用场景:** 查看 Git 仓库中所有操作的记录，包括分支切换、提交、重置等，可以用于恢复误操作。
+
+*   **`git remote`**
+    *   **用法:**
+        *   `git remote -v`: 列出所有远程仓库。
+        *   `git remote add origin <url>`: 添加远程仓库。
+        *   `git remote rm origin`: 移除远程仓库。
+    *   **说明:** 管理跟踪的仓库集合。
+    *   **使用场景:** 管理与远程仓库的连接。
+
+*   **`git repack`**
+    *   **说明:** 打包仓库中未打包的对象。
+    *   **使用场景:** 优化 Git 仓库的存储。
+
+*   **`git replace`**
+    *   **说明:** 创建、列出、删除替换对象的引用。
+    *   **使用场景:** 替换 Git 历史中的某个对象，而无需改写整个历史。
+
+---
+
+### Ancillary Commands / Interrogators (辅助命令 / 查询器)
+
+这些命令用于查询 Git 仓库的信息。
+
+*   **`git annotate`**
+    *   **说明:** 用提交信息注释文件行。
+    *   **使用场景:** 查看文件中每一行代码是由哪个提交引入的。
+
+*   **`git blame`**
+    *   **用法:** `git blame <file_path>`
+    *   **说明:** 显示文件的每一行是由哪个修订版本和作者最后修改的。
+    *   **使用场景:** 追溯代码的来源和修改历史。
+
+*   **`git bugreport`**
+    *   **说明:** 收集信息以供用户提交 bug 报告。
+    *   **使用场景:** 帮助用户收集 Git 相关信息，以便提交 bug 报告。
+
+*   **`git count-objects`**
+    *   **说明:** 计算未打包对象的数量及其磁盘消耗。
+    *   **使用场景:** 了解 Git 仓库的存储情况。
+
+*   **`git diagnose`**
+    *   **说明:** 生成诊断信息的 zip 归档。
+    *   **使用场景:** 收集 Git 仓库的诊断信息，用于故障排除。
+
+*   **`git difftool`**
+    *   **用法:** `git difftool`
+    *   **说明:** 使用通用 diff 工具显示更改。
+    *   **使用场景:** 启动外部 diff 工具来比较文件差异。
+
+*   **`git fsck`**
+    *   **说明:** 验证数据库中对象的连接性和有效性。
+    *   **使用场景:** 检查 Git 仓库的完整性。
+
+*   **`git gitweb`**
+    *   **说明:** Git web 界面（Git 仓库的 web 前端）。
+    *   **使用场景:** 在 web 浏览器中浏览 Git 仓库。
+
+*   **`git help`**
+    *   **用法:** `git help <command>`
+    *   **说明:** 显示 Git 的帮助信息。
+    *   **使用场景:** 获取 Git 命令的详细用法和说明。
+
+*   **`git instaweb`**
+    *   **说明:** 立即在 gitweb 中浏览你的工作仓库。
+    *   **使用场景:** 快速启动一个临时的 gitweb 实例来浏览本地仓库。
+
+*   **`git merge-tree`**
+    *   **说明:** 执行合并而不触及索引或工作树。
+    *   **使用场景:** 在不实际修改文件的情况下，模拟合并操作。
+
+*   **`git rerere`**
+    *   **说明:** 重用已记录的冲突合并解决方案。
+    *   **使用场景:** 当你多次遇到相同的合并冲突时，Git 可以记住你之前的解决方案并自动应用。
+
+*   **`git show-branch`**
+    *   **说明:** 显示分支及其提交。
+    *   **使用场景:** 查看分支之间的关系和共同祖先。
+
+*   **`git verify-commit`**
+    *   **说明:** 检查提交的 GPG 签名。
+    *   **使用场景:** 验证提交的真实性和完整性。
+
+*   **`git verify-tag`**
+    *   **说明:** 检查标签的 GPG 签名。
+    *   **使用场景:** 验证标签的真实性和完整性。
+
+*   **`git version`**
+    *   **用法:** `git version`
+    *   **说明:** 显示 Git 的版本信息。
+    *   **使用场景:** 查看当前安装的 Git 版本。
+
+*   **`git whatchanged`**
+    *   **说明:** 显示日志，其中包含每个提交引入的差异。
+    *   **使用场景:** 查看提交历史以及每个提交所做的具体更改。
+
+---
+
+### Interacting with Others (与其他系统交互)
+
+这些命令用于与外部版本控制系统或通信协议进行交互。
+
+*   **`git archimport`**
+    *   **说明:** 将 GNU Arch 仓库导入到 Git。
+    *   **使用场景:** 从 GNU Arch 迁移项目到 Git。
+
+*   **`git cvsexportcommit`**
+    *   **说明:** 将单个提交导出到 CVS 检出。
+    *   **使用场景:** 将 Git 提交导出到 CVS。
+
+*   **`git cvsimport`**
+    *   **说明:** 从另一个 SCM（人们讨厌的）中挽救你的数据。
+    *   **使用场景:** 从 CVS 导入项目到 Git。
+
+*   **`git cvsserver`**
+    *   **说明:** Git 的 CVS 服务器模拟器。
+    *   **使用场景:** 允许 CVS 客户端与 Git 仓库进行交互。
+
+*   **`git imap-send`**
+    *   **说明:** 将一系列补丁从标准输入发送到 IMAP 文件夹。
+    *   **使用场景:** 通过 IMAP 邮件发送补丁。
+
+*   **`git p4`**
+    *   **说明:** 与 Perforce 仓库进行导入和提交的双向操作。
+    *   **使用场景:** 与 Perforce 进行集成。
+
+*   **`git quiltimport`**
+    *   **说明:** 将 quilt 补丁集应用到当前分支。
+    *   **使用场景:** 应用 quilt 格式的补丁。
+
+*   **`git request-pull`**
+    *   **说明:** 生成待处理更改的摘要。
+    *   **使用场景:** 生成一个请求拉取（pull request）的摘要，以便其他人可以查看你的更改。
+
+*   **`git send-email`**
+    *   **说明:** 将一系列补丁作为电子邮件发送。
+    *   **使用场景:** 通过电子邮件发送补丁。
+
+*   **`git svn`**
+    *   **说明:** Subversion 仓库和 Git 之间的双向操作。
+    *   **使用场景:** 与 Subversion 进行集成，允许在 Git 和 Subversion 之间进行操作。
+
+---
+
+### Low-level Commands / Manipulators (底层命令 / 操作器)
+
+这些命令直接操作 Git 的底层对象模型。
+
+*   **`git apply`**
+    *   **说明:** 将补丁应用到文件和/或索引。
+    *   **使用场景:** 应用 `.patch` 文件。
+
+*   **`git checkout-index`**
+    *   **说明:** 将文件从索引复制到工作树。
+    *   **使用场景:** 从暂存区恢复文件到工作区。
+
+*   **`git commit-graph`**
+    *   **说明:** 写入和验证 Git 提交图文件。
+    *   **使用场景:** 优化 Git 仓库的性能。
+
+*   **`git commit-tree`**
+    *   **说明:** 创建一个新的提交对象。
+    *   **使用场景:** 手动创建提交对象，通常用于脚本或高级操作。
+
+*   **`git hash-object`**
+    *   **说明:** 计算对象 ID 并可选地从文件创建 blob。
+    *   **使用场景:** 计算文件的 Git 对象哈希值。
+
+*   **`git index-pack`**
+    *   **说明:** 为现有打包归档构建打包索引文件。
+    *   **使用场景:** 创建或更新 Git 打包文件的索引。
+
+*   **`git merge-file`**
+    *   **说明:** 运行三向文件合并。
+    *   **使用场景:** 手动执行三向合并。
+
+*   **`git merge-index`**
+    *   **说明:** 为需要合并的文件运行合并。
+    *   **使用场景:** 处理需要合并的文件。
+
+*   **`git mktag`**
+    *   **说明:** 创建带有额外验证的标签对象。
+    *   **使用场景:** 创建 Git 标签对象。
+
+*   **`git mktree`**
+    *   **说明:** 从 `ls-tree` 格式的文本构建树对象。
+    *   **使用场景:** 手动创建 Git 树对象。
+
+*   **`git multi-pack-index`**
+    *   **说明:** 写入和验证多打包索引。
+    *   **使用场景:** 优化 Git 仓库的存储。
+
+*   **`git pack-objects`**
+    *   **说明:** 创建对象的打包归档。
+    *   **使用场景:** 将 Git 对象打包成一个文件。
+
+*   **`git prune-packed`**
+    *   **说明:** 移除已在打包文件中的额外对象。
+    *   **使用场景:** 清理 Git 仓库中冗余的对象。
+
+*   **`git read-tree`**
+    *   **说明:** 将树信息读入索引。
+    *   **使用场景:** 将一个树对象的内容加载到暂存区。
+
+*   **`git symbolic-ref`**
+    *   **说明:** 读取、修改和删除符号引用。
+    *   **使用场景:** 管理 Git 的符号引用，例如 HEAD。
+
+*   **`git unpack-objects`**
+    *   **说明:** 从打包归档中解包对象。
+    *   **使用场景:** 从打包文件中提取 Git 对象。
+
+*   **`git update-index`**
+    *   **说明:** 将工作区中的文件内容注册到索引。
+    *   **使用场景:** 手动更新暂存区。
+
+*   **`git update-ref`**
+    *   **说明:** 安全地更新引用中存储的对象名称。
+    *   **使用场景:** 更新 Git 引用。
+
+*   **`git write-tree`**
+    *   **说明:** 从当前索引创建树对象。
+    *   **使用场景:** 从暂存区创建一个树对象。
+
+---
+
+### Low-level Commands / Interrogators (底层命令 / 查询器)
+
+这些命令用于查询 Git 的底层对象模型。
+
+*   **`git cat-file`**
+    *   **用法:** `git cat-file -p <object_hash>`
+    *   **说明:** 为仓库对象提供内容或类型和大小信息。
+    *   **使用场景:** 查看 Git 对象的原始内容。
+
+*   **`git cherry`**
+    *   **说明:** 查找尚未应用到上游的提交。
+    *   **使用场景:** 查找哪些提交还没有被合并到上游分支。
+
+*   **`git diff-files`**
+    *   **说明:** 比较工作区和索引中的文件。
+    *   **使用场景:** 查看工作区和暂存区之间的差异。
+
+*   **`git diff-index`**
+    *   **说明:** 比较树与工作区或索引。
+    *   **使用场景:** 比较一个树对象与工作区或暂存区之间的差异。
+
+*   **`git diff-tree`**
+    *   **说明:** 比较通过两个树对象找到的 blob 的内容和模式。
+    *   **使用场景:** 比较两个树对象之间的差异。
+
+*   **`git for-each-ref`**
+    *   **说明:** 输出每个引用的信息。
+    *   **使用场景:** 遍历 Git 仓库中的所有引用（分支、标签等）。
+
+*   **`git for-each-repo`**
+    *   **说明:** 在仓库列表中运行 Git 命令。
+    *   **使用场景:** 对多个 Git 仓库执行相同的操作。
+
+*   **`git get-tar-commit-id`**
+    *   **说明:** 从使用 `git-archive` 创建的归档中提取提交 ID。
+    *   **使用场景:** 从 `git archive` 生成的归档文件中获取提交 ID。
+
+*   **`git ls-files`**
+    *   **说明:** 显示索引和工作区中文件的信息。
+    *   **使用场景:** 列出 Git 跟踪的文件。
+
+*   **`git ls-remote`**
+    *   **说明:** 列出远程仓库中的引用。
+    *   **使用场景:** 查看远程仓库的分支和标签。
+
+*   **`git ls-tree`**
+    *   **说明:** 列出树对象的内容。
+    *   **使用场景:** 查看 Git 树对象的内容。
+
+*   **`git merge-base`**
+    *   **说明:** 尽可能找到合并的最佳共同祖先。
+    *   **使用场景:** 查找两个分支的共同祖先。
+
+*   **`git name-rev`**
+    *   **说明:** 为给定修订版本查找符号名称。
+    *   **使用场景:** 将提交哈希转换为人类可读的名称。
+
+*   **`git pack-redundant`**
+    *   **说明:** 查找冗余的打包文件。
+    *   **使用场景:** 识别并清理冗余的 Git 打包文件。
+
+*   **`git rev-list`**
+    *   **说明:** 以反向时间顺序列出提交对象。
+    *   **使用场景:** 列出提交历史。
+
+*   **`git rev-parse`**
+    *   **说明:** 挑选和处理参数。
+    *   **使用场景:** 将各种 Git 引用转换为 SHA-1 哈希值。
+
+*   **`git show-index`**
+    *   **说明:** 显示打包归档索引。
+    *   **使用场景:** 查看 Git 打包文件的索引信息。
+
+*   **`git show-ref`**
+    *   **说明:** 列出本地仓库中的引用。
+    *   **使用场景:** 查看本地仓库的分支和标签。
+
+*   **`git unpack-file`**
+    *   **说明:** 创建一个包含 blob 内容的临时文件。
+    *   **使用场景:** 将 Git blob 对象的内容写入临时文件。
+
+*   **`git var`**
+    *   **说明:** 显示 Git 逻辑变量。
+    *   **使用场景:** 查看 Git 的内部变量。
+
+*   **`git verify-pack`**
+    *   **说明:** 验证打包的 Git 归档文件。
+    *   **使用场景:** 检查 Git 打包文件的完整性。
+
+---
+
+### Low-level Commands / Syncing Repositories (底层命令 / 同步仓库)
+
+这些命令用于在 Git 仓库之间同步数据。
+
+*   **`git daemon`**
+    *   **说明:** Git 仓库的简单服务器。
+    *   **使用场景:** 启动一个简单的 Git 服务器，用于共享仓库。
+
+*   **`git fetch-pack`**
+    *   **说明:** 从另一个仓库接收缺失的对象。
+    *   **使用场景:** 从远程仓库获取缺失的 Git 对象。
+
+*   **`git http-backend`**
+    *   **说明:** 通过 HTTP 实现 Git 的服务器端。
+    *   **使用场景:** 通过 HTTP 协议提供 Git 服务。
+
+*   **`git send-pack`**
+    *   **说明:** 通过 Git 协议将对象推送到另一个仓库。
+    *   **使用场景:** 通过 Git 协议将本地对象推送到远程仓库。
+
+*   **`git update-server-info`**
+    *   **说明:** 更新辅助信息文件以帮助“哑”服务器。
+    *   **使用场景:** 为不支持智能协议的 Git 服务器更新信息。
+
+---
+
+### Low-level Commands / Internal Helpers (底层命令 / 内部辅助)
+
+这些命令是 Git 内部使用的辅助工具。
+
+*   **`git check-attr`**
+    *   **说明:** 显示 gitattributes 信息。
+    *   **使用场景:** 检查 `.gitattributes` 文件的配置。
+
+*   **`git check-ignore`**
+    *   **说明:** 调试 gitignore / exclude 文件。
+    *   **使用场景:** 检查文件是否被 `.gitignore` 或 `.git/info/exclude` 忽略。
+
+*   **`git check-mailmap`**
+    *   **说明:** 显示联系人的规范名称和电子邮件地址。
+    *   **使用场景:** 检查 `.mailmap` 文件的配置。
+
+*   **`git check-ref-format`**
+    *   **说明:** 确保引用名称格式正确。
+    *   **使用场景:** 验证 Git 引用名称的格式。
+
+*   **`git column`**
+    *   **说明:** 以列显示数据。
+    *   **使用场景:** 格式化输出。
+
+*   **`git credential`**
+    *   **说明:** 检索和存储用户凭据。
+    *   **使用场景:** 管理 Git 的凭据。
+
+*   **`git credential-cache`**
+    *   **说明:** 帮助程序，用于在内存中临时存储密码。
+    *   **使用场景:** 缓存 Git 凭据。
+
+*   **`git credential-store`**
+    *   **说明:** 帮助程序，用于在磁盘上存储凭据。
+    *   **使用场景:** 将 Git 凭据存储在磁盘上。
+
+*   **`git fmt-merge-msg`**
+    *   **说明:** 生成合并提交信息。
+    *   **使用场景:** 格式化合并提交信息。
+
+*   **`git hook`**
+    *   **说明:** 运行 Git 钩子。
+    *   **使用场景:** 手动触发 Git 钩子。
+
+*   **`git interpret-trailers`**
+    *   **说明:** 添加或解析提交信息中的结构化信息。
+    *   **使用场景:** 处理提交信息中的“trailer”部分。
+
+*   **`git mailinfo`**
+    *   **说明:** 从单个电子邮件消息中提取补丁和作者信息。
+    *   **使用场景:** 从邮件中解析补丁信息。
+
+*   **`git mailsplit`**
+    *   **说明:** 简单的 UNIX mbox 分割程序。
+    *   **使用场景:** 分割 mbox 格式的邮件文件。
+
+*   **`git merge-one-file`**
+    *   **说明:** 与 `git-merge-index` 一起使用的标准辅助程序。
+    *   **使用场景:** 内部合并辅助。
+
+*   **`git patch-id`**
+    *   **说明:** 计算补丁的唯一 ID。
+    *   **使用场景:** 为补丁生成唯一的标识符。
+
+*   **`git sh-i18n`**
+    *   **说明:** Git 的 shell 脚本国际化设置代码。
+    *   **使用场景:** Git 内部脚本的国际化支持。
+
+*   **`git sh-setup`**
+    *   **说明:** 通用 Git shell 脚本设置代码。
+    *   **使用场景:** Git 内部脚本的通用设置。
+
+*   **`git stripspace`**
+    *   **说明:** 移除不必要的空白。
+    *   **使用场景:** 清理文本中的空白字符。
+
+---
+
+### User-facing repository, command and file interfaces (面向用户的仓库、命令和文件接口)
+
+这些是 Git 的配置和接口文件。
+
+*   **`git attributes`**
+    *   **说明:** 定义每个路径的属性。
+    *   **使用场景:** 配置 Git 如何处理特定文件类型，例如文本文件的行尾符、二进制文件的比较方式等。
+
+*   **`git cli`**
+    *   **说明:** Git 命令行界面和约定。
+    *   **使用场景:** 描述 Git 命令行的使用方式和约定。
+
+*   **`git hooks`**
+    *   **说明:** Git 使用的钩子。
+    *   **使用场景:** 描述 Git 钩子的功能和使用方法，可以在特定事件发生时自动执行脚本。
+
+*   **`git ignore`**
+    *   **说明:** 指定有意未跟踪的文件以忽略。
+    *   **使用场景:** 描述 `.gitignore` 文件的作用和语法，用于忽略不需要版本控制的文件。
+
+*   **`git mailmap`**
+    *   **说明:** 映射作者/提交者名称和/或电子邮件地址。
+    *   **使用场景:** 统一 Git 历史中不同作者名称或电子邮件地址。
+
+*   **`git modules`**
+    *   **说明:** 定义子模块属性。
+    *   **使用场景:** 描述 `.gitmodules` 文件的作用和语法，用于配置子模块。
+
+*   **`git repository-layout`**
+    *   **说明:** Git 仓库布局。
+    *   **使用场景:** 描述 Git 仓库的目录结构。
+
+*   **`git revisions`**
+    *   **说明:** 指定 Git 的修订版本和范围。
+    *   **使用场景:** 描述如何在 Git 命令中指定提交、分支、标签等。
+
+---
+
+### Developer-facing file formats, protocols and other interfaces (面向开发者的文件格式、协议和其他接口)
+
+这些是 Git 的内部文件格式和通信协议。
+
+*   **`git format-bundle`**
+    *   **说明:** bundle 文件格式。
+    *   **使用场景:** 描述 Git bundle 文件的内部格式。
+
+*   **`git format-chunk`**
+    *   **说明:** 基于块的文件格式。
+    *   **使用场景:** 描述 Git 内部使用的基于块的文件格式。
+
+*   **`git format-commit-graph`**
+    *   **说明:** Git 提交图格式。
+    *   **使用场景:** 描述 Git 提交图文件的内部格式。
+
+*   **`git format-index`**
+    *   **说明:** Git 索引格式。
+    *   **使用场景:** 描述 Git 索引文件的内部格式。
+
+*   **`git format-pack`**
+    *   **说明:** Git 打包格式。
+    *   **使用场景:** 描述 Git 打包文件的内部格式。
+
+*   **`git format-signature`**
+    *   **说明:** Git 加密签名格式。
+    *   **使用场景:** 描述 Git 签名文件的内部格式。
+
+*   **`git protocol-capabilities`**
+    *   **说明:** 协议 v0 和 v1 功能。
+    *   **使用场景:** 描述 Git 协议的功能。
+
+*   **`git protocol-common`**
+    *   **说明:** 各种协议的共同点。
+    *   **使用场景:** 描述 Git 协议的通用特性。
+
+*   **`git protocol-http`**
+    *   **说明:** Git 基于 HTTP 的协议。
+    *   **使用场景:** 描述 Git 通过 HTTP 进行通信的协议。
+
+*   **`git protocol-pack`**
+    *   **说明:** 包如何通过网络传输。
+    *   **使用场景:** 描述 Git 打包文件在网络传输中的协议。
+
+*   **`git protocol-v2`**
+    *   **说明:** Git 线协议，版本 2。
+    *   **使用场景:** 描述 Git 协议的最新版本。
