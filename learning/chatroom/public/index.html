@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>实时聊天室</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script>
+<script>
+  // —— 1. 全局 Passive Event Listener 补丁 —— 
   ;(function() {
     const PASSIVE_EVENTS = new Set([
       'scroll','wheel','touchstart','touchmove',
@@ -22,7 +23,41 @@
       return _addEventListener.call(this, type, fn, opts);
     };
   })();
-  </script> 
+
+  // —— 2. 解锁 Web Audio 的 IIFE —— 
+  ;(function() {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+
+    function unlockAudioContext(e) {
+      // 如果是 touchend，阻止默认滚动，以确保它被视为“非被动”手势
+      if (e.type === 'touchend') e.preventDefault();
+
+      // 创建并恢复 AudioContext
+      const ac = new AudioCtx();
+      if (ac.state === 'suspended') {
+        ac.resume().then(() => console.log("AudioContext 已恢复"));
+      }
+
+      // 播放一段静音音频彻底解锁 Web Audio
+      const sound = new Audio(
+        "data:audio/mp3;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTG93ZXN0bGV2ZWxCZWF0LmNvbQ"
+      );
+      sound.volume = 0;
+      sound.play().catch(() => {});
+
+      // 卸载监听，不重复触发
+      document.body.removeEventListener('click', unlockAudioContext);
+      document.body.removeEventListener('touchend', unlockAudioContext);
+    }
+
+    // 注意：touchend 要显式 passive: false，才能被识别为用户手势
+    document.body.addEventListener('click', unlockAudioContext, { once: true });
+    document.body.addEventListener('touchend', unlockAudioContext, {
+      once: true,
+      passive: false
+    });
+  })();
+</script>
     <style>
         /* --- BASE STYLES --- */
         html, body {
@@ -1214,22 +1249,6 @@
         }
 
         setInterval(fetchUserStats, 10000);
-
-        // --- WebRTC Core Functions ---
-        function unlockAudioContext() {
-            const ac = new (window.AudioContext || window.webkitAudioContext)();
-            if (ac.state === 'suspended') {
-                ac.resume().then(() => console.log("AudioContext resumed on user gesture."));
-            }
-            const sound = new Audio("data:audio/mp3;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTG93ZXN0bGV2ZWxCZWF0LmNvbQ");
-            sound.volume = 0;
-            sound.play().catch(() => {});
-            console.log("Audio unlock attempted.");
-            document.body.removeEventListener('click', unlockAudioContext);
-            document.body.removeEventListener('touchstart', unlockAudioContext);
-        }
-        document.body.addEventListener('click', unlockAudioContext, { once: true });
-        document.body.addEventListener('touchstart', unlockAudioContext, { once: true });
 
         async function initLocalMedia() {
             try {
