@@ -2,7 +2,7 @@
         function escapeHTML(str) {
             if (typeof str !== 'string') return '';
             return str.replace(/[&<>"]/g, m => ({'&':'&','<':'<','>':'>','"':'"'})[m]);
-        }
+        } 垢
         这个函数可能不对，保留我之前的，这里不动，其他地方没有的补充完整。
 第 2 步: 替换 public/index.html
 请用下面的代码完全替换您的 public/index.html 文件。
