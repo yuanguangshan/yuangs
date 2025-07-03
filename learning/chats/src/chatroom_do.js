@@ -24,22 +24,33 @@ export class HibernatingChatRoom {
 
     // 从持久化存储中加载所有状态
     async loadState() {
+        console.log("DO instance waking up. Loading state from storage...");
         const data = await this.state.storage.get(["messages", "userStats"]);
         this.messages = data.get("messages") || [];
         this.userStats = data.get("userStats") || new Map();
+        console.log(`State loaded. Found ${this.messages.length} messages.`);
+        // Log the loaded stats to see if they are empty
+        console.log("Loaded userStats:", JSON.stringify(Array.from(this.userStats.entries())));
     }
 
-    // 安排一次节流的保存操作
-    async scheduleSave() {
-        // 只有在当前没有 alarm 时才设置，更高效
-        if ((await this.state.storage.getAlarm()) === null) {
-            await this.state.storage.setAlarm(Date.now() + 10000); // 10秒后保存
+    // 安排一次保存操作，可以立即执行或延时执行
+    async scheduleSave(immediately = false) {
+        if (immediately) {
+            // 如果要求立即执行，直接调用 alarm
+            await this.alarm();
+        } else {
+            // 否则，设置一个延时的 alarm (如果尚不存在)
+            if ((await this.state.storage.getAlarm()) === null) {
+                await this.state.storage.setAlarm(Date.now() + 10000); // 10秒后保存
+            }
         }
     }
 
     // Alarm 触发时，将所有状态写入存储
     async alarm() {
         console.log('Alarm triggered: Saving state.');
+        // Log the state of userStats in memory just BEFORE saving
+        console.log("In-memory userStats before saving:", JSON.stringify(Array.from(this.userStats.entries())));
         await this.state.storage.put({
             "messages": this.messages,
             "userStats": this.userStats
@@ -99,6 +110,9 @@ export class HibernatingChatRoom {
         const username = this.state.getTags(ws)[0];
         console.log(`WebSocket opened for: ${username}`);
 
+        // 判断这是否是房间里的第一个用户
+        const isFirstUser = this.state.getWebSockets().length === 1;
+
         let stats = this.userStats.get(username) || { messageCount: 0, totalOnlineDuration: 0 };
         stats.lastSeen = Date.now();
         stats.onlineSessions = (stats.onlineSessions || 0) + 1;
@@ -107,10 +121,14 @@ export class HibernatingChatRoom {
             stats.currentSessionStart = Date.now();
         }
         this.userStats.set(username, stats);
+        // Log the state of userStats in memory AFTER update
+        console.log("In-memory userStats after user connect:", JSON.stringify(Array.from(this.userStats.entries())));
 
         this.sendMessage(ws, { type: MSG_TYPE_HISTORY, payload: this.messages });
         this.broadcastSystemState();
-        await this.scheduleSave();
+
+        // 如果是第一个用户，立即保存一次状态以确保统计数据被创建
+        await this.scheduleSave(isFirstUser);
     }
 
     async webSocketMessage(ws, message) {
