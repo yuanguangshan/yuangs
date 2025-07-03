@@ -1,10 +1,10 @@
 // src/worker.js
 
-import { ChatRoomDurableObject } from './chatroom_do.js';
+import { HibernatingChatRoom } from './chatroom_do.js';
 import html from '../public/index.html';
 
 // Export Durable Object class for Cloudflare platform instantiation
-export { ChatRoomDurableObject };
+export { HibernatingChatRoom };
 
 // --- 新增：模块化的AI服务调用函数 ---
 
