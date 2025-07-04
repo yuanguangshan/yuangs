@@ -1,10 +1,10 @@
 // src/worker.js
 
-import { HibernatingChatRoom } from './chatroom_do.js';
+import { HibernatingChatRoomV2 } from './chatroom_do.js';
 import html from '../public/index.html';
 
 // Export Durable Object class for Cloudflare platform instantiation
-export { HibernatingChatRoom };
+export { HibernatingChatRoomV2 };
 
 // --- CORS Headers ---
 const corsHeaders = {

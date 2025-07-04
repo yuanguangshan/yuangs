@@ -11,7 +11,7 @@ const MSG_TYPE_ANSWER = 'answer';
 const MSG_TYPE_CANDIDATE = 'candidate';
 const MSG_TYPE_CALL_END = 'call_end';
 
-export class HibernatingChatRoom {
+export class HibernatingChatRoomV2 {
     constructor(state, env) {
         this.state = state;
         this.env = env;
