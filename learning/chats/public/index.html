@@ -539,6 +539,7 @@
             .header-users {
                 display: none;
             }
+
         /* 调试日志样式 */
         .debug-log-container {
             padding: 20px;
@@ -663,17 +664,16 @@
                 <div class="user-list-title">用户统计</div>
                 <div id="user-stats-list"></div>
             </div>
-            <!-- 修复日志区域的HTML部分 -->
-<div class="debug-log-container">
-    <div class="user-list-title">调试日志
-        <div class="debug-controls">
-            <button id="clear-logs-btn" title="清空日志">🗑️</button>
-            <button id="copy-logs-btn" title="复制全部日志">📋</button>
-            <button id="toggle-logs-btn" title="显示/隐藏日志">👁️</button>
-        </div>
-    </div>
-    <div id="debug-log-content" class="debug-log-content"></div>
-</div>
+            <!-- 在 user-stats-container 下方添加 -->
+            <div class="debug-log-container">
+                <div class="user-list-title">调试日志
+                    <div class="debug-controls">
+                        <button id="clear-logs-btn" title="清空日志">🗑️</button>
+                        <button id="copy-logs-btn" title="复制全部日志">📋</button>
+                        <button id="toggle-logs-btn" title="显示/隐藏日志">👁️</button>
+                    </div>
+                </div>
+                <div id="debug-log-content" class="debug-log-content"></div>
             </div>
         </aside>
 
@@ -769,6 +769,120 @@
         const userStatsListEl = document.getElementById('user-stats-list');
         const callControlsContainer = document.getElementById('call-controls-container');
         const remoteAudioContainer = document.getElementById('remote-audio-container');
+        const debugLogContent = document.getElementById('debug-log-content');
+        const clearLogsBtn = document.getElementById('clear-logs-btn');
+        const copyLogsBtn = document.getElementById('copy-logs-btn');
+        const toggleLogsBtn = document.getElementById('toggle-logs-btn');
+
+        // --- 日志功能 ---
+        // 日志级别
+        const LOG_LEVELS = {
+            INFO: 'info',
+            SUCCESS: 'success',
+            WARNING: 'warning',
+            ERROR: 'error'
+        };
+
+        // 最大日志条目数
+        const MAX_LOG_ENTRIES = 100;
+
+        // 初始化日志
+        function initDebugLog() {
+            if (clearLogsBtn) clearLogsBtn.addEventListener('click', clearLogs);
+            if (copyLogsBtn) copyLogsBtn.addEventListener('click', copyLogs);
+            if (toggleLogsBtn) toggleLogsBtn.addEventListener('click', toggleLogs);
+            
+            // 记录初始日志
+            logDebug('调试日志系统初始化完成', LOG_LEVELS.SUCCESS);
+            logDebug(`当前用户: ${username}`, LOG_LEVELS.INFO);
+            logDebug(`当前房间: ${roomName}`, LOG_LEVELS.INFO);
+        }
+
+        // 添加日志
+        function logDebug(message, level = LOG_LEVELS.INFO) {
+            if (!debugLogContent) return;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `debug-log-entry ${level}`;
+            
+            // 创建时间戳元素
+            const timestampSpan = document.createElement('span');
+            timestampSpan.className = 'log-timestamp';
+            timestampSpan.textContent = `[${timestamp}]`;
+            
+            // 创建消息元素
+            const messageSpan = document.createElement('span');
+            messageSpan.textContent = ` ${message}`;
+            
+            // 组装日志条目
+            logEntry.appendChild(timestampSpan);
+            logEntry.appendChild(messageSpan);
+            
+            // 添加到日志容器
+            debugLogContent.appendChild(logEntry);
+            
+            // 限制日志条目数量
+            while (debugLogContent.children.length > MAX_LOG_ENTRIES) {
+                debugLogContent.removeChild(debugLogContent.firstChild);
+            }
+            
+            // 自动滚动到底部
+            debugLogContent.scrollTop = debugLogContent.scrollHeight;
+            
+            // 同时输出到控制台
+            console[level === LOG_LEVELS.ERROR ? 'error' : 
+                    level === LOG_LEVELS.WARNING ? 'warn' : 
+                    level === LOG_LEVELS.SUCCESS ? 'info' : 'log'](message);
+        }
+
+        // 清空日志
+        function clearLogs() {
+            debugLogContent.innerHTML = '';
+            logDebug('日志已清空', LOG_LEVELS.INFO);
+        }
+
+        // 复制日志
+        function copyLogs() {
+            const logText = Array.from(debugLogContent.querySelectorAll('.debug-log-entry'))
+                .map(entry => {
+                    const timestamp = entry.querySelector('.log-timestamp').textContent;
+                    const message = entry.textContent.replace(timestamp, '');
+                    return `${timestamp}${message}`;
+                })
+                .join('\n');
+            
+            navigator.clipboard.writeText(logText).then(() => {
+                showCopyFeedback('日志已复制到剪贴板');
+                logDebug('日志已复制到剪贴板', LOG_LEVELS.SUCCESS);
+            }).catch(err => {
+                logDebug(`复制失败: ${err}`, LOG_LEVELS.ERROR);
+            });
+        }
+
+        // 显示/隐藏日志
+        function toggleLogs() {
+            debugLogContent.style.display = debugLogContent.style.display === 'none' ? 'block' : 'none';
+            logDebug(`日志显示已${debugLogContent.style.display === 'none' ? '隐藏' : '显示'}`, LOG_LEVELS.INFO);
+        }
+
+        // 显示复制成功反馈
+        function showCopyFeedback(message) {
+            let feedback = document.querySelector('.copy-feedback');
+            
+            if (!feedback) {
+                feedback = document.createElement('div');
+                feedback.className = 'copy-feedback';
+                document.body.appendChild(feedback);
+            }
+            
+            feedback.textContent = message;
+            feedback.classList.add('show');
+            
+            setTimeout(() => {
+                feedback.classList.remove('show');
+            }, 2000);
+        }
 
         // --- State Variables ---
         let selectedFile = null;
@@ -970,6 +1084,22 @@
             socket.onerror = onSocketError;
         }
         
+        function onSocketOpen() {
+            statusEl.textContent = '已连接';
+            connectionDot.classList.remove('disconnected');
+            reconnectInterval = 1000;
+            checkSendButtonState();
+            
+            logDebug('WebSocket连接已建立', LOG_LEVELS.SUCCESS);
+            
+            // 添加延时500ms后获取用户统计数据
+            setTimeout(() => {
+                logDebug('开始请求用户统计数据', LOG_LEVELS.INFO);
+                fetchUserStats();
+                setupStatsInterval(); // 设置定期更新
+            }, 500);
+        }
+
         function setupStatsInterval() {
             // 清除可能存在的旧定时器
             if (window.statsInterval) clearInterval(window.statsInterval);
@@ -982,27 +1112,6 @@
             
             logDebug('已设置用户统计10秒自动更新', LOG_LEVELS.SUCCESS);
         }
-
-        // --- Initial Connection ---
-        initDebugLog(); // 初始化调试日志系统
-        initLocalMedia();
-        connectWebSocket();
-        
-        function onSocketOpen() {
-    statusEl.textContent = '已连接';
-    connectionDot.classList.remove('disconnected');
-    reconnectInterval = 1000;
-    checkSendButtonState();
-    
-    logDebug('WebSocket连接已建立', LOG_LEVELS.SUCCESS);
-    
-    // 添加延时500ms后获取用户统计数据
-    setTimeout(() => {
-        logDebug('开始请求用户统计数据', LOG_LEVELS.INFO);
-        fetchUserStats();
-        setupStatsInterval(); // 设置定期更新
-    }, 500);
-}
 
         async function onSocketMessage(event) {
             const data = JSON.parse(event.data);
@@ -1115,7 +1224,7 @@
         // --- UI Rendering ---
         function escapeHTML(str) {
             if (typeof str !== 'string') return '';
-            return str.replace(/[&<>"]/g, m => ({'&':'&','<':'<','>':'>','"':'"'})[m]);
+            return str.replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[m]);
         }
         
         function convertUrlsToLinks(text) {
@@ -1425,13 +1534,11 @@
             });
         }
 
-        setInterval(fetchUserStats, 10000);
-
         async function initLocalMedia() {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             } catch (err) {
-                alert('无法获取麦克风，通话功��不可用。请检查权限。');
+                alert('无法获取麦克风，通话功能不可用。请检查权限。');
             }
         }
 
@@ -1539,74 +1646,6 @@
                 });
             }
         }
-
-        // --- 调试日志功能 ---
-        // --- 日志功能部分 ---
-const debugLogContent = document.getElementById('debug-log-content');
-const clearLogsBtn = document.getElementById('clear-logs-btn');
-const copyLogsBtn = document.getElementById('copy-logs-btn');
-const toggleLogsBtn = document.getElementById('toggle-logs-btn');
-
-// 日志级别
-const LOG_LEVELS = {
-    INFO: 'info',
-    SUCCESS: 'success',
-    WARNING: 'warning',
-    ERROR: 'error'
-};
-
-// 最大日志条目数
-const MAX_LOG_ENTRIES = 100;
-
-// 初始化日志
-function initDebugLog() {
-    if (clearLogsBtn) clearLogsBtn.addEventListener('click', clearLogs);
-    if (copyLogsBtn) copyLogsBtn.addEventListener('click', copyLogs);
-    if (toggleLogsBtn) toggleLogsBtn.addEventListener('click', toggleLogs);
-    
-    // 记录初始日志
-    logDebug('调试日志系统初始化完成', LOG_LEVELS.SUCCESS);
-    logDebug(`当前用户: ${username}`, LOG_LEVELS.INFO);
-    logDebug(`当前房间: ${roomName}`, LOG_LEVELS.INFO);
-}
-
-// 添加日志
-function logDebug(message, level = LOG_LEVELS.INFO) {
-    if (!debugLogContent) return;
-    
-    const timestamp = new Date().toLocaleTimeString();
-    const logEntry = document.createElement('div');
-    logEntry.className = `debug-log-entry ${level}`;
-    
-    // 创建时间戳元素
-    const timestampSpan = document.createElement('span');
-    timestampSpan.className = 'log-timestamp';
-    timestampSpan.textContent = `[${timestamp}]`;
-    
-    // 创建消息元素
-    const messageSpan = document.createElement('span');
-    messageSpan.textContent = ` ${message}`;
-    
-    // 组装日志条目
-    logEntry.appendChild(timestampSpan);
-    logEntry.appendChild(messageSpan);
-    
-    // 添加到日志容器
-    debugLogContent.appendChild(logEntry);
-    
-    // 限制日志条目数量
-    while (debugLogContent.children.length > MAX_LOG_ENTRIES) {
-        debugLogContent.removeChild(debugLogContent.firstChild);
-    }
-    
-    // 自动滚动到底部
-    debugLogContent.scrollTop = debugLogContent.scrollHeight;
-    
-    // 同时输出到控制台
-    console[level === LOG_LEVELS.ERROR ? 'error' : 
-            level === LOG_LEVELS.WARNING ? 'warn' : 
-            level === LOG_LEVELS.SUCCESS ? 'info' : 'log'](message);
-}
 
         // --- Initial Connection ---
         initDebugLog(); // 初始化调试日志系统
