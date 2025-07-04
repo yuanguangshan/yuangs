@@ -1,5 +1,7 @@
 // src/chatroom_do.js (Corrected and Final Version)
 
+
+
 // 定义应用层协议的消息类型
 const MSG_TYPE_CHAT = 'chat';
 const MSG_TYPE_DELETE = 'delete';
