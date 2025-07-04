@@ -424,5 +424,3 @@ broadcastSystemState() {
 }
 }
 
-// 同时“冒充”旧类，保持兼容
-export class ChatRoomV2 extends HibernatingChatRoomV2 {}
