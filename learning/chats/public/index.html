@@ -539,6 +539,94 @@
             .header-users {
                 display: none;
             }
+        /* 调试日志样式 */
+        .debug-log-container {
+            padding: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            background: rgba(0,0,0,0.2);
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .debug-log-content {
+            font-family: 'Courier New', monospace;
+            font-size: 0.75em;
+            color: #e0e0e0;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 150px;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .debug-log-content:empty::before {
+            content: "暂无日志数据";
+            color: rgba(255,255,255,0.5);
+            font-style: italic;
+        }
+
+        .debug-log-entry {
+            margin-bottom: 5px;
+            padding: 2px 5px;
+            border-radius: 3px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .debug-log-entry.info { color: #90caf9; border-left: 3px solid #90caf9; }
+        .debug-log-entry.success { color: #a5d6a7; border-left: 3px solid #a5d6a7; }
+        .debug-log-entry.warning { color: #ffcc80; border-left: 3px solid #ffcc80; }
+        .debug-log-entry.error { color: #ef9a9a; border-left: 3px solid #ef9a9a; }
+
+        .debug-controls {
+            display: inline-flex;
+            gap: 5px;
+            float: right;
+        }
+
+        .debug-controls button {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            border-radius: 4px;
+            color: white;
+            width: 24px;
+            height: 24px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .debug-controls button:hover {
+            background: rgba(255,255,255,0.2);
+            transform: scale(1.05);
+        }
+
+        .copy-feedback {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(102, 126, 234, 0.9);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            z-index: 9999;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .copy-feedback.show {
+            opacity: 1;
+        }
+
+        .log-timestamp {
+            color: rgba(255,255,255,0.5);
+            margin-right: 5px;
+            font-size: 0.85em;
+        }
     </style>
 </head>
 <body>
@@ -574,6 +662,17 @@
             <div class="user-stats-container">
                 <div class="user-list-title">用户统计</div>
                 <div id="user-stats-list"></div>
+            </div>
+            <!-- 在 user-stats-container 下方添加 -->
+            <div class="debug-log-container">
+                <div class="user-list-title">调试日志
+                    <div class="debug-controls">
+                        <button id="clear-logs-btn" title="清空日志">️</button>
+                        <button id="copy-logs-btn" title="复制全部日志"></button>
+                        <button id="toggle-logs-btn" title="显示/隐藏日志">️</button>
+                    </div>
+                </div>
+                <div id="debug-log-content" class="debug-log-content"></div>
             </div>
         </aside>
 
@@ -861,22 +960,32 @@
         // --- WebSocket & Chat Logic ---
         function connectWebSocket() {
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            socket = new WebSocket(`${wsProtocol}//${window.location.host}/${roomName}?username=${encodeURIComponent(username)}`);
+            const wsUrl = `${wsProtocol}//${window.location.host}/${roomName}?username=${encodeURIComponent(username)}`;
+            logDebug(`开始连接WebSocket: ${wsUrl}`, LOG_LEVELS.INFO);
+            socket = new WebSocket(wsUrl);
             socket.onopen = onSocketOpen;
             socket.onmessage = onSocketMessage;
             socket.onclose = onSocketClose;
             socket.onerror = onSocketError;
         }
         
-        let statsInterval;
+        function setupStatsInterval() {
+            // 清除可能存在的旧定时器
+            if (window.statsInterval) clearInterval(window.statsInterval);
+            
+            // 设置新的定时器
+            window.statsInterval = setInterval(() => {
+                logDebug('定期更新用户统计数据', LOG_LEVELS.INFO);
+                fetchUserStats();
+            }, 10000);
+            
+            logDebug('已设置用户统计10秒自动更新', LOG_LEVELS.SUCCESS);
+        }
 
-function setupStatsInterval() {
-    // 清除可能存在的旧定时器
-    if (statsInterval) clearInterval(statsInterval);
-    
-    // 设置新的定时器
-    statsInterval = setInterval(fetchUserStats, 10000);
-}
+        // --- Initial Connection ---
+        initDebugLog(); // 初始化调试日志系统
+        initLocalMedia();
+        connectWebSocket();
         
         function onSocketOpen() {
     statusEl.textContent = '已连接';
@@ -884,8 +993,11 @@ function setupStatsInterval() {
     reconnectInterval = 1000;
     checkSendButtonState();
     
+    logDebug('WebSocket连接已建立', LOG_LEVELS.SUCCESS);
+    
     // 添加延时500ms后获取用户统计数据
     setTimeout(() => {
+        logDebug('开始请求用户统计数据', LOG_LEVELS.INFO);
         fetchUserStats();
         setupStatsInterval(); // 设置定期更新
     }, 500);
@@ -893,34 +1005,60 @@ function setupStatsInterval() {
 
         async function onSocketMessage(event) {
             const data = JSON.parse(event.data);
+            logDebug(`收到消息: type=${data.type}`, LOG_LEVELS.INFO);
+            
             switch (data.type) {
                 case 'history':
                     chatWindowEl.innerHTML = '';
+                    logDebug(`收到历史消息: ${data.payload.length}条`, LOG_LEVELS.INFO);
                     data.payload.forEach(msg => appendChatMessage(msg));
                     break;
-                case 'chat': appendChatMessage(data.payload); break;
-                case 'system_state': updateUserList(data.payload.users); break;
+                case 'chat': 
+                    logDebug(`收到聊天消息: ${data.payload.username}: ${data.payload.text?.substring(0, 20) || '[media]'}...`, LOG_LEVELS.INFO);
+                    appendChatMessage(data.payload); 
+                    break;
+                case 'system_state': 
+                    logDebug(`系统状态更新: ${data.payload.users.length}位用户在线`, LOG_LEVELS.INFO);
+                    updateUserList(data.payload.users); 
+                    break;
                 case 'error':
+                    logDebug(`收到错误: ${data.payload.message}`, LOG_LEVELS.ERROR);
                     alert(data.payload.message);
                     sendButton.disabled = false;
                     break;
-                case 'delete': deleteChatMessage(data.payload.id); break;
-                case 'offer': await handleOffer(data.payload); break;
-                case 'answer': await handleAnswer(data.payload); break;
-                case 'candidate': await handleCandidate(data.payload); break;
-                case 'call_end': handleCallEnd(data.payload); break;
+                case 'delete': 
+                    logDebug(`消息删除: ID=${data.payload.id}`, LOG_LEVELS.WARNING);
+                    deleteChatMessage(data.payload.id); 
+                    break;
+                case 'offer': 
+                    logDebug(`收到通话请求: 来自${data.payload.from}`, LOG_LEVELS.INFO);
+                    await handleOffer(data.payload); 
+                    break;
+                case 'answer': 
+                    logDebug(`收到通话应答: 来自${data.payload.from}`, LOG_LEVELS.INFO);
+                    await handleAnswer(data.payload); 
+                    break;
+                case 'candidate': 
+                    logDebug(`收到ICE候选: 来自${data.payload.from}`, LOG_LEVELS.INFO);
+                    await handleCandidate(data.payload); 
+                    break;
+                case 'call_end': 
+                    logDebug(`通话结束: 来自${data.payload.from}`, LOG_LEVELS.WARNING);
+                    handleCallEnd(data.payload); 
+                    break;
             }
         }
         
         function onSocketClose() {
             statusEl.textContent = "连接已断开";
             connectionDot.classList.add('disconnected');
+            logDebug(`WebSocket连接已断开，将在${reconnectInterval/1000}秒后重连`, LOG_LEVELS.WARNING);
             setTimeout(connectWebSocket, reconnectInterval);
             reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval);
         }
 
         function onSocketError(error) {
-            console.error("WebSocket Error:", error);
+            logDebug(`WebSocket错误: ${error}`, LOG_LEVELS.ERROR);
             statusEl.textContent = "连接错误";
             socket.close();
         }
@@ -1223,11 +1361,16 @@ function setupStatsInterval() {
         // --- User Stats Functions ---
         async function fetchUserStats() {
             try {
+                logDebug(`开始获取用户统计数据: ${roomName}`, LOG_LEVELS.INFO);
                 const response = await fetch(`/room-user-stats?roomName=${roomName}`);
-                if (!response.ok) throw new Error(`Failed to fetch user stats: ${response.statusText}`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch user stats: ${response.statusText}`);
+                }
                 const stats = await response.json();
+                logDebug(`获取用户统计成功: ${stats.length}条数据`, LOG_LEVELS.SUCCESS);
                 renderUserStats(stats);
             } catch (error) {
+                logDebug(`获取用户统计失败: ${error.message}`, LOG_LEVELS.ERROR);
                 console.error('Error fetching user stats:', error);
             }
         }
@@ -1396,7 +1539,121 @@ function setupStatsInterval() {
             }
         }
 
+        // --- 调试日志功能 ---
+        const debugLogContent = document.getElementById('debug-log-content');
+        const clearLogsBtn = document.getElementById('clear-logs-btn');
+        const copyLogsBtn = document.getElementById('copy-logs-btn');
+        const toggleLogsBtn = document.getElementById('toggle-logs-btn');
+
+        // 日志级别
+        const LOG_LEVELS = {
+            INFO: 'info',
+            SUCCESS: 'success',
+            WARNING: 'warning',
+            ERROR: 'error'
+        };
+
+        // 最大日志条目数
+        const MAX_LOG_ENTRIES = 100;
+
+        // 初始化日志
+        function initDebugLog() {
+            clearLogsBtn.addEventListener('click', clearLogs);
+            copyLogsBtn.addEventListener('click', copyLogs);
+            toggleLogsBtn.addEventListener('click', toggleLogs);
+            
+            // 记录初始日志
+            logDebug('调试日志系统初始化完成', LOG_LEVELS.SUCCESS);
+            logDebug(`当前用户: ${username}`, LOG_LEVELS.INFO);
+            logDebug(`当前房间: ${roomName}`, LOG_LEVELS.INFO);
+        }
+
+        // 添加日志
+        function logDebug(message, level = LOG_LEVELS.INFO) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `debug-log-entry ${level}`;
+            
+            // 创建时间戳元素
+            const timestampSpan = document.createElement('span');
+            timestampSpan.className = 'log-timestamp';
+            timestampSpan.textContent = `[${timestamp}]`;
+            
+            // 创建消息元素
+            const messageSpan = document.createElement('span');
+            messageSpan.textContent = ` ${message}`;
+            
+            // 组装日志条目
+            logEntry.appendChild(timestampSpan);
+            logEntry.appendChild(messageSpan);
+            
+            // 添加到日志容器
+            debugLogContent.appendChild(logEntry);
+            
+            // 限制日志条目数量
+            while (debugLogContent.children.length > MAX_LOG_ENTRIES) {
+                debugLogContent.removeChild(debugLogContent.firstChild);
+            }
+            
+            // 自动滚动到底部
+            debugLogContent.scrollTop = debugLogContent.scrollHeight;
+            
+            // 同时输出到控制台
+            console[level === LOG_LEVELS.ERROR ? 'error' : 
+                    level === LOG_LEVELS.WARNING ? 'warn' : 
+                    level === LOG_LEVELS.SUCCESS ? 'info' : 'log'](message);
+        }
+
+        // 清空日志
+        function clearLogs() {
+            debugLogContent.innerHTML = '';
+            logDebug('日志已清空', LOG_LEVELS.INFO);
+        }
+
+        // 复制日志
+        function copyLogs() {
+            const logText = Array.from(debugLogContent.querySelectorAll('.debug-log-entry'))
+                .map(entry => {
+                    const timestamp = entry.querySelector('.log-timestamp').textContent;
+                    const message = entry.textContent.replace(timestamp, '');
+                    return `${timestamp}${message}`;
+                })
+                .join('\n');
+            
+            navigator.clipboard.writeText(logText).then(() => {
+                showCopyFeedback('日志已复制到剪贴板');
+                logDebug('日志已复制到剪贴板', LOG_LEVELS.SUCCESS);
+            }).catch(err => {
+                logDebug(`复制失败: ${err}`, LOG_LEVELS.ERROR);
+            });
+        }
+
+        // 显示/隐藏日志
+        function toggleLogs() {
+            debugLogContent.style.display = debugLogContent.style.display === 'none' ? 'block' : 'none';
+            logDebug(`日志显示已${debugLogContent.style.display === 'none' ? '隐藏' : '显示'}`, LOG_LEVELS.INFO);
+        }
+
+        // 显示复制成功反馈
+        function showCopyFeedback(message) {
+            let feedback = document.querySelector('.copy-feedback');
+            
+            if (!feedback) {
+                feedback = document.createElement('div');
+                feedback.className = 'copy-feedback';
+                document.body.appendChild(feedback);
+            }
+            
+            feedback.textContent = message;
+            feedback.classList.add('show');
+            
+            setTimeout(() => {
+                feedback.classList.remove('show');
+            }, 2000);
+        }
+
         // --- Initial Connection ---
+        initDebugLog(); // 初始化调试日志系统
         initLocalMedia();
         connectWebSocket();
     </script>
