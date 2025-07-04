@@ -259,7 +259,8 @@ renderUserStats()
 
 Generated code
 +————————+      +——————+
-| API/WebSocket          |——>|   allMessages    |<——+
+| API/。 
+WebSocket          |——>|   allMessages    |<——+
 | (数据来源)              |      |    (全局数组)     |      |
 +————————+      +———+———+      |
                                          |                |
