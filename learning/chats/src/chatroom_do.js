@@ -82,6 +82,18 @@ async saveState() {
 
         const url = new URL(request.url);
 
+        // --- 新增：处理 /history-messages 路径 ---
+        if (url.pathname === '/history-messages') {
+            return new Response(JSON.stringify(this.messages), {
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*', // 或者更严格地设置为 'https://chats.want.biz'
+                    'Access-Control-Allow-Methods': 'GET,HEAD,POST,OPTIONS',
+                    'Access-Control-Max-Age': '86400',
+                },
+            });
+        }
+
         if (url.pathname === '/user-stats') {
             const onlineUsersMap = new Map();
             for (const ws of this.state.getWebSockets()) {

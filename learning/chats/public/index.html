@@ -1095,6 +1095,7 @@
             // 添加延时500ms后获取用户统计数据
             setTimeout(() => {
                 logDebug('延后500毫秒请求数据，开始请求用户统计数据', LOG_LEVELS.INFO);
+                fetchHistoryMessages(); // 新增：获取历史消息
                 fetchUserStats();
                 setupStatsInterval(); // 设置定期更新
             }, 500);
@@ -1482,6 +1483,27 @@
             } catch (error) {
                 logDebug(`获取用户统计失败: ${error.message}`, LOG_LEVELS.ERROR);
                 console.error('Error fetching user stats:', error);
+            }
+        }
+
+        // --- 新增：获取历史消息函数 ---
+        async function fetchHistoryMessages() {
+            try {
+                logDebug(`开始获取房间 ${roomName} 的历史消息`, LOG_LEVELS.INFO);
+                const workerBaseUrl = window.location.origin; // 使用当前域名
+                const response = await fetch(`${workerBaseUrl}/api/messages/history?roomName=${roomName}`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch history messages: ${response.statusText}`);
+                }
+                const messages = await response.json();
+                logDebug(`获取历史消息成功: ${messages.length}条`, LOG_LEVELS.SUCCESS);
+                // 清空现有消息，然后添加历史消息
+                chatWindowEl.innerHTML = '';
+                messages.forEach(msg => appendChatMessage(msg));
+                chatWindowEl.scrollTop = chatWindowEl.scrollHeight; // 滚动到底部
+            } catch (error) {
+                logDebug(`获取历史消息失败: ${error.message}`, LOG_LEVELS.ERROR);
+                console.error('Error fetching history messages:', error);
             }
         }
 

@@ -6,6 +6,31 @@ import html from '../public/index.html';
 // Export Durable Object class for Cloudflare platform instantiation
 export { HibernatingChatRoom };
 
+// --- CORS Headers ---
+const corsHeaders = {
+    'Access-Control-Allow-Origin': '*', // 允许所有来源，或者更严格地设置为 'https://chats.want.biz'
+    'Access-Control-Allow-Methods': 'GET,HEAD,POST,OPTIONS',
+    'Access-Control-Max-Age': '86400',
+};
+
+// 处理 OPTIONS 请求 (CORS 预检请求)
+function handleOptions(request) {
+    if (request.headers.get('Origin') !== null &&
+        request.headers.get('Access-Control-Request-Method') !== null &&
+        request.headers.get('Access-Control-Request-Headers') !== null) {
+        // Handle CORS preflight request.
+        return new Response(null, {
+            headers: {
+                ...corsHeaders,
+                'Access-Control-Allow-Headers': request.headers.get('Access-Control-Request-Headers'),
+            },
+        });
+    } else {
+        // Handle standard OPTIONS request.
+        return new Response(null, { headers: corsHeaders });
+    }
+}
+
 // --- 新增：模块化的AI服务调用函数 ---
 
 /**
@@ -174,9 +199,16 @@ async function getGeminiImageDescription(imageUrl, env) {
 
 export default {
     async fetch(request, env, ctx) {
+        // Handle CORS preflight requests
+        if (request.method === 'OPTIONS') {
+            return handleOptions(request);
+        }
+
+        console.log('Incoming request URL:', request.url); // Add this line
         const url = new URL(request.url);
         
         let pathname = url.pathname;
+        console.log('Received request for path:', pathname); // Add this line for debugging
         if (pathname.endsWith('/') && pathname.length > 1) {
             pathname = pathname.slice(0, -1);
         }
@@ -192,7 +224,7 @@ export default {
                 const filename = request.headers.get('X-Filename') || `upload-${Date.now()}`;
                 const object = await env.R2_BUCKET.put(filename, request.body, { httpMetadata: request.headers });
                 const publicUrl = `${new URL(request.url).origin}/${object.key}`;
-                return new Response(JSON.stringify({ url: publicUrl }), { headers: { 'Content-Type': 'application/json' } });
+                return new Response(JSON.stringify({ url: publicUrl }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
             } catch (error) {
                 console.error('Upload error:', error.stack);
                 return new Response('Error uploading file.', { status: 500 });
@@ -224,7 +256,7 @@ export default {
                 }
 
                 return new Response(JSON.stringify({ explanation }), {
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', ...corsHeaders },
                 });
 
             } catch (error) {
@@ -247,7 +279,7 @@ export default {
                 const description = await getGeminiImageDescription(imageUrl, env);
 
                 return new Response(JSON.stringify({ description }), {
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', ...corsHeaders },
                 });
 
             } catch (error) {
@@ -281,12 +313,45 @@ export default {
 
                 const stats = await doResponse.json();
                 return new Response(JSON.stringify(stats), {
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', ...corsHeaders },
                 });
 
             } catch (error) {
                 console.error('User stats request error:', error.message);
                 return new Response(`Error processing user stats request: ${error.message}`, { status: 500 });
+            }
+        }
+        
+        // --- 新增：获取历史消息的请求处理逻辑 ---
+        if (pathname === '/api/messages/history' && request.method === 'GET') {
+            try {
+                const roomName = url.searchParams.get('roomName');
+                if (!roomName) {
+                    return new Response('Missing roomName in query parameters.', { status: 400 });
+                }
+
+                if (!env.CHAT_ROOM_DO) {
+                    return new Response('Server configuration error: CHAT_ROOM_DO not bound.', { status: 500 });
+                }
+                const doId = env.CHAT_ROOM_DO.idFromName(roomName);
+                const stub = env.CHAT_ROOM_DO.get(doId);
+
+                const doResponse = await stub.fetch(new Request(`${url.origin}/history-messages`, { method: 'GET' }));
+                
+                if (!doResponse.ok) {
+                    const errorText = await doResponse.text();
+                    console.error(`Failed to fetch history messages from DO: ${doResponse.status} - ${errorText}`);
+                    return new Response(`Error fetching history messages: ${errorText}`, { status: 500 });
+                }
+
+                const messages = await doResponse.json();
+                return new Response(JSON.stringify(messages), {
+                    headers: { 'Content-Type': 'application/json', ...corsHeaders },
+                });
+
+            } catch (error) {
+                console.error('History messages request error:', error.message);
+                return new Response(`Error processing history messages request: ${error.message}`, { status: 500 });
             }
         }
         
