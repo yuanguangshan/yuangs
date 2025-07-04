@@ -737,6 +737,20 @@
 <div id="remote-audio-container"></div>
 
     <script type="module">
+    
+            // --- 新增的辅助函数 ---
+        /**
+         * 检查用户是否在过去五分钟内活跃（发过言）
+         * @param {string | number} lastSeenTimestamp - 用户的最后发言时间戳
+         * @returns {boolean} - 如果活跃则返回 true，否则返回 false
+         */
+        function isUserActive(lastSeenTimestamp) {
+            if (!lastSeenTimestamp) return false;
+            const fiveMinutesInMs = 5 * 60 * 1000;
+            const fiveMinutesAgo = Date.now() - fiveMinutesInMs;
+            // 确保 lastSeenTimestamp 是一个数字时间戳
+            return new Date(lastSeenTimestamp).getTime() > fiveMinutesAgo;
+        }
         // --- DOM Elements ---
         const sidebarToggle = document.getElementById('sidebar-toggle');
         const sidebar = document.getElementById('sidebar');
@@ -1114,7 +1128,7 @@
             logDebug('已设置用户统计10秒自动更新', LOG_LEVELS.SUCCESS);
         }
 
-        async function onSocketMessage(event) {
+                async function onSocketMessage(event) {
             const data = JSON.parse(event.data);
             logDebug(`收到消息: type=${data.type}`, LOG_LEVELS.INFO);
             
@@ -1127,10 +1141,13 @@
                 case 'chat': 
                     logDebug(`收到聊天消息: ${data.payload.username}: ${data.payload.text?.substring(0, 20) || '[media]'}...`, LOG_LEVELS.INFO);
                     appendChatMessage(data.payload); 
+                    // 新增：收到新消息后，立即刷新用户统计和活跃列表
+                    fetchUserStats();
                     break;
                 case 'system_state': 
-                    logDebug(`系统状态更新: ${data.payload.users.length}位用户在线`, LOG_LEVELS.INFO);
-                    updateUserList(data.payload.users); 
+                    // 移除：不再使用 system_state 来更新用户列表
+                    // updateUserList(data.payload.users); 
+                    logDebug(`系统状态更新(已忽略用户列表更新): ${data.payload.users.length}位连接`, LOG_LEVELS.INFO);
                     break;
                 case 'error':
                     logDebug(`收到错误: ${data.payload.message}`, LOG_LEVELS.ERROR);
@@ -1236,17 +1253,28 @@
             });
         }
         
-        function updateUserList(users) {
+                 function updateUserList(userStats) {
             const userNamesEl = document.getElementById('user-names');
             const onlineCountEl = document.getElementById('online-count');
             const headerUsersEl = document.getElementById('header-users');
             const menuListEl = document.getElementById('users-menu-list');
+
+            // 修改：从统计数据中筛选出活跃用户
+            const activeUsers = userStats
+                .filter(stat => isUserActive(stat.lastSeen))
+                .map(stat => stat.username);
+
+            // 清空现有列表
             userNamesEl.innerHTML = '';
             headerUsersEl.innerHTML = '';
             menuListEl.innerHTML = '';
-            onlineCountEl.textContent = users.length;
-            onlineDisplay.textContent = `在线: ${users.length}`;
-            users.forEach(user => {
+
+            // 更新计数
+            onlineCountEl.textContent = activeUsers.length;
+            onlineDisplay.textContent = `在线: ${activeUsers.length}`;
+
+            // 重新填充列表
+            activeUsers.forEach(user => {
                 const safeName = escapeHTML(user);
                 userNamesEl.insertAdjacentHTML('beforeend', `<div class="user-item">${safeName}</div>`);
                 headerUsersEl.insertAdjacentHTML('beforeend', `<div class="user-item">${safeName}</div>`);
@@ -1256,6 +1284,8 @@
                     menuListEl.insertAdjacentHTML('beforeend', `<li class="user-menu-item-with-call"><span>${safeName}</span><button class="call-btn" data-username="${safeName}">📞</button></li>`);
                 }
             });
+
+            // 重新绑定通话按钮事件
             document.querySelectorAll('.call-btn').forEach(btn => {
                 btn.onclick = (e) => {
                     e.stopPropagation();
@@ -1470,21 +1500,7 @@
         });
 
         // --- User Stats Functions ---
-        async function fetchUserStats() {
-            try {
-                logDebug(`开始获取用户统计数据: ${roomName}`, LOG_LEVELS.INFO);
-                const response = await fetch(`/room-user-stats?roomName=${roomName}`);
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch user stats: ${response.statusText}`);
-                }
-                const stats = await response.json();
-                logDebug(`获取用户统计成功: ${stats.length}条数据`, LOG_LEVELS.SUCCESS);
-                renderUserStats(stats);
-            } catch (error) {
-                logDebug(`获取用户统计失败: ${error.message}`, LOG_LEVELS.ERROR);
-                console.error('Error fetching user stats:', error);
-            }
-        }
+        
 
         // --- 新增：获取历史消息函数 ---
         async function fetchHistoryMessages() {
@@ -1507,55 +1523,7 @@
             }
         }
 
-        function renderUserStats(stats) {
-            userStatsListEl.innerHTML = '';
-            if (stats.length === 0) {
-                userStatsListEl.innerHTML = '<p style="color: rgba(255,255,255,0.7); font-size: 0.8em;">暂无用户统计数据。</p>';
-                return;
-            }
-
-            stats.sort((a, b) => b.isOnline - a.isOnline || b.messageCount - a.messageCount);
-
-            stats.forEach(userStat => {
-                const item = document.createElement('div');
-                item.className = 'user-stats-item';
-                
-                const lastSeenDate = new Date(userStat.lastSeen);
-                const lastSeenString = lastSeenDate.toLocaleString();
-
-                let onlineDurationString = '-';
-                if (userStat.isOnline) {
-                    const durationSeconds = Math.floor(userStat.totalOnlineDuration / 1000);
-                    const hours = Math.floor(durationSeconds / 3600);
-                    const minutes = Math.floor((durationSeconds % 3600) / 60);
-                    const seconds = durationSeconds % 60;
-                    onlineDurationString = `${hours}h ${minutes}m ${seconds}s`;
-                }
-
-                item.innerHTML = `
-                    <div class="stat-row">
-                        <strong>${userStat.username}</strong>
-                        <span class="${userStat.isOnline ? 'online-status' : 'offline-status'}">
-                            ${userStat.isOnline ? '在线' : '离线'}
-                        </span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">发言:</span>
-                        <span class="stat-value">${userStat.messageCount}</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">在线时长:</span>
-                        <span class="stat-value">${onlineDurationString}</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">最近登录:</span>
-                        <span class="stat-value">${lastSeenString}</span>
-                    </div>
-                `;
-                userStatsListEl.appendChild(item);
-            });
-        }
-
+        function renderUserStats(sta
         async function initLocalMedia() {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
