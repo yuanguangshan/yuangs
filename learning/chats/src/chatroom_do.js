@@ -35,6 +35,7 @@ async loadState() {
         this.messages = data.get("messages") || [];
         
         const storedUserStats = data.get("userStats");
+        console.log('Raw storedUserStats from storage:', storedUserStats); // Add this line
         // 更稳健地处理：确保 storedUserStats 是一个对象才进行转换
         if (storedUserStats && typeof storedUserStats === 'object') {
             this.userStats = new Map(Object.entries(storedUserStats));
@@ -43,8 +44,10 @@ async loadState() {
         }
 
         console.log(`State loaded. Messages: ${this.messages.length}, Users: ${this.userStats.size}`);
+        console.log('Loaded userStats:', JSON.stringify(Object.fromEntries(this.userStats))); // Add this line
     }
 }
+
     
     /**
      * 将当前内存中的状态写入持久化存储。
@@ -63,6 +66,7 @@ async saveState() {
     const serializableUserStats = Object.fromEntries(this.userStats);
 
     console.log("Saving state to storage...");
+    console.log('Saving userStats:', JSON.stringify(serializableUserStats)); // Add this line
     try {
         await this.state.storage.put({
             "messages": this.messages,
@@ -94,31 +98,7 @@ async saveState() {
             });
         }
 
-        if (url.pathname === '/user-stats') {
-            const onlineUsersMap = new Map();
-            for (const ws of this.state.getWebSockets()) {
-                const username = this.state.getTags(ws)[0];
-                onlineUsersMap.set(username, true);
-            }
-
-            const statsArray = Array.from(this.userStats.entries()).map(([username, stats]) => {
-                const isOnline = onlineUsersMap.has(username);
-                let totalOnlineDuration = stats.totalOnlineDuration || 0;
-
-                if (isOnline && stats.currentSessionStart) {
-                    totalOnlineDuration += (Date.now() - stats.currentSessionStart);
-                }
-
-                return {
-                    username,
-                    messageCount: stats.messageCount || 0,
-                    lastSeen: stats.lastSeen || 0,
-                    totalOnlineDuration,
-                    isOnline,
-                };
-            });
-            return new Response(JSON.stringify(statsArray), { headers: { 'Content-Type': 'application/json' } });
-        }
+        
 
         const upgradeHeader = request.headers.get("Upgrade");
         if (upgradeHeader !== "websocket") {
@@ -139,6 +119,7 @@ async webSocketOpen(ws) {
     await this.loadState(); // 确保状态已加载
     const username = this.state.getTags(ws)[0];
     console.log(`WebSocket opened for: ${username}`);
+    console.log(`Username from tags: ${username}`); // Added log
     
     // *** 核心增加部分：安全检查 ***
     // 这是一个保险措施，确保 this.userStats 绝对是 Map 类型
@@ -148,6 +129,7 @@ async webSocketOpen(ws) {
     }
 
     let stats = this.userStats.get(username) || { messageCount: 0, totalOnlineDuration: 0 };
+    console.log(`User ${username} stats before update:`, JSON.stringify(stats));
     
     stats.lastSeen = Date.now();
     stats.onlineSessions = (stats.onlineSessions || 0) + 1;
@@ -155,11 +137,12 @@ async webSocketOpen(ws) {
         stats.currentSessionStart = Date.now();
     }
     this.userStats.set(username, stats);
+    console.log(`User ${username} stats after update:`, JSON.stringify(this.userStats.get(username)));
+    console.log(`userStats map size after webSocketOpen: ${this.userStats.size}`); // Added log
     
-    this.sendMessage(ws, { type: MSG_TYPE_HISTORY, payload: this.messages });
     this.broadcastSystemState();
     
-    await this.saveState();
+    await this.saveState(); // Ensure state is saved after userStats update
 }
     async webSocketMessage(ws, message) {
         await this.loadState();
@@ -197,6 +180,7 @@ async webSocketOpen(ws) {
         
         let stats = this.userStats.get(username);
         if (stats) {
+            console.log(`User ${username} stats before close update:`, JSON.stringify(stats));
             stats.lastSeen = Date.now();
             stats.onlineSessions = (stats.onlineSessions || 1) - 1;
             if (stats.onlineSessions === 0 && stats.currentSessionStart) {
@@ -204,6 +188,8 @@ async webSocketOpen(ws) {
                 delete stats.currentSessionStart;
             }
             this.userStats.set(username, stats);
+            console.log(`User ${username} stats after close update:`, JSON.stringify(this.userStats.get(username)));
+            console.log(`userStats map size after webSocketClose: ${this.userStats.size}`); // Added log
         }
         
         this.broadcastSystemState();
@@ -236,9 +222,12 @@ async webSocketOpen(ws) {
             if (stats) {
                 stats.messageCount = (stats.messageCount || 0) + 1;
                 this.userStats.set(user.username, stats);
+                console.log(`User ${user.username} messageCount updated to: ${stats.messageCount}`);
+                console.log(`userStats map size after handleChatMessage: ${this.userStats.size}`); // Added log
             }
             this.broadcast({ type: MSG_TYPE_CHAT, payload: message });
-            await this.saveState(); 
+            this.broadcastSystemState(); // Add this line to update active users after a new message
+            await this.saveState(); // Ensure state is saved after userStats update
         } catch (error) {
             console.error('处理聊天消息失败:', error);
             this.sendMessage(user.ws, { type: 'error', payload: { message: `消息发送失败: ${error.message}` } });
@@ -317,13 +306,15 @@ async webSocketOpen(ws) {
         });
 
         this.broadcastSystemState();
-        this.broadcast({ type: MSG_TYPE_HISTORY, payload: this.messages });
+        // this.broadcast({ type: MSG_TYPE_HISTORY, payload: this.messages }); // Removed, as history is fetched via HTTP
         await this.saveState();
     }
     
 
     // --- 辅助方法 ---
     
+    
+
     getWsByUsername(username) {
         const wss = this.state.getWebSockets(username);
         return wss.length > 0 ? wss[0] : null;
@@ -406,25 +397,26 @@ async webSocketOpen(ws) {
         }
     }
 
-// *** 请用这个新的函数替换上面的旧函数 ***
 broadcastSystemState() {
     // 确保状态已加载，以防万一
     if (!this.userStats) return;
 
-    // 1. 获取当前所有真正连接到此实例的用户的名字
-    const onlineUsernames = new Set(
-        this.state.getWebSockets().map(ws => this.state.getTags(ws)[0]).filter(Boolean)
-    );
-
-    // 2. 更新 this.userStats 中所有用户的 isOnline 状态
-    for (const [username, stats] of this.userStats.entries()) {
-        stats.isOnline = onlineUsernames.has(username);
+    // 1. 获取当前所有在线用户的名字 (基于WebSocket连接)
+    const onlineUsernames = new Set();
+    for (const ws of this.state.getWebSockets()) {
+        const username = this.state.getTags(ws)[0];
+        if (username) {
+            onlineUsernames.add(username);
+        }
     }
+
+    // 2. 构建完整的用户列表，包含在线状态
+    // 遍历所有已知用户（包括不活跃的），并标记其在线状态
+    const userList = Array.from(this.userStats.keys()).map(username => {
+        return { username, isOnline: onlineUsernames.has(username) };
+    });
     
-    // 3. 构建完整的用户列表，包含在线状态
-    const userList = Array.from(this.userStats.keys());
-    
-    // 4. 广播这个列表
+    // 3. 广播这个列表
     this.broadcast({
         type: MSG_TYPE_SYSTEM_STATE,
         payload: { users: userList } // 前端会根据这个列表来更新UI
