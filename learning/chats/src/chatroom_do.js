@@ -1,6 +1,4 @@
-// src/chatroom_do.js (Final version with hibernation-proof saving)
-
-// ... (MSG_TYPE constants remain the same) ...
+// src/chatroom_do.js (Corrected and Final Version)
 
 // 定义应用层协议的消息类型
 const MSG_TYPE_CHAT = 'chat';
@@ -17,52 +15,73 @@ export class HibernatingChatRoom {
     constructor(state, env) {
         this.state = state;
         this.env = env;
+        // 在实例首次创建时，将内存状态初始化为 null。
+        // 这是 `loadState` 函数判断是否需要从持久化存储加载数据的关键。
         this.messages = null;
         this.userStats = null;
-        // This promise is only to ensure the first load completes before any fetch.
-        // We will now load state more dynamically.
-        this.initializePromise = this.loadState().catch(err => {
-            console.error("Initial loadState failed:", err);
+    }
+
+    /**
+     * 从持久化存储加载状态到内存中。
+     * 这个函数是幂等的：在 Durable Object 实例的生命周期内，它只会真正执行一次加载操作。
+     * 后续的调用会因为 this.messages 不再是 null 而直接返回。
+     */
+// 新的、更稳健的 loadState
+async loadState() {
+    if (this.messages === null) { // 只在实例生命周期内从存储加载一次
+        console.log("State not in memory. Loading from storage...");
+        const data = await this.state.storage.get(["messages", "userStats"]);
+        
+        this.messages = data.get("messages") || [];
+        
+        const storedUserStats = data.get("userStats");
+        // 更稳健地处理：确保 storedUserStats 是一个对象才进行转换
+        if (storedUserStats && typeof storedUserStats === 'object') {
+            this.userStats = new Map(Object.entries(storedUserStats));
+        } else {
+            this.userStats = new Map(); // 如果数据损坏或不存在，则重新开始
+        }
+
+        console.log(`State loaded. Messages: ${this.messages.length}, Users: ${this.userStats.size}`);
+    }
+}
+    
+    /**
+     * 将当前内存中的状态写入持久化存储。
+     * 这是一个“直写（write-through）”策略，确保每次状态变更都持久化，防止数据丢失。
+     */
+// 这是最终修复后的版本
+async saveState() {
+    if (this.messages === null) {
+        console.warn("Attempted to save state before loading. Aborting save.");
+        return;
+    }
+
+    // ***核心改动在这里***
+    // 在保存前，明确地将 Map 转换为普通的、JSON友好的对象。
+    // 这保证了存储操作的稳定性和可预测性。
+    const serializableUserStats = Object.fromEntries(this.userStats);
+
+    console.log("Saving state to storage...");
+    try {
+        await this.state.storage.put({
+            "messages": this.messages,
+            "userStats": serializableUserStats // 保存转换后的普通对象，而不是 Map
         });
+        console.log("State saved successfully.");
+    } catch(e) {
+        console.error("Failed to save state:", e);
     }
+}
 
-    async loadState() {
-        // Only load from storage if it hasn't been loaded yet.
-        if (this.messages === null || this.userStats === null) {
-            console.log("Loading state from storage for the first time in this instance's life.");
-            const data = await this.state.storage.get(["messages", "userStats"]);
-            this.messages = data.get("messages") || [];
-            this.userStats = data.get("userStats") || new Map();
-            console.log(`State loaded. Messages: ${this.messages.length}`);
-        }
-    }
-    
-    // REMOVED: The old scheduleSave and alarm logic is flawed.
-    // async scheduleSave(...)
-    // async alarm()
-    
-    // NEW: A simple, direct "write-through" save method.
-    // We will call this whenever state changes.
-    async saveState() {
-        console.log("Saving state to storage immediately...");
-        try {
-            await this.state.storage.put({
-                "messages": this.messages,
-                "userStats": this.userStats
-            });
-            console.log("State saved successfully.");
-        } catch(e) {
-            console.error("Failed to save state:", e);
-        }
-    }
-
-
-    // Main fetch handler
+    // Main fetch handler - 这是所有外部请求（包括WebSocket升级）的入口
     async fetch(request) {
-        await this.initializePromise;
+        // **核心修复**: 在处理任何请求之前，首先确保状态已从存储中加载。
+        // 这保证了即使DO刚刚从休眠中唤醒，它也能拥有正确的历史数据。
+        await this.loadState();
+
         const url = new URL(request.url);
 
-        // FIXED: 恢复并增强 /user-stats 接口，以正确计算在线时长
         if (url.pathname === '/user-stats') {
             const onlineUsersMap = new Map();
             for (const ws of this.state.getWebSockets()) {
@@ -74,7 +93,6 @@ export class HibernatingChatRoom {
                 const isOnline = onlineUsersMap.has(username);
                 let totalOnlineDuration = stats.totalOnlineDuration || 0;
 
-                // 如果用户在线，加上当前会话的持续时间
                 if (isOnline && stats.currentSessionStart) {
                     totalOnlineDuration += (Date.now() - stats.currentSessionStart);
                 }
@@ -83,7 +101,7 @@ export class HibernatingChatRoom {
                     username,
                     messageCount: stats.messageCount || 0,
                     lastSeen: stats.lastSeen || 0,
-                    totalOnlineDuration, // 返回计算后的总时长
+                    totalOnlineDuration,
                     isOnline,
                 };
             });
@@ -104,30 +122,35 @@ export class HibernatingChatRoom {
 
     // --- WebSocket Handlers ---
 
-    async webSocketOpen(ws) {
-        await this.loadState(); // Ensure state is loaded before proceeding
-        const username = this.state.getTags(ws)[0];
-        console.log(`WebSocket opened for: ${username}`);
-        
-        let stats = this.userStats.get(username) || { messageCount: 0, totalOnlineDuration: 0 };
-        // ... (rest of stats logic is correct)
-        stats.lastSeen = Date.now();
-        stats.onlineSessions = (stats.onlineSessions || 0) + 1;
-        // 如果是该用户的第一个会话连接，记录会话开始时间
-        if (stats.onlineSessions === 1) {
-            stats.currentSessionStart = Date.now();
-        }
-        this.userStats.set(username, stats);
-        
-        this.sendMessage(ws, { type: MSG_TYPE_HISTORY, payload: this.messages });
-        this.broadcastSystemState();
-        
-        // **CRITICAL FIX**: Save state immediately after it changes.
-        await this.saveState();
+// 新的、带安全检查的 webSocketOpen
+async webSocketOpen(ws) {
+    await this.loadState(); // 确保状态已加载
+    const username = this.state.getTags(ws)[0];
+    console.log(`WebSocket opened for: ${username}`);
+    
+    // *** 核心增加部分：安全检查 ***
+    // 这是一个保险措施，确保 this.userStats 绝对是 Map 类型
+    if (!(this.userStats instanceof Map)) {
+        console.error("CRITICAL: this.userStats is not a Map after loading! Re-initializing.");
+        this.userStats = new Map();
     }
 
+    let stats = this.userStats.get(username) || { messageCount: 0, totalOnlineDuration: 0 };
+    
+    stats.lastSeen = Date.now();
+    stats.onlineSessions = (stats.onlineSessions || 0) + 1;
+    if (stats.onlineSessions === 1) {
+        stats.currentSessionStart = Date.now();
+    }
+    this.userStats.set(username, stats);
+    
+    this.sendMessage(ws, { type: MSG_TYPE_HISTORY, payload: this.messages });
+    this.broadcastSystemState();
+    
+    await this.saveState();
+}
     async webSocketMessage(ws, message) {
-        await this.loadState(); // Ensure state is loaded
+        await this.loadState();
         const username = this.state.getTags(ws)[0];
         const user = { ws, username };
         try {
@@ -142,6 +165,7 @@ export class HibernatingChatRoom {
                 case MSG_TYPE_RENAME:
                     await this.handleRename(user, data.payload);
                     break;
+                // WebRTC 信号转发逻辑保持不变
                 case MSG_TYPE_OFFER: this.handleOffer(user, data.payload); break;
                 case MSG_TYPE_ANSWER: this.handleAnswer(user, data.payload); break;
                 case MSG_TYPE_CANDIDATE: this.handleCandidate(user, data.payload); break;
@@ -155,7 +179,7 @@ export class HibernatingChatRoom {
     }
     
     async webSocketClose(ws, code, reason, wasClean) {
-        await this.loadState(); // Ensure state is loaded
+        await this.loadState();
         const username = this.state.getTags(ws)[0];
         console.log(`WebSocket closed for: ${username}`);
         
@@ -163,29 +187,27 @@ export class HibernatingChatRoom {
         if (stats) {
             stats.lastSeen = Date.now();
             stats.onlineSessions = (stats.onlineSessions || 1) - 1;
-            // 如果是该用户的最后一个会话断开，计算并累加本次在线时长
             if (stats.onlineSessions === 0 && stats.currentSessionStart) {
                 stats.totalOnlineDuration += (Date.now() - stats.currentSessionStart);
-                delete stats.currentSessionStart; // 清理会话开始时间戳
+                delete stats.currentSessionStart;
             }
             this.userStats.set(username, stats);
         }
         
         this.broadcastSystemState();
-        // **CRITICAL FIX**: Save state immediately.
         await this.saveState();
     }
     
     async webSocketError(ws, error) {
+        // loadState 不是必须的，因为 webSocketClose 会被调用
         const username = this.state.getTags(ws)[0];
         console.error(`WebSocket error for user ${username}:`, error);
-        // The webSocketClose handler will be called automatically after an error.
     }
 
-    // --- Core Logic ---
+    // --- Core Logic (所有核心逻辑函数也需要先加载状态) ---
 
     async handleChatMessage(user, payload) {
-        await this.loadState(); // Ensure state is loaded
+        await this.loadState();
         try {
             let message;
             if (payload.type === 'image') {
@@ -204,13 +226,15 @@ export class HibernatingChatRoom {
                 this.userStats.set(user.username, stats);
             }
             this.broadcast({ type: MSG_TYPE_CHAT, payload: message });
-            // **CRITICAL FIX**:
             await this.saveState(); 
         } catch (error) {
             console.error('处理聊天消息失败:', error);
             this.sendMessage(user.ws, { type: 'error', payload: { message: `消息发送失败: ${error.message}` } });
         }
     }
+
+    // ... (所有 #process... 和 handle... 方法保持不变，因为它们都被 `await this.loadState()` 保护了) ...
+
     #processTextMessage(user, payload) {
         return {
             id: crypto.randomUUID(),
@@ -246,26 +270,23 @@ export class HibernatingChatRoom {
     }
 
     async handleDeleteMessage(payload) {
-        await this.loadState(); // Ensure state is loaded
+        await this.loadState();
         this.messages = this.messages.filter(m => m.id !== payload.id);
         this.broadcast({ type: MSG_TYPE_DELETE, payload: payload });
-        // **CRITICAL FIX**:
         await this.saveState();
     }
 
     async handleRename(user, payload) {
-        await this.loadState(); // Ensure state is loaded
+        await this.loadState();
         const oldUsername = user.username;
         const newUsername = payload.newUsername;
         if (oldUsername === newUsername) return;
 
-        // 找到所有使用旧用户名的连接，并全部更新它们的 tag
         const socketsToUpdate = this.state.getWebSockets(oldUsername);
         for (const sock of socketsToUpdate) {
             this.state.setTags(sock, [newUsername]);
         }
 
-        // 转移统计数据
         if (this.userStats.has(oldUsername)) {
             const stats = this.userStats.get(oldUsername);
             const existingNewStats = this.userStats.get(newUsername) || { messageCount: 0, totalOnlineDuration: 0 };
@@ -285,10 +306,10 @@ export class HibernatingChatRoom {
 
         this.broadcastSystemState();
         this.broadcast({ type: MSG_TYPE_HISTORY, payload: this.messages });
-        // **CRITICAL FIX**:
         await this.saveState();
     }
     
+
     // --- 辅助方法 ---
     
     getWsByUsername(username) {
@@ -373,11 +394,28 @@ export class HibernatingChatRoom {
         }
     }
 
-    broadcastSystemState() {
-        const userList = Array.from(new Set(this.state.getWebSockets().map(ws => this.state.getTags(ws)[0])));
-        this.broadcast({ 
-            type: MSG_TYPE_SYSTEM_STATE,
-            payload: { users: userList }
-        });
+// *** 请用这个新的函数替换上面的旧函数 ***
+broadcastSystemState() {
+    // 确保状态已加载，以防万一
+    if (!this.userStats) return;
+
+    // 1. 获取当前所有真正连接到此实例的用户的名字
+    const onlineUsernames = new Set(
+        this.state.getWebSockets().map(ws => this.state.getTags(ws)[0]).filter(Boolean)
+    );
+
+    // 2. 更新 this.userStats 中所有用户的 isOnline 状态
+    for (const [username, stats] of this.userStats.entries()) {
+        stats.isOnline = onlineUsernames.has(username);
     }
+    
+    // 3. 构建完整的用户列表，包含在线状态
+    const userList = Array.from(this.userStats.keys());
+    
+    // 4. 广播这个列表
+    this.broadcast({
+        type: MSG_TYPE_SYSTEM_STATE,
+        payload: { users: userList } // 前端会根据这个列表来更新UI
+    });
+}
 }
