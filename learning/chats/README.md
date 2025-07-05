@@ -59,7 +59,7 @@ function onSocketError(error) {
     
     statusEl.textContent = "连接错误";
     socket.close(); // 主动关闭，会触发 onclose 里的重连逻辑
-}
+}。
 ```
 **更好的做法**是在 `onclose` 事件中获取断开信息：
 ```javascript
