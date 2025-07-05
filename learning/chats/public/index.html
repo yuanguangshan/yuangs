@@ -1003,19 +1003,28 @@
         }
     }
     
-    function onSocketClose() {
-        statusEl.textContent = "连接已断开";
-        connectionDot.classList.add('disconnected');
-        logDebug(`WebSocket连接已断开，将在${reconnectInterval/1000}秒后重连`, LOG_LEVELS.WARNING);
-        setTimeout(connectWebSocket, reconnectInterval);
-        reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval);
-    }
+function onSocketClose(event) {
+    statusEl.textContent = "连接已断开";
+    connectionDot.classList.add('disconnected');
+    
+    // event 包含了断开的详细信息
+    let reason = `Code: ${event.code}, Reason: ${event.reason || '无'}, Was Clean: ${event.wasClean}`;
+    logDebug(`WebSocket连接已断开。${reason}`, LOG_LEVELS.WARNING);
+    
+    logDebug(`将在${reconnectInterval/1000}秒后重连`, LOG_LEVELS.WARNING);
+    setTimeout(connectWebSocket, reconnectInterval);
+    reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval);
+}
 
-    function onSocketError(error) {
-        logDebug(`WebSocket错误: ${error}`, LOG_LEVELS.ERROR);
-        statusEl.textContent = "连接错误";
-        socket.close();
-    }
+ function onSocketError(error) {
+    // error 是一个 Event 对象，我们需要查看它的具体内容
+    // 对于错误事件，通常没有太多有用信息，但可以尝试记录 type
+    let errorMessage = `WebSocket发生未知错误。Type: ${error.type}`;
+    logDebug(errorMessage, LOG_LEVELS.ERROR);
+    
+    statusEl.textContent = "连接错误";
+    socket.close(); // 主动关闭，会触发 onclose 里的重连逻辑
+}
 
     messageForm.addEventListener('submit', async (e) => {
         e.preventDefault();
