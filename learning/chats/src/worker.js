@@ -157,70 +157,73 @@ async function sendAutoPost(env, roomName, text) {
 }
 
 
-// --- 主Worker入口点 ---
+// --- 主Worker入口点 ---// 在 src/worker.js 中，替换这个部分
+
 export default {
     /**
      * 处理所有传入的HTTP请求。
      */
     async fetch(request, env, ctx) {
-        if (request.method === 'OPTIONS') {
-            return handleOptions(request);
-        }
+        try {
+            if (request.method === 'OPTIONS') {
+                return handleOptions(request);
+            }
 
-        const url = new URL(request.url);
-        const pathname = url.pathname;
-        
-        // --- 路由 1: 全局API (与特定房间无关) ---
-        
-        if (pathname === '/upload') {
-            try {
+            const url = new URL(request.url); // 只在这里定义一次 url
+            const pathname = url.pathname;
+
+            // --- 路由 1: 全局API (由主Worker直接处理) ---
+            if (pathname === '/upload') {
                 if (!env.R2_BUCKET) return new Response('Server config error: R2_BUCKET not bound.', { status: 500 });
                 const filename = request.headers.get('X-Filename') || `upload-${Date.now()}`;
                 const object = await env.R2_BUCKET.put(filename, request.body, { httpMetadata: request.headers });
                 const publicUrl = `https://pub-8dfbdda6df204465aae771b4c080140b.r2.dev/${object.key}`;
                 return new Response(JSON.stringify({ url: publicUrl }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
-            } catch (error) {
-                console.error('Upload error:', error.stack);
-                return new Response('Error uploading file.', { status: 500 });
             }
-        }
-        
-        if (pathname === '/ai-explain') {
-            try {
+            if (pathname === '/ai-explain') {
                 const { text, model = 'gemini' } = await request.json();
                 if (!text) return new Response('Missing "text"', { status: 400, headers: corsHeaders });
                 const explanation = model === 'gemini' ? await getGeminiExplanation(text, env) : await getDeepSeekExplanation(text, env);
                 return new Response(JSON.stringify({ explanation }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
-            } catch (error) { return new Response(error.message, { status: 500, headers: corsHeaders }); }
-        }
-        
-        if (pathname === '/ai-describe-image') {
-            try {
+            }
+            if (pathname === '/ai-describe-image') {
                 const { imageUrl } = await request.json();
                 if (!imageUrl) return new Response('Missing "imageUrl"', { status: 400, headers: corsHeaders });
                 const description = await getGeminiImageDescription(imageUrl, env);
                 return new Response(JSON.stringify({ description }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
-            } catch (error) { return new Response(error.message, { status: 500, headers: corsHeaders }); }
-        }
+            }
 
-        // --- 路由 2: 房间相关请求 (转发给Durable Object) ---
-        
-        const pathParts = pathname.slice(1).split('/');
-        const roomName = pathParts[0];
+            // --- 路由 2: 房间相关请求 (转发给Durable Object) ---
+            // 匹配所有形如 /<any-string-as-room-name>... 的路径
+            const pathParts = pathname.slice(1).split('/');
+            const roomName = pathParts[0];
 
-        if (!roomName) {
-            return new Response(html, { headers: { 'Content-Type': 'text/html;charset=UTF-8' } });
+            if (roomName) {
+                if (!env.CHAT_ROOM_DO) throw new Error("Durable Object 'CHAT_ROOM_DO' is not bound.");
+                const doId = env.CHAT_ROOM_DO.idFromName(roomName);
+                const stub = env.CHAT_ROOM_DO.get(doId);
+                const response = await stub.fetch(request);
+
+                // 检查DO是否需要主Worker返回HTML
+                if (response.headers.get("X-DO-Request-HTML") === "true") {
+                    console.log(`DO requested HTML for path ${pathname}, serving main page.`);
+                    return new Response(html, {
+                        headers: { 'Content-Type': 'text/html;charset=UTF-8' },
+                    });
+                }
+                return response;
+            }
+
+            // --- 路由 3: 兜底逻辑 (服务根路径的HTML) ---
+            // 如果请求到这里，说明它既不是API也不是房间请求，很可能是对根路径'/'的访问
+            return new Response(html, {
+                headers: { 'Content-Type': 'text/html;charset=UTF-8' },
+            });
+
+        } catch (e) {
+            console.error("Critical error in main Worker fetch:", e.stack || e);
+            return new Response("An unexpected error occurred.", { status: 500 });
         }
-        
-        if (!env.CHAT_ROOM_DO) {
-            console.error("Durable Object 'CHAT_ROOM_DO' is not bound.");
-            return new Response('Server configuration error.', { status: 500 });
-        }
-        
-        const doId = env.CHAT_ROOM_DO.idFromName(roomName);
-        const stub = env.CHAT_ROOM_DO.get(doId);
-        
-        return stub.fetch(request);
     },
 
     /**
@@ -231,7 +234,7 @@ export default {
         
         const tasks = [
             // 直接调用顶级的辅助函数，不再使用`this`
-            sendAutoPost(env, 'test', '大家好，这是一个由定时任务发送的自动消息。')
+            sendAutoPost(env, 'test', '苑：这是发送到test房间的定时消息。')
         ];
         
         ctx.waitUntil(Promise.allSettled(tasks));
