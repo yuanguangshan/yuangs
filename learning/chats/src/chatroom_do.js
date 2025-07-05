@@ -1,5 +1,18 @@
 // src/chatroom_do.js (Corrected and Final Version)
 
+/*
+chatroom_do.js 文件是 Cloudflare Durable Object 的核心实现，它：
+管理持久化状态：通过 loadState 和 saveState 方法，将聊天消息 (messages) 和用户统计数据 (userStats) 在内存和 Durable Object 的持久化存储之间同步。特别处理了 Map 对象在存储时的序列化和反序列化问题。
+处理 WebSocket 连接：作为 WebSocket 服务器，处理连接的建立 (fetch 和 webSocketOpen)、消息的接收 (webSocketMessage) 和连接的关闭 (webSocketClose)。
+实现聊天室核心功能：包括发送/接收文本、图片、音频消息，删除消息，用户改名等。
+维护用户统计：记录用户的消息数量、在线会话数和总在线时长。
+支持 WebRTC 信令：转发 WebRTC 的 SDP Offer/Answer 和 ICE Candidate 消息，实现点对点通信的信令交换。
+集成 R2 存储：提供将图片和音频文件上传到 Cloudflare R2 的功能。
+广播机制：能够向所有连接的客户端广播消息和系统状态更新（如在线用户列表）。//此外已改为通过历史列表推断实现，后端因为一直返回0，无法确认原因。
+HTTP 接口：除了 WebSocket，还提供了一个 HTTP GET 接口 /history-messages 用于获取历史消息。
+这个 Durable Object 实例为每个聊天室提供了独立的、持久化的状态和实时通信能力，并且能够从休眠中快速恢复，确保了聊天室的连续性和数据完整性。
+*/
+
 // 定义应用层协议的消息类型
 const MSG_TYPE_CHAT = 'chat';
 const MSG_TYPE_DELETE = 'delete';

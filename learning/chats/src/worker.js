@@ -1,9 +1,19 @@
 // src/worker.js
+/*
+这个 `worker.js` 文件是 Cloudflare Worker 的入口点，它负责处理所有传入的 HTTP 请求，并根据请求的路径和方法将其路由到不同的处理逻辑，包括：
+1.  **Durable Object (DO) 管理**：用于持久化聊天室状态。
+2.  **CORS 处理**：允许跨域请求。
+3.  **文件上传**：将文件存储到 Cloudflare R2。
+4.  **AI 服务集成**：调用 DeepSeek 和 Google Gemini API 进行文本解释和图片描述。
+5.  **聊天室统计和历史消息**：通过 Durable Object 获取数据。
+6.  **静态文件服务**：提供 `index.html` 页面。
+7.  **WebSocket 连接**：将 WebSocket 请求转发给 Durable Object。
 
+*/
 import { HibernatingChatRoom } from './chatroom_do.js';
 import html from '../public/index.html';
 
-// Export Durable Object class for Cloudflare platform instantiation
+// 下面的导出是为了让 Cloudflare 平台能够实例化这个 Durable Object。
 export { HibernatingChatRoom };
 
 // --- CORS Headers ---
@@ -196,6 +206,12 @@ async function getGeminiImageDescription(imageUrl, env) {
 
 
 // --- 主Worker逻辑 ---
+
+/*`export default { async fetch(request, env, ctx) { ... } };`**: 这是 Cloudflare Worker 的标准入口点。当 Worker 接收到 HTTP 请求时，`fetch` 方法会被调用。
+    *   **`request`**: 传入的 `Request` 对象，包含请求的所有信息（URL、方法、头部、请求体等）。
+    *   **`env`**: 环境变量对象，包含了在 Cloudflare 控制台或 `wrangler.toml` 中配置的绑定（如 Durable Object 绑定、R2 绑定、环境变量等）。
+    *   **`ctx`**: 上下文对象，提供了 Worker 运行时的一些实用方法（如 `waitUntil` 用于延长 Worker 的生命周期）。
+*/
 
 export default {
     async fetch(request, env, ctx) {
