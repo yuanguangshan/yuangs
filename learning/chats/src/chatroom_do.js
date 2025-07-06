@@ -1,4 +1,4 @@
-// 文件: src/chatroom_do.js (Final, Full-Featured, and Correct Version)
+// 文件: src/chatroom_do.js (修复版本)
 
 import { DurableObject } from "cloudflare:workers";
 
@@ -47,12 +47,16 @@ export class HibernatingChatRoom extends DurableObject {
         // 处理 WebSocket 升级请求
         if (request.headers.get("Upgrade") === "websocket") {
             const { 0: client, 1: server } = new WebSocketPair();
+            
+            // 【关键修复】正确设置WebSocket事件处理器
+            this.ctx.acceptWebSocket(server);
+            
             // 将会话处理交给一个独立的函数
             await this.handleWebSocketSession(server, url);
             return new Response(null, { status: 101, webSocket: client });
         }
         
-        // 【已补回】处理所有 /api/ 请求
+        // 处理所有 /api/ 请求
         if (url.pathname.startsWith('/api/')) {
             // API: 重置房间
             if (url.pathname.endsWith('/reset-room')) {
@@ -90,13 +94,12 @@ export class HibernatingChatRoom extends DurableObject {
 
     // --- WebSocket 会话处理 ---
     async handleWebSocketSession(ws, url) {
-        ws.accept();
         const username = decodeURIComponent(url.searchParams.get("username") || "Anonymous");
         
-        // 【核心修正】直接将会话信息附加到 ws 对象上
+        // 直接将会话信息附加到 ws 对象上
         ws.session = { username }; 
         
-        this.sessions.push(ws); // 只将会话 ws 对象本身存入数组
+        this.sessions.push(ws);
 
         console.log(`✅ WebSocket connected for: ${username}`);
 
@@ -113,26 +116,38 @@ export class HibernatingChatRoom extends DurableObject {
         this.broadcast({ type: MSG_TYPE_USER_JOIN, payload: { username } }, ws);
     }
 
-    // --- WebSocket 事件处理器 ---
+    // --- 【关键修复】WebSocket 事件处理器 ---
     async webSocketMessage(ws, message) {
-        // 【核心修正】直接从 ws 对象上获取会话信息
+        console.log(`📨 Received WebSocket message from ${ws.session?.username || 'unknown'}: ${message}`);
+        
         const session = ws.session;
-        if (!session) return;
+        if (!session) {
+            console.error("❌ No session found for WebSocket");
+            return;
+        }
 
         try {
             const data = JSON.parse(message);
+            console.log(`📋 Parsed message data:`, data);
+            
             if (data.type === MSG_TYPE_CHAT) {
-                // 将 session（现在只包含 username）和 ws 组合成 user 对象传下去
+                // 将 session 和 ws 组合成 user 对象传下去
                 await this.handleChatMessage({ ws, ...session }, data.payload);
+            } else {
+                console.log(`⚠️ Unhandled message type: ${data.type}`);
             }
-            // (可以从旧代码中添加其他消息类型的处理，如 delete, rename, rtc 等)
         } catch (e) { 
-            console.error("Failed to parse WebSocket message:", e);
+            console.error("❌ Failed to parse WebSocket message:", e);
+            ws.send(JSON.stringify({
+                type: MSG_TYPE_ERROR,
+                payload: { message: "Invalid message format" }
+            }));
         }
     }
 
     async webSocketClose(ws, code, reason, wasClean) {
-        // 【核心修正】直接在数组中查找 ws 对象
+        console.log(`🔌 WebSocket closing. Code: ${code}, Reason: ${reason}, WasClean: ${wasClean}`);
+        
         const index = this.sessions.findIndex(s => s === ws);
         if (index > -1) {
             const sessionWs = this.sessions.splice(index, 1)[0];
@@ -143,12 +158,14 @@ export class HibernatingChatRoom extends DurableObject {
     }
     
     async webSocketError(ws, error) {
-        console.error("WebSocket error:", error);
-        this.webSocketClose(ws, 1011, "An error occurred");
+        console.error("💥 WebSocket error:", error);
+        this.webSocketClose(ws, 1011, "An error occurred", false);
     }
 
     // --- 核心业务逻辑 ---
     async handleChatMessage(session, payload) {
+        console.log(`💬 Handling chat message from ${session.username}: ${payload.text}`);
+        
         await this.loadState();
         const message = {
             id: crypto.randomUUID(),
@@ -161,6 +178,7 @@ export class HibernatingChatRoom extends DurableObject {
         if (this.messages.length > 200) this.messages.shift();
         
         await this.saveState();
+        console.log(`📤 Broadcasting message to ${this.sessions.length} sessions`);
         this.broadcast({ type: MSG_TYPE_CHAT, payload: message });
     }
 
@@ -171,6 +189,7 @@ export class HibernatingChatRoom extends DurableObject {
 
     broadcast(message, excludeWs = null) {
         const stringifiedMessage = JSON.stringify(message);
+        let activeSessions = 0;
         
         this.sessions = this.sessions.filter(ws => {
             if (ws === excludeWs) {
@@ -178,10 +197,14 @@ export class HibernatingChatRoom extends DurableObject {
             }
             try {
                 ws.send(stringifiedMessage);
+                activeSessions++;
                 return true;
             } catch (e) {
+                console.error(`💥 Failed to send message to session:`, e);
                 return false;
             }
         });
+        
+        console.log(`📡 Message broadcast to ${activeSessions} active sessions`);
     }
 }
