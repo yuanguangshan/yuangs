@@ -415,50 +415,36 @@ export class HibernatingChatRoom extends DurableObject {
     }
 
     // ============ WebSocket 事件处理器 ============
+      // 在 chatroom_do.js 中
     async webSocketMessage(ws, message) {
-        const sessionId = ws.sessionId;
-        const session = this.sessions.get(sessionId);
-        
-        if (!session) {
-            this.debugLog(`❌ No session found for WebSocket (SessionId: ${sessionId})`, 'ERROR');
-            // 尝试发送错误消息
-            try {
-                ws.send(JSON.stringify({
-                    type: MSG_TYPE_ERROR,
-                    payload: { message: "会话已失效，请刷新页面重新连接" }
-                }));
-            } catch (e) {
-                this.debugLog(`❌ Failed to send error message: ${e.message}`, 'ERROR');
-            }
-            return;
-        }
+        const session = this.sessions.get(ws.sessionId);
+        if (!session) { /* ... 错误处理 ... */ return; }
 
-        // 更新最后活跃时间
         session.lastSeen = Date.now();
-        
-        this.debugLog(`📨 Received WebSocket message from ${session.username}: ${message.substring(0, 100)}${message.length > 100 ? '...' : ''}`);
+        this.debugLog(`📨 Received WebSocket message from ${session.username}: ${String(message).substring(0, 100)}...`);
 
         try {
             const data = JSON.parse(message);
             
-            if (data.type === MSG_TYPE_CHAT) {
-                await this.handleChatMessage(session, data.payload);
-            } else if (data.type === MSG_TYPE_HEARTBEAT) {
-                // 心跳响应，不需要特殊处理
-                this.debugLog(`💓 Heartbeat received from ${session.username}`, 'HEARTBEAT');
-            } else {
-                this.debugLog(`⚠️ Unhandled message type: ${data.type}`, 'WARN');
+            switch(data.type) {
+                case 'chat':
+                    await this.handleChatMessage(session, data.payload);
+                    break;
+                
+                // --- 新增：处理删除消息的 case ---
+                case 'delete':
+                    await this.handleDeleteMessage(session, data.payload);
+                    break;
+                
+                case 'heartbeat':
+                    this.debugLog(`💓 Heartbeat received from ${session.username}`, 'HEARTBEAT');
+                    break;
+
+                default:
+                    this.debugLog(`⚠️ Unhandled message type: ${data.type}`, 'WARN');
             }
         } catch (e) { 
             this.debugLog(`❌ Failed to parse WebSocket message: ${e.message}`, 'ERROR');
-            try {
-                ws.send(JSON.stringify({
-                    type: MSG_TYPE_ERROR,
-                    payload: { message: "消息格式错误" }
-                }));
-            } catch (sendError) {
-                this.debugLog(`❌ Failed to send error response: ${sendError.message}`, 'ERROR');
-            }
         }
     }
 
@@ -504,7 +490,7 @@ export class HibernatingChatRoom extends DurableObject {
     // ============ 核心业务逻辑 ============
 // In handleChatMessage function in chatroom_do.js:
 
-async handleChatMessage(session, payload) {
+    async handleChatMessage(session, payload) {
     this.debugLog(`💬 Handling chat message from ${session.username}: ${payload.text?.substring(0, 50)}${payload.text?.length > 50 ? '...' : ''}`);
     
     // 确保状态已加载
@@ -595,10 +581,56 @@ async handleChatMessage(session, payload) {
     
     this.debugLog(`📤 Broadcasting message to ${this.sessions.size} sessions`);
     this.broadcast({ type: MSG_TYPE_CHAT, payload: message });
-}
+    }
+
+    /**
+     * 处理删除消息的请求。
+     * @param {object} session - 发起删除请求的用户会话。
+     * @param {object} payload - 包含要删除消息的ID { id: string }。
+     */
+    async handleDeleteMessage(session, payload) {
+        const messageId = payload.id;
+        if (!messageId) {
+            this.debugLog(`❌ Delete request from ${session.username} is missing message ID.`, 'WARN');
+            return;
+        }
+
+        const initialLength = this.messages.length;
+        const messageToDelete = this.messages.find(m => m.id === messageId);
+
+        // 安全检查：确保消息存在，并且是该用户自己发送的
+        if (messageToDelete && messageToDelete.username === session.username) {
+            this.messages = this.messages.filter(m => m.id !== messageId);
+            
+            // 检查是否真的删除了
+            if (this.messages.length < initialLength) {
+                this.debugLog(`🗑️ Message ${messageId} deleted by ${session.username}.`);
+                
+                // 保存状态
+                await this.saveState();
+                
+                // 广播删除指令给所有客户端
+                this.broadcast({
+                    type: 'delete',
+                    payload: { messageId: messageId } 
+                });
+            }
+        } else {
+            // 如果消息不存在，或用户试图删除别人的消息
+            let reason = messageToDelete ? "permission denied" : "message not found";
+            this.debugLog(`🚫 Unauthorized delete attempt by ${session.username} for message ${messageId}. Reason: ${reason}`, 'WARN');
+            
+            // 可以选择性地给该用户发送一个错误提示
+            this.sendMessage(session.ws, {
+                type: 'error',
+                payload: { message: "你不能删除这条消息。" }
+            });
+        }
+    }
+
 
     // ============ 辅助方法 ============
-    fetchHistory(since = 0) {
+fetchHistory(since = 0) {
         return since > 0 ? this.messages.filter(msg => msg.timestamp > since) : this.messages;
     }
 

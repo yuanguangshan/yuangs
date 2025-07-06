@@ -1028,14 +1028,28 @@ async function onSocketMessage(event) {
         case 'user_leave':
             logDebug(`系统消息: ${data.payload.username} ${data.type === 'user_join' ? '加入了' : '离开了'}`);
             break;
-        case 'delete': {
-            const { id } = data.payload;
-            allMessages = allMessages.filter(msg => msg.id !== id);
-            const msgEl = chatWindowEl.querySelector(`[data-id="${id}"]`);
-            if (msgEl) msgEl.remove();
-            updateUIFromMessages();
-            break;
-        }
+           // --- 新增：处理删除消息的 case ---
+            case 'delete': {
+                const { messageId } = data.payload;
+                if (messageId) {
+                    logDebug(`收到删除指令，准备移除消息: ${messageId}`, 'warning');
+                    const msgEl = chatWindowEl.querySelector(`[data-id="${messageId}"]`);
+                    if (msgEl) {
+                        // 添加一个删除动画，然后移除元素
+                        msgEl.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                        msgEl.style.opacity = '0';
+                        msgEl.style.transform = 'scale(0.9)';
+                        setTimeout(() => {
+                            msgEl.remove();
+                            // 删除后，需要更新 allMessages 数组以保持同步
+                            allMessages = allMessages.filter(m => m.id !== messageId);
+                            // 重新计算用户统计（因为发言数可能变化）
+                            updateUIFromMessages();
+                        }, 300);
+                    }
+                }
+                break;
+            }
         case 'error':
             logDebug(`收到错误: ${data.payload.message}`, LOG_LEVELS.ERROR);
             alert(data.payload.message);
@@ -1359,14 +1373,17 @@ contextMenu.addEventListener('click', async (e) => {
         return;
     }
 
-    if (clickedOption.id === 'delete-option') {
-        if (currentMessageElement.dataset.id && socket?.readyState === WebSocket.OPEN) {
-            const messageId = currentMessageElement.dataset.id;
-            logDebug(`准备删除消息: ${messageId}`);
-            socket.send(JSON.stringify({ type: 'delete', payload: { id: messageId } }));
+// --- 确认/实现删除逻辑 ---
+        if (clickedOption.id === 'delete-option') {
+            if (currentMessageElement.dataset.id && socket?.readyState === WebSocket.OPEN) {
+                const messageId = currentMessageElement.dataset.id;
+                logDebug(`用户请求删除消息: ${messageId}`);
+                
+                // 向后端发送 'delete' 类型的指令
+                socket.send(JSON.stringify({ type: 'delete', payload: { id: messageId } }));
+            }
+            return;
         }
-        return;
-    }
 
     // --- 处理AI功能 ---
     if (clickedOption.matches('.ai-explain-option')) {
