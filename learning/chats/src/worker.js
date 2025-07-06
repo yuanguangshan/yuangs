@@ -120,15 +120,17 @@ async function getGeminiImageDescription(imageUrl, env) {
     if (!description) throw new Error('Unexpected AI response format from Gemini Vision.');
     return description;
 }
+// 文件: src/worker.js
 
 /**
  * 独立的、顶级的辅助函数，用于向指定的房间发送自动帖子。
  * @param {object} env 环境变量
  * @param {string} roomName 要发帖的房间名
  * @param {string} text 帖子的内容
+ * @param {object} ctx 执行上下文，用于 waitUntil
  */
-async function sendAutoPost(env, roomName, text) {
-    console.log(`Sending auto-post to room: ${roomName}`);
+async function sendAutoPost(env, roomName, text, ctx) {
+    console.log(`Dispatching auto-post to room: ${roomName} via RPC`);
     try {
         if (!env.CHAT_ROOM_DO) {
             throw new Error("Durable Object 'CHAT_ROOM_DO' is not bound.");
@@ -137,25 +139,15 @@ async function sendAutoPost(env, roomName, text) {
         const doId = env.CHAT_ROOM_DO.idFromName(roomName);
         const stub = env.CHAT_ROOM_DO.get(doId);
 
-        const response = await stub.fetch(new Request(`https://scheduler.internal/internal/auto-post`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                text: text,
-                secret: env.CRON_SECRET
-            })
-        }));
+        // 【重大修改】从 fetch 调用改为 RPC 调用
+        // 使用传入的 ctx.waitUntil 来确保 RPC 调用执行完毕
+        ctx.waitUntil(stub.cronPost(text, env.CRON_SECRET));
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Auto-post failed: DO returned ${response.status} - ${errorText}`);
-        }
-        console.log(`Successfully sent auto-post to room: ${roomName}`);
+        console.log(`Successfully dispatched auto-post RPC to room: ${roomName}`);
     } catch (error) {
         console.error(`Error in sendAutoPost for room ${roomName}:`, error.stack || error);
     }
 }
-
 
 // --- 主Worker入口点 ---
 export default {
@@ -248,14 +240,34 @@ export default {
 
     /**
      * 处理由Cron Trigger触发的定时事件。
+// 文件: src/worker.js
+// 位置: export default { ... } 内部
+
+    /**
+     * 处理由Cron Trigger触发的定时事件。
      */
     async scheduled(event, env, ctx) {
         console.log(`Cron Trigger firing! Rule: ${event.cron}`);
         
-        const tasks = [
-            sendAutoPost(env, 'test', `Cron Trigger firing! Rule: ${event.cron}:苑：这是发送到房间的定时消息。`),
-        ];
-        
-        ctx.waitUntil(Promise.allSettled(tasks));
+        const roomName = 'test';
+        const text = `来自定时任务 (${event.cron}) 的消息：这是发送到 '${roomName}' 房间的定时消息。`;
+
+        // 【最终方案】直接从 scheduled 调用 RPC 方法
+        // 这是更简洁的做法，不再需要 sendAutoPost 中间函数了
+        try {
+            if (!env.CHAT_ROOM_DO) {
+                throw new Error("Durable Object 'CHAT_ROOM_DO' is not bound.");
+            }
+            const doId = env.CHAT_ROOM_DO.idFromName(roomName);
+            const stub = env.CHAT_ROOM_DO.get(doId);
+
+            // 用 ctx.waitUntil 保证即使 scheduled 函数结束，RPC 调用也会执行完毕
+            ctx.waitUntil(stub.cronPost(text, env.CRON_SECRET));
+            
+            console.log(`CRON: Dispatched post to room '${roomName}'`);
+
+        } catch (error) {
+            console.error(`CRON ERROR: Failed to dispatch post to room '${roomName}':`, error);
+        }
      },
 };

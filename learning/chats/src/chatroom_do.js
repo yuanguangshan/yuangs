@@ -30,6 +30,30 @@ export class HibernatingChatRoom {
         this.stateLock = null; // 状态锁，确保状态操作的原子性
     }
 
+
+    // 【新增】专门给 Cron 调用的 RPC 方法
+    async cronPost(text, secret) {
+        // 验证密钥
+        if (this.env.CRON_SECRET && secret !== this.env.CRON_SECRET) {
+            console.error("CRON RPC: Unauthorized attempt!");
+            return;
+        }
+
+        // 确保状态已加载
+        await this.loadState();
+        
+        console.log(`CRON RPC: Received post: "${text}". Current messages: ${this.messages.length}`);
+        
+        const message = this.createTextMessage({ username: "小助手" }, { text });
+        
+        this.messages.push(message);
+        if (this.messages.length > 200) this.messages.shift();
+        
+        this.broadcast({ type: 'chat', payload: message });
+        await this.saveState();
+        
+        console.log(`CRON RPC: Post processed. New message count: ${this.messages.length}`);
+    }
     // --- State Management ---
 
     /**
