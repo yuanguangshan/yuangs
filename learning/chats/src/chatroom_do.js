@@ -161,20 +161,36 @@ export class HibernatingChatRoom extends DurableObject {
     fetchHistory(since = 0) {
         return since > 0 ? this.messages.filter(msg => msg.timestamp > since) : this.messages;
     }
+// 文件: src/chatroom_do.js
+// 位置: HibernatingChatRoom class 内部
 
     broadcast(message, excludeSession = null) {
         const stringifiedMessage = JSON.stringify(message);
-        // 遍历所有会话，并排除掉 `excludeSession` (如果提供了)
-        this.sessions = this.sessions.filter(session => {
+        
+        // 【最终核心修正】
+        // 我们不能在遍历一个数组的同时修改它，所以先记录下线会话
+        const deadSessions = [];
+
+        // 遍历所有会话
+        this.sessions.forEach(session => {
+            // 如果这个会话需要被排除，则跳过
             if (session === excludeSession) {
-                return true; // 保留被排除的会话
+                return;
             }
+
             try {
+                // 尝试发送消息
                 session.ws.send(stringifiedMessage);
-                return true; // 连接有效，保留
             } catch (e) {
-                return false; // 连接已关闭，从数组中移除
+                // 如果发送失败，说明连接已断开，记录这个会话以便后续清理
+                deadSessions.push(session);
             }
         });
+
+        // 遍历完后，一次性地从主会话列表中移除所有掉线的会话
+        if (deadSessions.length > 0) {
+            this.sessions = this.sessions.filter(session => !deadSessions.includes(session));
+            console.log(`🧹 Cleaned up ${deadSessions.length} dead session(s).`);
+        }
     }
 }
