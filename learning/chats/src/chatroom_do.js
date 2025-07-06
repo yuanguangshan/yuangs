@@ -57,81 +57,58 @@ export class HibernatingChatRoom {
         });
     }
 
-    // --- Main Fetch Handler (Durable Object's Entrypoint) ---
-
     /**
      * 处理由主Worker转发来的所有请求。
      */
     async fetch(request) {
-       /**
-     * 处理由主Worker转发来的所有请求。
-     */
         const url = new URL(request.url);
 
         // ================================================================
-        //           新增：通过API安全地重置房间状态
+        //           API：通过密钥安全地重置房间状态
         // ================================================================
         if (url.pathname.endsWith('/api/reset-room')) {
-            // 从查询参数中获取密钥
             const secret = url.searchParams.get('secret');
 
-            // 必须提供密钥，且密钥必须与环境变量中设置的匹配
             if (this.env.ADMIN_SECRET && secret === this.env.ADMIN_SECRET) {
                 console.log(`!!!!!!!!!! RECEIVED RESET REQUEST FOR DO !!!!!!!!!!`);
-                // 清空此DO实例的所有持久化存储
                 await this.state.storage.deleteAll();
-                
-                // 将内存中的状态也重置，以立即生效
                 this.messages = [];
                 this.userStats = new Map();
-
                 console.log(`!!!!!!!!!! DO STORAGE AND STATE RESET SUCCESSFULLY !!!!!!!!!!`);
                 return new Response("Room has been reset successfully.", { status: 200 });
             } else {
-                // 如果密钥不匹配或未提供，返回 403 Forbidden
                 console.warn("Unauthorized reset attempt detected.");
                 return new Response("Forbidden: Invalid or missing secret.", { status: 403 });
             }
         }
         // ================================================================
-        //                      重置API逻辑结束
-        // ================================================================
 
-        // 正常加载状态，处理其他请求
+        // 对于所有其他请求，先加载状态
         await this.loadState(); 
 
-        // 路由 1: 处理内部定时发帖API
+        // API：处理内部定时发帖
         if (url.pathname.endsWith('/internal/auto-post') && request.method === 'POST') {
             try {
                 const { text, secret } = await request.json();
-
-                // (可选但推荐) 验证内部密钥
                 if (this.env.CRON_SECRET && secret !== this.env.CRON_SECRET) {
                     return new Response("Unauthorized", { status: 403 });
                 }
                 if (!text) {
                     return new Response("Missing text", { status: 400 });
                 }
-
-                // 直接调用 handleChatMessage，并模拟一个"系统"用户
                 const message = this.createTextMessage({ username: "小助手" }, { text });
-                
                 this.messages.push(message);
-
-                if (this.messages.length > 200) this.messages.shift(); // 消息截断逻辑
-
+                if (this.messages.length > 200) this.messages.shift();
                 this.broadcast({ type: 'chat', payload: message });
                 await this.saveState();
-                
                 return new Response("Auto-post successful", { status: 200 });
-
             } catch (error) {
                 console.error("Failed to process auto-post:", error);
                 return new Response("Internal error", { status: 500 });
             }
         }
         
-        // 路由 2: 处理公开的历史消息API
+        // API：处理公开的历史消息
         if (url.pathname.endsWith('/api/messages/history')) {
             const since = parseInt(url.searchParams.get('since') || '0', 10);
             const history = this.fetchHistory(since);
@@ -140,7 +117,7 @@ export class HibernatingChatRoom {
             });
         }
         
-        // 路由 3: 处理WebSocket升级请求
+        // WebSocket 升级请求
         if (request.headers.get("Upgrade") === "websocket") {
             const username = url.searchParams.get("username") || "Anonymous";
             const { 0: client, 1: server } = new WebSocketPair();
@@ -148,8 +125,7 @@ export class HibernatingChatRoom {
             return new Response(null, { status: 101, webSocket: client });
         }
 
-        // 路由 4: 处理房间页面请求 - 告诉主Worker返回HTML
-        // 如果请求不匹配任何API路由，且是GET请求，则请求主Worker返回HTML页面
+        // 页面加载请求：告诉主Worker返回HTML
         if (request.method === 'GET') {
             console.log(`DO: Requesting HTML for path: ${url.pathname}`);
             return new Response(null, { 
