@@ -179,13 +179,25 @@ export class HibernatingChatRoom {
 
     /**
      * 处理用户发送的聊天消息。
+     */// src/chatroom_do.js
+
+    /**
+     * 处理用户发送的聊天消息。
      */
     async handleChatMessage(user, payload) {
         try {
             let message;
-            if (payload.type === 'image') message = await this.createImageMessage(user, payload);
-            else if (payload.type === 'audio') message = await this.createAudioMessage(user, payload);
-            else message = this.createTextMessage(user, payload);
+            // 【修改】根据 payload.type 明确判断，并为文本消息设置默认 type
+            const messageType = payload.type || 'text'; 
+
+            if (messageType === 'image') {
+                message = await this.createImageMessage(user, payload);
+            } else if (messageType === 'audio') {
+                message = await this.createAudioMessage(user, payload);
+            } else {
+                // 现在 payload 中可能没有 type，但我们已经推断出是 'text'
+                message = this.createTextMessage(user, payload);
+            }
 
             this.messages.push(message);
             if (this.messages.length > 200) this.messages.shift();
@@ -225,9 +237,17 @@ export class HibernatingChatRoom {
         stats.messageCount = (stats.messageCount || 0) + 1;
         this.userStats.set(username, stats);
     }
+// src/chatroom_do.js
 
     createTextMessage(user, payload) {
-        return { id: crypto.randomUUID(), username: user.username, timestamp: Date.now(), text: payload.text };
+        // 【重大修正】为所有文本消息添加 type: 'text' 属性
+        return { 
+            id: crypto.randomUUID(), 
+            username: user.username, 
+            timestamp: Date.now(), 
+            text: payload.text,
+            type: 'text' // <<<<<<<<<<< 新增此行，确保数据结构一致
+        };
     }
 
     async createImageMessage(user, payload) {
