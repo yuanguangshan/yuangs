@@ -498,15 +498,27 @@ export class HibernatingChatRoom extends DurableObject {
     }
 
     // ============ 核心业务逻辑 ============
-    async handleChatMessage(session, payload) {
-        this.debugLog(`💬 Handling chat message from ${session.username}: ${payload.text?.substring(0, 50)}${payload.text?.length > 50 ? '...' : ''}`);
-        
-        // 确保状态已加载
-        if (!this.isInitialized) {
-            await this.loadState();
-        }
-        
-        // 基本的消息验证
+// In handleChatMessage function in chatroom_do.js:
+
+async handleChatMessage(session, payload) {
+    this.debugLog(`💬 Handling chat message from ${session.username}: ${payload.text?.substring(0, 50)}${payload.text?.length > 50 ? '...' : ''}`);
+    
+    // 确保状态已加载
+    if (!this.isInitialized) {
+        await this.loadState();
+    }
+    
+    // 创建基本消息对象
+    const message = {
+        id: crypto.randomUUID(),
+        username: session.username,
+        timestamp: Date.now(),
+        type: payload.type || 'text'
+    };
+    
+    // 基于消息类型添加不同的字段
+    if (payload.type === 'text') {
+        // 文本消息验证
         if (!payload.text || payload.text.trim().length === 0) {
             this.debugLog(`❌ Empty message from ${session.username}`, 'WARN');
             return;
@@ -526,34 +538,59 @@ export class HibernatingChatRoom extends DurableObject {
             return;
         }
         
-        const message = {
-            id: crypto.randomUUID(),
-            username: session.username,
-            timestamp: Date.now(),
-            text: payload.text.trim(),
-            type: payload.type || 'text'
-        };
-        
-        // 如果是图片消息，保存图片数据
-        if (payload.type === 'image') {
-            message.image = payload.image;
-            message.filename = payload.filename;
-            message.size = payload.size;
-            message.caption = payload.caption || '';
+        message.text = payload.text.trim();
+    } 
+    else if (payload.type === 'image') {
+        // 图片消息
+        if (!payload.imageUrl) {
+            this.debugLog(`❌ Missing image URL from ${session.username}`, 'WARN');
+            return;
         }
         
-        this.messages.push(message);
+        message.imageUrl = payload.imageUrl;
+        message.filename = payload.filename || '';
+        message.size = payload.size || 0;
         
-        // 限制消息数量
-        if (this.messages.length > 500) {
-            this.messages.shift();
+        // 可选的图片说明文字
+        if (payload.caption) {
+            message.caption = payload.caption.trim().substring(0, 500);
         }
         
-        await this.saveState();
-        
-        this.debugLog(`📤 Broadcasting message to ${this.sessions.size} sessions`);
-        this.broadcast({ type: MSG_TYPE_CHAT, payload: message });
+        // 同时保存原始的text字段，以保持兼容性
+        if (payload.text) {
+            message.text = payload.text.trim().substring(0, 500);
+        }
     }
+    else if (payload.type === 'audio') {
+        // 音频消息
+        if (!payload.audioUrl) {
+            this.debugLog(`❌ Missing audio URL from ${session.username}`, 'WARN');
+            return;
+        }
+        
+        message.audioUrl = payload.audioUrl;
+        message.filename = payload.filename || '';
+        message.size = payload.size || 0;
+    }
+    else {
+        // 未知消息类型
+        this.debugLog(`❌ Unknown message type: ${payload.type} from ${session.username}`, 'WARN');
+        return;
+    }
+    
+    // 保存消息
+    this.messages.push(message);
+    
+    // 限制消息数量
+    if (this.messages.length > 500) {
+        this.messages.shift();
+    }
+    
+    await this.saveState();
+    
+    this.debugLog(`📤 Broadcasting message to ${this.sessions.size} sessions`);
+    this.broadcast({ type: MSG_TYPE_CHAT, payload: message });
+}
 
     // ============ 辅助方法 ============
     fetchHistory(since = 0) {

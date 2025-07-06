@@ -189,26 +189,53 @@ export default {
                     return new Response(JSON.stringify({ description }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
                 }
                 // 【关键】文件上传API
-                if (pathname === '/upload' && request.method === 'POST') {
-                    try {
-                        if (!env.R2_BUCKET) throw new Error('Server config error: R2_BUCKET not bound.');
-                        
-                        const filename = decodeURIComponent(request.headers.get('X-Filename') || `upload-${Date.now()}`);
-                        const object = await env.R2_BUCKET.put(filename, request.body, {
-                            httpMetadata: { contentType: request.headers.get('Content-Type') || 'application/octet-stream' },
-                        });
-                        
-                        // 【重要】确保这个URL是您R2存储桶的公共访问URL
-                        const publicUrl = `https://pub-8dfbdda6df204465aae771b4c080140b.r2.dev/${object.key}`;
-                        
-                        return new Response(JSON.stringify({ url: publicUrl }), {
-                            headers: { 'Content-Type': 'application/json', ...corsHeaders },
-                        });
-                    } catch (error) {
-                        console.error('R2 Upload error:', error.stack || error);
-                        return new Response(`Error uploading file: ${error.message}`, { status: 500, headers: corsHeaders });
-                    }
-                }
+              // In worker.js, improve the file upload handler:
+
+if (pathname === '/upload' && request.method === 'POST') {
+    try {
+        if (!env.R2_BUCKET) {
+            throw new Error('Server config error: R2_BUCKET not bound.');
+        }
+        
+        // Get and decode the filename from header
+        const filenameHeader = request.headers.get('X-Filename');
+        if (!filenameHeader) {
+            throw new Error('Missing X-Filename header');
+        }
+        
+        const filename = decodeURIComponent(filenameHeader);
+        const contentType = request.headers.get('Content-Type') || 'application/octet-stream';
+        
+        // Generate a unique key for the file to avoid name conflicts
+        const fileKey = `${Date.now()}-${crypto.randomUUID().substring(0, 8)}-${filename}`;
+        
+        // Upload to R2 with proper content type
+        const object = await env.R2_BUCKET.put(fileKey, request.body, {
+            httpMetadata: { contentType }
+        });
+        
+        // Return the public URL for the uploaded file
+        const publicUrl = `https://pub-8dfbdda6df204465aae771b4c080140b.r2.dev/${fileKey}`;
+        
+        return new Response(JSON.stringify({ 
+            url: publicUrl,
+            key: fileKey,
+            size: object.size,
+            etag: object.etag
+        }), {
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders 
+            }
+        });
+    } catch (error) {
+        console.error('R2 Upload error:', error.stack || error);
+        return new Response(`Error uploading file: ${error.message}`, { 
+            status: 500, 
+            headers: corsHeaders 
+        });
+    }
+}
             }
 
             // --- 路由 2: 需要转发给 DO 的 API ---

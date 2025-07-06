@@ -1349,6 +1349,131 @@ async function initLocalMedia() {
     }
 }
 
+// --- Image & File Upload Functions ---
+async function sendImageMessage(file, caption = '') {
+    try {
+        logDebug(`开始上传图片: ${file.name}`, LOG_LEVELS.INFO);
+        
+        // Create FormData and append file with proper filename
+        const formData = new FormData();
+        const safeFileName = encodeURIComponent(file.name);
+        formData.append('file', file, safeFileName);
+        
+        // Show upload progress UI
+        uploadProgress.style.display = 'block';
+        uploadProgress.textContent = '上传中...';
+        imagePreview.classList.add('uploading');
+        
+        // Upload file to R2 storage
+        const response = await fetch('/upload', {
+            method: 'POST',
+            body: file,
+            headers: {
+                'X-Filename': safeFileName,
+                'Content-Type': file.type
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`上传失败: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.url) {
+            throw new Error('服务器没有返回有效的文件URL');
+        }
+        
+        logDebug(`图片上传成功，获取URL: ${data.url}`, LOG_LEVELS.SUCCESS);
+        
+        // Send image message through WebSocket
+        const payload = {
+            type: 'image',
+            text: caption,
+            caption: caption,
+            imageUrl: data.url,
+            filename: file.name,
+            size: file.size
+        };
+        
+        socket.send(JSON.stringify({
+            type: 'chat',
+            payload: payload
+        }));
+        
+        logDebug("图片消息已通过WebSocket发送", LOG_LEVELS.SUCCESS);
+        
+        // Clean up UI
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
+        removeImagePreview();
+        
+        return true;
+    } catch (error) {
+        logDebug(`图片上传失败: ${error.message}`, LOG_LEVELS.ERROR, error);
+        alert(`图片上传失败: ${error.message}`);
+        throw error;
+    } finally {
+        // Hide upload progress UI
+        uploadProgress.style.display = 'none';
+        imagePreview.classList.remove('uploading');
+    }
+}
+
+async function sendAudioMessage(audioBlob, mimeType) {
+    try {
+        logDebug(`开始上传音频`, LOG_LEVELS.INFO, { size: audioBlob.size, type: mimeType });
+        
+        // Generate a filename for the audio file
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `audio-${timestamp}.${mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
+        const safeFileName = encodeURIComponent(filename);
+        
+        // Upload audio to R2 storage
+        const response = await fetch('/upload', {
+            method: 'POST',
+            body: audioBlob,
+            headers: {
+                'X-Filename': safeFileName,
+                'Content-Type': mimeType
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`上传失败: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.url) {
+            throw new Error('服务器没有返回有效的文件URL');
+        }
+        
+        logDebug(`音频上传成功，获取URL: ${data.url}`, LOG_LEVELS.SUCCESS);
+        
+        // Send audio message through WebSocket
+        const payload = {
+            type: 'audio',
+            audioUrl: data.url,
+            filename: filename,
+            size: audioBlob.size
+        };
+        
+        socket.send(JSON.stringify({
+            type: 'chat',
+            payload: payload
+        }));
+        
+        logDebug("音频消息已通过WebSocket发送", LOG_LEVELS.SUCCESS);
+        
+        return true;
+    } catch (error) {
+        logDebug(`音频上传失败: ${error.message}`, LOG_LEVELS.ERROR, error);
+        alert(`音频上传失败: ${error.message}`);
+        throw error;
+    }
+}
+
 function showCallUI(targetUsername) {
     if (document.getElementById(`call-control-${targetUsername}`)) return;
     const panel = document.createElement('div');
