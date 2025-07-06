@@ -1,29 +1,31 @@
-# wrangler.toml
+# =================================================================
+#  wrangler.toml (The one and only correct version)
+# =================================================================
+
+# --- 基本信息 ---
 name = "chats"
 main = "src/worker.js"
-compatibility_date = "2024-03-01"
+compatibility_date = "2024-07-05" 
 
+# --- 静态网站托管 ---
+# 将 ./public 目录下的文件作为静态资源提供服务
+[site]
+bucket = "./public"
+
+# --- Durable Object 绑定 ---
+# 这是正确的、官方支持的写法
 [[durable_objects.bindings]]
 name       = "CHAT_ROOM_DO"
 class_name = "HibernatingChatRoom"
+# 关键：通过指定脚本名称，DO会自动继承该脚本的密钥和环境变量
+script_name = "chats" 
 
-# --- 新增的继承配置 ---
-[[durable_objects.bindings.migrations]]
-# 这是一个特殊的“空”迁移，用于将环境变量附加到现有类
-tag = "v5-inherit-secrets" # 使用一个新的、唯一的标签
-# 从主Worker继承这些密钥
-inherit = ["CRON_SECRET", "DEEPSEEK_API_KEY", "GEMINI_API_KEY"] 
-
+# --- R2 存储桶绑定 ---
 [[r2_buckets]]
 binding     = "R2_BUCKET"
 bucket_name = "yuangs"
 
-[[migrations]]
-# 关键：将类名更新为新的 Yjs Durable Object 类名
-tag='v5-inherit-secrets'
-# --- 新增：定时触发器配置 ---
+# --- 定时触发器 ---
 [triggers]
-# crons 是一个数组，您可以定义多个定时任务
-# 格式是标准的 Cron 表达式: 分 时 日 月 周
-# 下面这个例子表示：在每小时的第30分钟执行一次
-crons = [ "*/1 * * * *" ]
+# 测试时可临时改为 "*/1 * * * *" (每分钟执行一次)。
+crons = [ "30 * * * *" ]
