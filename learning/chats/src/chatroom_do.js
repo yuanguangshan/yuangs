@@ -63,8 +63,42 @@ export class HibernatingChatRoom {
      * 处理由主Worker转发来的所有请求。
      */
     async fetch(request) {
-        await this.loadState(); // 确保在处理任何请求前，状态已从存储加载
+       /**
+     * 处理由主Worker转发来的所有请求。
+     */
         const url = new URL(request.url);
+
+        // ================================================================
+        //           新增：通过API安全地重置房间状态
+        // ================================================================
+        if (url.pathname.endsWith('/api/reset-room')) {
+            // 从查询参数中获取密钥
+            const secret = url.searchParams.get('secret');
+
+            // 必须提供密钥，且密钥必须与环境变量中设置的匹配
+            if (this.env.ADMIN_SECRET && secret === this.env.ADMIN_SECRET) {
+                console.log(`!!!!!!!!!! RECEIVED RESET REQUEST FOR DO !!!!!!!!!!`);
+                // 清空此DO实例的所有持久化存储
+                await this.state.storage.deleteAll();
+                
+                // 将内存中的状态也重置，以立即生效
+                this.messages = [];
+                this.userStats = new Map();
+
+                console.log(`!!!!!!!!!! DO STORAGE AND STATE RESET SUCCESSFULLY !!!!!!!!!!`);
+                return new Response("Room has been reset successfully.", { status: 200 });
+            } else {
+                // 如果密钥不匹配或未提供，返回 403 Forbidden
+                console.warn("Unauthorized reset attempt detected.");
+                return new Response("Forbidden: Invalid or missing secret.", { status: 403 });
+            }
+        }
+        // ================================================================
+        //                      重置API逻辑结束
+        // ================================================================
+
+        // 正常加载状态，处理其他请求
+        await this.loadState(); 
 
         // 路由 1: 处理内部定时发帖API
         if (url.pathname.endsWith('/internal/auto-post') && request.method === 'POST') {
