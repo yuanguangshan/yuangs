@@ -1,4 +1,4 @@
-// src/worker.js (Final, Cleaned, and Corrected Version)
+// src/worker.js (Merged, Final Version)
 
 /*
  * 这个 `worker.js` 文件是 Cloudflare Worker 的入口点，它扮演着“前台总机”的角色。
@@ -157,8 +157,7 @@ async function sendAutoPost(env, roomName, text) {
 }
 
 
-// --- 主Worker入口点 ---// 在 src/worker.js 中，替换这个部分
-
+// --- 主Worker入口点 ---
 export default {
     /**
      * 处理所有传入的HTTP请求。
@@ -169,7 +168,7 @@ export default {
                 return handleOptions(request);
             }
 
-            const url = new URL(request.url); // 只在这里定义一次 url
+            const url = new URL(request.url);
             const pathname = url.pathname;
 
             // --- 路由 1: 全局API (由主Worker直接处理) ---
@@ -233,10 +232,10 @@ export default {
         console.log(`Cron Trigger firing! Rule: ${event.cron}`);
         
         const tasks = [
-            // 直接调用顶级的辅助函数，不再使用`this`
+            // 直接调用顶级的辅助函数
             sendAutoPost(env, 'test', '苑：这是发送到test房间的定时消息。')
         ];
         
         ctx.waitUntil(Promise.allSettled(tasks));
-    },
+     },
 };
