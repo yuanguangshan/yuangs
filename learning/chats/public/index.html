@@ -1136,7 +1136,7 @@ function isUserActive(lastSeenTimestamp) {
 }
 
 function updateUIFromMessages() {
-    //logDebug('从 allMessages 数组更新UI...', LOG_LEVELS.INFO);
+    logDebug('从 allMessages 数组更新UI...', LOG_LEVELS.INFO);
     const userLastSeen = new Map();
     const userMessageCount = new Map();
     allMessages.forEach(msg => {
@@ -1221,7 +1221,7 @@ function appendChatMessage(msg) {
             logDebug("致命错误：传入的 msg 对象是 null 或 undefined！", 'error');
             return;
         }
-        //logDebug("检查通过，chatWindowEl 和 msg 都存在。准备创建元素...", 'info', { 
+        logDebug("检查通过，chatWindowEl 和 msg 都存在。准备创建元素...", 'info', { 
             chatWindowElId: chatWindowEl.id, 
             messageId: msg.id 
         });
@@ -1267,7 +1267,7 @@ function appendChatMessage(msg) {
         }
             
         msgEl.innerHTML = contentHTML;
-        //logDebug("innerHTML 构建完成，准备 appendChild。", 'info', { htmlLength: msgEl.innerHTML.length });
+        logDebug("innerHTML 构建完成，准备 appendChild。", 'info', { htmlLength: msgEl.innerHTML.length });
         
         // --- 核心修改：为整个消息元素添加右键/长按事件监听 ---
         msgEl.addEventListener('contextmenu', e => {
@@ -1298,6 +1298,7 @@ function appendChatMessage(msg) {
 }
 
 // 在 index.html 的 <script> 中
+
 function showContextMenu(element, x, y) {
     currentMessageElement = element; // 将当前右键点击的消息元素存为全局变量
     
@@ -1336,6 +1337,46 @@ function showContextMenu(element, x, y) {
 
     // --- 【核心修正】根据是否为自己的消息，决定是否显示删除按钮 ---
     // 这个逻辑对所有类型的消息都适用
+    deleteOption.style.display = isSelf ? 'flex' : 'none';
+    
+    if (navigator.vibrate) navigator.vibrate(50); // 移动端震动反馈
+}
+    currentMessageElement = element; // 将当前右键点击的消息元素存为全局变量
+    
+    // 定位菜单
+    contextMenu.style.top = `${y}px`;
+    contextMenu.style.left = `${x}px`;
+    contextMenu.style.display = 'block';
+
+    const messageType = element.dataset.messageType;
+    const isSelf = element.classList.contains('self'); // 判断是否是自己发的消息
+
+    // 获取所有菜单项
+    const geminiTextOption = contextMenu.querySelector('[data-ai="gemini"][data-action="text-explain"]');
+    const deepseekTextOption = contextMenu.querySelector('[data-ai="deepseek"][data-action="text-explain"]');
+    const geminiImageOption = contextMenu.querySelector('[data-ai="gemini"][data-action="image-describe"]');
+    const copyOption = document.getElementById('copy-option');
+    const deleteOption = document.getElementById('delete-option');
+
+    // 根据消息类型动态显示/隐藏菜单项
+    if (messageType === 'image') {
+        geminiTextOption.style.display = 'none';
+        deepseekTextOption.style.display = 'none';
+        copyOption.style.display = 'none';
+        geminiImageOption.style.display = 'flex'; // 显示图片解释
+    } else if (messageType === 'text') {
+        geminiTextOption.style.display = 'flex'; // 显示文本解释
+        deepseekTextOption.style.display = 'flex';
+        copyOption.style.display = 'flex'; // 显示复制
+        geminiImageOption.style.display = 'none';
+    } else { // 对于音频或其他类型
+        geminiTextOption.style.display = 'none';
+        deepseekTextOption.style.display = 'none';
+        copyOption.style.display = 'none';
+        geminiImageOption.style.display = 'none';
+    }
+
+    // 只有自己发送的消息才能删除
     deleteOption.style.display = isSelf ? 'flex' : 'none';
     
     if (navigator.vibrate) navigator.vibrate(50); // 移动端震动反馈
