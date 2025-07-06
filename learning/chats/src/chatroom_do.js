@@ -98,7 +98,7 @@ export class HibernatingChatRoom {
         }
         
         // 路由 2: 处理公开的历史消息API
-        if (url.pathname.includes('/api/messages/history')) {
+        if (url.pathname.endsWith('/api/messages/history')) {
             const since = parseInt(url.searchParams.get('since') || '0', 10);
             const history = this.fetchHistory(since);
             return new Response(JSON.stringify(history), {
