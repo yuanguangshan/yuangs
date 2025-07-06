@@ -66,8 +66,36 @@ export class HibernatingChatRoom {
         const url = new URL(request.url);
 
         // 路由 1: 处理内部定时发帖API
-        if (url.pathname.endsWith('/internal/auto-post')) {
-            return this.handleAutoPostRequest(request);
+        // --- 新增：处理来自定时任务的内部发帖请求 ---
+        if (url.pathname.endsWith('/internal/auto-post') && request.method === 'POST') {
+            try {
+                const { text, secret } = await request.json();
+
+                // (可选但推荐) 验证内部密钥
+                if (this.env.CRON_SECRET && secret !== this.env.CRON_SECRET) {
+                    return new Response("Unauthorized", { status: 403 });
+                }
+                if (!text) {
+                    return new Response("Missing text", { status: 400 });
+                }
+
+                // 直接调用 handleChatMessage，并模拟一个"系统"用户
+                // 注意：我们假设“小助手”用户不需要追踪统计数据，所以直接发消息即可
+                const message = this.createTextMessage({ username: "小助手" }, { text });
+                
+                this.messages.push(message);
+
+                if (this.messages.length > 200) this.messages.shift(); // 假设您有消息截断逻辑
+
+                this.broadcast({ type: 'chat', payload: message });
+                await this.saveState();
+                
+                return new Response("Auto-post successful", { status: 200 });
+
+            } catch (error) {
+                console.error("Failed to process auto-post:", error);
+                return new Response("Internal error", { status: 500 });
+            }
         }
         
         // 路由 2: 处理公开的历史消息API
