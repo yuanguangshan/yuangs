@@ -74,6 +74,15 @@ export class HibernatingChatRoom extends DurableObject {
                 headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
             });
         }
+
+ 
+        // 告诉主 Worker 返回 HTML 页面
+        if (request.method === "GET") {
+            return new Response(null, {
+                headers: { "X-DO-Request-HTML": "true" },
+            });
+        }
+
         return new Response("Not Found", { status: 404 });
     }
   // 【全新】独立的 WebSocket 会话处理函数
