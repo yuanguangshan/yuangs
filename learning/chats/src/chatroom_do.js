@@ -1,4 +1,4 @@
-// src/chatroom_do.js (Fixed Version - 防止消息丢失)
+// src/chatroom_do.js (修复版本 - 解决消息丢失问题)
 
 /**
  * HibernatingChatRoom 是一个Durable Object，它负责管理单个聊天室的所有状态和逻辑，包括：
@@ -26,6 +26,8 @@ export class HibernatingChatRoom {
         this.messages = null;   // 消息数组，将从持久化存储中懒加载
         this.userStats = null;  // 用户统计Map，将从持久化存储中懒加载
         this.isStateLoaded = false; // 添加状态加载标志
+        this.isLoading = false; // 添加加载中标志，防止并发加载
+        this.stateLock = null; // 状态锁，确保状态操作的原子性
     }
 
     // --- State Management ---
@@ -33,35 +35,81 @@ export class HibernatingChatRoom {
     /**
      * 从持久化存储加载状态到内存。
      * 这个函数是幂等的，在一个Durable Object实例的生命周期中只会执行一次加载。
+     * 修复：添加并发控制，防止重复加载
      */
     async loadState() {
-        if (this.isStateLoaded) return; // 使用明确的标志位，防止重复加载
-
-        console.log("DO State: Not in memory. Loading from storage...");
-        const data = await this.state.storage.get(["messages", "userStats"]) || {};
-        this.messages = data.messages || [];
-        // 确保从存储中读取的数据能被正确转换为Map对象
-        this.userStats = new Map(Object.entries(data.userStats || {}));
-        this.isStateLoaded = true; // 标记状态已加载
-        console.log(`DO State: Loaded. Messages: ${this.messages.length}, Users: ${this.userStats.size}`);
+        if (this.isStateLoaded) return;
+        
+        // 防止并发加载
+        if (this.isLoading) {
+            // 等待其他加载完成
+            while (this.isLoading) {
+                await new Promise(resolve => setTimeout(resolve, 10));
+            }
+            return;
+        }
+        
+        this.isLoading = true;
+        
+        try {
+            console.log("DO State: Not in memory. Loading from storage...");
+            const data = await this.state.storage.get(["messages", "userStats"]) || {};
+            this.messages = data.messages || [];
+            // 确保从存储中读取的数据能被正确转换为Map对象
+            this.userStats = new Map(Object.entries(data.userStats || {}));
+            this.isStateLoaded = true;
+            console.log(`DO State: Loaded. Messages: ${this.messages.length}, Users: ${this.userStats.size}`);
+        } catch (error) {
+            console.error("❌ Failed to load state:", error);
+            // 即使加载失败，也要初始化基本状态
+            this.messages = [];
+            this.userStats = new Map();
+            this.isStateLoaded = true;
+        } finally {
+            this.isLoading = false;
+        }
     }
 
     /**
      * 将当前内存中的状态写入持久化存储。
+     * 修复：添加状态锁，确保保存操作的原子性
      */
     async saveState() {
         if (!this.isStateLoaded) {
             console.warn("DO State: Attempted to save state before loading. Skipping save.");
             return;
         }
-        
-        // 将Map转换为普通对象以便进行JSON序列化和存储
-        const serializableUserStats = Object.fromEntries(this.userStats);
-        await this.state.storage.put({
-            messages: this.messages,
-            userStats: serializableUserStats,
-        });
-        console.log(`DO State: Saved. Messages: ${this.messages.length}, Users: ${this.userStats.size}`);
+
+        // 防止并发保存
+        if (this.stateLock) {
+            await this.stateLock;
+        }
+
+        this.stateLock = this._performSave();
+        await this.stateLock;
+        this.stateLock = null;
+    }
+
+    /**
+     * 执行实际的状态保存操作
+     */
+    async _performSave() {
+        try {
+            // 将Map转换为普通对象以便进行JSON序列化和存储
+            const serializableUserStats = Object.fromEntries(this.userStats);
+            
+            // 创建状态快照，避免在保存过程中状态被修改
+            const stateSnapshot = {
+                messages: [...this.messages],
+                userStats: serializableUserStats,
+            };
+
+            await this.state.storage.put(stateSnapshot);
+            console.log(`DO State: Saved. Messages: ${this.messages.length}, Users: ${this.userStats.size}`);
+        } catch (error) {
+            console.error("❌ Failed to save state:", error);
+            throw error;
+        }
     }
 
     /**
@@ -95,7 +143,7 @@ export class HibernatingChatRoom {
                 await this.state.storage.deleteAll();
                 this.messages = [];
                 this.userStats = new Map();
-                this.isStateLoaded = true; // 重置后标记状态已加载
+                this.isStateLoaded = true;
                 
                 console.log(`✅ DO STORAGE AND STATE RESET SUCCESSFULLY`);
                 return new Response("Room has been reset successfully.", { status: 200 });
@@ -124,37 +172,61 @@ export class HibernatingChatRoom {
                     return new Response("Missing text", { status: 400 });
                 }
                 
-                // 🔴 确保状态已加载后再处理
+                // 🔴 修复：确保状态已加载并创建消息
                 await this.loadState();
                 
                 const message = this.createTextMessage({ username: "小助手" }, { text });
-                this.messages.push(message);
+                
+                // 🔴 修复：使用更安全的方式添加消息
+                this.messages = [...this.messages, message];
                 
                 // 限制消息数量
                 if (this.messages.length > 200) {
-                    this.messages.shift();
+                    this.messages = this.messages.slice(-200);
                 }
                 
-                console.log(`📤 Auto-post created. New messages count: ${this.messages.length}`);
+                console.log(`📤 Auto-post created. Message ID: ${message.id}, New messages count: ${this.messages.length}`);
                 
-                this.broadcast({ type: 'chat', payload: message });
+                // 🔴 修复：先保存状态再广播，确保持久化成功
                 await this.saveState();
                 
-                return new Response("Auto-post successful", { status: 200 });
+                // 广播消息
+                this.broadcast({ type: 'chat', payload: message });
+                
+                console.log(`✅ Auto-post processed successfully. Total messages: ${this.messages.length}`);
+                
+                return new Response(JSON.stringify({ 
+                    success: true, 
+                    messageId: message.id,
+                    totalMessages: this.messages.length 
+                }), { 
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' }
+                });
             } catch (error) {
                 console.error("❌ Failed to process auto-post:", error);
-                return new Response("Internal error", { status: 500 });
+                return new Response(`Internal error: ${error.message}`, { status: 500 });
             }
         }
         
         // API：处理公开的历史消息
         if (url.pathname.endsWith('/api/messages/history')) {
-            const since = parseInt(url.searchParams.get('since') || '0', 10);
-            const history = this.fetchHistory(since);
-            console.log(`📜 History request: returning ${history.length} messages (since: ${since})`);
-            return new Response(JSON.stringify(history), {
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-            });
+            try {
+                const since = parseInt(url.searchParams.get('since') || '0', 10);
+                const history = this.fetchHistory(since);
+                console.log(`📜 History request: returning ${history.length} messages (since: ${since})`);
+                console.log(`📜 Sample messages:`, history.slice(0, 3).map(m => ({ id: m.id, username: m.username, text: m.text?.substring(0, 50) })));
+                
+                return new Response(JSON.stringify(history), {
+                    headers: { 
+                        'Content-Type': 'application/json', 
+                        'Access-Control-Allow-Origin': '*' 
+                    }
+                });
+            } catch (error) {
+                console.error("❌ Failed to fetch history:", error);
+                return new Response(`Error fetching history: ${error.message}`, { status: 500 });
+            }
         }
         
         // WebSocket 升级请求
@@ -230,6 +302,7 @@ export class HibernatingChatRoom {
 
     /**
      * 处理用户发送的聊天消息。
+     * 修复：改进消息处理流程，确保状态一致性
      */
     async handleChatMessage(user, payload) {
         try {
@@ -247,16 +320,20 @@ export class HibernatingChatRoom {
                 message = this.createTextMessage(user, payload);
             }
 
-            this.messages.push(message);
+            // 🔴 修复：使用更安全的方式添加消息
+            this.messages = [...this.messages, message];
+            
             if (this.messages.length > 200) {
-                this.messages.shift();
+                this.messages = this.messages.slice(-200);
             }
 
             this.updateUserStatsOnMessage(user.username);
-            this.broadcast({ type: MSG_TYPE_CHAT, payload: message });
-            await this.saveState();
             
-            console.log(`✅ Chat message processed. New messages count: ${this.messages.length}`);
+            // 🔴 修复：先保存状态再广播
+            await this.saveState();
+            this.broadcast({ type: MSG_TYPE_CHAT, payload: message });
+            
+            console.log(`✅ Chat message processed. Message ID: ${message.id}, New messages count: ${this.messages.length}`);
         } catch (error) {
             console.error('❌ Error handling chat message:', error);
             this.sendMessage(user.ws, { type: MSG_TYPE_ERROR, payload: { message: `消息发送失败: ${error.message}` } });
@@ -268,8 +345,8 @@ export class HibernatingChatRoom {
         this.messages = this.messages.filter(m => m.id !== payload.id);
         if (this.messages.length < initialLength) {
             console.log(`🗑️  Message deleted. Messages count: ${initialLength} -> ${this.messages.length}`);
-            this.broadcast({ type: MSG_TYPE_DELETE, payload });
             await this.saveState();
+            this.broadcast({ type: MSG_TYPE_DELETE, payload });
         }
     }
 
