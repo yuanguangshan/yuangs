@@ -1,4 +1,4 @@
-// src/worker.js (Merged, Final Version)
+// src/worker.js (Merged, Final Version - CORRECTED)
 
 /*
  * 这个 `worker.js` 文件是 Cloudflare Worker 的入口点，它扮演着“前台总机”的角色。
@@ -192,14 +192,31 @@ export default {
                 return new Response(JSON.stringify({ description }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
             }
 
-            // --- 路由 2: 房间相关请求 (转发给Durable Object) ---
-            // 匹配所有形如 /<any-string-as-room-name>... 的路径
-            const pathParts = pathname.slice(1).split('/');
-            const roomName = pathParts[0];
-
-            if (roomName) {
+            // --- 新增：专门处理历史消息API的路由 ---
+            if (pathname === '/api/messages/history') {
+                const roomName = url.searchParams.get('roomName');
+                if (!roomName) {
+                    return new Response('Missing "roomName" query parameter', { status: 400, headers: corsHeaders });
+                }
+                
                 if (!env.CHAT_ROOM_DO) throw new Error("Durable Object 'CHAT_ROOM_DO' is not bound.");
+
+                // 使用从查询参数中获取的正确roomName
                 const doId = env.CHAT_ROOM_DO.idFromName(roomName);
+                const stub = env.CHAT_ROOM_DO.get(doId);
+                
+                // 将原始请求转发给正确的DO实例
+                return await stub.fetch(request);
+            }
+            
+            // --- 修改：将原来的房间路由逻辑放在后面 ---
+            // 这个逻辑现在只处理WebSocket连接和未来的房间特定API（如果路径以房间名开头）
+            const pathParts = pathname.slice(1).split('/');
+            const roomNameFromPath = pathParts[0];
+
+            if (roomNameFromPath) {
+                if (!env.CHAT_ROOM_DO) throw new Error("Durable Object 'CHAT_ROOM_DO' is not bound.");
+                const doId = env.CHAT_ROOM_DO.idFromName(roomNameFromPath);
                 const stub = env.CHAT_ROOM_DO.get(doId);
                 const response = await stub.fetch(request);
 
@@ -214,7 +231,6 @@ export default {
             }
 
             // --- 路由 3: 兜底逻辑 (服务根路径的HTML) ---
-            // 如果请求到这里，说明它既不是API也不是房间请求，很可能是对根路径'/'的访问
             return new Response(html, {
                 headers: { 'Content-Type': 'text/html;charset=UTF-8' },
             });
@@ -232,7 +248,6 @@ export default {
         console.log(`Cron Trigger firing! Rule: ${event.cron}`);
         
         const tasks = [
-            // 直接调用顶级的辅助函数
             sendAutoPost(env, 'test', '苑：这是发送到test房间的定时消息。')
         ];
         
