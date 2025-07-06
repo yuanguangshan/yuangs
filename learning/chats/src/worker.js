@@ -87,12 +87,31 @@ async function getGeminiExplanation(text, env) {
 /**
  * 从URL获取图片并转换为Base64编码。
  */
+/**
+ * 【修正版】从URL获取图片并高效地转换为Base64编码。
+ */
 async function fetchImageAsBase64(imageUrl) {
     const response = await fetch(imageUrl);
-    if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+    }
     const contentType = response.headers.get('content-type') || 'image/jpeg';
     const buffer = await response.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+
+    // --- 核心修正：使用更健壮和高效的编码方法 ---
+    // 将 ArrayBuffer 转换为一个由十六进制字符组成的字符串
+    const hex = [...new Uint8Array(buffer)]
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+
+    // 将十六进制字符串解码为普通的ASCII字符串，然后进行btoa编码
+    // 这种方法避免了 String.fromCharCode 的调用栈限制
+    let binary = '';
+    for (let i = 0; i < hex.length; i += 2) {
+        binary += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+    }
+    const base64 = btoa(binary);
+    
     return { base64, contentType };
 }
 
