@@ -1,7 +1,8 @@
-// 文件: src/chatroom_do.js (完善版本)
+// 文件: src/chatroom_do.js (完整整合版本)
 
 import { DurableObject } from "cloudflare:workers";
 
+// 消息类型常量
 const MSG_TYPE_CHAT = 'chat';
 const MSG_TYPE_DELETE = 'delete';
 const MSG_TYPE_ERROR = 'error';
@@ -17,10 +18,11 @@ export class HibernatingChatRoom extends DurableObject {
         this.ctx = ctx;
         this.env = env;
         this.messages = null;
-        this.sessions = new Map(); // 改为 Map 来更好地管理会话
+        this.sessions = new Map(); // 使用 Map 来更好地管理会话
         this.debugLogs = [];
         this.maxDebugLogs = 100;
         this.isInitialized = false;
+        this.heartbeatInterval = null;
         
         this.debugLog("🏗️ DO instance created.");
         
@@ -28,7 +30,7 @@ export class HibernatingChatRoom extends DurableObject {
         this.startHeartbeat();
     }
 
-    // 自定义调试日志方法
+    // ============ 调试日志系统 ============
     debugLog(message, level = 'INFO') {
         const timestamp = new Date().toISOString();
         const logEntry = {
@@ -71,6 +73,7 @@ export class HibernatingChatRoom extends DurableObject {
         });
     }
 
+    // ============ 状态管理 ============
     async loadState() {
         if (this.messages !== null) return;
         
@@ -105,15 +108,18 @@ export class HibernatingChatRoom extends DurableObject {
         this.debugLog(`💾 State saved. Messages: ${this.messages.length}, Sessions: ${this.sessions.size}`);
     }
 
-    // 启动心跳机制
+    // ============ 心跳机制 ============
     startHeartbeat() {
         // 每30秒发送一次心跳
-        setInterval(() => {
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+        }
+        
+        this.heartbeatInterval = setInterval(() => {
             this.sendHeartbeat();
         }, 30000);
     }
 
-    // 发送心跳
     sendHeartbeat() {
         if (this.sessions.size === 0) return;
         
@@ -153,7 +159,7 @@ export class HibernatingChatRoom extends DurableObject {
         }
     }
 
-    // --- RPC Method for Cron ---
+    // ============ RPC 方法 ============
     async cronPost(text, secret) {
         if (this.env.CRON_SECRET && secret !== this.env.CRON_SECRET) {
             this.debugLog("CRON RPC: Unauthorized attempt!", 'ERROR');
@@ -163,7 +169,7 @@ export class HibernatingChatRoom extends DurableObject {
         await this.handleChatMessage({ username: "小助手" }, { text, type: 'text' });
     }
 
-    // --- Main Fetch Handler (入口点) ---
+    // ============ 主要入口点 ============
     async fetch(request) {
         const url = new URL(request.url);
         this.debugLog(`📥 Incoming request: ${request.method} ${url.pathname}`);
@@ -202,7 +208,7 @@ export class HibernatingChatRoom extends DurableObject {
         return new Response("Not Found", { status: 404 });
     }
 
-    // API 请求处理
+    // ============ API 请求处理 ============
     async handleApiRequest(url) {
         // API: 获取调试日志
         if (url.pathname.endsWith('/debug/logs')) {
@@ -284,10 +290,74 @@ export class HibernatingChatRoom extends DurableObject {
             });
         }
 
+        // API: 删除消息
+        if (url.pathname.endsWith('/messages/delete')) {
+            const messageId = url.searchParams.get('id');
+            const secret = url.searchParams.get('secret');
+            
+            if (this.env.ADMIN_SECRET && secret === this.env.ADMIN_SECRET) {
+                const originalCount = this.messages.length;
+                this.messages = this.messages.filter(msg => msg.id !== messageId);
+                const deleted = originalCount - this.messages.length;
+                
+                if (deleted > 0) {
+                    await this.saveState();
+                    this.debugLog(`🗑️ Message deleted: ${messageId}`);
+                    
+                    // 广播删除消息
+                    this.broadcast({ 
+                        type: MSG_TYPE_DELETE, 
+                        payload: { messageId } 
+                    });
+                    
+                    return new Response(JSON.stringify({
+                        message: "Message deleted successfully",
+                        deleted: deleted
+                    }), {
+                        headers: { 
+                            'Content-Type': 'application/json', 
+                            'Access-Control-Allow-Origin': '*' 
+                        }
+                    });
+                } else {
+                    return new Response(JSON.stringify({
+                        message: "Message not found"
+                    }), {
+                        status: 404,
+                        headers: { 
+                            'Content-Type': 'application/json', 
+                            'Access-Control-Allow-Origin': '*' 
+                        }
+                    });
+                }
+            } else {
+                this.debugLog("🚫 Unauthorized delete attempt", 'WARN');
+                return new Response("Forbidden.", { status: 403 });
+            }
+        }
+
+        // API: 获取房间状态
+        if (url.pathname.endsWith('/room/status')) {
+            const status = {
+                totalMessages: this.messages.length,
+                activeSessions: this.sessions.size,
+                lastActivity: this.messages.length > 0 ? Math.max(...this.messages.map(m => m.timestamp)) : null,
+                isInitialized: this.isInitialized,
+                timestamp: new Date().toISOString()
+            };
+            
+            return new Response(JSON.stringify(status), {
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'Access-Control-Allow-Origin': '*' 
+                }
+            });
+        }
+
         return new Response("API endpoint not found", { status: 404 });
     }
 
-    // --- WebSocket 会话处理 ---
+    // ============ WebSocket 会话处理 ============
     async handleWebSocketSession(ws, url) {
         const username = decodeURIComponent(url.searchParams.get("username") || "Anonymous");
         const sessionId = crypto.randomUUID();
@@ -314,9 +384,10 @@ export class HibernatingChatRoom extends DurableObject {
         const welcomeMessage = {
             type: MSG_TYPE_WELCOME,
             payload: {
-                message: `欢迎 ${username} 加入!`,
+                message: `欢迎 ${username} 加入聊天室!`,
                 sessionId: sessionId,
-                history: this.messages.slice(-50)
+                history: this.messages.slice(-50), // 只发送最近50条消息
+                userCount: this.sessions.size
             }
         };
         
@@ -327,13 +398,19 @@ export class HibernatingChatRoom extends DurableObject {
         }
 
         // 广播用户加入消息
-        this.broadcast({ type: MSG_TYPE_USER_JOIN, payload: { username } }, sessionId);
+        this.broadcast({ 
+            type: MSG_TYPE_USER_JOIN, 
+            payload: { 
+                username,
+                userCount: this.sessions.size
+            } 
+        }, sessionId);
         
         // 保存状态
         await this.saveState();
     }
 
-    // --- WebSocket 事件处理器 ---
+    // ============ WebSocket 事件处理器 ============
     async webSocketMessage(ws, message) {
         const sessionId = ws.sessionId;
         const session = this.sessions.get(sessionId);
@@ -392,7 +469,13 @@ export class HibernatingChatRoom extends DurableObject {
             this.sessions.delete(sessionId);
             
             // 广播用户离开消息
-            this.broadcast({ type: MSG_TYPE_USER_LEAVE, payload: { username: session.username } });
+            this.broadcast({ 
+                type: MSG_TYPE_USER_LEAVE, 
+                payload: { 
+                    username: session.username,
+                    userCount: this.sessions.size
+                } 
+            });
             
             this.debugLog(`📊 Remaining sessions: ${this.sessions.size}`);
             
@@ -414,7 +497,7 @@ export class HibernatingChatRoom extends DurableObject {
         await this.webSocketClose(ws, 1011, "An error occurred", false);
     }
 
-    // --- 核心业务逻辑 ---
+    // ============ 核心业务逻辑 ============
     async handleChatMessage(session, payload) {
         this.debugLog(`💬 Handling chat message from ${session.username}: ${payload.text?.substring(0, 50)}${payload.text?.length > 50 ? '...' : ''}`);
         
@@ -423,11 +506,31 @@ export class HibernatingChatRoom extends DurableObject {
             await this.loadState();
         }
         
+        // 基本的消息验证
+        if (!payload.text || payload.text.trim().length === 0) {
+            this.debugLog(`❌ Empty message from ${session.username}`, 'WARN');
+            return;
+        }
+        
+        // 防止消息过长
+        if (payload.text.length > 1000) {
+            this.debugLog(`❌ Message too long from ${session.username}`, 'WARN');
+            try {
+                session.ws.send(JSON.stringify({
+                    type: MSG_TYPE_ERROR,
+                    payload: { message: "消息过长，请控制在1000字符以内" }
+                }));
+            } catch (e) {
+                this.debugLog(`❌ Failed to send error message: ${e.message}`, 'ERROR');
+            }
+            return;
+        }
+        
         const message = {
             id: crypto.randomUUID(),
             username: session.username,
             timestamp: Date.now(),
-            text: payload.text,
+            text: payload.text.trim(),
             type: payload.type || 'text'
         };
         
@@ -436,13 +539,13 @@ export class HibernatingChatRoom extends DurableObject {
             message.image = payload.image;
             message.filename = payload.filename;
             message.size = payload.size;
-            message.caption = payload.caption;
+            message.caption = payload.caption || '';
         }
         
         this.messages.push(message);
         
         // 限制消息数量
-        if (this.messages.length > 200) {
+        if (this.messages.length > 500) {
             this.messages.shift();
         }
         
@@ -452,7 +555,7 @@ export class HibernatingChatRoom extends DurableObject {
         this.broadcast({ type: MSG_TYPE_CHAT, payload: message });
     }
 
-    // --- 辅助方法 ---
+    // ============ 辅助方法 ============
     fetchHistory(since = 0) {
         return since > 0 ? this.messages.filter(msg => msg.timestamp > since) : this.messages;
     }
@@ -493,5 +596,18 @@ export class HibernatingChatRoom extends DurableObject {
         if (message.type !== MSG_TYPE_DEBUG_LOG) {
             this.debugLog(`📡 Message broadcast to ${activeSessions} active sessions`);
         }
+    }
+
+    // ============ 清理方法 ============
+    async cleanup() {
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+        
+        // 保存最终状态
+        await this.saveState();
+        
+        this.debugLog("🧹 Cleanup completed");
     }
 }

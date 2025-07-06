@@ -1067,77 +1067,51 @@ function onSocketError(error) {
 }
 
 // 在 index.html 的 <script type="module"> 标签内
+    // 在 index.html 的 <script type="module"> 标签内
 
-messageForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    logDebug("发送按钮点击，提交事件触发！");
+    messageForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        logDebug("发送按钮点击，提交事件触发！");
 
-    const text = messageInput.value.trim();
-    const isSocketReady = socket && socket.readyState === WebSocket.OPEN;
+        const text = messageInput.value.trim();
+        const isSocketReady = socket && socket.readyState === WebSocket.OPEN;
 
-    // 关键日志：检查发送前的所有条件
-    logDebug("准备检查发送条件...", 'info', {
-        '输入框文本': text,
-        '是否有文本': !!text,
-        '是否有文件': !!selectedFile,
-        'WebSocket是否存在': !!socket,
-        'WebSocket是否已打开': isSocketReady
-    });
+        logDebug("准备检查发送条件...", 'info', {
+            '输入框文本': text, '是否有文本': !!text, '是否有文件': !!selectedFile,
+            'WebSocket是否存在': !!socket, 'WebSocket是否已打开': isSocketReady
+        });
 
-    if ((!text && !selectedFile) || !isSocketReady) {
-        logDebug("发送条件不满足，消息被中止发送。", 'warning');
-        // 即使中止，也要确保按钮状态正确
-        checkSendButtonState();
-        return;
-    }
-    
-    sendButton.disabled = true;
-    logDebug("发送条件满足，按钮已禁用。");
-    
-    try {
-        if (selectedFile) {
-            logDebug("准备发送图片消息...");
-            await sendImageMessage(selectedFile, text);
-            logDebug("图片消息发送流程已调用。");
-        } else if (text) {
-            const payload = { type: 'text', text: text };
-            logDebug("准备发送文本消息...", 'success', payload);
-            socket.send(JSON.stringify({ type: 'chat', payload: payload }));
-            logDebug("socket.send() 已成功调用！", 'success');
+        if ((!text && !selectedFile) || !isSocketReady) {
+            logDebug("发送条件不满足，消息被中止发送。", 'warning');
+            checkSendButtonState(); // 确保按钮状态正确
+            return;
         }
         
-        messageInput.value = '';
-        messageInput.style.height = 'auto';
-        removeImagePreview();
-        logDebug("输入框已清空。");
+        sendButton.disabled = true;
+        logDebug("发送条件满足，按钮已禁用。");
+        
+        try {
+            if (selectedFile) {
+                // sendImageMessage 现在是异步的，并且会在内部处理UI清理
+                await sendImageMessage(selectedFile, text);
+            } else if (text) {
+                const payload = { type: 'text', text: text };
+                socket.send(JSON.stringify({ type: 'chat', payload }));
+                logDebug("socket.send() 已成功调用！", 'success');
+                // 发送文本后清理UI
+                messageInput.value = '';
+                messageInput.style.height = 'auto';
+                removeImagePreview();
+            }
+        } catch (error) {
+            logDebug('发送消息过程中出现顶级错误: ' + error, 'error', error.toString());
+            alert('发送失败，请重试');
+        } finally {
+            // 最后统一更新按钮状态，确保在任何情况下按钮都能恢复正确状态
+            checkSendButtonState();
+        }
+    });
 
-    } catch (error) {
-        logDebug('发送消息过程中出现顶级错误: ' + error, 'error', error.toString());
-        alert('发送失败，请重试');
-    } finally {
-        checkSendButtonState();
-        logDebug("发送流程结束，按钮状态已更新。");
-    }
-});
-
-async function sendImageMessage(file, caption = '') {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const message = { type: 'chat', payload: { type: 'image', image: e.target.result, filename: file.name, size: file.size, caption: caption } };
-        socket.send(JSON.stringify(message));
-    };
-    reader.readAsDataURL(file);
-}
-
-async function sendAudioMessage(blob, mimeType) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const fileExtension = mimeType.split('/')[1].split(';')[0];
-        const message = { type: 'chat', payload: { type: 'audio', audio: e.target.result, filename: `voice-${Date.now()}.${fileExtension}`, size: blob.size, mimeType: mimeType } };
-        socket.send(JSON.stringify(message));
-    };
-    reader.readAsDataURL(blob);
-}
 
 // --- UI Rendering ---
 function isUserActive(lastSeenTimestamp) {
@@ -1252,29 +1226,24 @@ function appendChatMessage(msg) {
         else if (diffSeconds < 3600) displayTime = `${Math.floor(diffSeconds / 60)}分钟前`;
         else if (diffSeconds < 86400) displayTime = `${Math.floor(diffSeconds / 3600)}小时前`;
         else displayTime = messageDate.toLocaleString([], { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-        let contentHTML = `<div class="info"><span class="username">${escapeHTML(msg.username)}</span> <span class="timestamp">${displayTime}</span></div>`;
-        try {
+             let contentHTML = `<div class="info"><span class="username">${escapeHTML(msg.username)}</span> <span class="timestamp">${displayTime}</span></div>`;
+            
+            // --- 核心修改在这里 ---
             if (msg.type === 'image') {
+                // 使用 msg.imageUrl，这是从R2获取的公共URL
                 contentHTML += `<div class="message-image" onclick="showImageModal('${msg.imageUrl}')"><img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy"></div>`;
                 if (msg.caption) {
-                    if (typeof marked !== 'undefined' && marked.parse) {
-                        contentHTML += `<div class="text">${marked.parse(msg.caption)}</div>`;
-                    } else {
-                        contentHTML += `<div class="text">${escapeHTML(msg.caption)}</div>`;
-                    }
+                    contentHTML += `<div class="text">${marked.parse(msg.caption)}</div>`;
                 }
             } else if (msg.type === 'audio') {
+                // 使用 msg.audioUrl，这是从R2获取的公共URL
                 contentHTML += `<div class="message-audio"><audio controls src="${msg.audioUrl}"></audio></div>`;
-            } else {
-                if (typeof marked !== 'undefined' && marked.parse && msg.text) {
+            } else { // text
+                if (msg.text) {
                     contentHTML += `<div class="text">${marked.parse(msg.text)}</div>`;
-                } else if (msg.text) {
-                    contentHTML += `<div class="text">${escapeHTML(msg.text)}</div>`;
                 }
             }
-        } catch (e) {
-            logDebug(`构建 contentHTML 时出错: ${e.message}`, 'error', msg);
-        }
+            // 
         msgEl.innerHTML = contentHTML;
         logDebug("innerHTML 构建完成，准备 appendChild。", 'info', { htmlLength: msgEl.innerHTML.length });
         chatWindowEl.appendChild(msgEl);
