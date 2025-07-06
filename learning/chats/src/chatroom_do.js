@@ -37,24 +37,24 @@ export class HibernatingChatRoom extends DurableObject {
 // 文件: src/chatroom_do.js
 // 位置: HibernatingChatRoom class 内部
 
-    async loadState() {
+async loadState() {
         if (this.messages !== null) return;
-        // 【修改】通过 this.ctx.storage 访问存储
+        // 【最终修正】确保从存储中安全地恢复 Map
+        const storedStats = await this.ctx.storage.get("userStats");
+        this.userStats = storedStats ? new Map(storedStats) : new Map();
+        
         this.messages = (await this.ctx.storage.get("messages")) || [];
-        // 【修改】Map 需要从数组恢复
-        this.userStats = new Map(await this.ctx.storage.get("userStats")) || new Map();
-        console.log(`DO State: Loaded. Messages: ${this.messages.length}`);
+        
+        console.log(`DO State: Loaded. Messages: ${this.messages.length}, Users: ${this.userStats.size}`);
     }
 // 文件: src/chatroom_do.js
 // 位置: HibernatingChatRoom class 内部
-
     async saveState() {
         if (this.messages === null || this.userStats === null) return;
-        // 【修改】通过 this.ctx.storage 访问存储
-        // 【修改】将 Map 转换为数组以便存储
+        // 【最终修正】将 Map 转换为数组 [key, value] 对进行存储
         await this.ctx.storage.put({
             messages: this.messages,
-            userStats: [...this.userStats.entries()], 
+            userStats: Array.from(this.userStats.entries()),
         });
         console.log(`DO State: Saved. Messages: ${this.messages.length}`);
     }
@@ -74,6 +74,8 @@ export class HibernatingChatRoom extends DurableObject {
     // --- Main Fetch Handler (Durable Object's Entrypoint) ---
 
     async fetch(request) {
+
+        try{
         const url = new URL(request.url);
 
         // API: 重置房间
@@ -116,7 +118,16 @@ export class HibernatingChatRoom extends DurableObject {
         }
 
         return new Response("Not Found", { status: 404 });
-    }
+    } catch (error) {
+            // 捕获 "This script has been upgraded" 错误并给出清晰的响应
+            if (error.message.includes("upgraded")) {
+                return new Response("Server script has been upgraded. Please reconnect.", { status: 426 }); // 426 Upgrade Required
+            }
+            // 其他错误则正常抛出
+            console.error("Critical error in DO fetch:", error);
+            return new Response("Internal Server Error", { status: 500 });
+        }
+    
     
     // --- WebSocket Event Handlers ---
     // 【重大修改】WebSocket 事件处理器现在是类的方法，而不是在 fetch 中定义
