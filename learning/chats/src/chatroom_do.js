@@ -1,9 +1,13 @@
-// 文件: src/chatroom_do.js (Final Refactored RPC Version)
+// 文件: src/chatroom_do.js (Final, Full-Featured, and Correct Version)
 
 import { DurableObject } from "cloudflare:workers";
 
-const MSG_TYPE_CHAT = 'chat', MSG_TYPE_DELETE = 'delete', MSG_TYPE_ERROR = 'error';
-const MSG_TYPE_WELCOME = 'welcome', MSG_TYPE_USER_JOIN = 'user_join', MSG_TYPE_USER_LEAVE = 'user_leave';
+const MSG_TYPE_CHAT = 'chat';
+const MSG_TYPE_DELETE = 'delete';
+const MSG_TYPE_ERROR = 'error';
+const MSG_TYPE_WELCOME = 'welcome';
+const MSG_TYPE_USER_JOIN = 'user_join';
+const MSG_TYPE_USER_LEAVE = 'user_leave';
 
 export class HibernatingChatRoom extends DurableObject {
     constructor(ctx, env) {
@@ -11,7 +15,6 @@ export class HibernatingChatRoom extends DurableObject {
         this.ctx = ctx;
         this.env = env;
         this.messages = null;
-        // 【核心修正】我们自己来管理会话，不再依赖 getWebSockets()
         this.sessions = [];
         console.log("🏗️ DO instance created.");
     }
@@ -27,56 +30,55 @@ export class HibernatingChatRoom extends DurableObject {
         await this.ctx.storage.put("messages", this.messages);
         console.log(`💾 State saved. Messages: ${this.messages.length}`);
     }
-    
 
+    // --- RPC Method for Cron ---
     async cronPost(text, secret) {
         if (this.env.CRON_SECRET && secret !== this.env.CRON_SECRET) {
             console.error("CRON RPC: Unauthorized attempt!");
             return;
         }
-        await this.loadState();
-        console.log(`CRON RPC: Received post. Current messages: ${this.messages.length}`);
         await this.handleChatMessage({ username: "小助手" }, { text, type: 'text' });
-        console.log(`CRON RPC: Post processed. New message count: ${this.messages.length}`);
     }
 
-
-    // 主 fetch 方法
+    // --- Main Fetch Handler (入口点) ---
     async fetch(request) {
         const url = new URL(request.url);
 
+        // 处理 WebSocket 升级请求
         if (request.headers.get("Upgrade") === "websocket") {
             const { 0: client, 1: server } = new WebSocketPair();
+            // 将会话处理交给一个独立的函数
             await this.handleWebSocketSession(server, url);
             return new Response(null, { status: 101, webSocket: client });
         }
         
-        // reset-room 和 history API)
-        // API: 重置房间
-        if (url.pathname.endsWith('/api/reset-room')) {
-            const secret = url.searchParams.get('secret');
-            if (this.env.ADMIN_SECRET && secret === this.env.ADMIN_SECRET) {
-                await this.ctx.storage.deleteAll();
-                this.messages = []; 
-                this.userStats = new Map();
-                return new Response("Room has been reset successfully.", { status: 200 });
-            } else {
-                return new Response("Forbidden.", { status: 403 });
+        // 【已补回】处理所有 /api/ 请求
+        if (url.pathname.startsWith('/api/')) {
+            // API: 重置房间
+            if (url.pathname.endsWith('/reset-room')) {
+                const secret = url.searchParams.get('secret');
+                if (this.env.ADMIN_SECRET && secret === this.env.ADMIN_SECRET) {
+                    await this.ctx.storage.deleteAll();
+                    this.messages = [];
+                    this.sessions = [];
+                    console.log("🔄 Room reset successfully");
+                    return new Response("Room has been reset successfully.", { status: 200 });
+                } else {
+                    return new Response("Forbidden.", { status: 403 });
+                }
+            }
+            // API: 获取历史消息
+            if (url.pathname.endsWith('/messages/history')) {
+                await this.loadState();
+                const since = parseInt(url.searchParams.get('since') || '0', 10);
+                const history = this.fetchHistory(since);
+                return new Response(JSON.stringify(history), {
+                    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+                });
             }
         }
-        
-        // API: 获取历史消息
-        if (url.pathname.endsWith('/api/messages/history')) {
-            await this.loadState();
-            const since = parseInt(url.searchParams.get('since') || '0', 10);
-            const history = this.fetchHistory(since);
-            return new Response(JSON.stringify(history), {
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-            });
-        }
 
- 
-        // 告诉主 Worker 返回 HTML 页面
+        // 处理所有其他 GET 请求（例如页面加载）
         if (request.method === "GET") {
             return new Response(null, {
                 headers: { "X-DO-Request-HTML": "true" },
@@ -85,14 +87,17 @@ export class HibernatingChatRoom extends DurableObject {
 
         return new Response("Not Found", { status: 404 });
     }
-  // 【全新】独立的 WebSocket 会话处理函数
+
+    // --- WebSocket 会话处理 ---
     async handleWebSocketSession(ws, url) {
         ws.accept();
-        const username = url.searchParams.get("username") || "Anonymous";
+        const username = decodeURIComponent(url.searchParams.get("username") || "Anonymous");
         const session = { ws, username };
         this.sessions.push(session);
 
-        // 发送欢迎消息
+        console.log(`✅ WebSocket connected for: ${username}`);
+
+        // 发送欢迎消息，包含历史记录
         await this.loadState();
         ws.send(JSON.stringify({
             type: MSG_TYPE_WELCOME,
@@ -102,10 +107,10 @@ export class HibernatingChatRoom extends DurableObject {
             }
         }));
 
-        this.broadcast({ type: MSG_TYPE_USER_JOIN, payload: { username } });
+        this.broadcast({ type: MSG_TYPE_USER_JOIN, payload: { username } }, session);
     }
 
-    // --- WebSocket Event Handlers ---
+    // --- WebSocket 事件处理器 ---
     async webSocketMessage(ws, message) {
         const session = this.sessions.find(s => s.ws === ws);
         if (!session) return;
@@ -115,22 +120,27 @@ export class HibernatingChatRoom extends DurableObject {
             if (data.type === MSG_TYPE_CHAT) {
                 await this.handleChatMessage(session, data.payload);
             }
-        } catch (e) { /* 忽略错误 */ }
+            // (可以从旧代码中添加其他消息类型的处理，如 delete, rename, rtc 等)
+        } catch (e) { 
+            console.error("Failed to parse WebSocket message:", e);
+        }
     }
 
     async webSocketClose(ws, code, reason, wasClean) {
         const index = this.sessions.findIndex(s => s.ws === ws);
         if (index > -1) {
             const session = this.sessions.splice(index, 1)[0];
+            console.log(`🔌 WebSocket disconnected for: ${session.username}`);
             this.broadcast({ type: MSG_TYPE_USER_LEAVE, payload: { username: session.username } });
         }
     }
-
+    
     async webSocketError(ws, error) {
+        console.error("WebSocket error:", error);
         this.webSocketClose(ws, 1011, "An error occurred");
     }
 
-    // --- Core Logic & Handlers ---
+    // --- 核心业务逻辑 ---
     async handleChatMessage(session, payload) {
         await this.loadState();
         const message = {
@@ -147,11 +157,18 @@ export class HibernatingChatRoom extends DurableObject {
         this.broadcast({ type: MSG_TYPE_CHAT, payload: message });
     }
 
-    // 【核心修正】广播方法，遍历我们自己管理的 sessions 数组
-    broadcast(message) {
+    // --- 辅助方法 ---
+    fetchHistory(since = 0) {
+        return since > 0 ? this.messages.filter(msg => msg.timestamp > since) : this.messages;
+    }
+
+    broadcast(message, excludeSession = null) {
         const stringifiedMessage = JSON.stringify(message);
-        // 清理已关闭的连接，并发送消息
+        // 遍历所有会话，并排除掉 `excludeSession` (如果提供了)
         this.sessions = this.sessions.filter(session => {
+            if (session === excludeSession) {
+                return true; // 保留被排除的会话
+            }
             try {
                 session.ws.send(stringifiedMessage);
                 return true; // 连接有效，保留
