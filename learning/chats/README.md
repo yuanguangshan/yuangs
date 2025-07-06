@@ -194,7 +194,7 @@ Generated javascript
                 break;
             case 'chat': {
                 const newMessage = data.payload;
-                // 【核心修正】直接添加和渲染，不再检查是否重复
+                // 【核心修正】直接添加和渲染，不再检查是否重复。 
                 allMessages.push(newMessage);
                 appendChatMessage(newMessage);
                 updateUIFromMessages();
