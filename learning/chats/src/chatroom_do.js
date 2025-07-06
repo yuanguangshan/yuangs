@@ -116,7 +116,7 @@ export class HibernatingChatRoom {
         }
 
         // 如果请求不匹配任何已知路由，返回404
-        return new Response("Endpoint not found within Durable Object.", { status: 404 });
+        return new Response(null, { status: 200 });
     }
     
     // --- WebSocket Event Handlers ---
