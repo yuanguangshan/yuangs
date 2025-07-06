@@ -1,4 +1,4 @@
-// src/chatroom_do.js (Final, Complete, and Correct Version)
+// src/chatroom_do.js (Fixed Version)
 
 /**
  * HibernatingChatRoom 是一个Durable Object，它负责管理单个聊天室的所有状态和逻辑，包括：
@@ -12,6 +12,7 @@
 const MSG_TYPE_CHAT = 'chat';
 const MSG_TYPE_DELETE = 'delete';
 const MSG_TYPE_ERROR = 'error';
+const MSG_TYPE_RENAME = 'rename';
 // WebRTC信令类型也在此定义，尽管处理逻辑在下方
 const MSG_TYPE_OFFER = 'offer';
 const MSG_TYPE_ANSWER = 'answer';
@@ -66,7 +67,6 @@ export class HibernatingChatRoom {
         const url = new URL(request.url);
 
         // 路由 1: 处理内部定时发帖API
-        // --- 新增：处理来自定时任务的内部发帖请求 ---
         if (url.pathname.endsWith('/internal/auto-post') && request.method === 'POST') {
             try {
                 const { text, secret } = await request.json();
@@ -80,12 +80,11 @@ export class HibernatingChatRoom {
                 }
 
                 // 直接调用 handleChatMessage，并模拟一个"系统"用户
-                // 注意：我们假设“小助手”用户不需要追踪统计数据，所以直接发消息即可
                 const message = this.createTextMessage({ username: "小助手" }, { text });
                 
                 this.messages.push(message);
 
-                if (this.messages.length > 200) this.messages.shift(); // 假设您有消息截断逻辑
+                if (this.messages.length > 200) this.messages.shift(); // 消息截断逻辑
 
                 this.broadcast({ type: 'chat', payload: message });
                 await this.saveState();
@@ -99,7 +98,7 @@ export class HibernatingChatRoom {
         }
         
         // 路由 2: 处理公开的历史消息API
-        if (url.pathname.startsWith('/api/messages/history')) {
+        if (url.pathname.includes('/api/messages/history')) {
             const since = parseInt(url.searchParams.get('since') || '0', 10);
             const history = this.fetchHistory(since);
             return new Response(JSON.stringify(history), {
@@ -115,8 +114,18 @@ export class HibernatingChatRoom {
             return new Response(null, { status: 101, webSocket: client });
         }
 
-        // 如果请求不匹配任何已知路由，返回404
-        return new Response(null, { status: 200 });
+        // 路由 4: 处理房间页面请求 - 告诉主Worker返回HTML
+        // 如果请求不匹配任何API路由，且是GET请求，则请求主Worker返回HTML页面
+        if (request.method === 'GET') {
+            console.log(`DO: Requesting HTML for path: ${url.pathname}`);
+            return new Response(null, { 
+                status: 200, 
+                headers: { 'X-DO-Request-HTML': 'true' } 
+            });
+        }
+
+        // 其他情况返回404
+        return new Response("Not Found", { status: 404 });
     }
     
     // --- WebSocket Event Handlers ---
@@ -169,30 +178,6 @@ export class HibernatingChatRoom {
     // --- Core Logic & Handlers ---
 
     /**
-     * 处理自动发帖的内部API请求。
-     */
-    async handleAutoPostRequest(request) {
-        try {
-            const { text, secret } = await request.json();
-            if (this.env.CRON_SECRET && secret !== this.env.CRON_SECRET) {
-                return new Response("Unauthorized", { status: 403 });
-            }
-            if (!text) return new Response("Missing text", { status: 400 });
-
-            const message = this.createTextMessage({ username: "小助手" }, { text });
-            this.messages.push(message);
-            if (this.messages.length > 200) this.messages.shift();
-
-            this.broadcast({ type: MSG_TYPE_CHAT, payload: message });
-            await this.saveState();
-            return new Response("Auto-post successful", { status: 200 });
-        } catch (e) {
-            console.error("DO: Failed to process auto-post:", e);
-            return new Response("Internal error on auto-post", { status: 500 });
-        }
-    }
-
-    /**
      * 处理用户发送的聊天消息。
      */
     async handleChatMessage(user, payload) {
@@ -223,7 +208,11 @@ export class HibernatingChatRoom {
         }
     }
 
-    async handleRename(user, payload) { /* ... 您已有的、能工作的重命名逻辑 ... */ }
+    async handleRename(user, payload) {
+        // 重命名逻辑（如果需要的话）
+        console.log(`User ${user.username} requested rename to ${payload.newName}`);
+        // 这里可以添加重命名的具体实现
+    }
 
     // --- Helper Methods ---
 
@@ -262,7 +251,6 @@ export class HibernatingChatRoom {
             await this.env.R2_BUCKET.put(key, buffer, {
                 httpMetadata: { contentType: mimeType || (type === 'image' ? 'image/jpeg' : 'application/octet-stream'), cacheControl: 'public, max-age=31536000' },
             });
-            // 请确保这个URL是您R2的公开访问URL
             return `https://pub-8dfbdda6df204465aae771b4c080140b.r2.dev/${key}`;
         } catch (error) {
             console.error(`DO: R2 ${type} upload failed:`, error);
