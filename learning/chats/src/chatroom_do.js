@@ -1,383 +1,688 @@
-// src/chatroom_do.js (Final version with hibernation-proof saving)
+// 文件: src/chatroom_do.js (完整整合版本)
 
-// ... (MSG_TYPE constants remain the same) ...
 
-// 定义应用层协议的消息类型
+import { DurableObject } from "cloudflare:workers";
+
+// 消息类型常量
 const MSG_TYPE_CHAT = 'chat';
 const MSG_TYPE_DELETE = 'delete';
-const MSG_TYPE_RENAME = 'rename';
-const MSG_TYPE_SYSTEM_STATE = 'system_state';
-const MSG_TYPE_HISTORY = 'history';
-const MSG_TYPE_OFFER = 'offer';
-const MSG_TYPE_ANSWER = 'answer';
-const MSG_TYPE_CANDIDATE = 'candidate';
-const MSG_TYPE_CALL_END = 'call_end';
+const MSG_TYPE_ERROR = 'error';
+const MSG_TYPE_WELCOME = 'welcome';
+const MSG_TYPE_USER_JOIN = 'user_join';
+const MSG_TYPE_USER_LEAVE = 'user_leave';
+const MSG_TYPE_DEBUG_LOG = 'debug_log';
+const MSG_TYPE_HEARTBEAT = 'heartbeat';
 
-export class HibernatingChatRoom {
-    constructor(state, env) {
-        this.state = state;
+export class HibernatingChatRoom extends DurableObject {
+    constructor(ctx, env) {
+        super(ctx, env);
+        this.ctx = ctx;
         this.env = env;
         this.messages = null;
-        this.userStats = null;
-        // This promise is only to ensure the first load completes before any fetch.
-        // We will now load state more dynamically.
-        this.initializePromise = this.loadState().catch(err => {
-            console.error("Initial loadState failed:", err);
+        this.sessions = new Map(); // 使用 Map 来更好地管理会话
+        this.debugLogs = [];
+        this.maxDebugLogs = 500;
+        this.isInitialized = false;
+        this.heartbeatInterval = null;
+        
+        this.debugLog("🏗️ DO instance created.");
+        
+        // 启动心跳机制
+        this.startHeartbeat();
+    }
+
+    // ============ 调试日志系统 ============
+    debugLog(message, level = 'INFO') {
+        const timestamp = new Date().toISOString();
+        const logEntry = {
+            timestamp,
+            level,
+            message,
+            id: crypto.randomUUID().substring(0, 8)
+        };
+        
+        // 添加到内存日志
+        this.debugLogs.push(logEntry);
+        if (this.debugLogs.length > this.maxDebugLogs) {
+            this.debugLogs.shift();
+        }
+        
+        // 同时输出到控制台
+        console.log(`[${timestamp}] [${level}] ${message}`);
+        
+        // 实时广播调试日志给所有连接的会话（避免循环）
+        if (level !== 'HEARTBEAT') {
+            this.broadcastDebugLog(logEntry);
+        }
+    }
+
+    // 单独的调试日志广播方法，避免无限循环
+    broadcastDebugLog(logEntry) {
+        const message = JSON.stringify({
+            type: MSG_TYPE_DEBUG_LOG,
+            payload: logEntry
+        });
+        
+        this.sessions.forEach((session, sessionId) => {
+            try {
+                if (session.ws.readyState === WebSocket.OPEN) {
+                    session.ws.send(message);
+                }
+            } catch (e) {
+                // 静默处理发送失败，避免在调试日志中产生更多日志
+            }
         });
     }
 
+    // ============ 状态管理 ============
     async loadState() {
-        // Only load from storage if it hasn't been loaded yet.
-        if (this.messages === null || this.userStats === null) {
-            console.log("Loading state from storage for the first time in this instance's life.");
-            const data = await this.state.storage.get(["messages", "userStats"]);
-            this.messages = data.get("messages") || [];
-            this.userStats = data.get("userStats") || new Map();
-            console.log(`State loaded. Messages: ${this.messages.length}`);
+        if (this.messages !== null) return;
+        
+        // 加载消息历史
+        this.messages = (await this.ctx.storage.get("messages")) || [];
+        
+        // 尝试恢复会话信息（虽然 WebSocket 连接无法恢复，但可以恢复会话元数据）
+        const savedSessionsData = await this.ctx.storage.get("sessions_metadata");
+        if (savedSessionsData) {
+            this.debugLog(`📁 Found ${savedSessionsData.length} saved session metadata entries`);
         }
+        
+        this.debugLog(`📁 State loaded. Messages: ${this.messages.length}`);
+        this.isInitialized = true;
     }
-    
-    // REMOVED: The old scheduleSave and alarm logic is flawed.
-    // async scheduleSave(...)
-    // async alarm()
-    
-    // NEW: A simple, direct "write-through" save method.
-    // We will call this whenever state changes.
+
     async saveState() {
-        console.log("Saving state to storage immediately...");
-        try {
-            await this.state.storage.put({
-                "messages": this.messages,
-                "userStats": this.userStats
-            });
-            console.log("State saved successfully.");
-        } catch(e) {
-            console.error("Failed to save state:", e);
-        }
+        if (this.messages === null) return;
+        
+        await this.ctx.storage.put("messages", this.messages);
+        
+        // 保存会话元数据（不包括 WebSocket 对象）
+        const sessionMetadata = Array.from(this.sessions.entries()).map(([id, session]) => ({
+            id,
+            username: session.username,
+            joinTime: session.joinTime,
+            lastSeen: session.lastSeen
+        }));
+        
+        await this.ctx.storage.put("sessions_metadata", sessionMetadata);
+        
+        this.debugLog(`💾 State saved. Messages: ${this.messages.length}, Sessions: ${this.sessions.size}`);
     }
 
+    // ============ 心跳机制 ============
+    startHeartbeat() {
+        // 每30秒发送一次心跳
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+        }
+        
+        this.heartbeatInterval = setInterval(() => {
+            this.sendHeartbeat();
+        }, 30000);
+    }
 
-    // Main fetch handler
-    async fetch(request) {
-        await this.initializePromise;
-        const url = new URL(request.url);
-
-        // FIXED: 恢复并增强 /user-stats 接口，以正确计算在线时长
-        if (url.pathname === '/user-stats') {
-            const onlineUsersMap = new Map();
-            for (const ws of this.state.getWebSockets()) {
-                const username = this.state.getTags(ws)[0];
-                onlineUsersMap.set(username, true);
-            }
-
-            const statsArray = Array.from(this.userStats.entries()).map(([username, stats]) => {
-                const isOnline = onlineUsersMap.has(username);
-                let totalOnlineDuration = stats.totalOnlineDuration || 0;
-
-                // 如果用户在线，加上当前会话的持续时间
-                if (isOnline && stats.currentSessionStart) {
-                    totalOnlineDuration += (Date.now() - stats.currentSessionStart);
+    sendHeartbeat() {
+        if (this.sessions.size === 0) return;
+        
+        const heartbeatMessage = JSON.stringify({
+            type: MSG_TYPE_HEARTBEAT,
+            payload: { timestamp: Date.now() }
+        });
+        
+        let activeSessions = 0;
+        const disconnectedSessions = [];
+        
+        this.sessions.forEach((session, sessionId) => {
+            try {
+                if (session.ws.readyState === WebSocket.OPEN) {
+                    session.ws.send(heartbeatMessage);
+                    session.lastSeen = Date.now();
+                    activeSessions++;
+                } else {
+                    disconnectedSessions.push(sessionId);
                 }
-
-                return {
-                    username,
-                    messageCount: stats.messageCount || 0,
-                    lastSeen: stats.lastSeen || 0,
-                    totalOnlineDuration, // 返回计算后的总时长
-                    isOnline,
-                };
-            });
-            return new Response(JSON.stringify(statsArray), { headers: { 'Content-Type': 'application/json' } });
+            } catch (e) {
+                disconnectedSessions.push(sessionId);
+            }
+        });
+        
+        // 清理断开的会话
+        disconnectedSessions.forEach(sessionId => {
+            const session = this.sessions.get(sessionId);
+            if (session) {
+                this.debugLog(`🧹 Cleaning up disconnected session: ${session.username}`);
+                this.sessions.delete(sessionId);
+            }
+        });
+        
+        if (activeSessions > 0) {
+            this.debugLog(`💓 Heartbeat sent to ${activeSessions} active sessions`, 'HEARTBEAT');
         }
-
-        const upgradeHeader = request.headers.get("Upgrade");
-        if (upgradeHeader !== "websocket") {
-            return new Response("Expected Upgrade: websocket", { status: 426 });
-        }
-
-        const username = url.searchParams.get("username") || "Anonymous";
-        const { 0: client, 1: server } = new WebSocketPair();
-        this.state.acceptWebSocket(server, [username]);
-
-        return new Response(null, { status: 101, webSocket: client });
     }
 
-    // --- WebSocket Handlers ---
-
-    async webSocketOpen(ws) {
-        await this.loadState(); // Ensure state is loaded before proceeding
-        const username = this.state.getTags(ws)[0];
-        console.log(`WebSocket opened for: ${username}`);
-        
-        let stats = this.userStats.get(username) || { messageCount: 0, totalOnlineDuration: 0 };
-        // ... (rest of stats logic is correct)
-        stats.lastSeen = Date.now();
-        stats.onlineSessions = (stats.onlineSessions || 0) + 1;
-        // 如果是该用户的第一个会话连接，记录会话开始时间
-        if (stats.onlineSessions === 1) {
-            stats.currentSessionStart = Date.now();
+    // ============ RPC 方法 ============
+    async cronPost(text, secret) {
+        if (this.env.CRON_SECRET && secret !== this.env.CRON_SECRET) {
+            this.debugLog("CRON RPC: Unauthorized attempt!", 'ERROR');
+            return;
         }
-        this.userStats.set(username, stats);
+        this.debugLog(`🤖 Cron posting message: ${text}`);
+        await this.handleChatMessage({ username: "小助手" }, { text, type: 'text' });
+    }
+
+    // ============ 主要入口点 ============
+    async fetch(request) {
+        const url = new URL(request.url);
+        this.debugLog(`📥 Incoming request: ${request.method} ${url.pathname}`);
+
+        // 确保状态已加载
+        if (!this.isInitialized) {
+            await this.loadState();
+        }
+
+        // 处理 WebSocket 升级请求
+        if (request.headers.get("Upgrade") === "websocket") {
+            const { 0: client, 1: server } = new WebSocketPair();
+            
+            // 正确设置WebSocket事件处理器
+            this.ctx.acceptWebSocket(server);
+            
+            // 处理会话
+            await this.handleWebSocketSession(server, url);
+            return new Response(null, { status: 101, webSocket: client });
+        }
         
-        this.sendMessage(ws, { type: MSG_TYPE_HISTORY, payload: this.messages });
-        this.broadcastSystemState();
+        // 处理所有 /api/ 请求
+        if (url.pathname.startsWith('/api/')) {
+            return await this.handleApiRequest(url);
+        }
+
+        // 处理所有其他 GET 请求（例如页面加载）
+        if (request.method === "GET") {
+            this.debugLog(`📄 Returning HTML page for: ${url.pathname}`);
+            return new Response(null, {
+                headers: { "X-DO-Request-HTML": "true" },
+            });
+        }
+
+        this.debugLog(`❓ Unhandled request: ${request.method} ${url.pathname}`, 'WARN');
+        return new Response("Not Found", { status: 404 });
+    }
+
+    // ============ API 请求处理 ============
+    async handleApiRequest(url) {
+        // API: 获取调试日志
+        if (url.pathname.endsWith('/debug/logs')) {
+            this.debugLog(`🔍 Debug logs requested. Total logs: ${this.debugLogs.length}`);
+            return new Response(JSON.stringify({
+                logs: this.debugLogs,
+                totalLogs: this.debugLogs.length,
+                activeSessions: this.sessions.size,
+                timestamp: new Date().toISOString()
+            }), {
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'Access-Control-Allow-Origin': '*' 
+                }
+            });
+        }
         
-        // **CRITICAL FIX**: Save state immediately after it changes.
+        // API: 获取会话状态
+        if (url.pathname.endsWith('/debug/sessions')) {
+            const sessionInfo = Array.from(this.sessions.entries()).map(([id, session]) => ({
+                id,
+                username: session.username,
+                joinTime: session.joinTime,
+                lastSeen: session.lastSeen,
+                isConnected: session.ws.readyState === WebSocket.OPEN
+            }));
+            
+            return new Response(JSON.stringify({
+                sessions: sessionInfo,
+                totalSessions: this.sessions.size,
+                timestamp: new Date().toISOString()
+            }), {
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'Access-Control-Allow-Origin': '*' 
+                }
+            });
+        }
+        
+        // API: 清空调试日志
+        if (url.pathname.endsWith('/debug/clear')) {
+            const clearedCount = this.debugLogs.length;
+            this.debugLogs = [];
+            this.debugLog(`🧹 Debug logs cleared. Cleared ${clearedCount} logs`);
+            return new Response(JSON.stringify({
+                message: `Cleared ${clearedCount} debug logs`,
+                timestamp: new Date().toISOString()
+            }), {
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'Access-Control-Allow-Origin': '*' 
+                }
+            });
+        }
+        
+        // API: 重置房间
+        if (url.pathname.endsWith('/reset-room')) {
+            const secret = url.searchParams.get('secret');
+            if (this.env.ADMIN_SECRET && secret === this.env.ADMIN_SECRET) {
+                await this.ctx.storage.deleteAll();
+                this.messages = [];
+                this.sessions.clear();
+                this.debugLogs = [];
+                this.debugLog("🔄 Room reset successfully");
+                return new Response("Room has been reset successfully.", { status: 200 });
+            } else {
+                this.debugLog("🚫 Unauthorized reset attempt", 'WARN');
+                return new Response("Forbidden.", { status: 403 });
+            }
+        }
+        
+        // API: 获取历史消息
+        if (url.pathname.endsWith('/messages/history')) {
+            const since = parseInt(url.searchParams.get('since') || '0', 10);
+            const history = this.fetchHistory(since);
+            this.debugLog(`📜 History requested. Since: ${since}, Returned: ${history.length} messages`);
+            return new Response(JSON.stringify(history), {
+                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+            });
+        }
+
+        // API: 删除消息
+        if (url.pathname.endsWith('/messages/delete')) {
+            const messageId = url.searchParams.get('id');
+            const secret = url.searchParams.get('secret');
+            
+            if (this.env.ADMIN_SECRET && secret === this.env.ADMIN_SECRET) {
+                const originalCount = this.messages.length;
+                this.messages = this.messages.filter(msg => msg.id !== messageId);
+                const deleted = originalCount - this.messages.length;
+                
+                if (deleted > 0) {
+                    await this.saveState();
+                    this.debugLog(`🗑️ Message deleted: ${messageId}`);
+                    
+                    // 广播删除消息
+                    this.broadcast({ 
+                        type: MSG_TYPE_DELETE, 
+                        payload: { messageId } 
+                    });
+                    
+                    return new Response(JSON.stringify({
+                        message: "Message deleted successfully",
+                        deleted: deleted
+                    }), {
+                        headers: { 
+                            'Content-Type': 'application/json', 
+                            'Access-Control-Allow-Origin': '*' 
+                        }
+                    });
+                } else {
+                    return new Response(JSON.stringify({
+                        message: "Message not found"
+                    }), {
+                        status: 404,
+                        headers: { 
+                            'Content-Type': 'application/json', 
+                            'Access-Control-Allow-Origin': '*' 
+                        }
+                    });
+                }
+            } else {
+                this.debugLog("🚫 Unauthorized delete attempt", 'WARN');
+                return new Response("Forbidden.", { status: 403 });
+            }
+        }
+
+        // API: 获取房间状态
+        if (url.pathname.endsWith('/room/status')) {
+            const status = {
+                totalMessages: this.messages.length,
+                activeSessions: this.sessions.size,
+                lastActivity: this.messages.length > 0 ? Math.max(...this.messages.map(m => m.timestamp)) : null,
+                isInitialized: this.isInitialized,
+                timestamp: new Date().toISOString()
+            };
+            
+            return new Response(JSON.stringify(status), {
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'Access-Control-Allow-Origin': '*' 
+                }
+            });
+        }
+
+        return new Response("API endpoint not found", { status: 404 });
+    }
+
+    // ============ WebSocket 会话处理 ============
+    async handleWebSocketSession(ws, url) {
+        let username = decodeURIComponent(url.searchParams.get("username") || "Anonymous");
+        const sessionId = crypto.randomUUID();
+        const now = Date.now();
+                // --- 新增：为匿名用户添加随机后缀 ---
+        if (username === "Anonymous") {
+            username = `Anonymous-${crypto.randomUUID().substring(0, 4)}`;
+        }
+        
+        // 创建会话对象
+        const session = {
+            id: sessionId,
+            username,
+            ws,
+            joinTime: now,
+            lastSeen: now
+        };
+        
+        // 将会话添加到 Map 中
+        this.sessions.set(sessionId, session);
+        
+        // 同时在 WebSocket 对象上保存会话信息，用于事件处理
+        ws.sessionId = sessionId;
+
+        this.debugLog(`✅ WebSocket connected for: ${username} (Session: ${sessionId}). Total sessions: ${this.sessions.size}`);
+
+        // 发送欢迎消息，包含历史记录
+        const welcomeMessage = {
+            type: MSG_TYPE_WELCOME,
+            payload: {
+                message: `欢迎 ${username} 加入聊天室!`,
+                sessionId: sessionId,
+                history: this.messages.slice(-50), // 只发送最近50条消息
+                userCount: this.sessions.size
+            }
+        };
+        
+        try {
+            ws.send(JSON.stringify(welcomeMessage));
+        } catch (e) {
+            this.debugLog(`❌ Failed to send welcome message: ${e.message}`, 'ERROR');
+        }
+
+        // 广播用户加入消息
+        this.broadcast({ 
+            type: MSG_TYPE_USER_JOIN, 
+            payload: { 
+                username,
+                userCount: this.sessions.size
+            } 
+        }, sessionId);
+        
+        // 保存状态
         await this.saveState();
     }
 
+    // ============ WebSocket 事件处理器 ============
+      // 在 chatroom_do.js 中
     async webSocketMessage(ws, message) {
-        await this.loadState(); // Ensure state is loaded
-        const username = this.state.getTags(ws)[0];
-        const user = { ws, username };
+        const session = this.sessions.get(ws.sessionId);
+        if (!session) { /* ... 错误处理 ... */ return; }
+
+        session.lastSeen = Date.now();
+        this.debugLog(`📨 Received WebSocket message from ${session.username}: ${String(message).substring(0, 100)}...`);
+
         try {
             const data = JSON.parse(message);
-            switch (data.type) {
-                case MSG_TYPE_CHAT:
-                    await this.handleChatMessage(user, data.payload);
+            
+            switch(data.type) {
+                case 'chat':
+                    await this.handleChatMessage(session, data.payload);
                     break;
-                case MSG_TYPE_DELETE:
-                    await this.handleDeleteMessage(data.payload);
+                
+                // --- 新增：处理删除消息的 case ---
+                case 'delete':
+                    await this.handleDeleteMessage(session, data.payload);
                     break;
-                case MSG_TYPE_RENAME:
-                    await this.handleRename(user, data.payload);
+                
+                case 'heartbeat':
+                    this.debugLog(`💓 Heartbeat received from ${session.username}`, 'HEARTBEAT');
                     break;
-                case MSG_TYPE_OFFER: this.handleOffer(user, data.payload); break;
-                case MSG_TYPE_ANSWER: this.handleAnswer(user, data.payload); break;
-                case MSG_TYPE_CANDIDATE: this.handleCandidate(user, data.payload); break;
-                case MSG_TYPE_CALL_END: this.handleCallEnd(user, data.payload); break;
-                default: console.warn('Unknown message type:', data.type);
+
+                default:
+                    this.debugLog(`⚠️ Unhandled message type: ${data.type}`, 'WARN');
             }
-        } catch (err) {
-            console.error('Failed to handle message:', err);
-            this.sendMessage(ws, { type: 'error', payload: { message: '消息处理失败' } });
+        } catch (e) { 
+            this.debugLog(`❌ Failed to parse WebSocket message: ${e.message}`, 'ERROR');
         }
     }
-    
+
     async webSocketClose(ws, code, reason, wasClean) {
-        await this.loadState(); // Ensure state is loaded
-        const username = this.state.getTags(ws)[0];
-        console.log(`WebSocket closed for: ${username}`);
+        const sessionId = ws.sessionId;
+        const session = this.sessions.get(sessionId);
         
-        let stats = this.userStats.get(username);
-        if (stats) {
-            stats.lastSeen = Date.now();
-            stats.onlineSessions = (stats.onlineSessions || 1) - 1;
-            // 如果是该用户的最后一个会话断开，计算并累加本次在线时长
-            if (stats.onlineSessions === 0 && stats.currentSessionStart) {
-                stats.totalOnlineDuration += (Date.now() - stats.currentSessionStart);
-                delete stats.currentSessionStart; // 清理会话开始时间戳
-            }
-            this.userStats.set(username, stats);
+        if (session) {
+            this.debugLog(`🔌 WebSocket disconnected for: ${session.username} (Session: ${sessionId}). Code: ${code}, Reason: ${reason}, WasClean: ${wasClean}`);
+            
+            // 从会话列表中移除
+            this.sessions.delete(sessionId);
+            
+            // 广播用户离开消息
+            this.broadcast({ 
+                type: MSG_TYPE_USER_LEAVE, 
+                payload: { 
+                    username: session.username,
+                    userCount: this.sessions.size
+                } 
+            });
+            
+            this.debugLog(`📊 Remaining sessions: ${this.sessions.size}`);
+            
+            // 保存状态
+            await this.saveState();
+        } else {
+            this.debugLog(`🔌 WebSocket closing for unknown session (SessionId: ${sessionId}). Code: ${code}`);
         }
-        
-        this.broadcastSystemState();
-        // **CRITICAL FIX**: Save state immediately.
-        await this.saveState();
     }
     
     async webSocketError(ws, error) {
-        const username = this.state.getTags(ws)[0];
-        console.error(`WebSocket error for user ${username}:`, error);
-        // The webSocketClose handler will be called automatically after an error.
+        const sessionId = ws.sessionId;
+        const session = this.sessions.get(sessionId);
+        const username = session ? session.username : 'unknown';
+        
+        this.debugLog(`💥 WebSocket error for ${username}: ${error}`, 'ERROR');
+        
+        // 触发关闭处理
+        await this.webSocketClose(ws, 1011, "An error occurred", false);
     }
 
-    // --- Core Logic ---
+    // ============ 核心业务逻辑 ============
+// In handleChatMessage function in chatroom_do.js:
 
-    async handleChatMessage(user, payload) {
-        await this.loadState(); // Ensure state is loaded
-        try {
-            let message;
-            if (payload.type === 'image') {
-                message = await this.#processImageMessage(user, payload);
-            } else if (payload.type === 'audio') {
-                message = await this.#processAudioMessage(user, payload);
-            } else {
-                message = this.#processTextMessage(user, payload);
-            }
-            this.messages.push(message);
-            if (this.messages.length > 100) this.messages.shift();
-
-            let stats = this.userStats.get(user.username);
-            if (stats) {
-                stats.messageCount = (stats.messageCount || 0) + 1;
-                this.userStats.set(user.username, stats);
-            }
-            this.broadcast({ type: MSG_TYPE_CHAT, payload: message });
-            // **CRITICAL FIX**:
-            await this.saveState(); 
-        } catch (error) {
-            console.error('处理聊天消息失败:', error);
-            this.sendMessage(user.ws, { type: 'error', payload: { message: `消息发送失败: ${error.message}` } });
-        }
-    }
-    #processTextMessage(user, payload) {
-        return {
-            id: crypto.randomUUID(),
-            username: user.username,
-            timestamp: Date.now(),
-            text: payload.text,
-        };
-    }
-    async #processImageMessage(user, payload) {
-        const imageUrl = await this.uploadImageToR2(payload.image, payload.filename);
-        return {
-            id: crypto.randomUUID(),
-            username: user.username,
-            timestamp: Date.now(),
-            type: 'image',
-            imageUrl,
-            filename: payload.filename,
-            size: payload.size,
-            caption: payload.caption || ''
-        };
-    }
-    async #processAudioMessage(user, payload) {
-        const audioUrl = await this.uploadAudioToR2(payload.audio, payload.filename, payload.mimeType);
-        return {
-            id: crypto.randomUUID(),
-            username: user.username,
-            timestamp: Date.now(),
-            type: 'audio',
-            audioUrl,
-            filename: payload.filename,
-            size: payload.size,
-        };
-    }
-
-    async handleDeleteMessage(payload) {
-        await this.loadState(); // Ensure state is loaded
-        this.messages = this.messages.filter(m => m.id !== payload.id);
-        this.broadcast({ type: MSG_TYPE_DELETE, payload: payload });
-        // **CRITICAL FIX**:
-        await this.saveState();
-    }
-
-    async handleRename(user, payload) {
-        await this.loadState(); // Ensure state is loaded
-        const oldUsername = user.username;
-        const newUsername = payload.newUsername;
-        if (oldUsername === newUsername) return;
-
-        // 找到所有使用旧用户名的连接，并全部更新它们的 tag
-        const socketsToUpdate = this.state.getWebSockets(oldUsername);
-        for (const sock of socketsToUpdate) {
-            this.state.setTags(sock, [newUsername]);
-        }
-
-        // 转移统计数据
-        if (this.userStats.has(oldUsername)) {
-            const stats = this.userStats.get(oldUsername);
-            const existingNewStats = this.userStats.get(newUsername) || { messageCount: 0, totalOnlineDuration: 0 };
-            existingNewStats.messageCount += stats.messageCount || 0;
-            existingNewStats.totalOnlineDuration += stats.totalOnlineDuration || 0;
-            if (stats.onlineSessions > 0) {
-                existingNewStats.onlineSessions = (existingNewStats.onlineSessions || 0) + stats.onlineSessions;
-                existingNewStats.currentSessionStart = stats.currentSessionStart;
-            }
-            this.userStats.set(newUsername, existingNewStats);
-            this.userStats.delete(oldUsername);
-        }
-
-        this.messages.forEach(msg => {
-            if (msg.username === oldUsername) msg.username = newUsername;
-        });
-
-        this.broadcastSystemState();
-        this.broadcast({ type: MSG_TYPE_HISTORY, payload: this.messages });
-        // **CRITICAL FIX**:
-        await this.saveState();
+    async handleChatMessage(session, payload) {
+    this.debugLog(`💬 Handling chat message from ${session.username}: ${payload.text?.substring(0, 50)}${payload.text?.length > 50 ? '...' : ''}`);
+    
+    // 确保状态已加载
+    if (!this.isInitialized) {
+        await this.loadState();
     }
     
-    // --- 辅助方法 ---
+    // 创建基本消息对象
+    const message = {
+        id: crypto.randomUUID(),
+        username: session.username,
+        timestamp: Date.now(),
+        text: payload.text ? payload.text.trim() : '', // 确保文本不为null并去除首尾空格
+        type: payload.type || 'text'
+    };
     
-    getWsByUsername(username) {
-        const wss = this.state.getWebSockets(username);
-        return wss.length > 0 ? wss[0] : null;
+    // 基于消息类型添加不同的字段
+    if (payload.type === 'text') {
+        // 文本消息验证
+        if (!payload.text || payload.text.trim().length === 0) {
+            this.debugLog(`❌ Empty message from ${session.username}`, 'WARN');
+            return;
+        }
+        
+        // 防止消息过长
+        if (payload.text.length > 10000) {
+            this.debugLog(`❌ Message too long from ${session.username}`, 'WARN');
+            try {
+                session.ws.send(JSON.stringify({
+                    type: MSG_TYPE_ERROR,
+                    payload: { message: "消息过长，请控制在10000字符以内" }
+                }));
+            } catch (e) {
+                this.debugLog(`❌ Failed to send error message: ${e.message}`, 'ERROR');
+            }
+            return;
+        }
+        
+        message.text = payload.text.trim();
+    } 
+    else if (payload.type === 'image') {
+        // 图片消息
+        if (!payload.imageUrl) {
+            this.debugLog(`❌ Missing image URL from ${session.username}`, 'WARN');
+            return;
+        }
+        
+        message.imageUrl = payload.imageUrl;
+        message.filename = payload.filename || '';
+        message.size = payload.size || 0;
+        
+        // 可选的图片说明文字
+        if (payload.caption) {
+            message.caption = payload.caption.trim().substring(0, 500);
+        }
+        
+        // 同时保存原始的text字段，以保持兼容性
+        if (payload.text) {
+            message.text = payload.text.trim().substring(0, 500);
+        }
     }
-
-    handleOffer(fromUser, payload) {
-        const targetWs = this.getWsByUsername(payload.target);
-        if (!targetWs) return console.warn(`用户 ${payload.target} 不在线，无法转发 offer`);
-        this.sendMessage(targetWs, { type: MSG_TYPE_OFFER, payload: { from: fromUser.username, sdp: payload.sdp } });
+    else if (payload.type === 'audio') {
+        // 音频消息
+        if (!payload.audioUrl) {
+            this.debugLog(`❌ Missing audio URL from ${session.username}`, 'WARN');
+            return;
+        }
+        
+        message.audioUrl = payload.audioUrl;
+        message.filename = payload.filename || '';
+        message.size = payload.size || 0;
     }
-
-    handleAnswer(fromUser, payload) {
-        const targetWs = this.getWsByUsername(payload.target);
-        if (!targetWs) return console.warn(`用户 ${payload.target} 不在线，无法转发 answer`);
-        this.sendMessage(targetWs, { type: MSG_TYPE_ANSWER, payload: { from: fromUser.username, sdp: payload.sdp } });
+    else {
+        // 未知消息类型
+        this.debugLog(`❌ Unknown message type: ${payload.type} from ${session.username}`, 'WARN');
+        return;
     }
     
-    handleCandidate(fromUser, payload) {
-        const targetWs = this.getWsByUsername(payload.target);
-        if (!targetWs) return console.warn(`用户 ${payload.target} 不在线，无法转发 candidate`);
-        this.sendMessage(targetWs, { type: MSG_TYPE_CANDIDATE, payload: { from: fromUser.username, candidate: payload.candidate } });
+    // 保存消息
+    this.messages.push(message);
+    
+    // 限制消息数量
+    if (this.messages.length > 500) {
+        this.messages.shift();
+    }
+    
+    await this.saveState();
+    
+    this.debugLog(`📤 Broadcasting message to ${this.sessions.size} sessions`);
+    this.broadcast({ type: MSG_TYPE_CHAT, payload: message });
     }
 
-    handleCallEnd(fromUser, payload) {
-        const targetWs = this.getWsByUsername(payload.target);
-        if (!targetWs) return console.warn(`用户 ${payload.target} 不在线，无法转发 call_end`);
-        this.sendMessage(targetWs, { type: MSG_TYPE_CALL_END, payload: { from: fromUser.username } });
-    }
+    /**
+     * 处理删除消息的请求。
+     * @param {object} session - 发起删除请求的用户会话。
+     * @param {object} payload - 包含要删除消息的ID { id: string }。
+     */
+    async handleDeleteMessage(session, payload) {
+        const messageId = payload.id;
+        if (!messageId) {
+            this.debugLog(`❌ Delete request from ${session.username} is missing message ID.`, 'WARN');
+            return;
+        }
 
-    async uploadImageToR2(imageData, filename) {
-        try {
-            const base64Data = imageData.split(',')[1];
-            if (!base64Data) throw new Error('无效的图片数据');
-            const imageBuffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-            const fileExtension = filename.split('.').pop() || 'jpg';
-            const key = `chat-images/${Date.now()}-${crypto.randomUUID()}.${fileExtension}`;
-            await this.env.R2_BUCKET.put(key, imageBuffer, {
-                httpMetadata: { contentType: this.getContentType(fileExtension), cacheControl: 'public, max-age=31536000' },
+        const initialLength = this.messages.length;
+        const messageToDelete = this.messages.find(m => m.id === messageId);
+
+        // 安全检查：确保消息存在，并且是该用户自己发送的
+        if (messageToDelete && messageToDelete.username === session.username) {
+            this.messages = this.messages.filter(m => m.id !== messageId);
+            
+            // 检查是否真的删除了
+            if (this.messages.length < initialLength) {
+                this.debugLog(`🗑️ Message ${messageId} deleted by ${session.username}.`);
+                
+                // 保存状态
+                await this.saveState();
+                
+                // 广播删除指令给所有客户端
+                this.broadcast({
+                    type: 'delete',
+                    payload: { messageId: messageId } 
+                });
+            }
+        } else {
+            // 如果消息不存在，或用户试图删除别人的消息
+            let reason = messageToDelete ? "permission denied" : "message not found";
+            this.debugLog(`🚫 Unauthorized delete attempt by ${session.username} for message ${messageId}. Reason: ${reason}`, 'WARN');
+            
+            // 可以选择性地给该用户发送一个错误提示
+            this.sendMessage(session.ws, {
+                type: 'error',
+                payload: { message: "你不能删除这条消息。" }
             });
-            return `https://pub-8dfbdda6df204465aae771b4c080140b.r2.dev/${key}`;
-        } catch (error) {
-            console.error('R2 上传失败:', error);
-            throw new Error(`图片上传失败: ${error.message}`);
         }
     }
 
-    getContentType(extension) {
-        const contentTypes = { 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp' };
-        return contentTypes[extension.toLowerCase()] || 'image/jpeg';
+
+    // ============ 辅助方法 ============
+fetchHistory(since = 0) {
+        return since > 0 ? this.messages.filter(msg => msg.timestamp > since) : this.messages;
     }
 
-    async uploadAudioToR2(audioData, filename, mimeType) {
-        try {
-            const base64Data = audioData.split(',')[1];
-            if (!base64Data) throw new Error('无效的音频数据');
-            const audioBuffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-            const fileExtension = filename.split('.').pop() || 'bin';
-            const key = `chat-audio/${Date.now()}-${crypto.randomUUID()}.${fileExtension}`;
-            await this.env.R2_BUCKET.put(key, audioBuffer, {
-                httpMetadata: { contentType: mimeType || 'application/octet-stream', cacheControl: 'public, max-age=31536000' },
-            });
-            return `https://pub-8dfbdda6df204465aae771b4c080140b.r2.dev/${key}`;
-        } catch (error) {
-            console.error('R2 音频上传失败:', error);
-            throw new Error(`音频上传失败: ${error.message}`);
-        }
-    }
-
-    sendMessage(ws, message) {
-        try {
-            ws.send(JSON.stringify(message));
-        } catch (err) {
-            console.error('Failed to send message:', err);
-        }
-    }
-
-    broadcast(message) {
-        for (const ws of this.state.getWebSockets()) {
-            this.sendMessage(ws, message);
-        }
-    }
-
-    broadcastSystemState() {
-        const userList = Array.from(new Set(this.state.getWebSockets().map(ws => this.state.getTags(ws)[0])));
-        this.broadcast({ 
-            type: MSG_TYPE_SYSTEM_STATE,
-            payload: { users: userList }
+    broadcast(message, excludeSessionId = null) {
+        const stringifiedMessage = JSON.stringify(message);
+        let activeSessions = 0;
+        const disconnectedSessions = [];
+        
+        this.sessions.forEach((session, sessionId) => {
+            if (sessionId === excludeSessionId) {
+                return;
+            }
+            
+            try {
+                if (session.ws.readyState === WebSocket.OPEN) {
+                    session.ws.send(stringifiedMessage);
+                    activeSessions++;
+                } else {
+                    disconnectedSessions.push(sessionId);
+                }
+            } catch (e) {
+                this.debugLog(`💥 Failed to send message to ${session.username}: ${e.message}`, 'ERROR');
+                disconnectedSessions.push(sessionId);
+            }
         });
+        
+        // 清理断开的会话
+        disconnectedSessions.forEach(sessionId => {
+            const session = this.sessions.get(sessionId);
+            if (session) {
+                this.debugLog(`🧹 Cleaning up failed session: ${session.username}`);
+                this.sessions.delete(sessionId);
+            }
+        });
+        
+        // 避免调试日志的广播产生无限循环
+        if (message.type !== MSG_TYPE_DEBUG_LOG) {
+            this.debugLog(`📡 Message broadcast to ${activeSessions} active sessions`);
+        }
+    }
+
+    // ============ 清理方法 ============
+    async cleanup() {
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+        
+        // 保存最终状态
+        await this.saveState();
+        
+        this.debugLog("🧹 Cleanup completed");
     }
 }

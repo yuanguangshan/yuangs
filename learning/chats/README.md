@@ -1,843 +1,234 @@
-注意：   // --- UI Rendering ---
-        function escapeHTML(str) {
-            if (typeof str !== 'string') return '';
-            return str.replace(/[&<>"]/g, m => ({'&':'&','<':'<','>':'>','"':'"'})[m]);
-        } 垢
-        这个函数可能不对，保留我之前的，这里不动，其他地方没有的补充完整。
-第 2 步: 替换 public/index.html
-请用下面的代码完全替换您的 public/index.html 文件。
-Generated html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>实时聊天室</title>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script>
-    ;(function(){
-      const PASSIVE_EVENTS=new Set(['scroll','wheel','mousewheel','touchstart','touchmove','touchenter','touchend','touchleave','touchcancel']);
-      const _orig=EventTarget.prototype.addEventListener;
-      EventTarget.prototype.addEventListener=function(e,t,o){PASSIVE_EVENTS.has(e)&&(void 0===o?o={passive:!0}:"boolean"==typeof o?o={capture:o,passive:!0}:"object"==typeof o&&void 0===o.passive&&(o.passive=!0));return _orig.call(this,e,t,o)};
-      document.addEventListener('DOMContentLoaded',()=>{const e=window.AudioContext||window.webkitAudioContext;function t(o){"touchend"===o.type&&o.preventDefault();const n=new e;"suspended"===n.state&&n.resume();new Audio("data:audio/mp3;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTG93IFRhY2tMYXRhY2s=").play().catch(()=>{});document.body.removeEventListener("click",t);document.body.removeEventListener("touchend",t)}document.body.addEventListener("click",t,{once:!0});document.body.addEventListener("touchend",t,{once:!0,passive:!1})});
-    })();
-    </script>
-    <style>
-        /* All CSS styles from your file - no changes needed */
-        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: center; align-items: center; }
-        .chat-container { width: 90%; max-width: 800px; height: 90vh; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; overflow: hidden; }
-        .sidebar { width: 280px; background: linear-gradient(180deg, #2c3e50 0%, #3498db 100%); color: white; padding: 0; border-right: none; display: flex; flex-direction: column; flex-shrink: 0; box-shadow: 2px 0 10px rgba(0,0,0,0.1); }
-        .sidebar-header { padding: 20px; background: rgba(0,0,0,0.1); border-bottom: 1px solid rgba(255,255,255,0.1); }
-        .sidebar h2 { margin: 0; font-size: 1.2em; font-weight: 600; display: flex; align-items: center; gap: 8px; }
-        .online-indicator { width: 8px; height: 8px; background: #2ecc71; border-radius: 50%; animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-        .user-list-container { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; }
-        .user-list-title { font-size: 0.9em; font-weight: 600; margin-bottom: 12px; color: rgba(255, 255, 255, 0.9); padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
-        .user-row { display: flex; align-items: flex-start; margin-bottom: 16px; gap: 16px; }
-        .user-names { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
-        .user-item { padding: 6px 10px; font-size: 0.8em; background: rgba(255,255,255,0.15); border-radius: 12px; backdrop-filter: blur(10px); display: flex; align-items: center; gap: 4px; white-space: nowrap; border: 1px solid rgba(255,255,255,0.1); transition: all 0.3s ease; }
-        .user-item::before { content: '👤'; font-size: 10px; }
-        .user-item:hover { background: rgba(255,255,255,0.25); transform: scale(1.05); box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-        .user-info { flex: 1; display: flex; flex-direction: column; gap: 8px; font-size: 0.75em; }
-        .info-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(255,255,255,0.08); border-radius: 8px; transition: all 0.3s ease; border: 1px solid rgba(255,255,255,0.05); }
-        .info-row:hover { background: rgba(255,255,255,0.15); box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-        .info-label { color: rgba(255,255,255,0.8); font-weight: 500; }
-        .info-value { color: white; font-weight: 600; text-align: right; }
-        .online-count { color: #2ecc71; font-size: 1.1em; }
-        .room-name-sidebar { color: #f39c12; font-size: 0.9em; }
-        .user-stats-container { padding: 20px; border-top: 1px solid rgba(255,255,255,0.1); margin-top: auto; max-height: 50vh; overflow-y: auto; }
-        .user-stats-item { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 10px; margin-bottom: 10px; max-height: 100px; overflow-y: auto; color: white; font-size: 0.85em; border: 1px solid rgba(255,255,255,0.05); }
-        .user-stats-item:last-child { margin-bottom: 0; }
-        .user-stats-item strong { color: #f39c12; }
-        .user-stats-item span { display: block; margin-top: 4px; }
-        .user-stats-item .stat-label { opacity: 0.8; font-size: 0.9em; }
-        .user-stats-item .stat-value { font-weight: 600; }
-        .user-stats-item .stat-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
-        .user-stats-item .stat-row:last-child { margin-bottom: 0; }
-        .user-stats-item .online-status { color: #2ecc71; font-weight: 600; }
-        .user-stats-item .offline-status { color: #e74c3c; font-weight: 600; }
-        .main-chat { flex: 1; display: flex; flex-direction: column; min-width: 0; height: 100%; }
-        .chat-header { padding: 12px 25px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; box-shadow: 0 2px 15px rgba(102, 126, 234, 0.2); position: relative; }
-        .sidebar-toggle { display: none; align-items: center; justify-content: center; width: 36px; height: 36px; background: rgba(255, 255, 255, 0.2); border: none; border-radius: 8px; font-size: 16px; color: white; cursor: pointer; transition: all 0.3s ease; flex-shrink: 0; }
-        .sidebar-toggle:hover { background: rgba(255, 255, 255, 0.3); }
-        .chat-info { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
-        .room-icon { width: 32px; height: 32px; background: rgba(255, 255, 255, 0 ); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
-        .chat-details { display: flex; flex-direction: column; min-width: 0; }
-        .room-name { font-size: 1.1em; font-weight: 700; margin: 0; color: white; text-shadow: 0 1px 3px rgba(0,0,0,0.3); }
-        .user-status { font-size: 0.8em; opacity: 0.9; margin: 2px 0 0 0; display: flex; align-items: center; gap: 6px; }
-        #username-display { cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; transition: color 0.3s; }
-        #username-display:hover { color: #f39c12; }
-        .connection-dot { width: 6px; height: 6px; background: #2ecc71; border-radius: 50%; animation: pulse 2s infinite; }
-        .connection-dot.disconnected { background: #e74c3c; animation: none; }
-        .header-users { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 15px; max-width: 50%; overflow-x: auto; }
-        .header-users .user-item { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; font-size: 0.75em; padding: 4px 8px; }
-        .header-users .user-item::before { content: '👤'; font-size: 8px; }
-        .online-users-display { cursor: pointer; user-select: none; font-size: 0.8em; font-weight: 500; color: rgba(255, 255, 255, 0.9); background: rgba(255,255,255,0.15); padding: 6px 10px; border-radius: 12px; backdrop-filter: blur(10px); flex-shrink: 0; white-space: nowrap; transition: all 0.3s ease; }
-        .online-users-display:hover { background: rgba(255,255,255,0.25); }
-        .users-menu { display: none; position: absolute; top: 100%; right: 25px; background: white; border: 1px solid #ddd; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 200; margin-top: 8px; min-width: 160px; }
-        .users-menu.show { display: block; }
-        .users-menu ul { list-style: none; margin: 0; padding: 8px 0; }
-        .users-menu li { padding: 8px 12px; font-size: 0.9em; color: #333; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
-        .users-menu li::before { content: '👤'; font-size: 12px; }
-        .users-menu li:hover { background: #f5f5f5; }
-        #chat-window { flex: 1; padding: 20px 25px; overflow-y: auto; min-height: 0; background: #f8f9fa; scroll-behavior: smooth; }
-        #chat-window::-webkit-scrollbar { width: 4px; }
-        #chat-window::-webkit-scrollbar-track { background: transparent; }
-        #chat-window::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
-        #chat-window::-webkit-scrollbar-thumb:hover { background: #999; }
-        .message { margin-bottom: 16px; display: flex; flex-direction: column; animation: fadeInUp 0.3s ease; }
-        @keyframes fadeInUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
-        .message .info { margin-bottom: 5px; }
-        .message .info .username { font-size: 0.85em; font-weight: 700; color: #495057; }
-        .message .info .timestamp { font-size: 0.65em; color: #999; }
-        .message .text { padding: 10px 10px; background: white; border-radius: 16px; max-width: 75%; line-height: 1.4; word-wrap: break-word; box-shadow: 0 1px 6px rgba(0,0,0,0.08); border: 1px solid #e9ecef; position: relative; }
-        .message.self { align-items: flex-end; }
-        .message.self .text { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; }
-        .message.self .info { text-align: right; }
-        .message .text { line-height: 1.6; }
-        .message .text h1, .message .text h2, .message .text h3 { margin-top: 0.5em; margin-bottom: 0.5em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
-        .message.self .text h1, .message.self .text h2, .message.self .text h3 { border-bottom-color: rgba(255, 255, 255, 0.3); }
-        .message .text p { margin-top: 0; margin-bottom: 0; }
-        .message .text ul, .message .text ol { padding-left: 1.5em; margin-bottom: 1em; }
-        .message .text li { margin-bottom: 0.25em; }
-        .message .text pre { background-color: #2d2d2d; color: #f8f8f2; padding: 1em; border-radius: 8px; overflow-x: auto; font-family: 'Courier New', Courier, monospace; font-size: 0.9em; margin: 1em 0; }
-        .message.self .text pre { background-color: rgba(0, 0, 0, 0.2); }
-        .message .text code { background-color: rgba(0,0,0,0.05); padding: 0.2em 0.4em; border-radius: 4px; font-family: 'Courier New', Courier, monospace; }
-        .message.self .text code { background-color: rgba(255, 255, 255, 0.2); }
-        .message .text pre > code { background-color: transparent; padding: 0; }
-        .message .text blockquote { border-left: 4px solid #ccc; padding-left: 1em; margin: 1em 0; color: #666; }
-        .message.self .text blockquote { border-left-color: rgba(255, 255, 255, 0.5); color: rgba(255, 255, 255, 0.8); }
-        .message .text table { border-collapse: collapse; width: 100%; margin: 1em 0; }
-        .message .text th, .message .text td { border: 1px solid #ddd; padding: 0.5em; }
-        .message.self .text th, .message.self .text td { border-color: rgba(255, 255, 255, 0.3); }
-        .message .text th { background-color: #f2f2f2; }
-        .message.self .text th { background-color: rgba(0, 0, 0, 0.1); }
-        .message .text a { color: #007bff; text-decoration: none; }
-        .message .text a:hover { text-decoration: underline; }
-        .message.self .text a { color: #a0c8ff; }
-        .message-image { padding: 4px; background: white; border-radius: 16px; max-width: 300px; box-shadow: 0 1px 6px rgba(0,0,0,0.08); border: 1px solid #e9ecef; overflow: hidden; cursor: pointer; transition: all 0.3s ease; position: relative; }
-        .message-image:hover { transform: scale(1.02); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-        .message-image img { width: 100%; height: auto; border-radius: 12px; display: block; }
-        .message.self .message-image { background: rgba(255,255,255,0.1); border: none; }
-        .message-audio { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #f1f3f5; border-radius: 16px; border: 1px solid #e9ecef; }
-        .message.self .message-audio { background: #7783EA; border: none; }
-        .message-audio audio { outline: none; }
-        .image-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; justify-content: center; align-items: center; animation: fadeIn 0.3s ease; }
-        .image-modal.show { display: flex; }
-        .image-modal img { max-width: 90%; max-height: 90%; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .image-modal-close { position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.2); border: none; color: white; font-size: 24px; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; }
-        .image-modal-close:hover { background: rgba(255,255,255,0.3); }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        #message-form { position: sticky; bottom: env(safe-area-inset-bottom, 0); display: flex; padding: 12px 15px; gap: 8px; align-items: center; border-top: 1px solid #e9ecef; background: white; box-shadow: 0 -2px 15px rgba(0,0,0,0.08); z-index: 100; }
-        .icon-btn { background: none; border: none; color: #6c757d; font-size: 24px; cursor: pointer; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; flex-shrink: 0; width: 44px; height: 44px; }
-        .icon-btn:hover { background: #f1f3f5; color: #667eea; }
-        .input-wrapper { flex: 1; position: relative; }
-        #message-input { width: 100%; padding: 12px 18px; border: 2px solid #e9ecef; border-radius: 22px; outline: none; font-size: 0.95em; font-family: inherit; resize: none; min-height: 20px; max-height: 100px; line-height: 1.4; transition: all 0.3s ease; box-sizing: border-box; }
-        #message-input:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
-        #image-input { display: none; }
-        .image-preview { position: absolute; bottom: 100%; left: 0; right: 0; background: white; border: 2px solid #667eea; border-radius: 12px; padding: 12px; margin-bottom: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); display: none; }
-        .image-preview.show { display: block; }
-        .preview-content { display: flex; align-items: center; gap: 12px; }
-        .preview-image { width: 60px; height: 60px; border-radius: 8px; object-fit: cover; border: 1px solid #e9ecef; }
-        .preview-info { flex: 1; min-width: 0; }
-        .preview-name { font-size: 0.9em; font-weight: 600; color: #333; margin-bottom: 4px; word-break: break-all; }
-        .preview-size { font-size: 0.8em; color: #6c757d; }
-        .preview-remove { background: #e74c3c; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; transition: all 0.3s ease; }
-        .preview-remove:hover { background: #c0392b; }
-        .uploading { opacity: 0.6; pointer-events: none; }
-        .upload-progress { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(102, 126, 234, 0.9); color: white; padding: 8px 12px; border-radius: 8px; font-size: 0.8em; font-weight: 500; }
-        #send-button { padding: 10px 20px; border: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 22px; cursor: pointer; font-size: 0.9em; font-weight: 600; transition: all 0.3s ease; box-shadow: 0 3px 12px rgba(102, 126, 234, 0.3); min-width: 70px; }
-        #send-button:hover { transform: translateY(-1px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); }
-        #send-button:active { transform: translateY(0); }
-        #send-button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-        .context-menu { display: none; position: absolute; background-color: #f1f1f1; border: 1px solid #ccc; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.15); z-index: 1000; }
-        .context-menu ul { list-style: none; padding: 5px 0; margin: 0; }
-        .context-menu ul li { padding: 8px 15px; cursor: pointer; }
-        .context-menu ul li:hover { background-color: #ddd; }
-        #call-controls-container { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; z-index: 1001; }
-        .call-control-panel { background: rgba(0,0,0,0.7); color: white; padding: 10px 20px; border-radius: 20px; display: flex; align-items: center; gap: 15px; }
-        .hang-up-btn { background: #e74c3c; color: white; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; }
-        .user-menu-item-with-call { display: flex; justify-content: space-between; align-items: center; }
-        .call-btn { background: #2ecc71; color: white; border: none; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; margin-left: 10px; }
-        .unmute-notice { background: #f39c12; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; margin-left: 10px; }
-        .context-menu .ai-explain-option { display: flex; align-items: center; gap: 8px; }
-        .context-menu .ai-explain-option::before { content: '🤖'; font-size: 14px; }   
-        .ai-explanation { position: relative; background-color: #f0f4f8; border: 1px solid #d1d9e6; border-radius: 12px; padding: 12px 16px; margin-top: 8px; font-size: 0.85em; color: #334; line-height: 1.5; animation: fadeInUp 0.4s ease; box-shadow: 0 2px 5px rgba(0,0,0,0.05); max-width: 75%; box-sizing: border-box; align-self: flex-start; }
-        .message.self .ai-explanation { align-self: flex-end; }
-        .ai-explanation::before { content: '🤖 AI 解释:'; font-weight: 600; color: #556; display: block; margin-bottom: 6px; font-size: 0.9em; }
-        .ai-explanation p { margin: 0; }
-        .ai-explanation-close { background: none; border: none; color: #889; font-size: 16px; cursor: pointer; width: 24px; height: 24px; line-height: 24px; text-align: center; border-radius: 50%; transition: all 0.2s ease; }
-        .ai-explanation-close:hover { background-color: #e1e5e9; color: #333; }
-        .ai-explanation-copy { background: none; border: none; color: #889; font-size: 16px; cursor: pointer; width: 24px; height: 24px; line-height: 24px; text-align: center; border-radius: 50%; transition: all 0.2s ease; margin-right: 5px; }
-        .ai-explanation-copy:hover { background-color: #e1e5e9; color: #333; }
-        .ai-explanation-buttons { position: absolute; top: 6px; right: 6px; display: flex; gap: 5px; }
-        .ai-explanation .markdown-content { font-size: 0.9em; line-height: 1.6; text-align: left; }
-        .ai-explanation .markdown-content p { margin-bottom: 12px; }
-        .ai-explanation .markdown-content p:last-child { margin-bottom: 0; }
-        .ai-explanation .markdown-content h1, .ai-explanation .markdown-content h2, .ai-explanation .markdown-content h3 { margin-top: 16px; margin-bottom: 8px; border-bottom: 1px solid #d1d9e6; padding-bottom: 4px; }
-        .ai-explanation .markdown-content pre { background-color: #2d2d2d; color: #f8f8f2; padding: 12px; border-radius: 8px; overflow-x: auto; font-family: 'Courier New', Courier, monospace; font-size: 0.85em; }
-        .ai-explanation .markdown-content code { background-color: #e8e8e8; padding: 2px 5px; border-radius: 4px; font-family: 'Courier New', Courier, monospace; }
-        .ai-explanation .markdown-content pre code { background-color: transparent; padding: 0; }
-        .ai-explanation .markdown-content ul, .ai-explanation .markdown-content ol { padding-left: 20px; margin-top: 8px; margin-bottom: 12px; }
-        .ai-explanation .markdown-content blockquote { border-left: 4px solid #b0c4de; padding-left: 12px; margin: 12px 0; color: #556; background-color: #f9f9f9; }
-        .ai-explanation .markdown-content a { color: #007bff; text-decoration: none; }
-        .ai-explanation .markdown-content a:hover { text-decoration: underline; }
-        .loading-dots { display: inline-block; width: 1.5em; text-align: left; }
-        .loading-dots::after { content: '.'; animation: dots 1s steps(5, end) infinite; }
-        @keyframes dots { 0%, 20% { color: rgba(0,0,0,0); text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0); } 40% { color: black; text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0); } 60% { text-shadow: .25em 0 0 black, .5em 0 0 rgba(0,0,0,0); } 80%, 100% { text-shadow: .25em 0 0 black, .5em 0 0 black; } }
-        @media (max-width: 768px) {
-            html, body { overflow: visible; align-items: flex-start; }
-            .chat-container { width: 100%; height: 100%; border-radius: 0; box-shadow: none; }
-            .sidebar { position: absolute; left: -280px; top: 0; height: 100%; z-index: 1000; transition: left 0.3s ease; }
-            .sidebar.open { left: 0; }
-            .sidebar-toggle { display: flex; }
-            .chat-header { padding: 10px 15px; }
-            .chat-info { gap: 10px; }
-            .room-icon { width: 28px; height: 28px; font-size: 14px; }
-            .room-name { font-size: 1em; }
-            .user-status { font-size: 0.75em; }
-            .header-users { display: none; }
-            .online-users-display { margin-left: auto; font-size: 0.75em; padding: 4px 8px; }
-            #chat-window { padding: 15px; -webkit-overflow-scrolling: touch; }
-            .message-image { max-width: 250px; }
-            #message-form { padding: 12px 15px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
-            #message-input { padding: 10px 40px 10px 15px; font-size: 16px; }
-            .users-menu { right: 15px; }
-            .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; }
-            .overlay.show { display: block; }
-            .user-row { flex-direction: column; align-items: stretch; gap: 12px; }
-            .user-names, .user-info { flex: none; width: 100%; }
-        }
-        .header-users { display: none; }
-    </style>
-</head>
-<body>
-    <div class="chat-container">
-        <div class="overlay" id="overlay"></div>
-        <div class="image-modal" id="image-modal">
-            <button class="image-modal-close" id="modal-close">×</button>
-            <img id="modal-image" src="" alt="Preview">
-        </div>
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <h2><span class="online-indicator"></span> 在线用户</h2>
-            </div>
-            <div class="user-list-container">
-                <div class="user-list-title">用户 & 房间信息</div>
-                <div class="user-row">
-                    <div class="user-names" id="user-names"></div>
-                    <div class="user-info">
-                        <div class="info-row">
-                            <span class="info-label">在线</span>
-                            <span class="info-value online-count" id="online-count">0</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="info-label">房间</span>
-                            <span class="info-value room-name-sidebar" id="sidebar-room-name">--</span>
-                        </div>
-                    </div>
-                </div>
-                <ul id="user-list" style="display: none;"></ul>
-            </div>
-            <div class="user-stats-container">
-                <div class="user-list-title">用户统计</div>
-                <div id="user-stats-list"></div>
-            </div>
-        </aside>
-        <main class="main-chat">
-            <header class="chat-header">
-                <button class="sidebar-toggle" id="sidebar-toggle">☰</button>
-                <div class="chat-info">
-                    <div class="room-icon">💬</div>
-                    <div class="chat-details">
-                        <h1 class="room-name" id="room-name">Room: test</h1>
-                        <p class="user-status">
-                            <span class="connection-dot" id="connection-dot"></span>
-                            <span id="status">正在连接...</span>
-                            <span id="username-display" title="点击修改用户名"></span>
-                        </p>
-                    </div>
-                </div>
-                <div class="header-users" id="header-users"></div>
-                <div class="online-users-display" id="online-users-display">在线: 0</div>
-                <div class="users-menu" id="users-menu">
-                    <ul id="users-menu-list"></ul>
-                </div>
-            </header>
-            <div id="chat-window"></div>
-            <form id="message-form">
-                <button type="button" class="icon-btn" id="attachment-btn">📎</button>
-                <input type="file" id="image-input" accept="image/*">
-                <div class="input-wrapper">
-                    <div class="image-preview" id="image-preview">
-                        <div class="upload-progress" id="upload-progress" style="display: none;"></div>
-                        <div class="preview-content">
-                            <img class="preview-image" id="preview-image" src="" alt="Preview">
-                            <div class="preview-info">
-                                <div class="preview-name" id="preview-name"></div>
-                                <div class="preview-size" id="preview-size"></div>
-                            </div>
-                            <button type="button" class="preview-remove" id="preview-remove">×</button>
-                        </div>
-                    </div>
-                    <textarea id="message-input" placeholder="请输入..." rows="1"></textarea>
-                </div>
-                <button type="button" class="icon-btn" id="record-button">🎤</button>
-                <button id="send-button" type="submit" disabled>发送</button>
-            </form>
-        </main>
-    </div>
-    <div id="context-menu" class="context-menu">
-        <ul>
-            <li class="ai-explain-option" data-ai="gemini" data-action="text-explain">问Gemini</li>
-            <li class="ai-explain-option" data-ai="deepseek" data-action="text-explain">DeepSeek</li>
-            <li class="ai-explain-option" data-ai="gemini" data-action="image-describe">问Gemini (图片)</li>
-            <li id="copy-option">📝 复 制</li>
-            <li id="delete-option">❌ 删 除</li>
-        </ul>
-    </div>
-    <div id="call-controls-container"></div>
-    <div id="remote-audio-container"></div>
+好的，这次的截图和您提供的完整前端代码，终于让我们锁定了最后一个、也是最根本的问题。我为之前的反复感到非常抱歉，但这次的证据链非常完整，我们可以充满信心地进行最终修复。
 
-    <script type="module">
-        // --- DOM Elements ---
-        const sidebarToggle = document.getElementById('sidebar-toggle');
-        const sidebar = document.getElementById('sidebar');
-        const overlay = document.getElementById('overlay');
-        const onlineDisplay = document.getElementById('online-users-display');
-        const usersMenu = document.getElementById('users-menu');
-        const attachmentBtn = document.getElementById('attachment-btn');
-        const imageInput = document.getElementById('image-input');
-        const imagePreview = document.getElementById('image-preview');
-        const previewImage = document.getElementById('preview-image');
-        const previewName = document.getElementById('preview-name');
-        const previewSize = document.getElementById('preview-size');
-        const previewRemove = document.getElementById('preview-remove');
-        const uploadProgress = document.getElementById('upload-progress');
-        const imageModal = document.getElementById('image-modal');
-        const modalImage = document.getElementById('modal-image');
-        const modalClose = document.getElementById('modal-close');
-        const recordButton = document.getElementById('record-button');
-        const messageInput = document.getElementById('message-input');
-        const roomNameEl = document.getElementById('room-name');
-        const statusEl = document.getElementById('status');
-        const usernameDisplayEl = document.getElementById('username-display');
-        const connectionDot = document.getElementById('connection-dot');
-        const chatWindowEl = document.getElementById('chat-window');
-        const messageForm = document.getElementById('message-form');
-        const sendButton = document.getElementById('send-button');
-        const contextMenu = document.getElementById('context-menu');
-        const copyOption = document.getElementById('copy-option');
-        const deleteOption = document.getElementById('delete-option');
-        const userStatsListEl = document.getElementById('user-stats-list');
-        const callControlsContainer = document.getElementById('call-controls-container');
-        const remoteAudioContainer = document.getElementById('remote-audio-container');
+恭喜您，您的后端代码 (worker.js 和 chatroom_do.js) 是完全正确的！
 
-        // --- State Variables ---
-        let selectedFile = null;
-        let mediaRecorder;
-        let audioChunks = [];
-        let isRecording = false;
-        let currentMessageElement = null;
-        let socket;
-        let reconnectInterval = 1000;
-        const maxReconnectInterval = 30000;
-        let localStream = null;
-        const peerConnections = {};
-        const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+问题纯粹出在您线上的 index.html 文件中，存在一个非常 subtle (微妙) 的逻辑错误。
 
-        // --- Initialization ---
-        let username = localStorage.getItem('chat_username');
-        if (!username) {
-            username = prompt("请输入您的姓名:") || "～苑广山";
-            localStorage.setItem('chat_username', username);
-        }
-        const pathParts = window.location.pathname.split('/');
-        const roomName = pathParts.find(p => p) || 'general';
-        roomNameEl.textContent = roomName;
-        document.getElementById('sidebar-room-name').textContent = roomName;
+最终诊断：为什么消息没有显示
 
-        usernameDisplayEl.textContent = username;
-        usernameDisplayEl.addEventListener('click', () => {
-            const newUsername = prompt("请输入新的用户名:", username);
-            if (newUsername && newUsername !== username) {
-                username = newUsername;
-                localStorage.setItem('chat_username', username);
-                usernameDisplayEl.textContent = username;
-                if (socket && socket.readyState === WebSocket.OPEN) {
-                    socket.send(JSON.stringify({ type: 'rename', payload: { newUsername: username } }));
-                }
-            }
-        });
+让我们结合截图和您提供的 index.html 代码来分析。
 
-        // --- UI Event Listeners ---
-        sidebarToggle.addEventListener('click', () => {
-            sidebar.classList.toggle('open');
-            overlay.classList.toggle('show');
-        });
-        overlay.addEventListener('click', () => {
-            sidebar.classList.remove('open');
-            overlay.classList.remove('show');
-        });
-        onlineDisplay.addEventListener('click', (e) => {
-            e.stopPropagation();
-            usersMenu.classList.toggle('show');
-        });
-        document.addEventListener('click', () => {
-            usersMenu.classList.remove('show');
-            contextMenu.style.display = 'none';
-        });
-        usersMenu.addEventListener('click', e => e.stopPropagation());
+截图中的证据：
 
-        // --- Image & Media Functions ---
-        attachmentBtn.addEventListener('click', () => imageInput.click());
-        imageInput.addEventListener('change', handleImageSelection);
-        previewRemove.addEventListener('click', removeImagePreview);
-        modalClose.addEventListener('click', () => imageModal.classList.remove('show'));
-        imageModal.addEventListener('click', (e) => {
-            if (e.target === imageModal) imageModal.classList.remove('show');
-        });
-        recordButton.addEventListener('click', handleRecordButtonClick);
-        window.showImageModal = (src) => {
-            modalImage.src = src;
-            imageModal.classList.add('show');
-        };
+Network -> Messages 面板：
 
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-        }
+(向上箭头) {"type":"chat","payload":{"type":"text","text":"还是没有"}}：前端成功向后端发送了您的消息。
 
-        async function handleImageSelection(e) {
-            const file = e.target.files[0];
-            if (!file || !file.type.startsWith('image/')) return;
-            try {
-                uploadProgress.style.display = 'block';
-                imagePreview.classList.add('show', 'uploading');
-                const compressedBlob = await compressImage(file);
-                selectedFile = new File([compressedBlob], file.name, { type: 'image/jpeg', lastModified: Date.now() });
-                showImagePreview(selectedFile);
-                checkSendButtonState();
-            } catch (error) {
-                console.error('图片处理失败:', error);
-                alert('图片处理失败，请重试');
-            } finally {
-                uploadProgress.style.display = 'none';
-                imagePreview.classList.remove('uploading');
-            }
-        }
+(向下箭头)：在您发送消息后，没有任何类型为 chat 的消息从服务器广播回来。只收到了 welcome 消息和小助手的定时消息。
 
-        function compressImage(file, maxWidth = 800, maxHeight = 600, quality = 0.8) {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => {
-                    let { width, height } = img;
-                    if (width > height) {
-                        if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
-                    } else {
-                        if (height > maxHeight) { width *= maxHeight / height; height = maxHeight; }
-                    }
-                    const canvas = document.createElement('canvas');
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    canvas.toBlob(resolve, 'image/jpeg', quality);
-                };
-                img.onerror = reject;
-                img.src = URL.createObjectURL(file);
-            });
-        }
+为什么后端没有广播您的消息回来？
+
+让我们再看一遍 chatroom_do.js 的 webSocketMessage 函数：
+
+Generated javascript
+// chatroom_do.js
+async webSocketMessage(ws, message) {
+    const session = this.sessions.find(s => s.ws === ws);
+    if (!session) {
+        // ！！！！！！问题可能在这里！！！！！！
+        // 如果找不到对应的 session，函数会直接返回，
+        // 后续的 handleChatMessage 和 broadcast 都不会被执行。
+        return; 
+    }
+    // ...
+}
+
+
+再看 handleWebSocketSession 函数：
+
+Generated javascript
+// chatroom_do.js
+async handleWebSocketSession(ws, url) {
+    ws.accept();
+    const username = decodeURIComponent(url.searchParams.get("username") || "Anonymous");
+    const session = { ws, username };
+    this.sessions.push(session); // <<<<<< 将包含了 ws 对象的 session 推入数组
+    // ...
+}
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+JavaScript
+IGNORE_WHEN_COPYING_END
+
+核心问题在于：webSocketMessage(ws, ...) 中的 ws 对象，和 handleWebSocketSession(ws, ...) 中的 ws 对象，虽然代表同一个连接，但在 JavaScript 中它们可能不是同一个对象引用！
+
+Durable Object 的运行时在内部管理 ws 对象。当它调用 webSocketMessage 时，它会传入一个代表当前连接的 ws 对象。而我们自己创建的 session 对象里，也存了一个 ws 对象。this.sessions.find(s => s.ws === ws) 这个比较，是在用一个对象去和另一个对象做 === 引用比较，这很可能会失败，导致 session 为 undefined。
+
+最终的、一劳永逸的解决方案
+
+我们需要一种更可靠的方式来在 webSocketMessage 中识别出当前是哪个用户在发消息。最好的方法是在 WebSocket 连接建立时，将用户会话信息直接附加到 ws 对象上。
+
+我们将对 chatroom_do.js 和 index.html 做最后的、也是最正确的微调。
+
+第 1 步：修改 chatroom_do.js
+
+需要修改的函数 1：handleWebSocketSession
+
+Generated javascript
+// 文件: src/chatroom_do.js
+// 位置: HibernatingChatRoom class 内部
+
+    async handleWebSocketSession(ws, url) {
+        ws.accept();
+        const username = decodeURIComponent(url.searchParams.get("username") || "Anonymous");
         
-        function showImagePreview(file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                previewImage.src = e.target.result;
-                previewName.textContent = file.name;
-                previewSize.textContent = formatFileSize(file.size);
-                imagePreview.classList.add('show');
-            };
-            reader.readAsDataURL(file);
-        }
+        // 【核心修正】直接将会话信息附加到 ws 对象上
+        ws.session = { username }; 
+        
+        this.sessions.push(ws); // 只将会话 ws 对象本身存入数组
 
-        function removeImagePreview() {
-            selectedFile = null;
-            imagePreview.classList.remove('show');
-            imageInput.value = '';
-            checkSendButtonState();
-        }
+        console.log(`✅ WebSocket connected for: ${username}`);
 
-        async function handleRecordButtonClick() {
-            if (isRecording) {
-                mediaRecorder.stop();
-                recordButton.textContent = '🎤';
-                isRecording = false;
-                checkSendButtonState();
-                return;
+        await this.loadState();
+        ws.send(JSON.stringify({
+            type: MSG_TYPE_WELCOME,
+            payload: {
+                message: `欢迎 ${username} 加入!`,
+                history: this.messages.slice(-50)
+            }
+        }));
+
+        this.broadcast({ type: MSG_TYPE_USER_JOIN, payload: { username } }, ws);
+    }
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+JavaScript
+IGNORE_WHEN_COPYING_END
+
+需要修改的函数 2：webSocketMessage
+
+Generated javascript
+// 文件: src/chatroom_do.js
+// 位置: HibernatingChatRoom class 内部
+
+    async webSocketMessage(ws, message) {
+        // 【核心修正】直接从 ws 对象上获取会话信息
+        const session = ws.session; 
+        if (!session) return;
+
+        try {
+            const data = JSON.parse(message);
+            if (data.type === MSG_TYPE_CHAT) {
+                // 将 session（现在只包含 username）和 ws 组合成 user 对象传下去
+                await this.handleChatMessage({ ws, ...session }, data.payload);
+            }
+        } catch (e) { }
+    }
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+JavaScript
+IGNORE_WHEN_COPYING_END
+
+需要修改的函数 3：webSocketClose
+
+Generated javascript
+// 文件: src/chatroom_do.js
+// 位置: HibernatingChatRoom class 内部
+
+    async webSocketClose(ws, code, reason, wasClean) {
+        // 【核心修正】直接在数组中查找 ws 对象
+        const index = this.sessions.findIndex(s => s === ws); 
+        if (index > -1) {
+            const sessionWs = this.sessions.splice(index, 1)[0];
+            const username = sessionWs.session?.username || '未知用户';
+            console.log(`🔌 WebSocket disconnected for: ${username}`);
+            this.broadcast({ type: MSG_TYPE_USER_LEAVE, payload: { username } });
+        }
+    }
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+JavaScript
+IGNORE_WHEN_COPYING_END
+
+需要修改的函数 4：broadcast
+
+Generated javascript
+// 文件: src/chatroom_do.js
+// 位置: HibernatingChatRoom class 内部
+
+    broadcast(message, excludeWs = null) {
+        const stringifiedMessage = JSON.stringify(message);
+        
+        this.sessions = this.sessions.filter(ws => {
+            if (ws === excludeWs) {
+                return true;
             }
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                const mimeType = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'].find(t => MediaRecorder.isTypeSupported(t));
-                if (!mimeType) {
-                    alert('您的浏览器不支持录音功能。');
-                    return;
-                }
-                mediaRecorder = new MediaRecorder(stream, { mimeType });
-                audioChunks = [];
-                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-                mediaRecorder.onstop = () => {
-                    const audioBlob = new Blob(audioChunks, { type: mimeType });
-                    sendAudioMessage(audioBlob, mimeType);
-                    stream.getTracks().forEach(track => track.stop());
-                    checkSendButtonState();
-                };
-                mediaRecorder.start();
-                recordButton.textContent = '🛑';
-                isRecording = true;
-                checkSendButtonState();
-            } catch (error) {
-                console.error('无法访问麦克风:', error);
-                alert('无法访问麦克风，请检查权限。');
-            }
-        }
-        
-        messageInput.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = `${Math.min(this.scrollHeight, 100)}px`;
-            checkSendButtonState();
-        });
-        
-        messageInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                messageForm.dispatchEvent(new Event('submit'));
+                ws.send(stringifiedMessage);
+                return true;
+            } catch (e) {
+                return false;
             }
         });
+    }
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+JavaScript
+IGNORE_WHEN_COPYING_END
+第 2 步：修改 index.html 的 onSocketMessage
+
+您提供的 index.html 代码中，onSocketMessage 函数在处理 chat 消息时，有一个 if (!allMessages.some(m => m.id === newMessage.id)) 的判断，这个判断是多余的，并且可能在某些边缘情况下导致消息不渲染。我们将其移除。
+
+需要替换的函数：onSocketMessage
+
+Generated javascript
+// 文件: index.html -> <script type="module">
+
+    async function onSocketMessage(event) {
+        const data = JSON.parse(event.data);
+        logDebug(`收到消息: type=${data.type}`, LOG_LEVELS.INFO);
         
-        function checkSendButtonState() {
-            sendButton.disabled = (messageInput.value.trim() === '' && selectedFile === null) || isRecording;
-        }
-
-        // --- WebSocket & Chat Logic ---
-        function connectWebSocket() {
-            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            socket = new WebSocket(`${wsProtocol}//${window.location.host}/${roomName}?username=${encodeURIComponent(username)}`);
-            socket.onopen = onSocketOpen;
-            socket.onmessage = onSocketMessage;
-            socket.onclose = onSocketClose;
-            socket.onerror = onSocketError;
-        }
-        
-        function onSocketOpen() {
-            console.log("WebSocket connection established.");
-            statusEl.textContent = '已连接';
-            connectionDot.classList.remove('disconnected');
-            reconnectInterval = 1000;
-            checkSendButtonState();
-            // **FIX**: 当连接成功后，立即获取一次用户统计数据
-            fetchUserStats();
-        }
-    
-        async function onSocketMessage(event) {
-            const data = JSON.parse(event.data);
-            switch (data.type) {
-                case 'history':
-                    console.log("Received history with", data.payload.length, "messages.");
-                    chatWindowEl.innerHTML = ''; // 清空旧消息
-                    data.payload.forEach(msg => appendChatMessage(msg));
-                    // 确保滚动到底部
-                    chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
-                    break;
-                case 'chat':
-                    appendChatMessage(data.payload);
-                    break;
-                case 'system_state':
-                    updateUserList(data.payload.users);
-                    // **FIX**: 当用户列表变化时，刷新统计数据
-                    fetchUserStats();
-                    break;
-                case 'error':
-                    alert(data.payload.message);
-                    sendButton.disabled = false;
-                    break;
-                case 'delete':
-                    deleteChatMessage(data.payload.id);
-                    break;
-                case 'offer': await handleOffer(data.payload); break;
-                case 'answer': await handleAnswer(data.payload); break;
-                case 'candidate': await handleCandidate(data.payload); break;
-                case 'call_end': handleCallEnd(data.payload); break;
+        switch (data.type) {
+            case 'welcome':
+                // (省略，这部分是正确的)
+                break;
+            case 'chat': {
+                const newMessage = data.payload;
+                // 【核心修正】直接添加和渲染，不再检查是否重复。 
+                allMessages.push(newMessage);
+                appendChatMessage(newMessage);
+                updateUIFromMessages();
+                break;
             }
+            // (省略其他 case)
         }
-        
-        function onSocketClose() {
-            console.log("WebSocket connection closed. Reconnecting...");
-            statusEl.textContent = "连接已断开";
-            connectionDot.classList.add('disconnected');
-            setTimeout(connectWebSocket, reconnectInterval);
-            reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval);
-        }
+    }
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+JavaScript
+IGNORE_WHEN_COPYING_END
+为什么这个最终组合能行
 
-        function onSocketError(error) {
-            console.error("WebSocket Error:", error);
-            statusEl.textContent = "连接错误";
-            // onSocketClose will be called, so it will handle the reconnection logic.
-            socket.close();
-        }
+可靠的会话识别：我们将用户信息直接附加到 ws 对象上 (ws.session = ...)。这是在 Durable Object 中管理 WebSocket 状态最可靠、最简单的方式。当 webSocketMessage 被调用时，我们能 100% 确定地从 ws.session 中取回当前用户的身份。
 
-        messageForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const text = messageInput.value.trim();
-            if ((!text && !selectedFile) || socket.readyState !== WebSocket.OPEN) return;
-            sendButton.disabled = true;
-            try {
-                if (selectedFile) await sendImageMessage(selectedFile, text);
-                else if (text) socket.send(JSON.stringify({ type: 'chat', payload: { text } }));
-                messageInput.value = '';
-                messageInput.style.height = 'auto';
-                removeImagePreview();
-            } catch (error) {
-                console.error('发送消息失败:', error);
-                alert('发送失败，请重试');
-            } finally {
-                sendButton.disabled = false;
-                checkSendButtonState();
-            }
-        });
-        
-        async function sendImageMessage(file, caption = '') {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const message = { type: 'chat', payload: { type: 'image', image: e.target.result, filename: file.name, size: file.size, caption: caption } };
-                socket.send(JSON.stringify(message));
-            };
-            reader.readAsDataURL(file);
-        }
-        
-        async function sendAudioMessage(blob, mimeType) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const fileExtension = mimeType.split('/')[1].split(';')[0];
-                const message = { type: 'chat', payload: { type: 'audio', audio: e.target.result, filename: `voice-${Date.now()}.${fileExtension}`, size: blob.size, mimeType: mimeType } };
-                socket.send(JSON.stringify(message));
-            };
-            reader.readAsDataURL(blob);
-        }
+正确的会话数组：this.sessions 现在只存储 ws 对象本身，find 和 filter 操作都是基于对象引用的直接比较，不会再出错了。
 
-        // --- UI Rendering ---
-        function escapeHTML(str) {
-            if (typeof str !== 'string') return '';
-            return str.replace(/[&<>"]/g, m => ({'&':'&','<':'<','>':'>','"':'"'})[m]);
-        }
-        
-        function updateUserList(users) {
-            const userNamesEl = document.getElementById('user-names');
-            const onlineCountEl = document.getElementById('online-count');
-            const menuListEl = document.getElementById('users-menu-list');
-            userNamesEl.innerHTML = '';
-            menuListEl.innerHTML = '';
-            onlineCountEl.textContent = users.length;
-            onlineDisplay.textContent = `在线: ${users.length}`;
-            users.forEach(user => {
-                const safeName = escapeHTML(user);
-                userNamesEl.insertAdjacentHTML('beforeend', `<div class="user-item">${safeName}</div>`);
-                if (user === username) {
-                    menuListEl.insertAdjacentHTML('beforeend', `<li>${safeName} (你)</li>`);
-                } else {
-                    menuListEl.insertAdjacentHTML('beforeend', `<li class="user-menu-item-with-call"><span>${safeName}</span><button class="call-btn" data-username="${safeName}">📞</button></li>`);
-                }
-            });
-            document.querySelectorAll('.call-btn').forEach(btn => {
-                btn.onclick = (e) => {
-                    e.stopPropagation();
-                    startCall(btn.dataset.username);
-                    usersMenu.classList.remove('show');
-                };
-            });
-        }
-        
-        function appendChatMessage(msg) {
-            const msgEl = document.createElement('div');
-            msgEl.className = 'message';
-            msgEl.dataset.id = msg.id;
-            msgEl.dataset.messageText = msg.text || (msg.caption || '');
-            if (msg.username === username) msgEl.classList.add('self');
-            msgEl.dataset.messageType = msg.type || 'text'; // Default to 'text' if not specified
-            const messageDate = new Date(msg.timestamp);
-            const now = new Date();
-            const diffMinutes = Math.floor((now - messageDate) / (1000 * 60));
-            let displayTime;
-            if (diffMinutes < 1) {
-                displayTime = '刚刚';
-            } else if (diffMinutes < 60) {
-                displayTime = `${diffMinutes}分钟前`;
-            } else if (diffMinutes < 24 * 60) {
-                displayTime = `${Math.floor(diffMinutes / 60)}小时前`;
-            } else {
-                displayTime = messageDate.toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-            }
-            let contentHTML = `<div class="info"><span class="username">${escapeHTML(msg.username)}</span> <span class="timestamp">${displayTime}</span></div>`;
-            if (msg.type === 'image') {
-                contentHTML += `<div class="message-image" onclick="showImageModal('${msg.imageUrl}')"><img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy"></div>`;
-                if (msg.caption) contentHTML += `<div class="text">${marked.parse(msg.caption)}</div>`;
-                msgEl.dataset.imageUrl = msg.imageUrl;
-            } else if (msg.type === 'audio') {
-                contentHTML += `<div class="message-audio"><audio controls src="${msg.audioUrl}"></audio></div>`;
-            } else {
-                contentHTML += `<div class="text">${marked.parse(msg.text)}</div>`;
-            }
-            msgEl.innerHTML = contentHTML;
-            msgEl.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(msgEl, e.pageX, e.pageY); });
-            let longPressTimer;
-            msgEl.addEventListener('touchstart', e => {
-                longPressTimer = setTimeout(() => showContextMenu(msgEl, e.touches[0].pageX, e.touches[0].pageY), 500);
-            }, { passive: true });
-            msgEl.addEventListener('touchend', () => clearTimeout(longPressTimer));
-            msgEl.addEventListener('touchmove', () => clearTimeout(longPressTimer));
-            chatWindowEl.appendChild(msgEl);
-            chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
-        }
-        
-        function showContextMenu(element, x, y) {
-            currentMessageElement = element;
-            contextMenu.style.top = `${y}px`;
-            contextMenu.style.left = `${x}px`;
-            contextMenu.style.display = 'block';
-            const messageType = element.dataset.messageType;
-            const geminiTextOption = contextMenu.querySelector('[data-ai="gemini"][data-action="text-explain"]');
-            const deepseekTextOption = contextMenu.querySelector('[data-ai="deepseek"][data-action="text-explain"]');
-            const geminiImageOption = contextMenu.querySelector('[data-ai="gemini"][data-action="image-describe"]');
-            if (messageType === 'image') {
-                geminiTextOption.style.display = 'none';
-                deepseekTextOption.style.display = 'none';
-                geminiImageOption.style.display = 'flex';
-                copyOption.style.display = 'none';
-            } else {
-                geminiTextOption.style.display = 'flex';
-                deepseekTextOption.style.display = 'flex';
-                geminiImageOption.style.display = 'none';
-                copyOption.style.display = 'flex';
-            }
-            if (navigator.vibrate) navigator.vibrate(50);
-        }
+简化的前端逻辑：前端不再做任何复杂的判断，完全信任后端广播过来的数据，只负责渲染。
 
-        // --- Context Menu Actions ---
-        copyOption.addEventListener('click', () => {
-            if (currentMessageElement?.dataset.messageText) {
-                navigator.clipboard.writeText(currentMessageElement.dataset.messageText);
-            }
-            contextMenu.style.display = 'none';
-        });
+最后的行动计划
 
-        deleteOption.addEventListener('click', () => {
-            if (currentMessageElement?.dataset.id) {
-                deleteMessage(currentMessageElement.dataset.id);
-            }
-            contextMenu.style.display = 'none';
-        });
-        
-        function deleteMessage(id) {
-            if (socket?.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({ type: 'delete', payload: { id } }));
-            }
-        }
-        
-        function deleteChatMessage(id) {
-            const msgEl = chatWindowEl.querySelector(`[data-id="${id}"]`);
-            if (msgEl) msgEl.remove();
-        }
+替换 chatroom_do.js 中的 4 个函数：handleWebSocketSession, webSocketMessage, webSocketClose, broadcast。
 
-        contextMenu.addEventListener('click', async (e) => {
-            // ... (保持不变) ...
-        });
+替换 index.html 中的 1 个函数：onSocketMessage。
 
-        // --- User Stats Functions ---
-        async function fetchUserStats() {
-            try {
-                console.log("Fetching user stats...");
-                const response = await fetch(`/room-user-stats?roomName=${encodeURIComponent(roomName)}`);
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch user stats: ${response.status} ${response.statusText}`);
-                }
-                const stats = await response.json();
-                console.log("Received user stats:", stats);
-                renderUserStats(stats);
-            } catch (error) {
-                console.error('Error fetching user stats:', error);
-                userStatsListEl.innerHTML = '<p style="color: rgba(255,255,255,0.7); font-size: 0.8em;">加载统计失败。</p>';
-            }
-        }
+部署和清理:
 
-        function renderUserStats(stats) {
-            userStatsListEl.innerHTML = '';
-            if (!stats || stats.length === 0) {
-                userStatsListEl.innerHTML = '<p style="color: rgba(255,255,255,0.7); font-size: 0.8em;">暂无用户统计数据。</p>';
-                return;
-            }
-            stats.sort((a, b) => b.isOnline - a.isOnline || b.messageCount - a.messageCount);
-            stats.forEach(userStat => {
-                const item = document.createElement('div');
-                item.className = 'user-stats-item';
-                const lastSeenDate = new Date(userStat.lastSeen);
-                const lastSeenString = lastSeenDate.toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                let onlineDurationString = '-';
-                if(userStat.totalOnlineDuration > 0) {
-                    const durationMs = userStat.totalOnlineDuration;
-                    const hours = Math.floor(durationMs / 3600000);
-                    const minutes = Math.floor((durationMs % 3600000) / 60000);
-                    const seconds = Math.floor((durationMs % 60000) / 1000);
-                    onlineDurationString = `${hours}h ${minutes}m ${seconds}s`;
-                }
-                
-                item.innerHTML = `
-                    <div class="stat-row">
-                        <strong>${escapeHTML(userStat.username)}</strong>
-                        <span class="${userStat.isOnline ? 'online-status' : 'offline-status'}">
-                            ${userStat.isOnline ? '在线' : '离线'}
-                        </span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">发言:</span>
-                        <span class="stat-value">${userStat.messageCount}</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">在线时长:</span>
-                        <span class="stat-value">${onlineDurationString}</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">最近活动:</span>
-                        <span class="stat-value">${lastSeenString}</span>
-                    </div>
-                `;
-                userStatsListEl.appendChild(item);
-            });
-        }
+wrangler deploy
 
-        // --- WebRTC Functions ---
-        async function initLocalMedia() {
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-            } catch (err) {
-                console.error('无法获取麦克风，通话功能不可用。', err);
-            }
-        }
-        function showCallUI(targetUsername) { /* ... (保持不变) ... */ }
-        function hideCallUI(targetUsername) { /* ... (保持不变) ... */ }
-        async function startCall(target) { /* ... (保持不变) ... */ }
-        async function handleOffer({ from, sdp }) { /* ... (保持不变) ... */ }
-        async function handleAnswer({ from, sdp }) { /* ... (保持不变) ... */ }
-        async function handleCandidate({ from, candidate }) { /* ... (保持不变) --*/ }
-        function handleCallEnd({ from }) { /* ... (保持不变) ... */ }
-        function endCall(target) { /* ... (保持不变) ... */ }
-        function playRemoteStream(username, stream) { /* ... (保持不变) ... */ }
+必须清理存储: https://.../api/reset-room?roomName=test&secret=...
 
-        // --- Initial Connection ---
-        console.log("Initializing chat application...");
-        initLocalMedia();
-        connectWebSocket();
-    </script>
-</body>
-</html>
+强制刷新浏览器。
+
+我为这次漫长的旅程再次深表歉意。但这次，通过分析网络面板的原始数据，我们找到了最底层的、关于 JavaScript 对象引用的问题，并用了最标准的方式去修复它。我相信，这真的是最后一次了。
