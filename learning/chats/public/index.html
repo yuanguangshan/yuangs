@@ -1220,12 +1220,15 @@ messageForm.addEventListener('submit', async (e) => {
         
     // 在 index.html 的 <script type="module"> 标签内
 
+// 在 index.html 的 <script type="module"> 标签内
+
 function appendChatMessage(msg) {
-console.log("进入 appendChatMessage，收到的 msg 对象是：", msg);
+    // 【第1个日志点】在函数入口，打印收到的原始消息对象
+    logDebug("进入 appendChatMessage，收到的 msg 对象是：", 'info', msg);
+
     const msgEl = document.createElement('div');
     msgEl.className = 'message';
     msgEl.dataset.id = msg.id;
-    // 【健壮性修改】确保 messageText 是字符串，防止后续操作出错
     msgEl.dataset.messageText = msg.text || (msg.caption || '');
     msgEl.dataset.timestamp = msg.timestamp;
     if (msg.username === username) msgEl.classList.add('self');
@@ -1243,12 +1246,10 @@ console.log("进入 appendChatMessage，收到的 msg 对象是：", msg);
     
     let contentHTML = `<div class="info"><span class="username">${escapeHTML(msg.username)}</span> <span class="timestamp">${displayTime}</span></div>`;
 
-    // --- 核心修复逻辑 ---
     try {
         if (msg.type === 'image') {
             contentHTML += `<div class="message-image" onclick="showImageModal('${msg.imageUrl}')"><img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy"></div>`;
             if (msg.caption) {
-                // 对图片的说明文字也进行安全解析
                 if (typeof marked !== 'undefined' && marked.parse) {
                     contentHTML += `<div class="text">${marked.parse(msg.caption)}</div>`;
                 } else {
@@ -1259,42 +1260,33 @@ console.log("进入 appendChatMessage，收到的 msg 对象是：", msg);
         } else if (msg.type === 'audio') {
             contentHTML += `<div class="message-audio"><audio controls src="${msg.audioUrl}"></audio></div>`;
         } else {
-            // 对普通文本消息进行安全解析
             if (typeof marked !== 'undefined' && marked.parse && msg.text) {
-                // 确认 marked 和 marked.parse 都存在，并且 msg.text 也存在
                 contentHTML += `<div class="text">${marked.parse(msg.text)}</div>`;
             } else if (msg.text) {
-                // 如果 marked 库加载失败，则进行降级处理，安全地显示纯文本
                 contentHTML += `<div class="text">${escapeHTML(msg.text)}</div>`;
+            } else {
+                // 【新增的关键日志】如果消息既不是图片/音频，又没有文本，记录下来
+                logDebug("消息渲染失败：这是一个空消息，无法显示。", 'warning', msg);
             }
         }
     } catch (e) {
-        // 捕获所有可能的解析错误，并记录日志
-        logDebug(`Markdown 解析时出现致命错误: ${e.message}`, 'error');
-        // 即使解析失败，也要保证原始文本能显示出来
+        logDebug(`Markdown 解析时出现致命错误: ${e.message}`, 'error', { error: e.toString(), originalMessage: msg });
         if (msg.text) {
             contentHTML += `<div class="text">${escapeHTML(msg.text)}</div>`;
         }
     }
-    // --- 核心修复逻辑结束 ---
 
     msgEl.innerHTML = contentHTML;
-    
-    // --- 请在这里添加下面这行代码 ---
-    console.log("准备将元素添加到页面中，msgEl 是：", msgEl);
 
-    msgEl.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(msgEl, e.pageX, e.pageY); });
-    
-    let longPressTimer;
-    msgEl.addEventListener('touchstart', e => { longPressTimer = setTimeout(() => showContextMenu(msgEl, e.touches[0].pageX, e.touches[0].pageY), 500); }, { passive: true });
-    msgEl.addEventListener('touchend', () => clearTimeout(longPressTimer));
-    msgEl.addEventListener('touchmove', () => clearTimeout(longPressTimer));
+    // 【第2个日志点】在准备添加到页面前，打印将要添加的元素内容
+    // 注意：直接打印 msgEl 对象会很复杂，我们打印它的 HTML 内容
+    logDebug("准备将 HTML 添加到页面中:", 'success', { htmlContent: msgEl.innerHTML });
     
     chatWindowEl.appendChild(msgEl);
-    const isScrolledToBottom = chatWindowEl.scrollHeight - chatWindowEl.clientHeight <= chatWindowEl.scrollTop + 1.5; // 增加一点容错
-    if (isScrolledToBottom) {
-        chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
-    }
+    
+    logDebug("已成功调用 appendChild。", 'success');
+    
+    chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
 }
 
     function isUserActive(lastSeenTimestamp) {
