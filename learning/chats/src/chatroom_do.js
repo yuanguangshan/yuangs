@@ -21,6 +21,9 @@ const MSG_TYPE_CALL_END = 'call_end';
 // 【重大修改】类声明继承自 DurableObject
 export class HibernatingChatRoom extends DurableObject {
     // 【重大修改】构造函数签名和 super() 调用
+// 文件: src/chatroom_do.js
+// 位置: HibernatingChatRoom class 内部
+
     constructor(ctx, env) {
         super(ctx, env); // 必须先调用 super
         this.ctx = ctx;   // this.ctx 包含了 state 和其他上下文
@@ -30,28 +33,31 @@ export class HibernatingChatRoom extends DurableObject {
     }
 
     // --- State Management ---
+// 文件: src/chatroom_do.js
+// 位置: HibernatingChatRoom class 内部
+
     async loadState() {
         if (this.messages !== null) return;
-        console.log("DO State: Not in memory. Loading from storage...");
-        // 【重大修改】通过 this.ctx.storage 访问存储
-        const data = await this.ctx.storage.get(["messages", "userStats"]) || {};
-        this.messages = data.messages || [];
-        this.userStats = new Map(Object.entries(data.userStats || {}));
-        console.log(`DO State: Loaded. Messages: ${this.messages.length}, Users: ${this.userStats.size}`);
+        // 【修改】通过 this.ctx.storage 访问存储
+        this.messages = (await this.ctx.storage.get("messages")) || [];
+        // 【修改】Map 需要从数组恢复
+        this.userStats = new Map(await this.ctx.storage.get("userStats")) || new Map();
+        console.log(`DO State: Loaded. Messages: ${this.messages.length}`);
     }
+// 文件: src/chatroom_do.js
+// 位置: HibernatingChatRoom class 内部
 
     async saveState() {
         if (this.messages === null || this.userStats === null) return;
-        const serializableUserStats = Object.fromEntries(this.userStats);
-        // 【重大修改】通过 this.ctx.storage 访问存储
+        // 【修改】通过 this.ctx.storage 访问存储
+        // 【修改】将 Map 转换为数组以便存储
         await this.ctx.storage.put({
             messages: this.messages,
-            userStats: serializableUserStats,
+            userStats: [...this.userStats.entries()], 
         });
         console.log(`DO State: Saved. Messages: ${this.messages.length}`);
     }
 
-    // --- RPC Method for Cron ---
     async cronPost(text, secret) {
         if (this.env.CRON_SECRET && secret !== this.env.CRON_SECRET) {
             console.error("CRON RPC: Unauthorized attempt!");
@@ -59,37 +65,31 @@ export class HibernatingChatRoom extends DurableObject {
         }
         await this.loadState();
         console.log(`CRON RPC: Received post. Current messages: ${this.messages.length}`);
-        const message = this.createTextMessage({ username: "小助手" }, { text });
-        this.messages.push(message);
-        if (this.messages.length > 200) this.messages.shift();
-        this.broadcast({ type: 'chat', payload: message });
-        await this.saveState();
+        // 复用 handleChatMessage 逻辑
+        await this.handleChatMessage({ username: "小助手" }, { text, type: 'text' });
         console.log(`CRON RPC: Post processed. New message count: ${this.messages.length}`);
     }
 
     // --- Main Fetch Handler (Durable Object's Entrypoint) ---
+
     async fetch(request) {
         const url = new URL(request.url);
 
+        // API: 重置房间
         if (url.pathname.endsWith('/api/reset-room')) {
             const secret = url.searchParams.get('secret');
             if (this.env.ADMIN_SECRET && secret === this.env.ADMIN_SECRET) {
-                console.log(`!!!!!!!!!! RECEIVED RESET REQUEST FOR DO !!!!!!!!!!`);
-                // 【重大修改】通过 this.ctx.storage 访问存储
                 await this.ctx.storage.deleteAll();
-                this.messages = [];
-                this.userStats = new Map();
-                console.log(`!!!!!!!!!! DO STORAGE AND STATE RESET SUCCESSFULLY !!!!!!!!!!`);
+                this.messages = []; this.userStats = new Map();
                 return new Response("Room has been reset successfully.", { status: 200 });
             } else {
-                console.warn("Unauthorized reset attempt detected.");
-                return new Response("Forbidden: Invalid or missing secret.", { status: 403 });
+                return new Response("Forbidden.", { status: 403 });
             }
         }
-
-        await this.loadState();
-
+        
+        // API: 获取历史消息
         if (url.pathname.endsWith('/api/messages/history')) {
+            await this.loadState();
             const since = parseInt(url.searchParams.get('since') || '0', 10);
             const history = this.fetchHistory(since);
             return new Response(JSON.stringify(history), {
@@ -97,21 +97,21 @@ export class HibernatingChatRoom extends DurableObject {
             });
         }
         
+        // 【核心修正】处理 WebSocket 升级请求
         if (request.headers.get("Upgrade") === "websocket") {
             const username = url.searchParams.get("username") || "Anonymous";
             const { 0: client, 1: server } = new WebSocketPair();
-            // 【重大修改】通过 this.ctx.request.headers.get(...) 访问头部
-            // 和 this.ctx.acceptWebSocket(server, ...)
-            this.ctx.acceptWebSocket(server, [username]);
+            
+            // 手动接受连接，并用 username 作为 tag 进行管理
+            server.accept();
+            this.ctx.getWebSockets(username).push(server);
+            
             return new Response(null, { status: 101, webSocket: client });
         }
 
+        // 页面加载请求
         if (request.method === 'GET') {
-            console.log(`DO: Requesting HTML for path: ${url.pathname}`);
-            return new Response(null, { 
-                status: 200, 
-                headers: { 'X-DO-Request-HTML': 'true' } 
-            });
+            return new Response(null, { headers: { 'X-DO-Request-HTML': 'true' } });
         }
 
         return new Response("Not Found", { status: 404 });
@@ -119,15 +119,21 @@ export class HibernatingChatRoom extends DurableObject {
     
     // --- WebSocket Event Handlers ---
     // 【重大修改】WebSocket 事件处理器现在是类的方法，而不是在 fetch 中定义
+// 文件: src/chatroom_do.js
+// 位置: HibernatingChatRoom class 内部
+
+    // --- WebSocket Event Handlers (由运行时直接调用) ---
     async webSocketOpen(ws) {
         await this.loadState();
-        const username = ws.getTags()[0];
-        console.log(`DO: WebSocket opened for: ${username}`);
+        // 【核心修正】使用 ws.getTags()
+        const tags = ws.getTags();
+        console.log(`DO: WebSocket opened for tags: ${JSON.stringify(tags)}`);
     }
 
     async webSocketMessage(ws, message) {
         await this.loadState();
-        const username = ws.getTags()[0];
+        // 【核心修正】使用 ws.getTags()
+        const username = (ws.getTags()[0] || 'Anonymous');
         const user = { ws, username };
         try {
             const data = JSON.parse(message);
@@ -151,13 +157,13 @@ export class HibernatingChatRoom extends DurableObject {
                     console.warn(`DO: Unknown message type received: ${data.type}`);
             }
         } catch (err) {
-            console.error('DO: Failed to handle message:', err);
             this.sendMessage(ws, { type: MSG_TYPE_ERROR, payload: { message: '消息处理失败' } });
+            console.error('DO: Failed to handle message:', err);
         }
     }
 
     async webSocketClose(ws, code, reason, wasClean) {
-        console.log(`DO: WebSocket closed. Code: ${code}, Reason: "${reason}", Clean: ${wasClean}`);
+        console.log(`DO: WebSocket closed for tags: ${JSON.stringify(ws.getTags())}. Code: ${code}, Reason: "${reason}", Clean: ${wasClean}`);
     }
     
     async webSocketError(ws, error) {
@@ -301,8 +307,13 @@ export class HibernatingChatRoom extends DurableObject {
         try { ws.send(JSON.stringify(message)); }
         catch (e) { console.error("❌ Failed to send message to a WebSocket:", e); }
     }
-    // 【重大修改】broadcast 方法需要从 this.ctx 获取 sockets
+    // 【重大修改】broadcast 方法需要从 this.ctx 获取 sockets// 文件: src/chatroom_do.js
+// 位置: HibernatingChatRoom class 内部
+
     broadcast(message) {
-        this.ctx.getWebSockets().forEach(ws => this.sendMessage(ws, message));
+        // 【核心修正】使用 this.ctx.getWebSockets() 遍历所有连接
+        for (const ws of this.ctx.getWebSockets()) {
+            this.sendMessage(ws, message);
+        }
     }
 }
