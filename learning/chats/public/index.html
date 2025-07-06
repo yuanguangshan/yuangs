@@ -955,21 +955,45 @@
         socket.onclose = onSocketClose;
         socket.onerror = onSocketError;
     }
-    
-    function onSocketOpen() {
-        statusEl.textContent = '已连接';
-        connectionDot.classList.remove('disconnected');
-        reconnectInterval = 1000;
-        checkSendButtonState();
-        logDebug('WebSocket连接已建立', LOG_LEVELS.SUCCESS);
-        
-        // 1. 获取历史记录 (这将填充 allMessages 并首次更新UI)
-        fetchHistoryMessages();
-        
-        // 2. 设置定时器，周期性调用核心函数以更新用户活跃状态
-        if (window.userListInterval) clearInterval(window.userListInterval);
-        window.userListInterval = setInterval(updateUIFromMessages, 15000); // 每15秒检查一次
+    // 文件: index.html oo-> <script>
+
+
+
+function onSocketOpen(event) {
+    addDebugInfo('WebSocket连接已建立');
+    updateConnectionStatus('connected', `已连接 (${username})`);
+    reconnectAttempts = 0;
+    isConnecting = false;
+    // 不再需要在这里调用 loadHistoryMessages()
+    // 因为欢迎消息中已经包含了历史记录
+}
+
+// 文件: index.html -> <script>
+function handleMessage(data) {
+    switch (data.type) {
+        case 'welcome':
+            addDebugInfo(`成功加入房间: ${data.payload.message}`);
+            // 清空旧消息，显示欢迎消息中的历史记录
+            displayMessages(data.payload.history || []);
+            break;
+        case 'chat':
+            addDebugInfo(`收到聊天消息: ${data.payload.username}`);
+            displayMessage(data.payload);
+            break;
+        case 'user_join':
+            addDebugInfo(`用户加入: ${data.payload.username}`);
+            // (可选) 可以在聊天窗口显示系统提示
+            break;
+        case 'user_leave':
+            addDebugInfo(`用户离开: ${data.payload.username}`);
+            // (可选) 可以在聊天窗口显示系统提示
+            break;
+        // ... (省略其他 case)
+        default:
+            addDebugInfo(`未知消息类型: ${data.type}`);
     }
+}
+
 
     async function onSocketMessage(event) {
         const data = JSON.parse(event.data);
