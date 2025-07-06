@@ -1218,51 +1218,80 @@ messageForm.addEventListener('submit', async (e) => {
         }
     }
         
-    function appendChatMessage(msg) {
-        const msgEl = document.createElement('div');
-        msgEl.className = 'message';
-        msgEl.dataset.id = msg.id;
-        msgEl.dataset.messageText = msg.text || (msg.caption || '');
-        msgEl.dataset.timestamp = msg.timestamp;
-        if (msg.username === username) msgEl.classList.add('self');
-        msgEl.dataset.messageType = msg.type;
+    // 在 index.html 的 <script type="module"> 标签内
 
-        const messageDate = new Date(msg.timestamp);
-        const now = new Date();
-        const diffSeconds = Math.floor((now - messageDate) / 1000);
-        let displayTime;
+function appendChatMessage(msg) {
+    const msgEl = document.createElement('div');
+    msgEl.className = 'message';
+    msgEl.dataset.id = msg.id;
+    // 【健壮性修改】确保 messageText 是字符串，防止后续操作出错
+    msgEl.dataset.messageText = msg.text || (msg.caption || '');
+    msgEl.dataset.timestamp = msg.timestamp;
+    if (msg.username === username) msgEl.classList.add('self');
+    msgEl.dataset.messageType = msg.type;
 
-        if (diffSeconds < 60) displayTime = '刚刚';
-        else if (diffSeconds < 3600) displayTime = `${Math.floor(diffSeconds / 60)}分钟前`;
-        else if (diffSeconds < 86400) displayTime = `${Math.floor(diffSeconds / 3600)}小时前`;
-        else displayTime = messageDate.toLocaleString([], { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-        
-        let contentHTML = `<div class="info"><span class="username">${escapeHTML(msg.username)}</span> <span class="timestamp">${displayTime}</span></div>`;
+    const messageDate = new Date(msg.timestamp);
+    const now = new Date();
+    const diffSeconds = Math.floor((now - messageDate) / 1000);
+    let displayTime;
 
+    if (diffSeconds < 60) displayTime = '刚刚';
+    else if (diffSeconds < 3600) displayTime = `${Math.floor(diffSeconds / 60)}分钟前`;
+    else if (diffSeconds < 86400) displayTime = `${Math.floor(diffSeconds / 3600)}小时前`;
+    else displayTime = messageDate.toLocaleString([], { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    
+    let contentHTML = `<div class="info"><span class="username">${escapeHTML(msg.username)}</span> <span class="timestamp">${displayTime}</span></div>`;
+
+    // --- 核心修复逻辑 ---
+    try {
         if (msg.type === 'image') {
             contentHTML += `<div class="message-image" onclick="showImageModal('${msg.imageUrl}')"><img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy"></div>`;
-            if (msg.caption) contentHTML += `<div class="text">${marked.parse(msg.caption)}</div>`;
+            if (msg.caption) {
+                // 对图片的说明文字也进行安全解析
+                if (typeof marked !== 'undefined' && marked.parse) {
+                    contentHTML += `<div class="text">${marked.parse(msg.caption)}</div>`;
+                } else {
+                    contentHTML += `<div class="text">${escapeHTML(msg.caption)}</div>`;
+                }
+            }
             msgEl.dataset.imageUrl = msg.imageUrl;
         } else if (msg.type === 'audio') {
             contentHTML += `<div class="message-audio"><audio controls src="${msg.audioUrl}"></audio></div>`;
         } else {
-            contentHTML += `<div class="text">${marked.parse(msg.text)}</div>`;
+            // 对普通文本消息进行安全解析
+            if (typeof marked !== 'undefined' && marked.parse && msg.text) {
+                // 确认 marked 和 marked.parse 都存在，并且 msg.text 也存在
+                contentHTML += `<div class="text">${marked.parse(msg.text)}</div>`;
+            } else if (msg.text) {
+                // 如果 marked 库加载失败，则进行降级处理，安全地显示纯文本
+                contentHTML += `<div class="text">${escapeHTML(msg.text)}</div>`;
+            }
         }
-        msgEl.innerHTML = contentHTML;
-
-        msgEl.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(msgEl, e.pageX, e.pageY); });
-        
-        let longPressTimer;
-        msgEl.addEventListener('touchstart', e => { longPressTimer = setTimeout(() => showContextMenu(msgEl, e.touches[0].pageX, e.touches[0].pageY), 500); }, { passive: true });
-        msgEl.addEventListener('touchend', () => clearTimeout(longPressTimer));
-        msgEl.addEventListener('touchmove', () => clearTimeout(longPressTimer));
-        
-        chatWindowEl.appendChild(msgEl);
-        const isScrolledToBottom = chatWindowEl.scrollHeight - chatWindowEl.clientHeight <= chatWindowEl.scrollTop + 1;
-        if (isScrolledToBottom) {
-            chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
+    } catch (e) {
+        // 捕获所有可能的解析错误，并记录日志
+        logDebug(`Markdown 解析时出现致命错误: ${e.message}`, 'error');
+        // 即使解析失败，也要保证原始文本能显示出来
+        if (msg.text) {
+            contentHTML += `<div class="text">${escapeHTML(msg.text)}</div>`;
         }
     }
+    // --- 核心修复逻辑结束 ---
+
+    msgEl.innerHTML = contentHTML;
+
+    msgEl.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(msgEl, e.pageX, e.pageY); });
+    
+    let longPressTimer;
+    msgEl.addEventListener('touchstart', e => { longPressTimer = setTimeout(() => showContextMenu(msgEl, e.touches[0].pageX, e.touches[0].pageY), 500); }, { passive: true });
+    msgEl.addEventListener('touchend', () => clearTimeout(longPressTimer));
+    msgEl.addEventListener('touchmove', () => clearTimeout(longPressTimer));
+    
+    chatWindowEl.appendChild(msgEl);
+    const isScrolledToBottom = chatWindowEl.scrollHeight - chatWindowEl.clientHeight <= chatWindowEl.scrollTop + 1.5; // 增加一点容错
+    if (isScrolledToBottom) {
+        chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
+    }
+}
 
     function isUserActive(lastSeenTimestamp) {
         if (!lastSeenTimestamp) return false;
