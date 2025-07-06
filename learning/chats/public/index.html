@@ -960,21 +960,18 @@
 
 
 // 文件: index.html -> <script type="module">
-// 位置: onSocketOpen 函数
 
     function onSocketOpen() {
         statusEl.textContent = '已连接';
         connectionDot.classList.remove('disconnected');
         reconnectInterval = 1000;
         checkSendButtonState();
-        
-        // 【最终修正】使用正确的日志函数名 logDebug
         logDebug('WebSocket连接已建立', LOG_LEVELS.SUCCESS);
         
-        // 获取历史记录
-        fetchHistoryMessages();
+        // 【核心修正】删除了 fetchHistoryMessages() 的调用
+        // 现在我们等待后端的 'welcome' 消息来加载历史记录
         
-        // (如果您有其他代码，请保留)
+        // 保留用户列表更新的定时器
         if (window.userListInterval) clearInterval(window.userListInterval);
         window.userListInterval = setInterval(updateUIFromMessages, 15000);
     }
@@ -1004,6 +1001,7 @@ function handleMessage(data) {
             addDebugInfo(`未知消息类型: ${data.type}`);
     }
 }
+// 文件: index.html -> <script type="module">
 
     async function onSocketMessage(event) {
         const data = JSON.parse(event.data);
@@ -1022,25 +1020,24 @@ function handleMessage(data) {
             }
             case 'chat': {
                 const newMessage = data.payload;
-                // 避免重复添加已存在的消息
-                if (!allMessages.some(m => m.id === newMessage.id)) {
-                    allMessages.push(newMessage);
-                    appendChatMessage(newMessage);
-                    updateUIFromMessages();
-                }
+                // 【核心修正】不再检查消息是否重复，直接添加和渲染
+                // 因为后端是单一事实来源，它广播过来的就一定是要显示的
+                allMessages.push(newMessage);
+                appendChatMessage(newMessage);
+                updateUIFromMessages();
                 break;
             }
             // 【新增】处理用户加入/离开的系统提示
             case 'user_join':
             case 'user_leave': {
                 logDebug(`系统消息: ${data.payload.username} ${data.type === 'user_join' ? '加入了' : '离开了'}`);
-                // 这里可以调用 updateUIFromMessages() 来更新在线用户列表
-                // 或者在聊天窗口显示一条系统提示
-                updateUIFromMessages(); 
+                // 暂时只打印日志，未来可以更新UI
+                // 注意：这里我们不需要手动更新在线用户列表，因为后端的 `welcome` 消息
+                // 和未来的 `user_list_update` 消息会提供完整的列表
                 break;
             }
-            // ... (您原有的 delete, error, rtc 等 case 保持不变) ...
-             case 'delete': {
+            // 您原有的其他 case (delete, error, rtc) 保持不变
+            case 'delete': {
                 const { id } = data.payload;
                 allMessages = allMessages.filter(msg => msg.id !== id);
                 const msgEl = chatWindowEl.querySelector(`[data-id="${id}"]`);
@@ -1058,7 +1055,6 @@ function handleMessage(data) {
             case 'candidate': await handleCandidate(data.payload); break;
             case 'call_end': handleCallEnd(data.payload); break;
         }
-        
     }
 
     
@@ -1370,57 +1366,7 @@ messageForm.addEventListener('submit', async (e) => {
         }
     });
 
- // index.html -> <script type="module"> -> fetchHistoryMessages 函数
 
-async function fetchHistoryMessages() {
-    try {
-        // 1. 决定 'since' 的值
-        const latestMessage = allMessages.length > 0 ? allMessages[allMessages.length - 1] : null;
-        const since = latestMessage ? latestMessage.timestamp : 0;
-
-        // <<<<<<<<<<<< 修改点在这里 >>>>>>>>>>>>>
-        // 2. 准备用于日志的可读时间字符串
-        const sinceForLog = since === 0 
-            ? "0 (获取全部)" 
-            : new Date(since).toLocaleString(); // 将时间戳转换为本地时间格式字符串
-
-        logDebug(`开始获取历史消息，since: ${sinceForLog}`, LOG_LEVELS.INFO);
-        // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-
-        // 3. 构建包含 since 参数的 URL
-        const workerBaseUrl = window.location.origin;
-        const apiUrl = `${workerBaseUrl}/api/messages/history?roomName=${roomName}&since=${since}`;
-        
-        const response = await fetch(apiUrl);
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const newMessages = await response.json();
-        logDebug(`获取到 ${newMessages.length} 条新消息`, LOG_LEVELS.SUCCESS);
-
-        // 4. 处理响应
-        if (since === 0) {
-            // 全量加载
-            allMessages = newMessages;
-            chatWindowEl.innerHTML = '';
-            allMessages.forEach(msg => appendChatMessage(msg));
-            chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
-        } else {
-            // 增量加载
-            if (newMessages.length > 0) {
-                allMessages.push(...newMessages);
-                newMessages.forEach(msg => appendChatMessage(msg));
-            }
-        }
-        
-        updateUIFromMessages();
-
-    } catch (error) {
-        logDebug(`获取历史消息失败: ${error.message}`, LOG_LEVELS.ERROR);
-    }
-}
 
 
     async function initLocalMedia() {
