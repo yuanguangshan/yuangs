@@ -161,6 +161,10 @@ async function sendAutoPost(env, roomName, text) {
 export default {
     /**
      * 处理所有传入的HTTP请求。
+     */// 文件: src/worker.js
+
+    /**
+     * 处理所有传入的HTTP请求。
      */
     async fetch(request, env, ctx) {
         try {
@@ -171,69 +175,70 @@ export default {
             const url = new URL(request.url);
             const pathname = url.pathname;
 
-            // --- 路由 1: 全局API (由主Worker直接处理) ---
-            if (pathname === '/upload') {
-                if (!env.R2_BUCKET) return new Response('Server config error: R2_BUCKET not bound.', { status: 500 });
-                const filename = request.headers.get('X-Filename') || `upload-${Date.now()}`;
-                const object = await env.R2_BUCKET.put(filename, request.body, { httpMetadata: request.headers });
-                const publicUrl = `https://pub-8dfbdda6df204465aae771b4c080140b.r2.dev/${object.key}`;
-                return new Response(JSON.stringify({ url: publicUrl }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
-            }
-            if (pathname === '/ai-explain') {
-                const { text, model = 'gemini' } = await request.json();
-                if (!text) return new Response('Missing "text"', { status: 400, headers: corsHeaders });
-                const explanation = model === 'gemini' ? await getGeminiExplanation(text, env) : await getDeepSeekExplanation(text, env);
-                return new Response(JSON.stringify({ explanation }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
-            }
-            if (pathname === '/ai-describe-image') {
-                const { imageUrl } = await request.json();
-                if (!imageUrl) return new Response('Missing "imageUrl"', { status: 400, headers: corsHeaders });
-                const description = await getGeminiImageDescription(imageUrl, env);
-                return new Response(JSON.stringify({ description }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
-            }
-
-            // --- 新增：专门处理历史消息API的路由 ---
-            if (pathname === '/api/messages/history') {
-                const roomName = url.searchParams.get('roomName');
-                if (!roomName) {
-                    return new Response('Missing "roomName" query parameter', { status: 400, headers: corsHeaders });
+            // --- 路由 1: 全局独立API (不需转发) ---
+            if (pathname === '/upload' || pathname === '/ai-explain' || pathname === '/ai-describe-image') {
+                if (pathname === '/upload') {
+                    if (!env.R2_BUCKET) return new Response('Server config error: R2_BUCKET not bound.', { status: 500 });
+                    const filename = request.headers.get('X-Filename') || `upload-${Date.now()}`;
+                    const object = await env.R2_BUCKET.put(filename, request.body, { httpMetadata: request.headers });
+                    const publicUrl = `https://pub-8dfbdda6df204465aae771b4c080140b.r2.dev/${object.key}`;
+                    return new Response(JSON.stringify({ url: publicUrl }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
                 }
-                
-                if (!env.CHAT_ROOM_DO) throw new Error("Durable Object 'CHAT_ROOM_DO' is not bound.");
+                if (pathname === '/ai-explain') {
+                    const { text, model = 'gemini' } = await request.json();
+                    if (!text) return new Response('Missing "text"', { status: 400, headers: corsHeaders });
+                    const explanation = model === 'gemini' ? await getGeminiExplanation(text, env) : await getDeepSeekExplanation(text, env);
+                    return new Response(JSON.stringify({ explanation }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+                }
+                if (pathname === '/ai-describe-image') {
+                    const { imageUrl } = await request.json();
+                    if (!imageUrl) return new Response('Missing "imageUrl"', { status: 400, headers: corsHeaders });
+                    const description = await getGeminiImageDescription(imageUrl, env);
+                    return new Response(JSON.stringify({ description }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+                }
+            }
 
-                // 使用从查询参数中获取的正确roomName
+            // --- 路由 2: 需要转发给 DO 的 API ---
+            // 明确列出所有需要转发的API路径前缀
+            if (pathname.startsWith('/api/')) {
+                let roomName;
+                // 对于这些API，房间名在查询参数里
+                if (pathname.startsWith('/api/messages/history') || pathname.startsWith('/api/reset-room')) {
+                    roomName = url.searchParams.get('roomName');
+                }
+                // (未来可以为其他API在这里添加 roomName 的获取逻辑)
+
+                if (!roomName) {
+                    return new Response('API request requires a roomName parameter', { status: 400 });
+                }
+
+                if (!env.CHAT_ROOM_DO) throw new Error("Durable Object 'CHAT_ROOM_DO' is not bound.");
                 const doId = env.CHAT_ROOM_DO.idFromName(roomName);
                 const stub = env.CHAT_ROOM_DO.get(doId);
-                
-                // 将原始请求转发给正确的DO实例
-                return await stub.fetch(request);
+                return stub.fetch(request); // 直接转发并返回DO的响应
             }
-            
-            // --- 修改：将原来的房间路由逻辑放在后面 ---
-            // 这个逻辑现在只处理WebSocket连接和未来的房间特定API（如果路径以房间名开头）
+
+            // --- 路由 3: 房间页面加载 和 WebSocket 连接 ---
+            // 匹配所有不以 /api/ 开头的路径，例如 /test, /general
             const pathParts = pathname.slice(1).split('/');
             const roomNameFromPath = pathParts[0];
 
-            if (roomNameFromPath) {
-                if (!env.CHAT_ROOM_DO) throw new Error("Durable Object 'CHAT_ROOM_DO' is not bound.");
-                const doId = env.CHAT_ROOM_DO.idFromName(roomNameFromPath);
-                const stub = env.CHAT_ROOM_DO.get(doId);
-                const response = await stub.fetch(request);
+            // 过滤掉空的路径部分和 favicon.ico 请求
+            if (roomNameFromPath && roomNameFromPath !== 'favicon.ico') {
+                 if (!env.CHAT_ROOM_DO) throw new Error("Durable Object 'CHAT_ROOM_DO' is not bound.");
+                 const doId = env.CHAT_ROOM_DO.idFromName(roomNameFromPath);
+                 const stub = env.CHAT_ROOM_DO.get(doId);
+                 const response = await stub.fetch(request);
 
-                // 检查DO是否需要主Worker返回HTML
-                if (response.headers.get("X-DO-Request-HTML") === "true") {
-                    console.log(`DO requested HTML for path ${pathname}, serving main page.`);
-                    return new Response(html, {
-                        headers: { 'Content-Type': 'text/html;charset=UTF-8' },
-                    });
-                }
-                return response;
+                 // 只有在DO明确要求时，才返回HTML
+                 if (response.headers.get("X-DO-Request-HTML") === "true") {
+                     return new Response(html, { headers: { 'Content-Type': 'text/html;charset=UTF-8' } });
+                 }
+                 return response;
             }
 
-            // --- 路由 3: 兜底逻辑 (服务根路径的HTML) ---
-            return new Response(html, {
-                headers: { 'Content-Type': 'text/html;charset=UTF-8' },
-            });
+            // --- 路由 4: 根路径 或 其他未匹配路径，直接返回HTML ---
+            return new Response(html, { headers: { 'Content-Type': 'text/html;charset=UTF-8' } });
 
         } catch (e) {
             console.error("Critical error in main Worker fetch:", e.stack || e);
