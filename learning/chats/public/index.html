@@ -1005,20 +1005,42 @@ function handleMessage(data) {
     }
 }
 
-
     async function onSocketMessage(event) {
         const data = JSON.parse(event.data);
         logDebug(`收到消息: type=${data.type}`, LOG_LEVELS.INFO);
         
         switch (data.type) {
-            case 'chat': {
-                const newMessage = data.payload;
-                allMessages.push(newMessage);
-                appendChatMessage(newMessage);
+            // 【新增】处理 welcome 消息
+            case 'welcome': {
+                logDebug(`收到欢迎消息，加载 ${data.payload.history?.length || 0} 条历史记录。`);
+                chatWindowEl.innerHTML = ''; // 清空旧内容
+                allMessages = data.payload.history || [];
+                allMessages.forEach(msg => appendChatMessage(msg));
                 updateUIFromMessages();
+                chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
                 break;
             }
-            case 'delete': {
+            case 'chat': {
+                const newMessage = data.payload;
+                // 避免重复添加已存在的消息
+                if (!allMessages.some(m => m.id === newMessage.id)) {
+                    allMessages.push(newMessage);
+                    appendChatMessage(newMessage);
+                    updateUIFromMessages();
+                }
+                break;
+            }
+            // 【新增】处理用户加入/离开的系统提示
+            case 'user_join':
+            case 'user_leave': {
+                logDebug(`系统消息: ${data.payload.username} ${data.type === 'user_join' ? '加入了' : '离开了'}`);
+                // 这里可以调用 updateUIFromMessages() 来更新在线用户列表
+                // 或者在聊天窗口显示一条系统提示
+                updateUIFromMessages(); 
+                break;
+            }
+            // ... (您原有的 delete, error, rtc 等 case 保持不变) ...
+             case 'delete': {
                 const { id } = data.payload;
                 allMessages = allMessages.filter(msg => msg.id !== id);
                 const msgEl = chatWindowEl.querySelector(`[data-id="${id}"]`);
@@ -1036,7 +1058,9 @@ function handleMessage(data) {
             case 'candidate': await handleCandidate(data.payload); break;
             case 'call_end': handleCallEnd(data.payload); break;
         }
+        
     }
+
     
 function onSocketClose(event) {
     statusEl.textContent = "连接已断开";
