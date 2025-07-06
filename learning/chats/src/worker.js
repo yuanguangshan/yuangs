@@ -210,23 +210,17 @@ if (pathname === '/upload' && request.method === 'POST') {
         const fileKey = `${Date.now()}-${crypto.randomUUID().substring(0, 8)}-${filename}`;
         
         // Upload to R2 with proper content type
-        const object = await env.R2_BUCKET.put(fileKey, request.body, {
-            httpMetadata: { contentType }
+        const object = await env.R2_BUCKET.put(filename, request.body, {
+             httpMetadata: { contentType: request.headers.get('Content-Type') || 'application/octet-stream' },
         });
         
-        // Return the public URL for the uploaded file
-        const publicUrl = `https://pub-8dfbdda6df204465aae771b4c080140b.r2.dev/${fileKey}`;
+        // --- 核心修正：硬编码为 HTTPS ---
+        // 移除不确定的 new URL(request.url).origin
+        const r2PublicDomain = "pub-8dfbdda6df204465aae771b4c080140b.r2.dev";
+        const publicUrl = `https://${r2PublicDomain}/${object.key}`;
         
-        return new Response(JSON.stringify({ 
-            url: publicUrl,
-            key: fileKey,
-            size: object.size,
-            etag: object.etag
-        }), {
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders 
-            }
+        return new Response(JSON.stringify({ url: publicUrl }), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
     } catch (error) {
         console.error('R2 Upload error:', error.stack || error);

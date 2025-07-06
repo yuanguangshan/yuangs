@@ -362,6 +362,10 @@ export class HibernatingChatRoom extends DurableObject {
         const username = decodeURIComponent(url.searchParams.get("username") || "Anonymous");
         const sessionId = crypto.randomUUID();
         const now = Date.now();
+                // --- 新增：为匿名用户添加随机后缀 ---
+        if (username === "Anonymous") {
+            username = `Anonymous-${crypto.randomUUID().substring(0, 4)}`;
+        }
         
         // 创建会话对象
         const session = {
@@ -513,6 +517,7 @@ async handleChatMessage(session, payload) {
         id: crypto.randomUUID(),
         username: session.username,
         timestamp: Date.now(),
+        text: payload.text ? payload.text.trim() : '', // 确保文本不为null并去除首尾空格
         type: payload.type || 'text'
     };
     
