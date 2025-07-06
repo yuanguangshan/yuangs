@@ -250,14 +250,36 @@ export class HibernatingChatRoom {
         };
     }
 
-    async createImageMessage(user, payload) {
+async createImageMessage(user, payload) {
+        // 【重大修正】不再使用 ...payload，只选取必要的字段
         const imageUrl = await this.uploadToR2(payload.image, payload.filename, 'image');
-        return { id: crypto.randomUUID(), username: user.username, timestamp: Date.now(), type: 'image', imageUrl, ...payload };
+        return { 
+            id: crypto.randomUUID(), 
+            username: user.username, 
+            timestamp: Date.now(), 
+            type: 'image', 
+            imageUrl: imageUrl, // << 已上传到R2的URL
+            // 只保留有用的元数据，丢弃巨大的base64数据
+            filename: payload.filename,
+            size: payload.size,
+            caption: payload.caption 
+        };
     }
 
-    async createAudioMessage(user, payload) {
+async createAudioMessage(user, payload) {
+        // 【重大修正】同样，不再使用 ...payload
         const audioUrl = await this.uploadToR2(payload.audio, payload.filename, 'audio', payload.mimeType);
-        return { id: crypto.randomUUID(), username: user.username, timestamp: Date.now(), type: 'audio', audioUrl, ...payload };
+        return { 
+            id: crypto.randomUUID(), 
+            username: user.username, 
+            timestamp: Date.now(), 
+            type: 'audio', 
+            audioUrl: audioUrl, // << 已上传到R2的URL
+            // 只保留有用的元数据
+            filename: payload.filename,
+            size: payload.size,
+            mimeType: payload.mimeType
+        };
     }
 
     async uploadToR2(data, filename, type, mimeType) {
