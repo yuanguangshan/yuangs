@@ -1301,53 +1301,57 @@ function onSocketClose(event) {
         }
     });
 
-    async function fetchHistoryMessages() {
-        try {
-            // 1. 决定 'since' 的值
-            //    - 如果 allMessages 数组不为空，取最后一条消息的时间戳。
-            //    - 否则，取 0，表示获取全部历史。
-            const latestMessage = allMessages.length > 0 ? allMessages[allMessages.length - 1] : null;
-            const since = latestMessage ? latestMessage.timestamp : 0;
+ // index.html -> <script type="module"> -> fetchHistoryMessages 函数
 
-            logDebug(`开始获取历史消息，since: ${since}`, LOG_LEVELS.INFO);
+async function fetchHistoryMessages() {
+    try {
+        // 1. 决定 'since' 的值
+        const latestMessage = allMessages.length > 0 ? allMessages[allMessages.length - 1] : null;
+        const since = latestMessage ? latestMessage.timestamp : 0;
 
-            // 2. 构建包含 since 参数的 URL
-            const workerBaseUrl = window.location.origin;
-            const apiUrl = `${workerBaseUrl}/api/messages/history?roomName=${roomName}&since=${since}`;
-            
-            const response = await fetch(apiUrl);
+        // <<<<<<<<<<<< 修改点在这里 >>>>>>>>>>>>>
+        // 2. 准备用于日志的可读时间字符串
+        const sinceForLog = since === 0 
+            ? "0 (获取全部)" 
+            : new Date(since).toLocaleString(); // 将时间戳转换为本地时间格式字符串
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const newMessages = await response.json();
-            logDebug(`获取到 ${newMessages.length} 条新消息`, LOG_LEVELS.SUCCESS);
+        logDebug(`开始获取历史消息，since: ${sinceForLog}`, LOG_LEVELS.INFO);
+        // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
-            // 3. 处理响应：根据是全量加载还是增量加载，执行不同逻辑
-            if (since === 0) {
-                // --- 全量加载逻辑 (首次加载) ---
-                allMessages = newMessages;
-                chatWindowEl.innerHTML = ''; // 清空并重绘
-                allMessages.forEach(msg => appendChatMessage(msg));
-                // 首次加载，滚动到底部
-                chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
-            } else {
-                // --- 增量加载逻辑 (重连后) ---
-                if (newMessages.length > 0) {
-                    allMessages.push(...newMessages); // 追加到数组
-                    newMessages.forEach(msg => appendChatMessage(msg)); // 追加到DOM
-                    // 注意：这里我们不自动滚动，因为用户可能正在向上翻阅历史记录
-                }
-            }
-            
-            // 无论如何都更新UI统计信息
-            updateUIFromMessages();
+        // 3. 构建包含 since 参数的 URL
+        const workerBaseUrl = window.location.origin;
+        const apiUrl = `${workerBaseUrl}/api/messages/history?roomName=${roomName}&since=${since}`;
+        
+        const response = await fetch(apiUrl);
 
-        } catch (error) {
-            logDebug(`获取历史消息失败: ${error.message}`, LOG_LEVELS.ERROR);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
+        
+        const newMessages = await response.json();
+        logDebug(`获取到 ${newMessages.length} 条新消息`, LOG_LEVELS.SUCCESS);
+
+        // 4. 处理响应
+        if (since === 0) {
+            // 全量加载
+            allMessages = newMessages;
+            chatWindowEl.innerHTML = '';
+            allMessages.forEach(msg => appendChatMessage(msg));
+            chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
+        } else {
+            // 增量加载
+            if (newMessages.length > 0) {
+                allMessages.push(...newMessages);
+                newMessages.forEach(msg => appendChatMessage(msg));
+            }
+        }
+        
+        updateUIFromMessages();
+
+    } catch (error) {
+        logDebug(`获取历史消息失败: ${error.message}`, LOG_LEVELS.ERROR);
     }
+}
 
 
     async function initLocalMedia() {
