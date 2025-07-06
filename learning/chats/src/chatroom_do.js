@@ -359,7 +359,7 @@ export class HibernatingChatRoom extends DurableObject {
 
     // ============ WebSocket 会话处理 ============
     async handleWebSocketSession(ws, url) {
-        const username = decodeURIComponent(url.searchParams.get("username") || "Anonymous");
+        let username = decodeURIComponent(url.searchParams.get("username") || "Anonymous");
         const sessionId = crypto.randomUUID();
         const now = Date.now();
                 // --- 新增：为匿名用户添加随机后缀 ---
