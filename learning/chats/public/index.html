@@ -1025,36 +1025,35 @@ function onSocketClose(event) {
     statusEl.textContent = "连接错误";
     socket.close(); // 主动关闭，会触发 onclose 里的重连逻辑
 }
-    messageForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const text = messageInput.value.trim();
-        if ((!text && !selectedFile) || !socket || socket.readyState !== WebSocket.OPEN) return;
-        
-        sendButton.disabled = true;
-        
-        try {
-            if (selectedFile) {
-                // 发送图片消息的逻辑已经是正确的
-                await sendImageMessage(selectedFile, text);
-            } else if (text) {
-                // 【最终修正】在发送文本消息时，明确指定 payload 的 type
-                const payload = {
-                    type: 'text', // <<<<<<<<<<< 新增此行
-                    text: text
-                };
-                socket.send(JSON.stringify({ type: 'chat', payload: payload }));
-            }
-            
-            messageInput.value = '';
-            messageInput.style.height = 'auto';
-            removeImagePreview();
-        } catch (error) {
-            logDebug('发送消息失败: ' + error, LOG_LEVELS.ERROR);
-            alert('发送失败，请重试');
-        } finally {
-            checkSendButtonState();
+messageForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = messageInput.value.trim();
+    if ((!text && !selectedFile) || !socket || socket.readyState !== WebSocket.OPEN) return;
+    
+    sendButton.disabled = true;
+    
+    try {
+        if (selectedFile) {
+            await sendImageMessage(selectedFile, text);
+        } else if (text) {
+            // 【修复】在发送文本消息时，明确指定 payload 的 type
+            const payload = {
+                type: 'text', // <<<<<<<<<<< 添加此行
+                text: text
+            };
+            socket.send(JSON.stringify({ type: 'chat', payload: payload }));
         }
-    });
+        
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
+        removeImagePreview();
+    } catch (error) {
+        logDebug('发送消息失败: ' + error, LOG_LEVELS.ERROR);
+        alert('发送失败，请重试');
+    } finally {
+        checkSendButtonState();
+    }
+});
 
     async function sendImageMessage(file, caption = '') {
         const reader = new FileReader();
