@@ -1070,26 +1070,57 @@ function onSocketError(error) {
     socket.close();
 }
 
+// 在 index.html 的 <script type="module"> 标签内
+
 messageForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+    logDebug("发送按钮点击，提交事件触发！");
+
     const text = messageInput.value.trim();
-    if ((!text && !selectedFile) || !socket || socket.readyState !== WebSocket.OPEN) return;
+    const isSocketReady = socket && socket.readyState === WebSocket.OPEN;
+
+    // 关键日志：检查发送前的所有条件
+    logDebug("准备检查发送条件...", 'info', {
+        '输入框文本': text,
+        '是否有文本': !!text,
+        '是否有文件': !!selectedFile,
+        'WebSocket是否存在': !!socket,
+        'WebSocket是否已打开': isSocketReady
+    });
+
+    if ((!text && !selectedFile) || !isSocketReady) {
+        logDebug("发送条件不满足，消息被中止发送。", 'warning');
+        // 即使中止，也要确保按钮状态正确
+        checkSendButtonState();
+        return;
+    }
+    
     sendButton.disabled = true;
+    logDebug("发送条件满足，按钮已禁用。");
+    
     try {
         if (selectedFile) {
+            logDebug("准备发送图片消息...");
             await sendImageMessage(selectedFile, text);
+            logDebug("图片消息发送流程已调用。");
         } else if (text) {
             const payload = { type: 'text', text: text };
+            logDebug("准备发送文本消息...", 'success', payload);
             socket.send(JSON.stringify({ type: 'chat', payload: payload }));
+            logDebug("socket.send() 已成功调用！", 'success');
         }
+        
         messageInput.value = '';
         messageInput.style.height = 'auto';
         removeImagePreview();
+        logDebug("输入框已清空。");
+
     } catch (error) {
-        logDebug('发送消息失败: ' + error, LOG_LEVELS.ERROR);
+        logDebug('发送消息过程中出现顶级错误: ' + error, 'error', error.toString());
         alert('发送失败，请重试');
     } finally {
         checkSendButtonState();
+        logDebug("发送流程结束，按钮状态已更新。");
     }
 });
 
