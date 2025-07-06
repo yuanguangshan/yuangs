@@ -248,7 +248,7 @@ export default {
         console.log(`Cron Trigger firing! Rule: ${event.cron}`);
         
         const tasks = [
-            sendAutoPost(env, 'test', '苑：这是发送到test房间的定时消息。')
+            sendAutoPost(env, 'test', 'Cron Trigger firing! Rule: ${event.cron}`:苑：这是发送到${roomNameFromPath}房间的定时消息。')
         ];
         
         ctx.waitUntil(Promise.allSettled(tasks));
