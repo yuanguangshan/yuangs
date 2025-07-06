@@ -1301,27 +1301,54 @@ function onSocketClose(event) {
         }
     });
 
-    // --- History & WebRTC Functions ---
     async function fetchHistoryMessages() {
         try {
-            logDebug(`开始获取房间 ${roomName} 的历史消息`, LOG_LEVELS.INFO);
-            const workerBaseUrl = window.location.origin;
-            const response = await fetch(`${workerBaseUrl}/api/messages/history?roomName=${roomName}`);
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            
-            const messages = await response.json();
-            logDebug(`获取历史消息成功: ${messages.length}条`, LOG_LEVELS.SUCCESS);
+            // 1. 决定 'since' 的值
+            //    - 如果 allMessages 数组不为空，取最后一条消息的时间戳。
+            //    - 否则，取 0，表示获取全部历史。
+            const latestMessage = allMessages.length > 0 ? allMessages[allMessages.length - 1] : null;
+            const since = latestMessage ? latestMessage.timestamp : 0;
 
-            allMessages = messages;
-            chatWindowEl.innerHTML = '';
-            allMessages.forEach(msg => appendChatMessage(msg));
+            logDebug(`开始获取历史消息，since: ${since}`, LOG_LEVELS.INFO);
+
+            // 2. 构建包含 since 参数的 URL
+            const workerBaseUrl = window.location.origin;
+            const apiUrl = `${workerBaseUrl}/api/messages/history?roomName=${roomName}&since=${since}`;
+            
+            const response = await fetch(apiUrl);
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const newMessages = await response.json();
+            logDebug(`获取到 ${newMessages.length} 条新消息`, LOG_LEVELS.SUCCESS);
+
+            // 3. 处理响应：根据是全量加载还是增量加载，执行不同逻辑
+            if (since === 0) {
+                // --- 全量加载逻辑 (首次加载) ---
+                allMessages = newMessages;
+                chatWindowEl.innerHTML = ''; // 清空并重绘
+                allMessages.forEach(msg => appendChatMessage(msg));
+                // 首次加载，滚动到底部
+                chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
+            } else {
+                // --- 增量加载逻辑 (重连后) ---
+                if (newMessages.length > 0) {
+                    allMessages.push(...newMessages); // 追加到数组
+                    newMessages.forEach(msg => appendChatMessage(msg)); // 追加到DOM
+                    // 注意：这里我们不自动滚动，因为用户可能正在向上翻阅历史记录
+                }
+            }
+            
+            // 无论如何都更新UI统计信息
             updateUIFromMessages();
-            chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
 
         } catch (error) {
             logDebug(`获取历史消息失败: ${error.message}`, LOG_LEVELS.ERROR);
         }
     }
+
 
     async function initLocalMedia() {
         try {
