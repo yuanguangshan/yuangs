@@ -3,6 +3,7 @@
 /**
  * HibernatingChatRoom 是一个Durable Object，它负责管理单个聊天室的所有状态和逻辑。
  * 它现在继承自 "cloudflare:workers" 的 DurableObject 类以支持 RPC。
+ *  chatroom_do.js 就完全适配了新版 RPC API，ws.getTags() 的错误就会被解决
  */
 
 // 【重大修改】从 "cloudflare:workers" 导入 DurableObject 基类
