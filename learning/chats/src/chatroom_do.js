@@ -92,8 +92,11 @@ export class HibernatingChatRoom extends DurableObject {
     async handleWebSocketSession(ws, url) {
         ws.accept();
         const username = decodeURIComponent(url.searchParams.get("username") || "Anonymous");
-        const session = { ws, username };
-        this.sessions.push(session);
+        
+        // 【核心修正】直接将会话信息附加到 ws 对象上
+        ws.session = { username }; 
+        
+        this.sessions.push(ws); // 只将会话 ws 对象本身存入数组
 
         console.log(`✅ WebSocket connected for: ${username}`);
 
@@ -107,18 +110,20 @@ export class HibernatingChatRoom extends DurableObject {
             }
         }));
 
-        this.broadcast({ type: MSG_TYPE_USER_JOIN, payload: { username } }, session);
+        this.broadcast({ type: MSG_TYPE_USER_JOIN, payload: { username } }, ws);
     }
 
     // --- WebSocket 事件处理器 ---
     async webSocketMessage(ws, message) {
-        const session = this.sessions.find(s => s.ws === ws);
+        // 【核心修正】直接从 ws 对象上获取会话信息
+        const session = ws.session;
         if (!session) return;
 
         try {
             const data = JSON.parse(message);
             if (data.type === MSG_TYPE_CHAT) {
-                await this.handleChatMessage(session, data.payload);
+                // 将 session（现在只包含 username）和 ws 组合成 user 对象传下去
+                await this.handleChatMessage({ ws, ...session }, data.payload);
             }
             // (可以从旧代码中添加其他消息类型的处理，如 delete, rename, rtc 等)
         } catch (e) { 
@@ -127,11 +132,13 @@ export class HibernatingChatRoom extends DurableObject {
     }
 
     async webSocketClose(ws, code, reason, wasClean) {
-        const index = this.sessions.findIndex(s => s.ws === ws);
+        // 【核心修正】直接在数组中查找 ws 对象
+        const index = this.sessions.findIndex(s => s === ws);
         if (index > -1) {
-            const session = this.sessions.splice(index, 1)[0];
-            console.log(`🔌 WebSocket disconnected for: ${session.username}`);
-            this.broadcast({ type: MSG_TYPE_USER_LEAVE, payload: { username: session.username } });
+            const sessionWs = this.sessions.splice(index, 1)[0];
+            const username = sessionWs.session?.username || '未知用户';
+            console.log(`🔌 WebSocket disconnected for: ${username}`);
+            this.broadcast({ type: MSG_TYPE_USER_LEAVE, payload: { username } });
         }
     }
     
@@ -161,36 +168,20 @@ export class HibernatingChatRoom extends DurableObject {
     fetchHistory(since = 0) {
         return since > 0 ? this.messages.filter(msg => msg.timestamp > since) : this.messages;
     }
-// 文件: src/chatroom_do.js
-// 位置: HibernatingChatRoom class 内部
 
-    broadcast(message, excludeSession = null) {
+    broadcast(message, excludeWs = null) {
         const stringifiedMessage = JSON.stringify(message);
         
-        // 【最终核心修正】
-        // 我们不能在遍历一个数组的同时修改它，所以先记录下线会话
-        const deadSessions = [];
-
-        // 遍历所有会话
-        this.sessions.forEach(session => {
-            // 如果这个会话需要被排除，则跳过
-            if (session === excludeSession) {
-                return;
+        this.sessions = this.sessions.filter(ws => {
+            if (ws === excludeWs) {
+                return true;
             }
-
             try {
-                // 尝试发送消息
-                session.ws.send(stringifiedMessage);
+                ws.send(stringifiedMessage);
+                return true;
             } catch (e) {
-                // 如果发送失败，说明连接已断开，记录这个会话以便后续清理
-                deadSessions.push(session);
+                return false;
             }
         });
-
-        // 遍历完后，一次性地从主会话列表中移除所有掉线的会话
-        if (deadSessions.length > 0) {
-            this.sessions = this.sessions.filter(session => !deadSessions.includes(session));
-            console.log(`🧹 Cleaned up ${deadSessions.length} dead session(s).`);
-        }
     }
 }
