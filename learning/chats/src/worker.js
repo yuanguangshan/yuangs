@@ -8,8 +8,17 @@
  * 3. 响应定时触发器（Cron Triggers），并调度Durable Object执行定时任务。
  * 4. 为用户提供初始的HTML页面。
  */
+// src/worker.js
+
+// --- ✨ 核心修正：添加 polyfill 来定义 global ---
+// Cloudflare Workers环境没有`global`，但有些npm包（如echarts）会依赖它。
+// 我们在这里创建一个全局的 `global` 变量，并让它指向Worker环境的全局对象 `self`。
+globalThis.global = globalThis;
+
+
 import { HibernatingChatRoom } from './chatroom_do.js';
 import html from '../public/index.html';
+import { generateAndPostCharts } from './chart_generator.js';
 
 // 导出Durable Object类，以便Cloudflare平台能够识别和实例化它。
 export { HibernatingChatRoom };
@@ -299,36 +308,23 @@ if (pathname === '/upload' && request.method === 'POST') {
         }
     },
 
-    /**
-     * 处理由Cron Trigger触发的定时事件。
-// 文件: src/worker.js
-// 位置: export default { ... } 内部
-
-    /**
+    /*
      * 处理由Cron Trigger触发的定时事件。
      */
     async scheduled(event, env, ctx) {
-        console.log(`Cron Trigger firing! Rule: ${event.cron}`);
+        console.log(`[Worker] Cron Trigger firing! Rule: ${event.cron}`);
         
-        const roomName = 'test';
-        const text = `来自定时任务 (${event.cron}) 的消息：这是发送到 '${roomName}' 房间的定时消息。`;
-
-        // 【最终方案】直接从 scheduled 调用 RPC 方法
-        // 这是更简洁的做法，不再需要 sendAutoPost 中间函数了
+        // --- 任务1：发送定时文本消息到 'test' 房间 ---
+        const textTaskRoom = 'test';
+        const textTaskContent = `来自定时任务 (${event.cron}) 的消息：这是发送到 '${textTaskRoom}' 房间的定时消息。`;
         try {
-            if (!env.CHAT_ROOM_DO) {
-                throw new Error("Durable Object 'CHAT_ROOM_DO' is not bound.");
-            }
-            const doId = env.CHAT_ROOM_DO.idFromName(roomName);
+            const doId = env.CHAT_ROOM_DO.idFromName(textTaskRoom);
             const stub = env.CHAT_ROOM_DO.get(doId);
+            ctx.waitUntil(stub.cronPost(textTaskContent, env.CRON_SECRET));
+        } catch (e) { console.error(`CRON ERROR (text):`, e); }
 
-            // 用 ctx.waitUntil 保证即使 scheduled 函数结束，RPC 调用也会执行完毕
-            ctx.waitUntil(stub.cronPost(text, env.CRON_SECRET));
-            
-            console.log(`CRON: Dispatched post to room '${roomName}'`);
-
-        } catch (error) {
-            console.error(`CRON ERROR: Failed to dispatch post to room '${roomName}':`, error);
-        }
-     },
+        // --- 任务2：生成图表并发送到 'future' 房间 ---
+        const chartTaskRoom = 'future';
+        ctx.waitUntil(generateAndPostCharts(env, chartTaskRoom));
+    },
 };

@@ -160,13 +160,42 @@ export class HibernatingChatRoom extends DurableObject {
     }
 
     // ============ RPC 方法 ============
-    async cronPost(text, secret) {
+
+    /**
+     * 【新增】RPC方法，用于系统/机器人发送消息
+     */
+    async postBotMessage(payload, secret) {
+        // 安全检查 (可选，但推荐)
         if (this.env.CRON_SECRET && secret !== this.env.CRON_SECRET) {
-            this.debugLog("CRON RPC: Unauthorized attempt!", 'ERROR');
+            this.debugLog("BOT POST: Unauthorized attempt!", 'ERROR');
             return;
         }
-        this.debugLog(`🤖 Cron posting message: ${text}`);
-        await this.handleChatMessage({ username: "小助手" }, { text, type: 'text' });
+        
+        this.debugLog(`🤖 Bot posting message...`, 'info', payload);
+        await this.loadState();
+        
+        const message = {
+            id: crypto.randomUUID(),
+            username: "图表小助手", // 机器人的名字
+            timestamp: Date.now(),
+            ...payload 
+        };
+        
+        this.messages.push(message);
+        if (this.messages.length > 500) this.messages.shift();
+        
+        await this.saveState();
+        this.broadcast({ type: 'chat', payload: message });
+    }
+
+
+    /**
+     * 【替换】旧的 cronPost 方法
+     */
+    async cronPost(text, secret) {
+        this.debugLog(`🤖 Cron job received, posting text: ${text}`);
+        // 复用机器人发帖逻辑
+        await this.postBotMessage({ text, type: 'text' }, secret);
     }
 
     // ============ 主要入口点 ============
