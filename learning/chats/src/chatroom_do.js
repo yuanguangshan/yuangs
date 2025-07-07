@@ -466,15 +466,17 @@ export class HibernatingChatRoom extends DurableObject {
         // 更新最后活跃时间
         session.lastSeen = Date.now();
         
+        // 打印原始的WebSocket消息字符串
         this.debugLog(`📨 Received WebSocket message from ${session.username}: ${message.substring(0, 100)}${message.length > 100 ? '...' : ''}`);
 
         try {
             const data = JSON.parse(message);
             
         if (data.type === MSG_TYPE_CHAT) {
-            await this.handleChatMessage(session, data.payload);
+            // 这里 data.payload 就是前端发送的 { type: 'text', text: '...' } 或 { type: 'image', ... }
+            await this.handleChatMessage(session, data.payload); 
         } else if (data.type === MSG_TYPE_DELETE) {
-            await this.handleDeleteMessage(session, data.payload); // 确认这里是 this.handleDeleteMessage
+            await this.handleDeleteMessage(session, data.payload);
         } else if (data.type === MSG_TYPE_HEARTBEAT) {
             this.debugLog(`💓 收到其心跳包💓 ${session.username}`, 'HEARTBEAT');
         } else {
@@ -534,32 +536,35 @@ export class HibernatingChatRoom extends DurableObject {
 
     // ============ 核心业务逻辑 ============
     async handleChatMessage(session, payload) {
-        this.debugLog(`💬 Handling chat message from ${session.username}: ${payload.text?.substring(0, 50)}${payload.text?.length > 50 ? '...' : ''}`);
+        // 打印完整的 payload 方便调试，可以确认内部 type
+        this.debugLog(`💬 Handling chat message from ${session.username}`, 'INFO', payload);
         
         // 确保状态已加载
         if (!this.isInitialized) {
             await this.loadState();
         }
         
-        // --- 核心修正：更细致的消息内容验证，不再强求所有消息都有 text 字段 ---
         let messageContentValid = false;
-        // 检查消息类型和对应的关键内容字段
-        if (payload.type === 'text') {
+        // 获取内部 payload 的 type
+        const messageType = payload.type; 
+        
+        // 【关键修正】将 'chat' 类型也视为文本消息，并将其规范为 'text'
+        if (messageType === 'text' || messageType === 'chat') { 
             if (payload.text && payload.text.trim().length > 0) {
                 messageContentValid = true;
             }
-        } else if (payload.type === 'image') {
-            if (payload.imageUrl) { // 图片消息必须有 imageUrl
+        } else if (messageType === 'image') {
+            if (payload.imageUrl) {
                 messageContentValid = true;
             }
             // 图片消息可以有可选的 caption，即使 text/caption 为空也视为有效
-        } else if (payload.type === 'audio') {
-            if (payload.audioUrl) { // 音频消息必须有 audioUrl
+        } else if (messageType === 'audio') {
+            if (payload.audioUrl) {
                 messageContentValid = true;
             }
         } else {
             // 未知或不支持的消息类型
-            this.debugLog(`⚠️ Unsupported message type: ${payload.type}`, 'WARN', payload);
+            this.debugLog(`⚠️ Unsupported message type: ${messageType}`, 'WARN', payload);
             try {
                 session.ws.send(JSON.stringify({
                     type: MSG_TYPE_ERROR,
@@ -570,7 +575,7 @@ export class HibernatingChatRoom extends DurableObject {
         }
 
         if (!messageContentValid) {
-            this.debugLog(`❌ Invalid or empty content for message type ${payload.type} from ${session.username}`, 'WARN', payload);
+            this.debugLog(`❌ Invalid or empty content for message type ${messageType} from ${session.username}`, 'WARN', payload);
             try {
                 session.ws.send(JSON.stringify({
                     type: MSG_TYPE_ERROR,
@@ -596,21 +601,21 @@ export class HibernatingChatRoom extends DurableObject {
         }
         
         const message = {
-            id: crypto.randomUUID(),
+            id: payload.id || crypto.randomUUID(), // 使用前端提供的ID（乐观更新），否则生成新ID
             username: session.username,
-            timestamp: Date.now(),
-            // 确保 text 字段始终存在，即使为空字符串
-            text: payload.text?.trim() || '', // 对于图片和音频，text可能是空
-            type: payload.type || 'text'
+            timestamp: payload.timestamp || Date.now(), // 使用前端提供的时间戳（乐观更新），否则用当前时间
+            text: payload.text?.trim() || '',
+            // 【核心修正】将内部 'chat' 类型规范为 'text' 存储
+            type: messageType === 'chat' ? 'text' : messageType 
         };
         
         // 如果是图片消息，保存图片数据
-        if (payload.type === 'image') {
-            message.imageUrl = payload.imageUrl; // 核心修正：存储图片URL
+        if (messageType === 'image') {
+            message.imageUrl = payload.imageUrl; 
             message.filename = payload.filename;
             message.size = payload.size;
-            message.caption = payload.caption?.trim() || ''; // 图片标题
-        } else if (payload.type === 'audio') { // 如果是音频消息
+            message.caption = payload.caption?.trim() || ''; 
+        } else if (messageType === 'audio') { 
             message.audioUrl = payload.audioUrl;
             message.filename = payload.filename;
             message.size = payload.size;
@@ -626,13 +631,11 @@ export class HibernatingChatRoom extends DurableObject {
         await this.saveState();
         
         this.debugLog(`📤 Broadcasting message to ${this.sessions.size} sessions`);
+        // 广播时，使用 MSG_TYPE_CHAT 作为外层类型，内部 payload 为规范后的消息对象
         this.broadcast({ type: MSG_TYPE_CHAT, payload: message });
     }
 
-        // 【核心修正】将 handleDeleteMessage 声明为箭头函数，或在构造函数中绑定
-    // 箭头函数会自动绑定 this 到创建时的上下文 (即 Durable Object 实例)
-    // 这样可以消除所有关于 `this` 上下文丢失的疑虑。
-      async handleDeleteMessage(session, payload) { 
+    async handleDeleteMessage(session, payload) { 
         const messageId = payload.id;
         if (!messageId) {
             this.debugLog(`❌ Delete request from ${session.username} is missing message ID.`, 'WARN');
@@ -640,19 +643,19 @@ export class HibernatingChatRoom extends DurableObject {
         }
 
         const initialLength = this.messages.length;
-        // 查找消息时，使用一个临时变量来避免在循环或回调中潜在的 'this' 问题
         const messageToDelete = this.messages.find(m => m.id === messageId);
 
         // 安全检查：确保消息存在，并且是该用户自己发送的
+        // 或者，如果你希望管理员可以删除任何消息，可以添加 ADMIN_SECRET 检查
         if (messageToDelete && messageToDelete.username === session.username) {
             this.messages = this.messages.filter(m => m.id !== messageId);
             
             if (this.messages.length < initialLength) {
                 this.debugLog(`🗑️ Message ${messageId} deleted by ${session.username}.`);
                 
-                await this.saveState(); // 确认 this.saveState 是正确的
+                await this.saveState();
                 
-                this.broadcast({ // 确认 this.broadcast 是正确的
+                this.broadcast({ 
                     type: MSG_TYPE_DELETE, 
                     payload: { messageId } 
                 });
@@ -661,7 +664,6 @@ export class HibernatingChatRoom extends DurableObject {
             let reason = messageToDelete ? "permission denied" : "message not found";
             this.debugLog(`🚫 Unauthorized delete attempt by ${session.username} for message ${messageId}. Reason: ${reason}`, 'WARN');
             
-            // 直接发送错误消息给请求用户，而不是通过 sendMessage 辅助函数
             try {
                 session.ws.send(JSON.stringify({
                     type: MSG_TYPE_ERROR,
