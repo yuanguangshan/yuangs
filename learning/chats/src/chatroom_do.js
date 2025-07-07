@@ -176,7 +176,7 @@ export class HibernatingChatRoom extends DurableObject {
         
         const message = {
             id: crypto.randomUUID(),
-            username: "图表小助手", // 机器人的名字
+            username: "机器人小助手", // 机器人的名字
             timestamp: Date.now(),
             ...payload 
         };
