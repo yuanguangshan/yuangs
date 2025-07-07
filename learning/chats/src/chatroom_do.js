@@ -31,13 +31,14 @@ export class HibernatingChatRoom extends DurableObject {
     }
 
     // ============ 调试日志系统 ============
-    debugLog(message, level = 'INFO') {
+    debugLog(message, level = 'INFO', data = null) { // 增加 data 参数
         const timestamp = new Date().toISOString();
         const logEntry = {
             timestamp,
             level,
             message,
-            id: crypto.randomUUID().substring(0, 8)
+            id: crypto.randomUUID().substring(0, 8),
+            data // 存储额外数据
         };
         
         // 添加到内存日志
@@ -47,7 +48,11 @@ export class HibernatingChatRoom extends DurableObject {
         }
         
         // 同时输出到控制台
-        console.log(`[${timestamp}] [${level}] ${message}`);
+        if (data) {
+            console.log(`[${timestamp}] [${level}] ${message}`, data);
+        } else {
+            console.log(`[${timestamp}] [${level}] ${message}`);
+        }
         
         // 实时广播调试日志给所有连接的会话（避免循环）
         if (level !== 'HEARTBEAT') {
@@ -171,7 +176,7 @@ export class HibernatingChatRoom extends DurableObject {
             return;
         }
         
-        this.debugLog(`🤖 机器人自动发帖...`, 'info', payload);
+        this.debugLog(`🤖 机器人自动发帖...`, 'INFO', payload);
         await this.loadState();
         
         const message = {
@@ -536,19 +541,53 @@ export class HibernatingChatRoom extends DurableObject {
             await this.loadState();
         }
         
-        // 基本的消息验证
-        if (!payload.text || payload.text.trim().length === 0) {
-            this.debugLog(`❌ Empty message from ${session.username}`, 'WARN');
-            return;
-        }
-        
-        // 防止消息过长
-        if (payload.text.length > 10000) {
-            this.debugLog(`❌ Message too long from ${session.username}`, 'WARN');
+        // --- 核心修正：更细致的消息内容验证，不再强求所有消息都有 text 字段 ---
+        let messageContentValid = false;
+        // 检查消息类型和对应的关键内容字段
+        if (payload.type === 'text') {
+            if (payload.text && payload.text.trim().length > 0) {
+                messageContentValid = true;
+            }
+        } else if (payload.type === 'image') {
+            if (payload.imageUrl) { // 图片消息必须有 imageUrl
+                messageContentValid = true;
+            }
+            // 图片消息可以有可选的 caption，即使 text/caption 为空也视为有效
+        } else if (payload.type === 'audio') {
+            if (payload.audioUrl) { // 音频消息必须有 audioUrl
+                messageContentValid = true;
+            }
+        } else {
+            // 未知或不支持的消息类型
+            this.debugLog(`⚠️ Unsupported message type: ${payload.type}`, 'WARN', payload);
             try {
                 session.ws.send(JSON.stringify({
                     type: MSG_TYPE_ERROR,
-                    payload: { message: "消息过长，请控制在10000字符以内" }
+                    payload: { message: "不支持的消息类型或无效内容" }
+                }));
+            } catch (e) { /* silently fail */ }
+            return;
+        }
+
+        if (!messageContentValid) {
+            this.debugLog(`❌ Invalid or empty content for message type ${payload.type} from ${session.username}`, 'WARN', payload);
+            try {
+                session.ws.send(JSON.stringify({
+                    type: MSG_TYPE_ERROR,
+                    payload: { message: "消息内容无效或为空。" }
+                }));
+            } catch (e) { /* silently fail */ }
+            return;
+        }
+
+        // 防止文本或标题过长 (仅对文本和图片标题进行长度限制)
+        const textContentToCheckLength = payload.text || payload.caption || '';
+        if (textContentToCheckLength.length > 10000) {
+            this.debugLog(`❌ Message text/caption too long from ${session.username}`, 'WARN');
+            try {
+                session.ws.send(JSON.stringify({
+                    type: MSG_TYPE_ERROR,
+                    payload: { message: "消息文本或标题过长，请控制在10000字符以内" }
                 }));
             } catch (e) {
                 this.debugLog(`❌ Failed to send error message: ${e.message}`, 'ERROR');
@@ -560,16 +599,21 @@ export class HibernatingChatRoom extends DurableObject {
             id: crypto.randomUUID(),
             username: session.username,
             timestamp: Date.now(),
-            text: payload.text.trim(),
+            // 确保 text 字段始终存在，即使为空字符串
+            text: payload.text?.trim() || '', // 对于图片和音频，text可能是空
             type: payload.type || 'text'
         };
         
         // 如果是图片消息，保存图片数据
         if (payload.type === 'image') {
-            message.image = payload.image;
+            message.imageUrl = payload.imageUrl; // 核心修正：存储图片URL
             message.filename = payload.filename;
             message.size = payload.size;
-            message.caption = payload.caption || '';
+            message.caption = payload.caption?.trim() || ''; // 图片标题
+        } else if (payload.type === 'audio') { // 如果是音频消息
+            message.audioUrl = payload.audioUrl;
+            message.filename = payload.filename;
+            message.size = payload.size;
         }
         
         this.messages.push(message);
@@ -617,10 +661,15 @@ export class HibernatingChatRoom extends DurableObject {
             let reason = messageToDelete ? "permission denied" : "message not found";
             this.debugLog(`🚫 Unauthorized delete attempt by ${session.username} for message ${messageId}. Reason: ${reason}`, 'WARN');
             
-            this.sendMessage(session.ws, { // 确认 this.sendMessage 是正确的
-                type: MSG_TYPE_ERROR,
-                payload: { message: "你不能删除这条消息。" }
-            });
+            // 直接发送错误消息给请求用户，而不是通过 sendMessage 辅助函数
+            try {
+                session.ws.send(JSON.stringify({
+                    type: MSG_TYPE_ERROR,
+                    payload: { message: "你不能删除这条消息。" }
+                }));
+            } catch (e) {
+                this.debugLog(`❌ 无法发送错误信息: ${e.message}`, 'ERROR');
+            }
         }
     }
 
