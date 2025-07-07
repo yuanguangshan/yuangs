@@ -542,7 +542,7 @@ export class HibernatingChatRoom extends DurableObject {
         }
         
         // 防止消息过长
-        if (payload.text.length > 1000) {
+        if (payload.text.length > 10000) {
             this.debugLog(`❌ Message too long from ${session.username}`, 'WARN');
             try {
                 session.ws.send(JSON.stringify({
