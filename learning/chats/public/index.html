@@ -1386,7 +1386,7 @@ function checkSendButtonState() {
 }
 
 
-// --- 消息发送函数 (优化版) ---
+// --- 消息发送函数 (简化版) ---
 messageForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const text = messageInput.value.trim();
@@ -1405,23 +1405,14 @@ messageForm.addEventListener('submit', async (e) => {
             // 发送图片消息
             await sendImageMessage(selectedFile, text);
         } else if (text) {
-            // 创建一个临时ID来实现乐观UI更新
-            const tempId = 'temp-' + Date.now();
-            const tempMsg = {
-                id: tempId,
-                type: 'text',
-                text: text,
-                username: username,
-                timestamp: Date.now() // 使用数字时间戳
-            };
-            
-            // 先添加消息到UI（乐观更新）
-            allMessages.push(tempMsg);
-            appendChatMessage(tempMsg);
-            
-            // 然后发送到服务器
-            const payload = { type: 'chat', text: text };
-            socket.send(JSON.stringify({ type: 'chat', payload }));
+            // 简化版本 - 直接发送文本消息，不进行乐观更新
+            socket.send(JSON.stringify({ 
+                type: 'chat', 
+                payload: { 
+                    type: 'text',
+                    text: text 
+                } 
+            }));
             
             // 清理输入框
             messageInput.value = '';
@@ -1437,8 +1428,7 @@ messageForm.addEventListener('submit', async (e) => {
     }
 });
 
-
-// --- 图片/音频文件上传函数 (优化版) ---
+// --- 图片文件上传函数 (简化版) ---
 async function sendImageMessage(file, caption = '') {
     try {
         logDebug(`开始上传图片: ${file.name}`, LOG_LEVELS.INFO);
@@ -1450,25 +1440,6 @@ async function sendImageMessage(file, caption = '') {
         
         // 创建FormData并添加正确文件名的文件
         const safeFileName = encodeURIComponent(file.name);
-        
-        // 创建临时消息ID和对象用于乐观UI更新
-        const tempId = 'temp-img-' + crypto.randomUUID(); // 使用UUID确保唯一性
-        const tempImageUrl = URL.createObjectURL(file); // 本地预览URL
-        
-        // 创建临时消息对象
-        const tempMsg = {
-            id: tempId,
-            type: 'image',
-            caption: caption,
-            imageUrl: tempImageUrl, // 乐观更新使用本地URL
-            filename: file.name,
-            username: username,
-            timestamp: Date.now()
-        };
-        
-        // 添加临时消息到UI（乐观更新）
-        allMessages.push(tempMsg);
-        appendChatMessage(tempMsg);
         
         // 上传文件到R2存储
         const response = await fetch('/upload', {
@@ -1492,7 +1463,7 @@ async function sendImageMessage(file, caption = '') {
         
         logDebug(`图片上传成功，获取URL: ${data.url}`, LOG_LEVELS.SUCCESS);
         
-        // 发送实际图片消息通过WebSocket
+        // 发送图片消息通过WebSocket
         const payload = {
             type: 'image',
             text: caption, // text 字段可以为空，但存在 (后端使用 caption)
@@ -1514,19 +1485,10 @@ async function sendImageMessage(file, caption = '') {
         messageInput.style.height = 'auto';
         removeImagePreview();
         
-        // 释放临时URL
-        URL.revokeObjectURL(tempImageUrl);
-        
         return true;
     } catch (error) {
         logDebug(`图片上传失败: ${error.message}`, LOG_LEVELS.ERROR, error);
         alert(`图片上传失败: ${error.message}`);
-        // 乐观更新失败，可以考虑删除或标记这条临时消息
-        // 简单处理：如果上传失败，就从allMessages中移除这条临时消息，并从DOM中移除
-        const tempMsgEl = chatWindowEl.querySelector(`[data-id="${tempId}"]`);
-        if (tempMsgEl) tempMsgEl.remove();
-        allMessages = allMessages.filter(msg => msg.id !== tempId);
-        
         throw error;
     } finally {
         // 隐藏上传进度UI
@@ -1535,6 +1497,7 @@ async function sendImageMessage(file, caption = '') {
     }
 }
 
+// --- 音频文件上传函数 (简化版) ---
 async function sendAudioMessage(audioBlob, mimeType) {
     try {
         logDebug(`开始上传音频`, LOG_LEVELS.INFO, { size: audioBlob.size, type: mimeType });
@@ -1544,22 +1507,6 @@ async function sendAudioMessage(audioBlob, mimeType) {
         const filename = `audio-${timestamp}.${mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
         const safeFileName = encodeURIComponent(filename);
         
-        // 创建临时ID和本地URL用于乐观UI更新
-        const tempId = 'temp-audio-' + crypto.randomUUID();
-        const tempAudioUrl = URL.createObjectURL(audioBlob);
-
-        const tempMsg = {
-            id: tempId,
-            type: 'audio',
-            text: '', // 乐观更新也保持这个字段
-            audioUrl: tempAudioUrl,
-            filename: filename,
-            username: username,
-            timestamp: Date.now()
-        };
-        allMessages.push(tempMsg);
-        appendChatMessage(tempMsg);
-
         // 上传音频到R2存储
         const response = await fetch('/upload', {
             method: 'POST',
@@ -1597,22 +1544,14 @@ async function sendAudioMessage(audioBlob, mimeType) {
         }));
         
         logDebug("音频消息已通过WebSocket发送", LOG_LEVELS.SUCCESS);
-
-        // 释放临时URL
-        URL.revokeObjectURL(tempAudioUrl);
         
         return true;
     } catch (error) {
         logDebug(`音频上传失败: ${error.message}`, LOG_LEVELS.ERROR, error);
         alert(`音频上传失败: ${error.message}`);
-        // 乐观更新失败处理
-        const tempMsgEl = chatWindowEl.querySelector(`[data-id="${tempId}"]`);
-        if (tempMsgEl) tempMsgEl.remove();
-        allMessages = allMessages.filter(msg => msg.id !== tempId);
         throw error;
     }
 }
-
 // 优化的历史消息处理函数 - 完整版本
 async function processHistoryMessages(history) {
     if (!Array.isArray(history) || history.length === 0) {
