@@ -968,7 +968,7 @@ messageInput.addEventListener('keydown', (e) => {
 });
 
 function checkSendButtonState() {
-    sendButton.disabled = (messageInput.value.trim() === '' && selectedFile === null) || isRecording;
+    sendButton.disabled = (messageInput.value.trim() === '' && selectedFile === null && !isRecording);
 }
 
 // --- WebSocket & Chat Logic ---
@@ -1124,7 +1124,7 @@ function onSocketError(error) {
         const text = messageInput.value.trim();
         const isSocketReady = socket && socket.readyState === WebSocket.OPEN;
 
-        if ((!text && !selectedFile) || !isSocketReady) {
+        if ((!text && !selectedFile && !isRecording) || !isSocketReady) { // 增加对 isRecording 的检查
             logDebug("发送条件不满足，消息被中止发送。", 'warning');
             checkSendButtonState(); // 确保按钮状态正确
             return;
@@ -1555,7 +1555,7 @@ async function sendImageMessage(file, caption = '') {
         // Send image message through WebSocket
         const payload = {
             type: 'image',
-            text: caption,
+            text: caption, // text 字段可以为空，但存在
             caption: caption,
             imageUrl: data.url,
             filename: file.name,
@@ -1620,6 +1620,7 @@ async function sendAudioMessage(audioBlob, mimeType) {
         // Send audio message through WebSocket
         const payload = {
             type: 'audio',
+            text: '', // 核心修正：为音频消息添加空的 text 字段
             audioUrl: data.url,
             filename: filename,
             size: audioBlob.size
