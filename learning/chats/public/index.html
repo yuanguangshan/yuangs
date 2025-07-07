@@ -994,81 +994,111 @@ function onSocketOpen() {
 }
 
 // ==========================================================
-// 【最终调试函数】ON SOCKET MESSAGE
-// ==========================================================
-async function onSocketMessage(event) {
-    const data = JSON.parse(event.data);
-    logDebug(`收到原始 WebSocket 数据包`, 'info', data);
-    
-    switch (data.type) {
-        case 'welcome': {
-            const history = data.payload?.history;
-            if (Array.isArray(history)) {
-                logDebug(`收到欢迎消息，准备处理 ${history.length} 条历史记录。`);
-                const validHistory = history.filter(msg => msg && msg.id);
-                if (validHistory.length < history.length) {
-                    logDebug(`数据清洗：过滤掉了 ${history.length - validHistory.length} 条无效的历史记录。`, 'warning');
+    // 【最终调试函数】ON SOCKET MESSAGE (增强前端健壮性版本)
+    // ==========================================================
+    async function onSocketMessage(event) {
+        let data;
+        try {
+            // 尝试解析原始数据
+            data = JSON.parse(event.data);
+            // 成功解析后，打印解析后的数据对象
+            logDebug(`收到原始 WebSocket 数据包`, 'info', data);
+        } catch (parseError) {
+            // 如果解析失败，说明原始数据本身就有问题
+            // 打印原始数据的前几百个字符，方便调试
+            const rawMessageSnippet = String(event.data).substring(0, 500);
+            logDebug(`❌ 收到格式错误的 WebSocket 数据包`, LOG_LEVELS.ERROR, {
+                error: parseError.message,
+                raw: rawMessageSnippet
+            });
+            alert("客户端收到服务器发来的格式错误消息，请刷新页面。");
+            // 如果解析失败，不继续处理这条消息，避免下游逻辑崩溃
+            return;
+        }
+
+        // 只有当数据成功解析后，才进入 switch 逻辑
+        switch (data.type) {
+            case 'welcome': {
+                const history = data.payload?.history;
+                if (Array.isArray(history)) {
+                    logDebug(`收到欢迎消息，准备处理 ${history.length} 条历史记录。`);
+                    const validHistory = history.filter(msg => msg && msg.id);
+                    if (validHistory.length < history.length) {
+                        logDebug(`数据清洗：过滤掉了 ${history.length - validHistory.length} 条无效的历史记录。`, LOG_LEVELS.WARNING);
+                    }
+                    chatWindowEl.innerHTML = '';
+                    allMessages = validHistory;
+                    allMessages.forEach(msg => appendChatMessage(msg));
+                    updateUIFromMessages();
+                    chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
+                } else {
+                    logDebug("收到的欢迎消息中 history 格式不正确或不存在。", LOG_LEVELS.ERROR, data.payload);
                 }
-                chatWindowEl.innerHTML = '';
-                allMessages = validHistory;
-                allMessages.forEach(msg => appendChatMessage(msg));
-                updateUIFromMessages();
-                chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
-            } else {
-                logDebug("收到的欢迎消息中 history 格式不正确或不存在。", 'error', data.payload);
+                break;
             }
-            break;
-        }
-        case 'chat': {
-            const newMessage = data.payload;
-            if (newMessage && newMessage.id) {
-                allMessages.push(newMessage);
-                appendChatMessage(newMessage);
-                updateUIFromMessages();
-            } else {
-                logDebug("收到一条无效的聊天消息，已忽略。", 'error', newMessage);
+            case 'chat': {
+                const newMessage = data.payload;
+                if (newMessage && newMessage.id) {
+                    allMessages.push(newMessage);
+                    appendChatMessage(newMessage);
+                    updateUIFromMessages();
+                } else {
+                    logDebug("收到一条无效的聊天消息，已忽略。", LOG_LEVELS.ERROR, newMessage);
+                }
+                break;
             }
-            break;
-        }
-        case 'user_join':
-        case 'user_leave':
-            logDebug(`系统消息: ${data.payload.username} ${data.type === 'user_join' ? '加入了' : '离开了'}`);
-            break;
-           // --- 新增：处理删除消息的 case ---
+            case 'user_join':
+            case 'user_leave':
+                logDebug(`系统消息: ${data.payload.username} ${data.type === 'user_join' ? '加入了' : '离开了'}`, LOG_LEVELS.INFO, data.payload);
+                break;
             case 'delete': {
                 const { messageId } = data.payload;
                 if (messageId) {
-                    logDebug(`收到删除指令，准备移除消息: ${messageId}`, 'warning');
+                    logDebug(`收到删除指令，准备移除消息: ${messageId}`, LOG_LEVELS.WARNING);
                     const msgEl = chatWindowEl.querySelector(`[data-id="${messageId}"]`);
                     if (msgEl) {
-                        // 添加一个删除动画，然后移除元素
                         msgEl.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
                         msgEl.style.opacity = '0';
                         msgEl.style.transform = 'scale(0.9)';
                         setTimeout(() => {
                             msgEl.remove();
-                            // 删除后，需要更新 allMessages 数组以保持同步
                             allMessages = allMessages.filter(m => m.id !== messageId);
-                            // 重新计算用户统计（因为发言数可能变化）
                             updateUIFromMessages();
                         }, 300);
                     }
                 }
                 break;
             }
-        case 'error':
-            logDebug(`收到错误: ${data.payload.message}`, LOG_LEVELS.ERROR);
-            alert(data.payload.message);
-            sendButton.disabled = false;
-            break;
-        case 'offer': await handleOffer(data.payload); break;
-        case 'answer': await handleAnswer(data.payload); break;
-        case 'candidate': await handleCandidate(data.payload); break;
-        case 'call_end': handleCallEnd(data.payload); break;
+            case 'error': // <-- 这是后端 Durable Object 发送的错误通知
+                logDebug(`收到后端错误通知: ${data.payload?.message}`, LOG_LEVELS.ERROR, data.payload);
+                alert(data.payload?.message);
+                sendButton.disabled = false;
+                break;
+            case 'offer':
+                await handleOffer(data.payload);
+                break;
+            case 'answer':
+                await handleAnswer(data.payload);
+                break;
+            case 'candidate':
+                await handleCandidate(data.payload);
+                break;
+            case 'call_end':
+                handleCallEnd(data.payload);
+                break;
+            case 'debug_log': // 客户端收到后端DO的调试日志
+                // 此时 payload 就是后端 logEntry 对象
+                logDebug(`[后端日志] ${data.payload.message}`, data.payload.level.toLowerCase(), data.payload.data);
+                break;
+            case 'heartbeat': // 客户端收到后端DO的心跳
+                // 不必在logDebug中打印，因为它会产生大量日志，除非你特别想看
+                // logDebug(`心跳`, LOG_LEVELS.INFO, data.payload);
+                break;
+            default:
+                logDebug(`收到未知 WebSocket 消息类型: ${data.type}`, LOG_LEVELS.WARNING, data);
+        }
     }
-}
-
-
+    
 function onSocketClose(event) {
     statusEl.textContent = "连接已断开";
     connectionDot.classList.add('disconnected');

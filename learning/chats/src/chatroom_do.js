@@ -466,16 +466,15 @@ export class HibernatingChatRoom extends DurableObject {
         try {
             const data = JSON.parse(message);
             
-            if (data.type === MSG_TYPE_CHAT) {
-                await this.handleChatMessage(session, data.payload);
-            } else if (data.type === MSG_TYPE_DELETE) { // <-- 新增此分支
-                await this.handleDeleteMessage(session, data.payload);
-            } else if (data.type === MSG_TYPE_HEARTBEAT) {
-                // 心跳响应，不需要特殊处理
-                this.debugLog(`💓 Heartbeat received from ${session.username}`, 'HEARTBEAT');
-            } else {
-                this.debugLog(`⚠️ Unhandled message type: ${data.type}`, 'WARN');
-            }
+        if (data.type === MSG_TYPE_CHAT) {
+            await this.handleChatMessage(session, data.payload);
+        } else if (data.type === MSG_TYPE_DELETE) {
+            await this.handleDeleteMessage(session, data.payload); // 确认这里是 this.handleDeleteMessage
+        } else if (data.type === MSG_TYPE_HEARTBEAT) {
+            this.debugLog(`💓 Heartbeat received from ${session.username}`, 'HEARTBEAT');
+        } else {
+            this.debugLog(`⚠️ Unhandled message type: ${data.type}`, 'WARN', data);
+        }
         } catch (e) { 
             this.debugLog(`❌ Failed to parse WebSocket message: ${e.message}`, 'ERROR');
             try {
@@ -584,6 +583,45 @@ export class HibernatingChatRoom extends DurableObject {
         
         this.debugLog(`📤 Broadcasting message to ${this.sessions.size} sessions`);
         this.broadcast({ type: MSG_TYPE_CHAT, payload: message });
+    }
+
+        // 【核心修正】将 handleDeleteMessage 声明为箭头函数，或在构造函数中绑定
+    // 箭头函数会自动绑定 this 到创建时的上下文 (即 Durable Object 实例)
+    // 这样可以消除所有关于 `this` 上下文丢失的疑虑。
+      async handleDeleteMessage(session, payload) { 
+        const messageId = payload.id;
+        if (!messageId) {
+            this.debugLog(`❌ Delete request from ${session.username} is missing message ID.`, 'WARN');
+            return;
+        }
+
+        const initialLength = this.messages.length;
+        // 查找消息时，使用一个临时变量来避免在循环或回调中潜在的 'this' 问题
+        const messageToDelete = this.messages.find(m => m.id === messageId);
+
+        // 安全检查：确保消息存在，并且是该用户自己发送的
+        if (messageToDelete && messageToDelete.username === session.username) {
+            this.messages = this.messages.filter(m => m.id !== messageId);
+            
+            if (this.messages.length < initialLength) {
+                this.debugLog(`🗑️ Message ${messageId} deleted by ${session.username}.`);
+                
+                await this.saveState(); // 确认 this.saveState 是正确的
+                
+                this.broadcast({ // 确认 this.broadcast 是正确的
+                    type: MSG_TYPE_DELETE, 
+                    payload: { messageId } 
+                });
+            }
+        } else {
+            let reason = messageToDelete ? "permission denied" : "message not found";
+            this.debugLog(`🚫 Unauthorized delete attempt by ${session.username} for message ${messageId}. Reason: ${reason}`, 'WARN');
+            
+            this.sendMessage(session.ws, { // 确认 this.sendMessage 是正确的
+                type: MSG_TYPE_ERROR,
+                payload: { message: "你不能删除这条消息。" }
+            });
+        }
     }
 
     // ============ 辅助方法 ============
