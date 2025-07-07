@@ -193,42 +193,34 @@
         .user-stats-item .offline-status { color: #e74c3c; font-weight: 600; }
         
         /* --- MAIN CHAT AREA --- */
-        .main-chat { flex: 1; display: flex; flex-direction: column; min-width: 0; height: 100%; }
-        .chat-header { padding: 12px 25px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; box-shadow: 0 2px 15px rgba(102, 126, 234, 0.2); position: relative; }
-        .sidebar-toggle { display: none; align-items: center; justify-content: center; width: 36px; height: 36px; background: rgba(255, 255, 255, 0.2); border: none; border-radius: 8px; font-size: 16px; color: white; cursor: pointer; transition: all 0.3s ease; flex-shrink: 0; }
-        .sidebar-toggle:hover { background: rgba(255, 255, 255, 0.3); }
-        .chat-info { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
-        .room-icon { width: 32px; height: 32px; background: rgba(255, 255, 255, 0 ); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
-        .chat-details { display: flex; flex-direction: column; min-width: 0; }
-        .room-name { font-size: 1.1em; font-weight: 700; margin: 0; color: white; text-shadow: 0 1px 3px rgba(0,0,0,0.3); }
-        .user-status { font-size: 0.8em; opacity: 0.9; margin: 2px 0 0 0; display: flex; align-items: center; gap: 6px; }
-        #username-display {
-            cursor: pointer;
-            text-decoration: underline;
-            text-decoration-style: dotted;
-            text-underline-offset: 3px;
-            transition: color 0.3s;
+        #chat-window { 
+            flex: 1; 
+            padding: 20px 25px; 
+            overflow-y: auto; 
+            min-height: 0; 
+            background: #f8f9fa; 
+            /* scroll-behavior: smooth; 虚拟滚动不需要这个，由JS控制 */
+            display: flex; /* Flexbox布局，用于容纳填充元素和消息 */
+            flex-direction: column; /* 垂直排列 */
+            position: relative; /* 用于绝对定位的填充元素 */
         }
-        #username-display:hover {
-            color: #f39c12;
-        }
-        .connection-dot { width: 6px; height: 6px; background: #2ecc71; border-radius: 50%; animation: pulse 2s infinite; }
-        .connection-dot.disconnected { background: #e74c3c; animation: none; }
-        .online-users-display { cursor: pointer; user-select: none; font-size: 0.8em; font-weight: 500; color: rgba(255, 255, 255, 0.9); background: rgba(255,255,255,0.15); padding: 6px 10px; border-radius: 12px; backdrop-filter: blur(10px); flex-shrink: 0; white-space: nowrap; transition: all 0.3s ease; }
-        .online-users-display:hover { background: rgba(255,255,255,0.25); }
-        .users-menu { display: none; position: absolute; top: 100%; right: 25px; background: white; border: 1px solid #ddd; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 200; margin-top: 8px; min-width: 160px; }
-        .users-menu.show { display: block; }
-        .users-menu ul { list-style: none; margin: 0; padding: 8px 0; }
-        .users-menu li { padding: 8px 12px; font-size: 0.9em; color: #333; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
-        .users-menu li::before { content: '👤'; font-size: 12px; }
-        .users-menu li:hover { background: #f5f5f5; }
-
-        /* --- CHAT WINDOW --- */
-        #chat-window { flex: 1; padding: 20px 25px; overflow-y: auto; min-height: 0; background: #f8f9fa; scroll-behavior: smooth; }
         #chat-window::-webkit-scrollbar { width: 4px; }
         #chat-window::-webkit-scrollbar-track { background: transparent; }
         #chat-window::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
         #chat-window::-webkit-scrollbar-thumb:hover { background: #999; }
+        /* 虚拟滚动填充元素 */
+        .virtual-scroll-spacer {
+            flex-shrink: 0; /* 不会被压缩 */
+            width: 100%;
+        }
+        .virtual-scroll-spacer.top { order: 1; } /* 顶部填充在最前面 */
+        .virtual-scroll-spacer.bottom { order: 3; } /* 底部填充在最后面 */
+        .message-container-wrapper {
+            order: 2; /* 实际消息容器在中间 */
+            width: 100%;
+            position: relative; /* 消息相对这个容器定位 */
+        }
+
 
         /* --- MESSAGE STYLES --- */
         .message { margin-bottom: 16px; display: flex; flex-direction: column; animation: fadeInUp 0.3s ease; }
@@ -698,7 +690,7 @@ const toggleLogsBtn = document.getElementById('toggle-logs-btn');
 
 
 // --- 全局状态变量 ---
-let allMessages = [];
+let allMessages = []; // 存储所有消息数据
 let selectedFile = null;
 let mediaRecorder;
 let audioChunks = [];
@@ -731,11 +723,11 @@ const roomName = pathParts.find(p => p.trim()) || 'general';
 function escapeHTML(str) {
     if (typeof str !== 'string') return '';
     const map = {
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;'
+        '&': '&',
+        '<': '<',
+        '>': '>',
+        '"': '"',
+        "'": '''
     };
     return str.replace(/[&<>"']/g, m => map[m]);
 }
@@ -1027,81 +1019,261 @@ function updateUIFromMessages() {
 }
 
 
-// --- 消息渲染函数 (优化版) ---
-function appendChatMessage(msg) {
-    try {
-        if (!chatWindowEl) {
-            logDebug("致命错误：chatWindowEl 变量是 null 或 undefined！", 'error');
-            return;
-        }
-        if (!msg || !msg.id) {
-            logDebug("致命错误：传入的 msg 对象无效或缺少ID！", 'error', msg);
-            return;
-        }
-        
-        // 使用文档片段提高性能
-        const fragment = document.createDocumentFragment();
-        const msgEl = document.createElement('div');
-        msgEl.className = 'message';
-        
-        // 确保所有相关数据都存入dataset
-        msgEl.dataset.id = msg.id;
-        // 优先使用 caption 作为 messageText，如果没有则使用 text
-        msgEl.dataset.messageText = msg.caption || msg.text || ''; 
-        msgEl.dataset.timestamp = msg.timestamp;
-        msgEl.dataset.messageType = msg.type;
-        if (msg.type === 'image') {
-            msgEl.dataset.imageUrl = msg.imageUrl; // 图片消息需要存储URL
-        }
+// --- 虚拟滚动相关变量 ---
+const AVERAGE_MESSAGE_HEIGHT = 80; // 预估每条消息的平均高度 (px)
+const OVERSCAN_COUNT = 10; // 在可见区域上方和下方额外渲染的消息数量，用于平滑滚动
+const messageHeights = new Map(); // 存储每条消息实际高度的Map: { messageId: height }
+let topSpacerEl;
+let bottomSpacerEl;
+let messageWrapperEl; // 用于包裹实际消息DOM的容器
 
-        if (msg.username === username) msgEl.classList.add('self');
-        
-        const messageDate = new Date(msg.timestamp);
-        const now = new Date();
-        const diffSeconds = Math.floor((now - messageDate) / 1000);
-        let displayTime;
-        if (diffSeconds < 60) displayTime = '刚刚';
-        else if (diffSeconds < 3600) displayTime = `${Math.floor(diffSeconds / 60)}分钟前`;
-        else if (diffSeconds < 86400) displayTime = `${Math.floor(diffSeconds / 3600)}小时前`;
-        else displayTime = messageDate.toLocaleString([], { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-        
-        let contentHTML = `<div class="info"><span class="username">${escapeHTML(msg.username)}</span> <span class="timestamp">${displayTime}</span></div>`;
-            
-        // 消息内容渲染
-        if (msg.type === 'image') {
-            contentHTML += `<div class="message-image" onclick="showImageModal('${msg.imageUrl}')"><img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy"></div>`;
-            // 无论 caption 是否为空，都添加一个 .text div
-            // marked.parse('') 会返回空字符串，不会造成问题
-            contentHTML += `<div class="text">${marked.parse(msg.caption || '')}</div>`; 
-        } else if (msg.type === 'audio') {
-            contentHTML += `<div class="message-audio"><audio controls src="${msg.audioUrl}"></audio></div>`;
-            // 无论 text 是否为空，都添加一个 .text div
-            contentHTML += `<div class="text">${marked.parse(msg.text || '')}</div>`; 
-        } else { // text (及其他未定义的类型，会 fallback到text处理)
-            // 确保 text 字段始终被处理，即使为空字符串
-            contentHTML += `<div class="text">${marked.parse(msg.text || '')}</div>`;
-        }
-            
-        msgEl.innerHTML = contentHTML;
-        fragment.appendChild(msgEl);
-        
-        // 只有当接近底部时才自动滚动
-        const isNearBottom = chatWindowEl.scrollHeight - chatWindowEl.clientHeight <= chatWindowEl.scrollTop + 50; // 50px缓冲
-        chatWindowEl.appendChild(fragment); // 批量添加DOM
-        
-        if (isNearBottom) {
-            // 使用requestAnimationFrame确保滚动发生在下一次重绘，避免强制同步布局
-            requestAnimationFrame(() => {
-                chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
-            });
-        }
-    } catch (e) {
-        logDebug(`appendChatMessage 函数出现顶级错误: ${e.message}`, 'error', { error: e.toString(), stack: e.stack, originalMessage: msg });
+let prevScrollTop = 0; // 用于判断滚动方向和是否需要重新渲染
+let lastRenderedRange = { start: -1, end: -1 }; // 上次渲染的消息范围
+
+
+// --- 虚拟滚动核心渲染函数 ---
+function renderVirtualWindow(scrollToBottom = false) {
+    if (!chatWindowEl || !messageWrapperEl) {
+        logDebug('虚拟滚动初始化未完成，无法渲染', 'WARN');
+        return;
     }
+
+    const viewportHeight = chatWindowEl.clientHeight;
+    const scrollTop = chatWindowEl.scrollTop;
+
+    let currentScrollY = 0;
+    let startIndex = 0;
+    
+    // 计算起始索引和顶部填充高度
+    for (let i = 0; i < allMessages.length; i++) {
+        const msg = allMessages[i];
+        const msgHeight = messageHeights.get(msg.id) || AVERAGE_MESSAGE_HEIGHT;
+        if (currentScrollY + msgHeight > scrollTop) {
+            startIndex = i;
+            break;
+        }
+        currentScrollY += msgHeight;
+    }
+
+    // 应用overscan
+    startIndex = Math.max(0, startIndex - OVERSCAN_COUNT);
+
+    let endIndex = startIndex;
+    let renderedHeight = 0;
+    
+    // 计算结束索引和渲染区域高度
+    for (let i = startIndex; i < allMessages.length; i++) {
+        const msg = allMessages[i];
+        const msgHeight = messageHeights.get(msg.id) || AVERAGE_MESSAGE_HEIGHT;
+        renderedHeight += msgHeight;
+        endIndex = i;
+        if (renderedHeight >= viewportHeight + (OVERSCAN_COUNT * AVERAGE_MESSAGE_HEIGHT * 2)) { // 包含上下overscan的高度
+            break;
+        }
+    }
+    endIndex = Math.min(allMessages.length - 1, endIndex + OVERSCAN_COUNT);
+
+    // 检查是否需要重新渲染：如果范围没有变化，则不操作
+    if (lastRenderedRange.start === startIndex && lastRenderedRange.end === endIndex && !scrollToBottom) {
+        return;
+    }
+    lastRenderedRange = { start: startIndex, end: endIndex };
+
+    // 计算顶部和底部填充高度
+    let topPaddingHeight = 0;
+    for (let i = 0; i < startIndex; i++) {
+        topPaddingHeight += messageHeights.get(allMessages[i].id) || AVERAGE_MESSAGE_HEIGHT;
+    }
+
+    let totalContentHeight = topPaddingHeight; // 已经计算的顶部高度
+    for (let i = startIndex; i <= endIndex; i++) {
+        totalContentHeight += messageHeights.get(allMessages[i].id) || AVERAGE_MESSAGE_HEIGHT;
+    }
+
+    let bottomPaddingHeight = 0;
+    for (let i = endIndex + 1; i < allMessages.length; i++) {
+        bottomPaddingHeight += messageHeights.get(allMessages[i].id) || AVERAGE_MESSAGE_HEIGHT;
+    }
+    
+    topSpacerEl.style.height = `${topPaddingHeight}px`;
+    bottomSpacerEl.style.height = `${bottomPaddingHeight}px`;
+
+    // 清空并重新添加可见消息
+    messageWrapperEl.innerHTML = ''; // 清空所有旧的DOM消息
+    const fragment = document.createDocumentFragment();
+    const currentRenderedIds = new Set(); // 用于跟踪当前渲染的ID
+
+    for (let i = startIndex; i <= endIndex; i++) {
+        const msg = allMessages[i];
+        const existingEl = messageWrapperEl.querySelector(`[data-id="${msg.id}"]`); // 检查是否已存在
+        if (existingEl) {
+            // 如果已存在，直接添加到fragment（通常不会发生，因为我们清空了）
+            // 或者，可以在这里做更细致的diffing来避免重建，但innerHTML=清空+fragment.appendChild对于少量DOM足够快
+            fragment.appendChild(existingEl); 
+        } else {
+            const msgEl = createMessageElement(msg);
+            fragment.appendChild(msgEl);
+            currentRenderedIds.add(msg.id);
+        }
+    }
+    messageWrapperEl.appendChild(fragment);
+
+    // 测量新添加消息的实际高度并缓存
+    messageWrapperEl.querySelectorAll('.message').forEach(el => {
+        const msgId = el.dataset.id;
+        if (currentRenderedIds.has(msgId)) { // 仅测量新添加的或可能变化高度的
+            const actualHeight = el.offsetHeight + 16; // 加上margin-bottom
+            if (messageHeights.get(msgId) !== actualHeight) {
+                messageHeights.set(msgId, actualHeight);
+            }
+        }
+    });
+
+    // 如果是滚动到底部，确保滚动到位
+    if (scrollToBottom) {
+        requestAnimationFrame(() => {
+            chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
+        });
+    }
+
+    // 调整一下总高度，以防测量后总高度发生变化
+    // 这里需要重新计算一次总高度并可能调整bottomSpacer
+    const newTotalHeight = topPaddingHeight + messageWrapperEl.offsetHeight + bottomPaddingHeight;
+    // logDebug(`渲染窗口：${startIndex}-${endIndex}, 顶部: ${topPaddingHeight.toFixed(0)}, 底部: ${bottomPaddingHeight.toFixed(0)}, 总高: ${newTotalHeight.toFixed(0)}`, 'INFO');
+}
+
+
+// --- 初始化虚拟滚动结构 ---
+function initVirtualScrolling() {
+    if (chatWindowEl.querySelector('.virtual-scroll-spacer')) { // 避免重复初始化
+        logDebug('虚拟滚动已初始化，跳过', 'INFO');
+        return;
+    }
+
+    // 清空原始内容
+    chatWindowEl.innerHTML = '';
+
+    // 创建顶部填充元素
+    topSpacerEl = document.createElement('div');
+    topSpacerEl.className = 'virtual-scroll-spacer top';
+    topSpacerEl.style.height = '0px';
+
+    // 创建消息容器，用于容纳实际渲染的消息
+    messageWrapperEl = document.createElement('div');
+    messageWrapperEl.className = 'message-container-wrapper';
+    
+    // 创建底部填充元素
+    bottomSpacerEl = document.createElement('div');
+    bottomSpacerEl.className = 'virtual-scroll-spacer bottom';
+    bottomSpacerEl.style.height = '0px';
+
+    // 将这些元素添加到聊天窗口
+    chatWindowEl.appendChild(topSpacerEl);
+    chatWindowEl.appendChild(messageWrapperEl);
+    chatWindowEl.appendChild(bottomSpacerEl);
+
+    // 绑定滚动事件监听器（节流）
+    chatWindowEl.addEventListener('scroll', throttle(() => {
+        const currentScrollTop = chatWindowEl.scrollTop;
+        const scrollDelta = Math.abs(currentScrollTop - prevScrollTop);
+
+        // 只有当滚动距离超过一定阈值（如100px）时才重新渲染，减少不必要的渲染
+        // 或者，在所有消息都已测量高度后，可以更精确地计算是否需要渲染
+        if (scrollDelta > AVERAGE_MESSAGE_HEIGHT / 2 || allMessages.length === 0) {
+             renderVirtualWindow();
+        }
+        prevScrollTop = currentScrollTop;
+    }, 100)); // 滚动事件节流，每100ms最多执行一次
+
+    logDebug('虚拟滚动结构初始化完成', 'SUCCESS');
+    renderVirtualWindow(true); // 首次渲染并滚动到底部
+}
+
+
+// --- 消息渲染函数 (优化版，用于创建单个DOM元素) ---
+// 此函数只负责创建消息DOM，不负责添加到DOM或滚动
+function createMessageElement(msg) {
+    const msgEl = document.createElement('div');
+    msgEl.className = 'message';
+    
+    // 确保所有相关数据都存入dataset
+    msgEl.dataset.id = msg.id;
+    // 优先使用 caption 作为 messageText，如果没有则使用 text
+    msgEl.dataset.messageText = msg.caption || msg.text || ''; 
+    msgEl.dataset.timestamp = msg.timestamp;
+    msgEl.dataset.messageType = msg.type;
+    if (msg.type === 'image') {
+        msgEl.dataset.imageUrl = msg.imageUrl; // 图片消息需要存储URL
+    }
+
+    if (msg.username === username) msgEl.classList.add('self');
+    
+    const messageDate = new Date(msg.timestamp);
+    const now = new Date();
+    const diffSeconds = Math.floor((now - messageDate) / 1000);
+    let displayTime;
+    if (diffSeconds < 60) displayTime = '刚刚';
+    else if (diffSeconds < 3600) displayTime = `${Math.floor(diffSeconds / 60)}分钟前`;
+    else if (diffSeconds < 86400) displayTime = `${Math.floor(diffSeconds / 3600)}小时前`;
+    else displayTime = messageDate.toLocaleString([], { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    
+    let contentHTML = `<div class="info"><span class="username">${escapeHTML(msg.username)}</span> <span class="timestamp">${displayTime}</span></div>`;
+            
+    // 消息内容渲染
+    if (msg.type === 'image') {
+        contentHTML += `<div class="message-image" onclick="showImageModal('${msg.imageUrl}')"><img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy"></div>`;
+        // 无论 caption 是否为空，都添加一个 .text div
+        // marked.parse('') 会返回空字符串，不会造成问题
+        contentHTML += `<div class="text">${marked.parse(msg.caption || '')}</div>`; 
+    } else if (msg.type === 'audio') {
+        contentHTML += `<div class="message-audio"><audio controls src="${msg.audioUrl}"></audio></div>`;
+        // 无论 text 是否为空，都添加一个 .text div
+        contentHTML += `<div class="text">${marked.parse(msg.text || '')}</div>`; 
+    } else { // text (及其他未定义的类型，会 fallback到text处理)
+        // 确保 text 字段始终被处理，即使为空字符串
+        contentHTML += `<div class="text">${marked.parse(msg.text || '')}</div>`;
+    }
+        
+    msgEl.innerHTML = contentHTML;
+    return msgEl;
+}
+
+// 这个函数现在只负责将消息数据添加到 allMessages 数组，并触发渲染
+function appendChatMessage(msg) {
+    if (!msg || !msg.id) {
+        logDebug("致命错误：传入的 msg 对象无效或缺少ID！", 'error', msg);
+        return;
+    }
+    
+    // 检查是否是需要替换的乐观更新消息
+    const existingIndex = allMessages.findIndex(m => m.id === msg.id);
+    if (existingIndex > -1) {
+        // 如果找到同ID消息，替换数据
+        allMessages[existingIndex] = msg;
+        logDebug(`消息 ${msg.id} 已更新/确认`, 'INFO');
+    } else {
+        // 否则，添加新消息
+        allMessages.push(msg);
+        logDebug(`新消息 ${msg.id} 已添加`, 'INFO');
+    }
+    
+    // 限制 allMessages 数组的大小，避免内存无限增长
+    const MAX_ALL_MESSAGES = 1000; // 调整这个值以控制总消息量
+    if (allMessages.length > MAX_ALL_MESSAGES) {
+        const removedMessages = allMessages.splice(0, allMessages.length - MAX_ALL_MESSAGES);
+        removedMessages.forEach(removedMsg => {
+            messageHeights.delete(removedMsg.id); // 从高度缓存中移除
+        });
+        logDebug(`消息数组已截断，移除 ${removedMessages.length} 条旧消息`, 'INFO');
+    }
+
+    // 触发虚拟窗口渲染，并滚动到底部（如果需要）
+    renderVirtualWindow(true); 
 }
 
 
 // --- 上下文菜单和 AI 解释逻辑 ---
+// (这部分保持不变，因为它不直接影响消息渲染性能，但与消息元素互动)
 function showContextMenu(element, x, y) {
     currentMessageElement = element; // 将当前右键点击的消息元素存为全局变量
     
@@ -1406,21 +1578,21 @@ messageForm.addEventListener('submit', async (e) => {
             await sendImageMessage(selectedFile, text);
         } else if (text) {
             // 创建一个临时ID来实现乐观UI更新
-            const tempId = 'temp-' + Date.now();
+            const tempId = 'temp-' + crypto.randomUUID(); // 使用UUID确保唯一性
             const tempMsg = {
                 id: tempId,
-                type: 'text',
+                type: 'text', // 乐观更新时，客户端内部类型是 'text'
                 text: text,
                 username: username,
-                timestamp: Date.now() // 使用数字时间戳
+                timestamp: Date.now() 
             };
             
             // 先添加消息到UI（乐观更新）
-            allMessages.push(tempMsg);
-            appendChatMessage(tempMsg);
+            appendChatMessage(tempMsg); // 调用 appendChatMessage，它会将消息添加到 allMessages 并触发渲染
             
             // 然后发送到服务器
-            const payload = { type: 'chat', text: text };
+            // 外层 type 是 'chat'，payload 内部 type 是 'text'，符合后端 webSocketMessage 接收格式
+            const payload = { type: 'text', text: text, id: tempId, timestamp: tempMsg.timestamp }; 
             socket.send(JSON.stringify({ type: 'chat', payload }));
             
             // 清理输入框
@@ -1452,7 +1624,7 @@ async function sendImageMessage(file, caption = '') {
         const safeFileName = encodeURIComponent(file.name);
         
         // 创建临时消息ID和对象用于乐观UI更新
-        const tempId = 'temp-img-' + crypto.randomUUID(); // 使用UUID确保唯一性
+        const tempId = 'temp-img-' + crypto.randomUUID(); 
         const tempImageUrl = URL.createObjectURL(file); // 本地预览URL
         
         // 创建临时消息对象
@@ -1467,8 +1639,7 @@ async function sendImageMessage(file, caption = '') {
         };
         
         // 添加临时消息到UI（乐观更新）
-        allMessages.push(tempMsg);
-        appendChatMessage(tempMsg);
+        appendChatMessage(tempMsg); // 调用 appendChatMessage
         
         // 上传文件到R2存储
         const response = await fetch('/upload', {
@@ -1495,11 +1666,13 @@ async function sendImageMessage(file, caption = '') {
         // 发送实际图片消息通过WebSocket
         const payload = {
             type: 'image',
-            text: caption, // text 字段可以为空，但存在 (后端使用 caption)
+            text: caption, 
             caption: caption,
             imageUrl: data.url, // 发送服务器返回的URL
             filename: file.name,
-            size: file.size
+            size: file.size,
+            id: tempId,          // 包含临时ID和时间戳
+            timestamp: tempMsg.timestamp
         };
         
         socket.send(JSON.stringify({
@@ -1521,11 +1694,10 @@ async function sendImageMessage(file, caption = '') {
     } catch (error) {
         logDebug(`图片上传失败: ${error.message}`, LOG_LEVELS.ERROR, error);
         alert(`图片上传失败: ${error.message}`);
-        // 乐观更新失败，可以考虑删除或标记这条临时消息
-        // 简单处理：如果上传失败，就从allMessages中移除这条临时消息，并从DOM中移除
-        const tempMsgEl = chatWindowEl.querySelector(`[data-id="${tempId}"]`);
-        if (tempMsgEl) tempMsgEl.remove();
+        // 乐观更新失败，从 allMessages 和 DOM 中移除对应的临时消息
         allMessages = allMessages.filter(msg => msg.id !== tempId);
+        messageHeights.delete(tempId); // 移除高度缓存
+        renderVirtualWindow(); // 重新渲染以移除失败的临时消息
         
         throw error;
     } finally {
@@ -1557,8 +1729,7 @@ async function sendAudioMessage(audioBlob, mimeType) {
             username: username,
             timestamp: Date.now()
         };
-        allMessages.push(tempMsg);
-        appendChatMessage(tempMsg);
+        appendChatMessage(tempMsg); // 调用 appendChatMessage
 
         // 上传音频到R2存储
         const response = await fetch('/upload', {
@@ -1588,7 +1759,9 @@ async function sendAudioMessage(audioBlob, mimeType) {
             text: '', // 核心修正：为音频消息添加空的 text 字段
             audioUrl: data.url, // 发送服务器返回的URL
             filename: filename,
-            size: audioBlob.size
+            size: audioBlob.size,
+            id: tempId,          // 包含临时ID和时间戳
+            timestamp: tempMsg.timestamp
         };
         
         socket.send(JSON.stringify({
@@ -1606,9 +1779,9 @@ async function sendAudioMessage(audioBlob, mimeType) {
         logDebug(`音频上传失败: ${error.message}`, LOG_LEVELS.ERROR, error);
         alert(`音频上传失败: ${error.message}`);
         // 乐观更新失败处理
-        const tempMsgEl = chatWindowEl.querySelector(`[data-id="${tempId}"]`);
-        if (tempMsgEl) tempMsgEl.remove();
         allMessages = allMessages.filter(msg => msg.id !== tempId);
+        messageHeights.delete(tempId); // 移除高度缓存
+        renderVirtualWindow(); // 重新渲染以移除失败的临时消息
         throw error;
     }
 }
@@ -1634,7 +1807,7 @@ function onSocketOpen() {
     logDebug('WebSocket连接已建立', LOG_LEVELS.SUCCESS);
     // 启动用户列表定时更新（如果之前没有）
     if (!window.userListInterval) {
-        window.userListInterval = setInterval(updateUIFromMessages, 100000); // 100秒更新一次用户列表
+        window.userListInterval = setInterval(updateUIFromMessages, 30000); // 30秒更新一次用户列表
     }
 }
 
@@ -1646,7 +1819,10 @@ async function onSocketMessage(event) {
         if (data.type === 'welcome' && Array.isArray(data.payload?.history)) {
             logDebug(`收到欢迎消息，包含 ${data.payload.history.length} 条历史记录`);
         } else {
-            logDebug(`收到 WebSocket 数据包 (${data.type})`, 'info');
+            // 如果日志级别不是 HEARTBEAT，才打印原始数据，避免日志过载
+            if (data.type !== 'heartbeat') {
+                logDebug(`收到 WebSocket 数据包 (${data.type})`, 'info', data); 
+            }
         }
     } catch (parseError) {
         const rawMessageSnippet = String(event.data).substring(0, 500);
@@ -1664,62 +1840,25 @@ async function onSocketMessage(event) {
             if (Array.isArray(history)) {
                 logDebug(`开始处理 ${history.length} 条历史记录`);
                 
-                // 清空现有消息和DOM
-                chatWindowEl.innerHTML = '';
-                allMessages = [];
+                // 清空现有消息，但虚拟滚动不需要清空 chatWindowEl.innerHTML
+                allMessages = []; // 清空内存中的消息数组
+                messageHeights.clear(); // 清空高度缓存
                 
-                const batchSize = 15; // 每批处理消息数量
                 const validHistory = history.filter(msg => msg && msg.id); // 过滤无效消息
                 
                 if (validHistory.length < history.length) {
                     logDebug(`数据清洗：过滤掉了 ${history.length - validHistory.length} 条无效的历史记录。`, LOG_LEVELS.WARNING);
                 }
                 
-                // 分批次处理历史消息，避免UI冻结
-                let processedCount = 0;
-                for (let i = 0; i < validHistory.length; i += batchSize) {
-                    const batch = validHistory.slice(i, i + batchSize);
-                    
-                    // 使用setTimeout在主线程空闲时处理每一批
-                    // requestAnimationFrame 也可以，但 setTimeout(0) 更能确保批处理任务的公平调度
-                    setTimeout(() => {
-                        const fragment = document.createDocumentFragment();
-                        batch.forEach(msg => {
-                            // 检查是否有乐观更新的临时消息，如果有则替换
-                            const existingTempMsgIndex = allMessages.findIndex(m => m.id === msg.id);
-                            if (msg.id.startsWith('temp-') && existingTempMsgIndex > -1) {
-                                // 这是一个乐观消息的回响，替换它
-                                allMessages[existingTempMsgIndex] = msg;
-                                const tempEl = chatWindowEl.querySelector(`[data-id="${msg.id}"]`);
-                                if (tempEl) tempEl.remove(); // 移除旧的临时DOM
-                                // 然后重新添加正确的消息
-                                appendChatMessage(msg);
-                            } else {
-                                // 正常添加新消息
-                                allMessages.push(msg);
-                                appendChatMessage(msg);
-                            }
-                        });
-                        
-                        processedCount += batch.length;
-                        // 只在所有批次处理完后更新UI和滚动
-                        if (processedCount >= validHistory.length) {
-                            updateUIFromMessages();
-                            requestAnimationFrame(() => { // 确保滚动在DOM更新后
-                                chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
-                            });
-                            logDebug(`历史记录加载完成，共 ${validHistory.length} 条消息`, LOG_LEVELS.SUCCESS);
-                        }
-                    }, 0); // 尽可能快地调度，但不阻塞主线程
-                }
-                // 如果没有历史消息，也要确保UI更新和滚动
-                if (validHistory.length === 0) {
-                    updateUIFromMessages();
-                    requestAnimationFrame(() => {
-                        chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
-                    });
-                    logDebug(`历史记录加载完成，共 0 条消息`, LOG_LEVELS.SUCCESS);
-                }
+                // 将所有历史消息直接添加到 allMessages
+                allMessages.push(...validHistory);
+                
+                // 启动虚拟滚动渲染，并滚动到最新消息
+                initVirtualScrolling(); // 确保虚拟滚动结构存在
+                renderVirtualWindow(true); // 渲染可见范围并滚动到底部
+                
+                updateUIFromMessages(); // 更新用户列表和统计
+                logDebug(`历史记录加载完成，共 ${validHistory.length} 条消息`, LOG_LEVELS.SUCCESS);
 
             } else {
                 logDebug("收到的欢迎消息中 history 格式不正确或不存在。", LOG_LEVELS.ERROR, data.payload);
@@ -1729,23 +1868,8 @@ async function onSocketMessage(event) {
         case 'chat': {
             const newMessage = data.payload;
             if (newMessage && newMessage.id) {
-                // 处理乐观更新的回响：如果新消息的ID与某个临时消息匹配，则替换它
-                const tempMessageIndex = allMessages.findIndex(m => m.id === newMessage.id || (m.id.startsWith('temp-') && m.text === newMessage.text && m.username === newMessage.username && m.timestamp + 5000 > newMessage.timestamp)); // 简单匹配
-                
-                if (tempMessageIndex > -1) {
-                    logDebug(`收到乐观更新确认: ${newMessage.id}`, LOG_LEVELS.INFO, newMessage);
-                    // 替换内存中的临时消息
-                    allMessages[tempMessageIndex] = newMessage;
-                    // 移除旧的临时DOM元素
-                    const tempEl = chatWindowEl.querySelector(`[data-id="${allMessages[tempMessageIndex].id}"]`);
-                    if (tempEl) tempEl.remove();
-                    // 重新添加新的真实消息DOM元素
-                    appendChatMessage(newMessage);
-                } else {
-                    // 这是一个全新的消息，直接添加
-                    allMessages.push(newMessage);
-                    appendChatMessage(newMessage);
-                }
+                // `appendChatMessage` 现在会处理替换或添加逻辑，并触发渲染
+                appendChatMessage(newMessage);
                 // 使用节流函数减少UI更新频率
                 throttledUpdateUI();
             } else {
@@ -1763,17 +1887,11 @@ async function onSocketMessage(event) {
             const { messageId } = data.payload;
             if (messageId) {
                 logDebug(`收到删除指令，准备移除消息: ${messageId}`, LOG_LEVELS.WARNING);
-                const msgEl = chatWindowEl.querySelector(`[data-id="${messageId}"]`);
-                if (msgEl) {
-                    msgEl.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-                    msgEl.style.opacity = '0';
-                    msgEl.style.transform = 'scale(0.9)';
-                    setTimeout(() => {
-                        msgEl.remove();
-                        allMessages = allMessages.filter(m => m.id !== messageId);
-                        throttledUpdateUI(); // 删除后也更新用户列表统计
-                    }, 300);
-                }
+                // 直接从 allMessages 中移除，然后触发重新渲染
+                allMessages = allMessages.filter(m => m.id !== messageId);
+                messageHeights.delete(messageId); // 从高度缓存中移除
+                renderVirtualWindow(); // 重新渲染以反映删除
+                throttledUpdateUI(); // 删除后也更新用户列表统计
             }
             break;
         }
@@ -2084,10 +2202,16 @@ function initializeChat() {
     });
 
     // 全局点击监听器，用于在点击其他地方时关闭菜单
-    document.addEventListener('click', () => {
-        usersMenu.classList.remove('show');
-        contextMenu.style.display = 'none';
+    document.addEventListener('click', (e) => {
+        // 只有当点击目标不是菜单本身或其子元素时才关闭
+        if (!usersMenu.contains(e.target) && !contextMenu.contains(e.target)) {
+            usersMenu.classList.remove('show');
+            contextMenu.style.display = 'none';
+        }
     });
+    // 阻止菜单内的点击事件冒泡到document，防止菜单立即关闭
+    usersMenu.addEventListener('click', e => e.stopPropagation());
+    contextMenu.addEventListener('click', e => e.stopPropagation());
 }
 
 // 页面加载完成后调用初始化函数
