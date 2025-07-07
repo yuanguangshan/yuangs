@@ -209,6 +209,9 @@ download
 Use code with caution.
 JavaScript
 IGNORE_WHEN_COPYING_END
+
+
+
 为什么这个最终组合能行
 
 可靠的会话识别：我们将用户信息直接附加到 ws 对象上 (ws.session = ...)。这是在 Durable Object 中管理 WebSocket 状态最可靠、最简单的方式。当 webSocketMessage 被调用时，我们能 100% 确定地从 ws.session 中取回当前用户的身份。
