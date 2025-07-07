@@ -548,7 +548,7 @@ export class HibernatingChatRoom extends DurableObject {
             try {
                 session.ws.send(JSON.stringify({
                     type: MSG_TYPE_ERROR,
-                    payload: { message: "消息过长，请控制在1000字符以内" }
+                    payload: { message: "消息过长，请控制在10000字符以内" }
                 }));
             } catch (e) {
                 this.debugLog(`❌ Failed to send error message: ${e.message}`, 'ERROR');
