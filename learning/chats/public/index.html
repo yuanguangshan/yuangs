@@ -148,7 +148,6 @@
             font-size: 0.8em;
             background: rgba(255,255,255,0.15);
             border-radius: 12px;
-            backdrop-filter: blur(10px);
             display: flex;
             align-items: center;
             gap: 4px;
@@ -214,7 +213,7 @@
         }
         .connection-dot { width: 6px; height: 6px; background: #2ecc71; border-radius: 50%; animation: pulse 2s infinite; }
         .connection-dot.disconnected { background: #e74c3c; animation: none; }
-        .online-users-display { cursor: pointer; user-select: none; font-size: 0.8em; font-weight: 500; color: rgba(255, 255, 255, 0.9); background: rgba(255,255,255,0.15); padding: 6px 10px; border-radius: 12px; backdrop-filter: blur(10px); flex-shrink: 0; white-space: nowrap; transition: all 0.3s ease; }
+        .online-users-display { cursor: pointer; user-select: none; font-size: 0.8em; font-weight: 500; color: rgba(255, 255, 255, 0.9); background: rgba(255,255,255,0.15); padding: 6px 10px; border-radius: 12px; flex-shrink: 0; white-space: nowrap; transition: all 0.3s ease; }
         .online-users-display:hover { background: rgba(255,255,255,0.25); }
         .users-menu { display: none; position: absolute; top: 100%; right: 25px; background: white; border: 1px solid #ddd; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 200; margin-top: 8px; min-width: 160px; }
         .users-menu.show { display: block; }
@@ -1291,29 +1290,59 @@ function appendChatMessage(msg) {
             
         msgEl.innerHTML = contentHTML;
         
-        // --- 核心修改：为整个消息元素添加右键/长按事件监听 ---
-        msgEl.addEventListener('contextmenu', e => {
-            e.preventDefault();
-            showContextMenu(msgEl, e.pageX, e.pageY);
-        });
-        
-        let longPressTimer;
-        msgEl.addEventListener('touchstart', e => {
-            // 防止触发默认的文本选择等行为
-            e.preventDefault(); 
-            longPressTimer = setTimeout(() => {
-                showContextMenu(msgEl, e.touches[0].pageX, e.touches[0].pageY);
-            }, 500); // 长按500毫秒
+    // 在文件顶层或初始化时添加一次到父元素
+chatWindowEl.addEventListener('contextmenu', e => {
+    const msgEl = e.target.closest('.message');
+    if (msgEl) {
+        e.preventDefault();
+        showContextMenu(msgEl, e.pageX, e.pageY);
+    }
+});
+
+    // 针对 touchstart 的长按事件委托会稍微复杂一点，
+    // 因为需要管理 touchstart 和 touchend 的状态。
+    // 考虑简化为仅支持右键菜单（更稳定），或者为移动端单独实现长按逻辑。
+    // 示例 (仅为示意，可能需更健壮的触摸事件处理):
+    let touchStartTime;
+    let currentTouchMsgEl = null;
+
+    chatWindowEl.addEventListener('touchstart', e => {
+        const msgEl = e.target.closest('.message');
+        if (msgEl) {
+            e.preventDefault(); // 阻止默认的滚动或文本选择
+            currentTouchMsgEl = msgEl;
+            touchStartTime = Date.now();
+            // 设置一个短时间定时器，如果手指在这个时间内没有移动且未抬起，则视为长按
+            setTimeout(() => {
+                if (currentTouchMsgEl === msgEl && (Date.now() - touchStartTime) >= 500) {
+                    showContextMenu(msgEl, e.touches[0].pageX, e.touches[0].pageY);
+                    navigator.vibrate(50); // 移动端震动反馈
+                }
+            }, 500);
+
+    }
         }, { passive: false }); // passive: false 允许 preventDefault
 
-        msgEl.addEventListener('touchend', () => clearTimeout(longPressTimer));
-        msgEl.addEventListener('touchmove', () => clearTimeout(longPressTimer));
-        
+        chatWindowEl.addEventListener('touchend', () => {
+            currentTouchMsgEl = null;
+            clearTimeout(touchStartTime); // 清除定时器
+        });
+
+        chatWindowEl.addEventListener('touchmove', () => {
+            currentTouchMsgEl = null;
+            clearTimeout(touchStartTime); // 移动时也清除定时器
+        });
         chatWindowEl.appendChild(msgEl);
         const scrollHeightAfterAppend = chatWindowEl.scrollHeight;
         chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
     } catch (e) {
         logDebug(`appendChatMessage 函数出现顶级错误: ${e.message}`, 'error', { error: e.toString(), stack: e.stack, originalMessage: msg });
+    }
+      const isAtBottom = chatWindowEl.scrollHeight - chatWindowEl.clientHeight <= chatWindowEl.scrollTop + 50; // 留一点缓冲
+    chatWindowEl.appendChild(msgEl);
+
+    if (isAtBottom) {
+        chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
     }
 }
 
