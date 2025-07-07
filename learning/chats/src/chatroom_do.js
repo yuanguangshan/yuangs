@@ -468,6 +468,8 @@ export class HibernatingChatRoom extends DurableObject {
             
             if (data.type === MSG_TYPE_CHAT) {
                 await this.handleChatMessage(session, data.payload);
+            } else if (data.type === MSG_TYPE_DELETE) { // <-- 新增此分支
+                await this.handleDeleteMessage(session, data.payload);
             } else if (data.type === MSG_TYPE_HEARTBEAT) {
                 // 心跳响应，不需要特殊处理
                 this.debugLog(`💓 Heartbeat received from ${session.username}`, 'HEARTBEAT');
