@@ -702,7 +702,13 @@ const MAX_LOG_ENTRIES = 100;
 
 function escapeHTML(str) {
     if (typeof str !== 'string') return '';
-    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    };
     return str.replace(/[&<>"']/g, m => map[m]);
 }
 
@@ -1325,6 +1331,150 @@ function showContextMenu(element, x, y) {
     
     if (navigator.vibrate) navigator.vibrate(50); // 移动端震动反馈
 }
+
+// --- CONTEXT MENU ACTIONS (已恢复，缺失部分在这里) ---
+contextMenu.addEventListener('click', async (e) => {
+    const clickedOption = e.target;
+    // 确保点击的是菜单项，而不是菜单背景或其他地方
+    if (!clickedOption.closest('li')) return; 
+
+    const action = clickedOption.dataset.action;
+    const model = clickedOption.dataset.ai;
+    
+    // 获取原始消息内容
+    const originalMessageText = currentMessageElement?.dataset.messageText;
+    const originalImageUrl = currentMessageElement?.dataset.imageUrl;
+    const messageType = currentMessageElement?.dataset.messageType;
+
+    // 清除当前的右键菜单
+    contextMenu.style.display = 'none';
+
+    // 处理复制选项
+    if (clickedOption.id === 'copy-option') {
+        if (originalMessageText) {
+            navigator.clipboard.writeText(originalMessageText)
+                .then(() => showCopyFeedback('文本已复制!'))
+                .catch(err => logDebug(`复制失败: ${err}`, LOG_LEVELS.ERROR));
+        }
+        return; // 处理完复制就返回
+    }
+
+    // 处理删除选项
+    if (clickedOption.id === 'delete-option') {
+        if (currentMessageElement?.dataset.id) {
+            // 可以在这里加一个确认弹窗
+            if (confirm("确定要删除这条消息吗？")) {
+                socket.send(JSON.stringify({ type: 'delete', payload: { id: currentMessageElement.dataset.id } }));
+                logDebug(`发送删除消息指令: ${currentMessageElement.dataset.id}`, LOG_LEVELS.INFO);
+            }
+        }
+        return; // 处理完删除就返回
+    }
+
+    // 处理AI解释/描述选项
+    let explanationText = "";
+    let requestBody = {};
+    let apiUrl = '';
+
+    if (action === 'image-describe' && messageType === 'image') {
+        if (!originalImageUrl) {
+            logDebug("图片描述：缺少图片URL", LOG_LEVELS.WARNING);
+            return;
+        }
+        apiUrl = '/ai-describe-image';
+        requestBody = { imageUrl: originalImageUrl };
+        explanationText = "正在通过AI模型解读图片...";
+    } else if (action === 'text-explain' && messageType === 'text') {
+        if (!originalMessageText) {
+            logDebug("文本解释：缺少文本内容", LOG_LEVELS.WARNING);
+            return;
+        }
+        apiUrl = '/ai-explain';
+        requestBody = { text: originalMessageText, model: model };
+        explanationText = `正在通过 ${model} 模型思考中...`;
+    } else if (action === 'custom-prompt' && messageType === 'text') { // 如果需要自定义提示词功能
+        const customPrompt = prompt("请输入您的提示词:");
+        if (!customPrompt || !originalMessageText) {
+            logDebug("自定义提示词：用户取消或缺少文本内容", LOG_LEVELS.INFO);
+            return;
+        }
+        apiUrl = '/ai-explain';
+        requestBody = { text: `${originalMessageText}\n\n${customPrompt}`, model: 'gemini' }; // 默认使用Gemini处理自定义提示
+        explanationText = `正在使用您的自定义提示词通过 Gemini 模型思考中...`;
+    } else {
+        // 未知或不匹配的 AI 动作，或类型不符，直接返回
+        logDebug(`AI操作失败：未知动作或消息类型不匹配。Action: ${action}, Type: ${messageType}`, LOG_LEVELS.WARNING);
+        return;
+    }
+
+    // 在消息下方显示 AI 解释容器
+    const existingExplanation = currentMessageElement.querySelector('.ai-explanation');
+    if (existingExplanation) {
+        existingExplanation.remove();
+    }
+    
+    const explanationEl = document.createElement('div');
+    explanationEl.className = 'ai-explanation';
+    explanationEl.innerHTML = `<p>🤖 ${explanationText}<span class="loading-dots"></span></p>`;
+    currentMessageElement.appendChild(explanationEl);
+
+    try {
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText); // 抛出后端返回的错误信息
+        }
+        
+        const data = await response.json();
+        const explanationContent = data.explanation || data.description; // 兼容两种 AI 响应
+        
+        explanationEl.innerHTML = ''; // 清空加载提示
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'ai-explanation-buttons';
+
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'ai-explanation-close';
+        closeBtn.innerHTML = '×';
+        closeBtn.onclick = () => {
+            explanationEl.remove();
+            logDebug('AI解释已关闭。', LOG_LEVELS.INFO);
+        };
+
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'ai-explanation-copy';
+        copyBtn.innerHTML = '📋';
+        copyBtn.title = '复制内容';
+        copyBtn.onclick = () => {
+            navigator.clipboard.writeText(explanationContent)
+                .then(() => showCopyFeedback('AI解释已复制!'))
+                .catch(err => logDebug(`AI解释复制失败: ${err}`, LOG_LEVELS.ERROR));
+        };
+
+        buttonContainer.appendChild(copyBtn);
+        buttonContainer.appendChild(closeBtn);
+
+        const markdownContainer = document.createElement('div');
+        markdownContainer.className = 'markdown-content';
+        markdownContainer.innerHTML = marked.parse(explanationContent, { gfm: true, breaks: true, sanitize: true });
+        
+        explanationEl.appendChild(buttonContainer);
+        explanationEl.appendChild(markdownContainer);
+        logDebug(`AI解释成功，模型: ${model || '图片描述'}.`, LOG_LEVELS.SUCCESS);
+
+    } catch (error) {
+        logDebug(`请求AI解释失败: ${error.message}`, LOG_LEVELS.ERROR, error);
+        const errorModelName = (action === 'image-describe') ? 'AI图片描述' : (model || '未知AI模型');
+        explanationEl.innerHTML = `<p>😞 抱歉，无法从 ${errorModelName} 获取解释: ${escapeHTML(error.message)}</p>`;
+        setTimeout(() => { if (explanationEl.parentNode) explanationEl.remove(); }, 6000); // 错误信息显示6秒后自动消失
+    }
+});
+
+
 // --- WebRTC Functions ---
 async function initLocalMedia() {
     try {
