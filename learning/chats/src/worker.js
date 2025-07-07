@@ -313,18 +313,32 @@ if (pathname === '/upload' && request.method === 'POST') {
      */
     async scheduled(event, env, ctx) {
         console.log(`[Worker] Cron Trigger firing! Rule: ${event.cron}`);
-        
-        // --- 任务1：发送定时文本消息到 'test' 房间 ---
-        const textTaskRoom = 'test';
-        const textTaskContent = `来自定时任务 (${event.cron}) 的消息：这是发送到 '${textTaskRoom}' 房间的定时消息。`;
-        try {
-            const doId = env.CHAT_ROOM_DO.idFromName(textTaskRoom);
-            const stub = env.CHAT_ROOM_DO.get(doId);
-            ctx.waitUntil(stub.cronPost(textTaskContent, env.CRON_SECRET));
-        } catch (e) { console.error(`CRON ERROR (text):`, e); }
 
-        // --- 任务2：生成图表并发送到 'future' 房间 ---
-        const chartTaskRoom = 'future';
-        ctx.waitUntil(generateAndPostCharts(env, chartTaskRoom));
+        // --- 为文本触发器 (每天上午9点) ---
+        if (event.cron === "0 9 * * *") {
+            console.log("[Worker] Executing daily text task...");
+            const textTaskRoom = 'test';
+            const textTaskContent = `来自定时任务 (${event.cron}) 的消息：这是发送到 '${textTaskRoom}' 房间的定时消息。`;
+            try {
+                const doId = env.CHAT_ROOM_DO.idFromName(textTaskRoom);
+                const stub = env.CHAT_ROOM_DO.get(doId);
+                ctx.waitUntil(stub.cronPost(textTaskContent, env.CRON_SECRET));
+                console.log(`[Worker] Text message sent to room '${textTaskRoom}'.`);
+            } catch (e) {
+                console.error(`CRON ERROR (text task):`, e);
+            }
+        }
+
+        // --- 为图片触发器 (多个时间段整点) ---
+        if (event.cron === "0 9-15,21-3 * * *") {
+            console.log("[Worker] Executing hourly image task...");
+            const chartTaskRoom = 'future';
+            try {
+                ctx.waitUntil(generateAndPostCharts(env, chartTaskRoom));
+                console.log(`[Worker] Charts generated and posted to room '${chartTaskRoom}'.`);
+            } catch (e) {
+                console.error(`CRON ERROR (chart task):`, e);
+            }
+        }
     },
 };
