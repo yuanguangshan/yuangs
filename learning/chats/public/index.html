@@ -1136,7 +1136,7 @@ function isUserActive(lastSeenTimestamp) {
 }
 
 function updateUIFromMessages() {
-    //logDebug('从 allMessages 数组更新UI...', LOG_LEVELS.INFO);
+    logDebug('从 allMessages 数组更新UI...', LOG_LEVELS.INFO);
     const userLastSeen = new Map();
     const userMessageCount = new Map();
     allMessages.forEach(msg => {
@@ -1221,7 +1221,7 @@ function appendChatMessage(msg) {
             logDebug("致命错误：传入的 msg 对象是 null 或 undefined！", 'error');
             return;
         }
-        //logDebug("检查通过，chatWindowEl 和 msg 都存在。准备创建元素...", 'info', { 
+        logDebug("检查通过，chatWindowEl 和 msg 都存在。准备创建元素...", 'info', { 
             chatWindowElId: chatWindowEl.id, 
             messageId: msg.id 
         });
@@ -1267,7 +1267,7 @@ function appendChatMessage(msg) {
         }
             
         msgEl.innerHTML = contentHTML;
-        //logDebug("innerHTML 构建完成，准备 appendChild。", 'info', { htmlLength: msgEl.innerHTML.length });
+        logDebug("innerHTML 构建完成，准备 appendChild。", 'info', { htmlLength: msgEl.innerHTML.length });
         
         // --- 核心修改：为整个消息元素添加右键/长按事件监听 ---
         msgEl.addEventListener('contextmenu', e => {
@@ -1298,6 +1298,7 @@ function appendChatMessage(msg) {
 }
 
 // 在 index.html 的 <script> 中
+
 function showContextMenu(element, x, y) {
     currentMessageElement = element; // 将当前右键点击的消息元素存为全局变量
     
@@ -1340,112 +1341,6 @@ function showContextMenu(element, x, y) {
     
     if (navigator.vibrate) navigator.vibrate(50); // 移动端震动反馈
 }
-// --- Context Menu Actions ---
-copyOption.addEventListener('click', () => {
-    if (currentMessageElement?.dataset.messageText) {
-        navigator.clipboard.writeText(currentMessageElement.dataset.messageText);
-    }
-    contextMenu.style.display = 'none';
-});
-
-deleteOption.addEventListener('click', () => {
-    if (currentMessageElement?.dataset.id && socket?.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: 'delete', payload: { id: currentMessageElement.dataset.id } }));
-    }
-    contextMenu.style.display = 'none';
-});
-
-// 在 index.html 的 <script> 中
-
-contextMenu.addEventListener('click', async (e) => {
-    const clickedOption = e.target;
-    contextMenu.style.display = 'none'; // 无论点击哪个都先关闭菜单
-
-    if (!currentMessageElement) return;
-
-    // --- 处理复制和删除 ---
-    if (clickedOption.id === 'copy-option') {
-        if (currentMessageElement.dataset.messageText) {
-            navigator.clipboard.writeText(currentMessageElement.dataset.messageText)
-                .then(() => showCopyFeedback('已复制到剪贴板!'))
-                .catch(err => logDebug('复制失败', 'error', err));
-        }
-        return;
-    }
-
-// --- 确认/实现删除逻辑 ---
-        if (clickedOption.id === 'delete-option') {
-            if (currentMessageElement.dataset.id && socket?.readyState === WebSocket.OPEN) {
-                const messageId = currentMessageElement.dataset.id;
-                logDebug(`用户请求删除消息: ${messageId}`);
-                
-                // 向后端发送 'delete' 类型的指令
-                socket.send(JSON.stringify({ type: 'delete', payload: { id: messageId } }));
-            }
-            return;
-        }
-
-    // --- 处理AI功能 ---
-    if (clickedOption.matches('.ai-explain-option')) {
-        const action = clickedOption.dataset.action;
-        const model = clickedOption.dataset.ai;
-        let explanationText = "";
-        let requestBody = {};
-        let apiUrl = '';
-
-        if (action === 'image-describe') {
-            if (!currentMessageElement.dataset.imageUrl) return;
-            apiUrl = '/ai-describe-image';
-            requestBody = { imageUrl: currentMessageElement.dataset.imageUrl };
-            explanationText = "正在通过AI模型解读图片...";
-        } else if (action === 'text-explain') {
-            if (!currentMessageElement.dataset.messageText) return;
-            apiUrl = '/ai-explain';
-            requestBody = { text: currentMessageElement.dataset.messageText, model };
-            explanationText = `正在通过 ${model} 模型思考中...`;
-        } else {
-            return;
-        }
-
-        // 如果已有解释，先移除
-        currentMessageElement.querySelector('.ai-explanation')?.remove();
-        
-        const explanationEl = document.createElement('div');
-        explanationEl.className = 'ai-explanation';
-        explanationEl.innerHTML = `<p>🤖 ${explanationText}<span class="loading-dots"></span></p>`;
-        currentMessageElement.appendChild(explanationEl);
-
-        try {
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
-            });
-            if (!response.ok) throw new Error(await response.text());
-            
-            const data = await response.json();
-            const explanation = data.explanation || data.description;
-            
-            explanationEl.innerHTML = `
-                <div class="ai-explanation-buttons">
-                    <button class="ai-explanation-copy" title="复制内容">📋</button>
-                    <button class="ai-explanation-close" title="关闭">×</button>
-                </div>
-                <div class="markdown-content">${marked.parse(explanation)}</div>`;
-
-            explanationEl.querySelector('.ai-explanation-close').onclick = () => explanationEl.remove();
-            explanationEl.querySelector('.ai-explanation-copy').onclick = () => {
-                navigator.clipboard.writeText(explanation)
-                    .then(() => showCopyFeedback('AI解释已复制!'));
-            };
-
-        } catch (error) {
-            logDebug(`AI请求失败: ${error}`, 'error');
-            explanationEl.innerHTML = `<p>😞 抱歉，无法从 ${model} 获取解释。</p>`;
-            setTimeout(() => explanationEl.remove(), 4000);
-        }
-    }
-});
 // --- WebRTC Functions ---
 async function initLocalMedia() {
     try {
