@@ -1613,6 +1613,190 @@ async function sendAudioMessage(audioBlob, mimeType) {
     }
 }
 
+// 优化的历史消息处理函数 - 完整版本
+async function processHistoryMessages(history) {
+    if (!Array.isArray(history) || history.length === 0) {
+        logDebug("历史记录为空或格式不正确", LOG_LEVELS.WARNING);
+        updateUIFromMessages();
+        return;
+    }
+    
+    logDebug(`开始处理 ${history.length} 条历史记录，使用优化的批处理方式`);
+    
+    // 清空现有消息和DOM
+    chatWindowEl.innerHTML = '';
+    allMessages = [];
+    
+    // 过滤无效消息
+    const validHistory = history.filter(msg => msg && msg.id);
+    if (validHistory.length < history.length) {
+        logDebug(`数据清洗：过滤掉了 ${history.length - validHistory.length} 条无效的历史记录。`, LOG_LEVELS.WARNING);
+    }
+    
+    // 设置批量大小和处理状态
+    const batchSize = 15;
+    let processedCount = 0;
+    const totalMessages = validHistory.length;
+    
+    // 预先在内存中准备批次索引
+    const batchIndices = [];
+    for (let i = 0; i < totalMessages; i += batchSize) {
+        batchIndices.push(i);
+    }
+    
+    // 使用requestAnimationFrame的递归处理函数
+    function processNextBatch(batchIndex) {
+        if (batchIndex >= batchIndices.length) {
+            // 所有批次处理完成
+            finalizeBatchProcessing();
+            return;
+        }
+        
+        const startIndex = batchIndices[batchIndex];
+        const endIndex = Math.min(startIndex + batchSize, totalMessages);
+        const currentBatch = validHistory.slice(startIndex, endIndex);
+        
+        // 使用DocumentFragment减少DOM操作
+        const fragment = document.createDocumentFragment();
+        
+        // 处理当前批次的所有消息
+        currentBatch.forEach(msg => {
+            // 检查是否有乐观更新的临时消息，如果有则替换
+            const existingTempMsgIndex = allMessages.findIndex(m => 
+                m.id === msg.id || 
+                (m.id.startsWith('temp-') && 
+                 m.text === msg.text && 
+                 m.username === msg.username && 
+                 m.timestamp + 5000 > msg.timestamp)
+            );
+            
+            if (existingTempMsgIndex > -1) {
+                // 替换内存中的临时消息
+                allMessages[existingTempMsgIndex] = msg;
+                // 如果DOM中已有此元素，需要删除它
+                const tempEl = chatWindowEl.querySelector(`[data-id="${allMessages[existingTempMsgIndex].id}"]`);
+                if (tempEl) tempEl.remove();
+            } else {
+                // 添加新消息到内存数组
+                allMessages.push(msg);
+            }
+            
+            // 创建消息DOM元素并添加到文档片段
+            const msgEl = createMessageElement(msg);
+            if (msgEl) {
+                fragment.appendChild(msgEl);
+            }
+        });
+        
+        // 一次性将整个批次添加到DOM
+        chatWindowEl.appendChild(fragment);
+        
+        // 更新进度计数
+        processedCount += currentBatch.length;
+        
+        // 可选：显示加载进度
+        if (totalMessages > 100) {
+            const progress = Math.round((processedCount / totalMessages) * 100);
+            logDebug(`历史记录加载进度: ${progress}%`);
+        }
+        
+        // 使用requestAnimationFrame安排下一批处理
+        // 如果浏览器繁忙，可以延迟处理下一批
+        if (batchIndex < 5 || processedCount % 50 === 0) {
+            // 前几批和每50条消息后立即处理下一批，确保快速显示部分内容
+            requestAnimationFrame(() => processNextBatch(batchIndex + 1));
+        } else {
+            // 其他批次使用setTimeout增加间隙，减轻主线程负担
+            setTimeout(() => {
+                requestAnimationFrame(() => processNextBatch(batchIndex + 1));
+            }, 20);
+        }
+    }
+    
+    // 处理完所有批次后的最终步骤
+    function finalizeBatchProcessing() {
+        // 更新用户列表UI
+        updateUIFromMessages();
+        
+        // 滚动到底部，使用requestAnimationFrame确保在DOM更新后执行
+        requestAnimationFrame(() => {
+            chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
+            logDebug(`历史记录加载完成，共 ${processedCount} 条消息`, LOG_LEVELS.SUCCESS);
+        });
+    }
+    
+    // 创建单个消息元素的辅助函数
+    function createMessageElement(msg) {
+        try {
+            if (!msg || !msg.id) {
+                logDebug("无效的消息对象", LOG_LEVELS.ERROR, msg);
+                return null;
+            }
+            
+            const msgEl = document.createElement('div');
+            msgEl.className = 'message';
+            
+            // 设置消息数据属性
+            msgEl.dataset.id = msg.id;
+            msgEl.dataset.messageText = msg.caption || msg.text || '';
+            msgEl.dataset.timestamp = msg.timestamp;
+            msgEl.dataset.messageType = msg.type;
+            
+            if (msg.type === 'image') {
+                msgEl.dataset.imageUrl = msg.imageUrl;
+            }
+            
+            if (msg.username === username) msgEl.classList.add('self');
+            
+            // 格式化消息时间戳
+            const messageDate = new Date(msg.timestamp);
+            const now = new Date();
+            const diffSeconds = Math.floor((now - messageDate) / 1000);
+            let displayTime;
+            
+            if (diffSeconds < 60) displayTime = '刚刚';
+            else if (diffSeconds < 3600) displayTime = `${Math.floor(diffSeconds / 60)}分钟前`;
+            else if (diffSeconds < 86400) displayTime = `${Math.floor(diffSeconds / 3600)}小时前`;
+            else displayTime = messageDate.toLocaleString([], { 
+                year: 'numeric', month: 'numeric', day: 'numeric', 
+                hour: '2-digit', minute: '2-digit' 
+            });
+            
+            // 构建消息内容HTML
+            let contentHTML = `<div class="info">
+                <span class="username">${escapeHTML(msg.username)}</span> 
+                <span class="timestamp">${displayTime}</span>
+            </div>`;
+            
+            // 根据消息类型渲染不同内容
+            if (msg.type === 'image') {
+                contentHTML += `<div class="message-image" onclick="showImageModal('${msg.imageUrl}')">
+                    <img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy">
+                </div>`;
+                contentHTML += `<div class="text">${marked.parse(msg.caption || '')}</div>`;
+            } else if (msg.type === 'audio') {
+                contentHTML += `<div class="message-audio">
+                    <audio controls src="${msg.audioUrl}"></audio>
+                </div>`;
+                contentHTML += `<div class="text">${marked.parse(msg.text || '')}</div>`;
+            } else { // 文本消息
+                contentHTML += `<div class="text">${marked.parse(msg.text || '')}</div>`;
+            }
+            
+            msgEl.innerHTML = contentHTML;
+            return msgEl;
+            
+        } catch (e) {
+            logDebug(`创建消息元素出错: ${e.message}`, LOG_LEVELS.ERROR, { 
+                error: e.toString(), stack: e.stack, originalMessage: msg 
+            });
+            return null;
+        }
+    }
+    
+    // 开始处理第一批
+    processNextBatch(0);
+}
 
 // --- WebSocket 事件处理器 (优化版) ---
 function connectWebSocket() {
@@ -1659,73 +1843,16 @@ async function onSocketMessage(event) {
     }
 
     switch (data.type) {
-        case 'welcome': {
-            const history = data.payload?.history;
-            if (Array.isArray(history)) {
-                logDebug(`开始处理 ${history.length} 条历史记录`);
-                
-                // 清空现有消息和DOM
-                chatWindowEl.innerHTML = '';
-                allMessages = [];
-                
-                const batchSize = 15; // 每批处理消息数量
-                const validHistory = history.filter(msg => msg && msg.id); // 过滤无效消息
-                
-                if (validHistory.length < history.length) {
-                    logDebug(`数据清洗：过滤掉了 ${history.length - validHistory.length} 条无效的历史记录。`, LOG_LEVELS.WARNING);
+           case 'welcome': {
+                const history = data.payload?.history;
+                if (Array.isArray(history)) {
+                    // 使用优化的函数处理历史记录
+                    processHistoryMessages(history);
+                } else {
+                    logDebug("收到的欢迎消息中 history 格式不正确或不存在。", LOG_LEVELS.ERROR, data.payload);
                 }
-                
-                // 分批次处理历史消息，避免UI冻结
-                let processedCount = 0;
-                for (let i = 0; i < validHistory.length; i += batchSize) {
-                    const batch = validHistory.slice(i, i + batchSize);
-                    
-                    // 使用setTimeout在主线程空闲时处理每一批
-                    // requestAnimationFrame 也可以，但 setTimeout(0) 更能确保批处理任务的公平调度
-                    setTimeout(() => {
-                        const fragment = document.createDocumentFragment();
-                        batch.forEach(msg => {
-                            // 检查是否有乐观更新的临时消息，如果有则替换
-                            const existingTempMsgIndex = allMessages.findIndex(m => m.id === msg.id);
-                            if (msg.id.startsWith('temp-') && existingTempMsgIndex > -1) {
-                                // 这是一个乐观消息的回响，替换它
-                                allMessages[existingTempMsgIndex] = msg;
-                                const tempEl = chatWindowEl.querySelector(`[data-id="${msg.id}"]`);
-                                if (tempEl) tempEl.remove(); // 移除旧的临时DOM
-                                // 然后重新添加正确的消息
-                                appendChatMessage(msg);
-                            } else {
-                                // 正常添加新消息
-                                allMessages.push(msg);
-                                appendChatMessage(msg);
-                            }
-                        });
-                        
-                        processedCount += batch.length;
-                        // 只在所有批次处理完后更新UI和滚动
-                        if (processedCount >= validHistory.length) {
-                            updateUIFromMessages();
-                            requestAnimationFrame(() => { // 确保滚动在DOM更新后
-                                chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
-                            });
-                            logDebug(`历史记录加载完成，共 ${validHistory.length} 条消息`, LOG_LEVELS.SUCCESS);
-                        }
-                    }, 0); // 尽可能快地调度，但不阻塞主线程
-                }
-                // 如果没有历史消息，也要确保UI更新和滚动
-                if (validHistory.length === 0) {
-                    updateUIFromMessages();
-                    requestAnimationFrame(() => {
-                        chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
-                    });
-                    logDebug(`历史记录加载完成，共 0 条消息`, LOG_LEVELS.SUCCESS);
-                }
-
-            } else {
-                logDebug("收到的欢迎消息中 history 格式不正确或不存在。", LOG_LEVELS.ERROR, data.payload);
+                break;
             }
-            break;
-        }
         case 'chat': {
             const newMessage = data.payload;
             if (newMessage && newMessage.id) {
