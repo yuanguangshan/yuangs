@@ -26,7 +26,7 @@ const CRON_TRIGGERS = {
  */
 async function executeTextTask(env, ctx) {
     const roomName = 'test'; // 目标房间
-    const prompt = '你是deepseek小助于，每天自动向用户问好，并且每次附上一句名人名言，及每日一句精典英文句子，并仔细分析名言和英文句子的意思及衍生意义，帮助用户提升自我，最后鼓励用户好好工作，好好学习，好好生活。';
+    const prompt = '你是deepseek小助手，每天自动向用户问好，并且每次附上一句名人名言，及每日一句精典英文句子，并仔细分析名言和英文句子的意思及衍生意义，帮助用户提升自我，最后鼓励用户好好工作，好好学习，好好生活。';
     
     console.log(`[Cron Task] Executing daily text task for room: ${roomName}`);
     try {
