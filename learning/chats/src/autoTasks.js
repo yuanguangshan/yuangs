@@ -9,7 +9,7 @@ import { generateAndPostCharts } from './chart_generator.js';
  */
 const CRON_TRIGGERS = {
     // 假设每天早上8点发送文本消息 (注意：这里的时间可以自定义)
-    DAILY_TEXT_MESSAGE: "*/10 2-7 * * *",
+    DAILY_TEXT_MESSAGE: "*/10 2-10 * * *",
     // 盘中和夜盘时段，每小时整点生成图表
     HOURLY_CHART_GENERATION:   "*/15 17-23,2-7 * * 1-5" // 周一到周五的指定小时
 };

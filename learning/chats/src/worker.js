@@ -18,7 +18,7 @@ globalThis.global = globalThis;
 
 import { HibernatingChatRoom } from './chatroom_do.js';
 import html from '../public/index.html';
-import { generateAndPostCharts } from './chart_generator.js';
+// import { generateAndPostCharts } from './chart_generator.js';
 import { taskMap } from './autoTasks.js';
 
 // 导出Durable Object类，以便Cloudflare平台能够识别和实例化它。
