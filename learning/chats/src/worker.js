@@ -251,14 +251,9 @@ const taskMap = new Map([
 
 
 // --- 主Worker入口点 ---
-export default {
-    /**
-     * 处理所有传入的HTTP请求。
-     */// 文件: src/worker.js
+// 在 worker.js 的 fetch 函数中
 
-    /**
-     * 处理所有传入的HTTP请求。
-     */
+export default {
     async fetch(request, env, ctx) {
         try {
             if (request.method === 'OPTIONS') {
@@ -269,68 +264,64 @@ export default {
             const pathname = url.pathname;
 
             // --- 路由 1: 全局独立API (不需转发) ---
-            if (pathname === '/upload' || pathname === '/ai-explain' || pathname === '/ai-describe-image') {
-                if (pathname === '/upload') {
-                    if (!env.R2_BUCKET) return new Response('Server config error: R2_BUCKET not bound.', { status: 500 });
-                    const filename = request.headers.get('X-Filename') || `upload-${Date.now()}`;
-                    const object = await env.R2_BUCKET.put(filename, request.body, { httpMetadata: request.headers });
-                    const publicUrl = `https://pub-8dfbdda6df204465aae771b4c080140b.r2.dev/${object.key}`;
-                    return new Response(JSON.stringify({ url: publicUrl }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+            
+            // 将所有全局API的判断合并到一个if/else if结构中
+            if (pathname === '/upload') {
+                // --- ✨ 这是唯一且正确的 /upload 处理逻辑 ✨ ---
+                // (基于您提供的“改进版”代码，并修正了key的使用)
+                if (request.method !== 'POST') {
+                    return new Response('Method Not Allowed', { status: 405, headers: corsHeaders });
                 }
-                if (pathname === '/ai-explain') {
-                    const { text, model = 'gemini' } = await request.json();
-                    if (!text) return new Response('Missing "text"', { status: 400, headers: corsHeaders });
-                    const explanation = model === 'gemini' ? await getGeminiExplanation(text, env) : await getDeepSeekExplanation(text, env);
-                    return new Response(JSON.stringify({ explanation }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
-                }
-                if (pathname === '/ai-describe-image') {
-                    const { imageUrl } = await request.json();
-                    if (!imageUrl) return new Response('Missing "imageUrl"', { status: 400, headers: corsHeaders });
-                    const description = await getGeminiImageDescription(imageUrl, env);
-                    return new Response(JSON.stringify({ description }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
-                }
-                // 【关键】文件上传API
-              // In worker.js, improve the file upload handler:
+                try {
+                    if (!env.R2_BUCKET) {
+                        throw new Error('Server config error: R2_BUCKET not bound.');
+                    }
+                    
+                    const filenameHeader = request.headers.get('X-Filename');
+                    if (!filenameHeader) {
+                        throw new Error('Missing X-Filename header');
+                    }
+                    
+                    const filename = decodeURIComponent(filenameHeader);
+                    const contentType = request.headers.get('Content-Type') || 'application/octet-stream';
+                    
+                    // 正确生成包含目录的、唯一的R2对象Key
+                    const r2ObjectKey = `chats/${Date.now()}-${crypto.randomUUID().substring(0, 8)}-${filename}`;
+                    
+                    // 使用正确的key上传到R2
+                    const object = await env.R2_BUCKET.put(r2ObjectKey, request.body, {
+                         httpMetadata: { contentType: contentType },
+                    });
+                    
+                    // 生成与存储路径完全匹配的公开URL
+                    const r2PublicDomain = "pub-8dfbdda6df204465aae771b4c080140b.r2.dev";
+                    const publicUrl = `https://${r2PublicDomain}/${object.key}`; // object.key 现在是 "chats/..."
+                    
+                    return new Response(JSON.stringify({ url: publicUrl }), {
+                        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+                    });
 
-if (pathname === '/upload' && request.method === 'POST') {
-    try {
-        if (!env.R2_BUCKET) {
-            throw new Error('Server config error: R2_BUCKET not bound.');
-        }
-        
-        // Get and decode the filename from header
-        const filenameHeader = request.headers.get('X-Filename');
-        if (!filenameHeader) {
-            throw new Error('Missing X-Filename header');
-        }
-        
-        const filename = decodeURIComponent(filenameHeader);
-        const contentType = request.headers.get('Content-Type') || 'application/octet-stream';
-        
-        // Generate a unique key for the file to avoid name conflicts
-        const fileKey = `${Date.now()}-${crypto.randomUUID().substring(0, 8)}-${filename}`;
-        
-        // Upload to R2 with proper content type
-        const object = await env.R2_BUCKET.put(filename, request.body, {
-             httpMetadata: { contentType: request.headers.get('Content-Type') || 'application/octet-stream' },
-        });
-        
-        // --- 核心修正：硬编码为 HTTPS ---
-        // 移除不确定的 new URL(request.url).origin
-        const r2PublicDomain = "pub-8dfbdda6df204465aae771b4c080140b.r2.dev";
-        const publicUrl = `https://${r2PublicDomain}/${object.key}`;
-        
-        return new Response(JSON.stringify({ url: publicUrl }), {
-            headers: { 'Content-Type': 'application/json', ...corsHeaders },
-        });
-    } catch (error) {
-        console.error('R2 Upload error:', error.stack || error);
-        return new Response(`Error uploading file: ${error.message}`, { 
-            status: 500, 
-            headers: corsHeaders 
-        });
-    }
-}
+                } catch (error) {
+                    console.error('R2 Upload error:', error.stack || error);
+                    return new Response(`Error uploading file: ${error.message}`, { 
+                        status: 500, 
+                        headers: corsHeaders 
+                    });
+                }
+
+            } else if (pathname === '/ai-explain') {
+                // ... /ai-explain 的逻辑 ...
+                const { text, model = 'gemini' } = await request.json();
+                if (!text) return new Response('Missing "text"', { status: 400, headers: corsHeaders });
+                const explanation = model === 'gemini' ? await getGeminiExplanation(text, env) : await getDeepSeekExplanation(text, env);
+                return new Response(JSON.stringify({ explanation }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+
+            } else if (pathname === '/ai-describe-image') {
+                // ... /ai-describe-image 的逻辑 ...
+                const { imageUrl } = await request.json();
+                if (!imageUrl) return new Response('Missing "imageUrl"', { status: 400, headers: corsHeaders });
+                const description = await getGeminiImageDescription(imageUrl, env);
+                return new Response(JSON.stringify({ description }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
             }
 
             // --- 路由 2: 需要转发给 DO 的 API ---
