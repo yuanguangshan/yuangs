@@ -19,6 +19,8 @@ globalThis.global = globalThis;
 import { HibernatingChatRoom } from './chatroom_do.js';
 import html from '../public/index.html';
 import { generateAndPostCharts } from './chart_generator.js';
+import { taskMap } from './autoTasks.js';
+import { getDeepSeekExplanation, getGeminiExplanation, getGeminiImageDescription } from './ai.js';
 
 // 导出Durable Object类，以便Cloudflare平台能够识别和实例化它。
 export { HibernatingChatRoom };
@@ -47,107 +49,7 @@ function handleOptions(request) {
     }
 }
 
-// --- AI Service Functions (Modularized) ---
-
-/**
- * 调用 DeepSeek API 获取文本解释。
- */
-async function getDeepSeekExplanation(text, env) {
-    const apiKey = env.DEEPSEEK_API_KEY;
-    if (!apiKey) throw new Error('Server config error: DEEPSEEK_API_KEY is not set.');
-
-    const response = await fetch("https://api.deepseek.com/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-        body: JSON.stringify({
-            model: "deepseek-chat",
-            messages: [{ role: "system", content: "你是一个有用的，善于用简洁的markdown语言来解释下面的文本." }, { role: "user", content: `你是一位非常耐心的小学老师，专门给小学生讲解新知识。  我是一名小学三年级学生，我特别渴望弄明白事物的含义。  请你用精准、详细的语言解释（Markdown 格式）：1. 用通俗易懂的语言解释下面这段文字。2. 给出关键概念的定义。3. 用生活中的比喻或小故事帮助理解。4. 举一个具体例子，并示范“举一反三”的思考方法。5. 最后用一至两个问题来引导我延伸思考。:\n\n${text}` }]
-        })
-    });
-    if (!response.ok) throw new Error(`DeepSeek API error: ${await response.text()}`);
-    const data = await response.json();
-    const explanation = data?.choices?.[0]?.message?.content;
-    if (!explanation) throw new Error('Unexpected AI response format from DeepSeek.');
-    return explanation;
-}
-
-/**
- * 调用 Google Gemini API 获取文本解释。
- */
-async function getGeminiExplanation(text, env) {
-    const apiKey = env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error('Server config error: GEMINI_API_KEY is not set.');
-    
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`;
-    const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            contents: [{ parts: [{ text: `你是一位非常耐心的小学老师，专门给小学生讲解新知识。  我是一名小学三年级学生，我特别渴望弄明白事物的含义。  请你用精准、详细的语言解释（Markdown 格式）：1. 用通俗易懂的语言解释下面这段文字。2. 给出关键概念的定义。3. 用生活中的比喻或小故事帮助理解。4. 举一个具体例子，并示范“举一反三”的思考方法。5. 最后用一至两个问题来引导我延伸思考。：:\n\n${text}` }] }]
-        })
-    });
-    if (!response.ok) throw new Error(`Gemini API error: ${await response.text()}`);
-    const data = await response.json();
-    const explanation = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!explanation) throw new Error('Unexpected AI response format from Gemini.');
-    return explanation;
-}
-
-/**
- * 从URL获取图片并转换为Base64编码。
- */
-/**
- * 【修正版】从URL获取图片并高效地转换为Base64编码。
- */
-async function fetchImageAsBase64(imageUrl) {
-    const response = await fetch(imageUrl);
-    if (!response.ok) {
-        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
-    }
-    const contentType = response.headers.get('content-type') || 'image/jpeg';
-    const buffer = await response.arrayBuffer();
-
-    // --- 核心修正：使用更健壮和高效的编码方法 ---
-    // 将 ArrayBuffer 转换为一个由十六进制字符组成的字符串
-    const hex = [...new Uint8Array(buffer)]
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
-
-    // 将十六进制字符串解码为普通的ASCII字符串，然后进行btoa编码
-    // 这种方法避免了 String.fromCharCode 的调用栈限制
-    let binary = '';
-    for (let i = 0; i < hex.length; i += 2) {
-        binary += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
-    }
-    const base64 = btoa(binary);
-    
-    return { base64, contentType };
-}
-
-/**
- * 调用 Google Gemini API 获取图片描述。
- */
-async function getGeminiImageDescription(imageUrl, env) {
-    const apiKey = env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error('Server config error: GEMINI_API_KEY is not set.');
-
-    const { base64, contentType } = await fetchImageAsBase64(imageUrl);
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`;
-    const prompt = "请仔细描述图片的内容，如果图片中识别出有文字，则在回复的内容中返回这些文字，并且这些文字支持复制，之后是对文字的仔细描述，格式为：图片中包含文字：{文字内容}；图片的描述：{图片描述}";
-
-    const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: contentType, data: base64 } }] }]
-        })
-    });
-    if (!response.ok) throw new Error(`Gemini Vision API error: ${await response.text()}`);
-    const data = await response.json();
-    const description = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!description) throw new Error('Unexpected AI response format from Gemini Vision.');
-    return description;
-}
+// --- AI Service Functions are now in src/ai.js ---
 // 文件: src/worker.js
 
 /**
@@ -178,76 +80,6 @@ async function sendAutoPost(env, roomName, text, ctx) {
 }
 
 
-// ===================================================================
-//  ✨ 定时任务 (Cron Jobs) 重构区域 ✨
-// ===================================================================
-
-/**
- * 1. 定义 Cron 表达式常量
- *    与 wrangler.toml 中的 [triggers].crons 保持一致
- */
-const CRON_TRIGGERS = {
-    // 假设每天早上8点发送文本消息 (注意：这里的时间可以自定义)
-    DAILY_TEXT_MESSAGE: "*/10 2-7 * * *",
-    // 盘中和夜盘时段，每小时整点生成图表
-    HOURLY_CHART_GENERATION:   "*/15 17-23,2-7 * * 1-5" // 周一到周五的指定小时
-};
-
-/**
- * 2. 定义独立的任务执行函数
- */
-
-/**
- * 任务：发送每日文本消息
- * @param {object} env - 环境变量
- * @param {object} ctx - 执行上下文
- */
-async function executeTextTask(env, ctx) {
-    const roomName = 'test'; // 目标房间
-    const content = `[每日播报] 早上好！现在是北京时间 ${new Date(Date.now() + 8 * 3600 * 1000).toLocaleTimeString('zh-CN')}。`;
-    
-    console.log(`[Cron Task] Executing daily text task for room: ${roomName}`);
-    try {
-        if (!env.CHAT_ROOM_DO) throw new Error("Durable Object 'CHAT_ROOM_DO' is not bound.");
-        
-        const doId = env.CHAT_ROOM_DO.idFromName(roomName);
-        const stub = env.CHAT_ROOM_DO.get(doId);
-        
-        // 使用 RPC 调用 DO 的方法
-        ctx.waitUntil(stub.cronPost(content, env.CRON_SECRET));
-        
-        console.log(`[Cron Task] Successfully dispatched text message to room: ${roomName}`);
-    } catch (error) {
-        console.error(`CRON ERROR (text task):`, error.stack || error);
-    }
-}
-
-/**
- * 任务：生成并发布图表
- * @param {object} env - 环境变量
- * @param {object} ctx - 执行上下文
- */
-async function executeChartTask(env, ctx) {
-    const roomName = 'future'; // 目标房间
-    
-    console.log(`[Cron Task] Executing chart generation task for room: ${roomName}`);
-    try {
-        // generateAndPostCharts 是一个重量级操作，适合用 waitUntil 在后台执行
-        ctx.waitUntil(generateAndPostCharts(env, roomName));
-        
-        console.log(`[Cron Task] Chart generation process dispatched for room: ${roomName}`);
-    } catch (error) {
-        console.error(`CRON ERROR (chart task):`, error.stack || error);
-    }
-}
-
-/**
- * 3. 创建 Cron 表达式到任务函数的映射
- */
-const taskMap = new Map([
-    [CRON_TRIGGERS.DAILY_TEXT_MESSAGE, executeTextTask],
-    [CRON_TRIGGERS.HOURLY_CHART_GENERATION, executeChartTask]
-]);
 
 
 // --- 主Worker入口点 ---
@@ -313,7 +145,14 @@ export default {
                 // ... /ai-explain 的逻辑 ...
                 const { text, model = 'gemini' } = await request.json();
                 if (!text) return new Response('Missing "text"', { status: 400, headers: corsHeaders });
-                const explanation = model === 'gemini' ? await getGeminiExplanation(text, env) : await getDeepSeekExplanation(text, env);
+
+                // 修正：移除硬编码的prompt，直接使用传入的text
+                const fullPrompt = `你是一位非常耐心的小学老师，专门给小学生讲解新知识。  我是一名小学三年级学生，我特别渴望弄明白事物的含义。  请你用精准、详细的语言解释（Markdown 格式）：1. 用通俗易懂的语言解释下面这段文字。2. 给出关键概念的定义。3. 用生活中的比喻或小故事帮助理解。4. 举一个具体例子，并示范“举一反三”的思考方法。5. 最后用一至两个问题来引导我延伸思考。:\n\n${text}`;
+                
+                const explanation = model === 'gemini' 
+                    ? await getGeminiExplanation(fullPrompt, env) 
+                    : await getDeepSeekExplanation(fullPrompt, env);
+
                 return new Response(JSON.stringify({ explanation }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
 
             } else if (pathname === '/ai-describe-image') {
@@ -393,5 +232,3 @@ export default {
         }
     },
 };
-
-    

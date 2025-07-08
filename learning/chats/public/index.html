@@ -586,6 +586,7 @@
             background: rgba(255,255,255,0.1);
             border: none;
             border-radius: 4px;
+            margin-right: 8px; 
             color: white;
             width: 24px;
             height: 24px;
@@ -2010,7 +2011,7 @@ function onSocketOpen() {
     logDebug('WebSocket连接已建立', LOG_LEVELS.SUCCESS);
     // 启动用户列表定时更新（如果之前没有）
     if (!window.userListInterval) {
-        window.userListInterval = setInterval(updateUIFromMessages, 30000); // 30秒更新一次用户列表
+        window.userListInterval = setInterval(updateUIFromMessages, 600000); // 10分钟更新一次用户列表
     }
 }
 
@@ -2048,21 +2049,23 @@ async function onSocketMessage(event) {
                 }
                 break;
             }
-        case 'chat': {
-            const newMessage = data.payload;
-            if (newMessage && newMessage.id) {
-                // `appendChatMessage` 现在会处理替换或添加逻辑，并触发渲染
-                appendChatMessage(newMessage);
-                // 使用节流函数减少UI更新频率
-                throttledUpdateUI();
-            } else {
-                logDebug("收到一条无效的聊天消息，已忽略。", LOG_LEVELS.ERROR, newMessage);
-            }
-            break;
+      
+// onSocketMessage 中 case 'chat' 的简化版
+case 'chat': {
+    const newMessage = data.payload;
+    if (newMessage && newMessage.id) {
+        // 如果不使用乐观更新，只需确保不重复添加即可
+        if (!allMessages.some(m => m.id === newMessage.id)) {
+            allMessages.push(newMessage);
+            appendChatMessage(newMessage);
+            throttledUpdateUI();
+        }
+    }
+    break;
         }
         case 'user_join':
         case 'user_leave':
-            logDebug(`系统消息: ${data.payload.username} ${data.type === 'user_join' ? '加入了' : '离开了'}`, LOG_LEVELS.INFO, data.payload);
+            logDebug(`前端消息: ${data.payload.username} ${data.type === 'user_join' ? '加入了' : '离开了'}`, LOG_LEVELS.INFO, data.payload);
             // 延迟更新UI以避免频繁更新，使用节流函数
             throttledUpdateUI(); 
             break;
@@ -2281,13 +2284,7 @@ function initializeChat() {
             connectWebSocket();
         }
     }, 30000); // 每30秒检查一次
-    
-    // 添加窗口关闭事件监听，用于发送优雅退出消息
-    window.addEventListener('beforeunload', () => {
-        if (socket?.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ type: 'user_leave' }));
-        }
-    });
+
 
     // --- 核心UI事件监听器 (只绑定一次) ---
     sidebarToggle.addEventListener('click', () => {
