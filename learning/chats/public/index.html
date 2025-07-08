@@ -35,7 +35,7 @@
       if (e.type==='touchend') e.preventDefault();
       const ac = new AudioCtx();
       if (ac.state==='suspended') ac.resume();
-      new Audio("data:audio/mp3;base64,SUQz…").play().catch(()=>{});
+      new Audio("data:audio/mp3;base64,SUQz...").play().catch(()=>{}); // 这里的音频数据应该是一个完整的Base64编码MP3数据
       document.body.removeEventListener('click', unlockAudioContext);
       document.body.removeEventListener('touchend', unlockAudioContext);
     }
@@ -235,24 +235,13 @@
             -webkit-overflow-scrolling: touch; /* 关键: 使iOS设备上的滚动更流畅 */
             overscroll-behavior: contain; /* 确保滚动行为被包含 */
             touch-action: pan-y; /* 明确启用垂直平移 */
-            position: relative; /* 确保正确定位 */
+            /* 移除了虚拟滚动相关的 flex 布局和 order 属性 */
         }
         #chat-window::-webkit-scrollbar { width: 4px; }
         #chat-window::-webkit-scrollbar-track { background: transparent; }
         #chat-window::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
         #chat-window::-webkit-scrollbar-thumb:hover { background: #999; }
-        /* 虚拟滚动填充元素 */
-        .virtual-scroll-spacer {
-            flex-shrink: 0; /* 不会被压缩 */
-            width: 100%;
-        }
-        .virtual-scroll-spacer.top { order: 1; } /* 顶部填充在最前面 */
-        .virtual-scroll-spacer.bottom { order: 3; } /* 底部填充在最后面 */
-        .message-container-wrapper {
-            order: 2; /* 实际消息容器在中间 */
-            width: 100%;
-            position: relative; /* 消息相对这个容器定位 */
-        }
+        /* 虚拟滚动相关的填充元素样式不再需要 */
 
 
         /* --- MESSAGE STYLES --- */
@@ -343,7 +332,7 @@
         .preview-remove:hover { background: #c0392b; }
         .uploading { opacity: 0.6; pointer-events: none; }
         .upload-progress { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(102, 126, 234, 0.9); color: white; padding: 8px 12px; border-radius: 8px; font-size: 0.8em; font-weight: 500; }
-        #send-button { padding: 10px 20px; border: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 22px; cursor: pointer; font-size: 0.9em; font-weight: 600; transition: all 0.3s ease; box-shadow: 0 3px 12px rgba(102, 126, 234, 0.3); min-width: 70px; }
+        #send-button { padding: 10px 20px; border: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 22px; cursor; font-size: 0.9em; font-weight: 600; transition: all 0.3s ease; box-shadow: 0 3px 12px rgba(102, 126, 234, 0.3); min-width: 70px; }
         #send-button:hover { transform: translateY(-1px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); }
         #send-button:active { transform: translateY(0); }
         #send-button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
@@ -722,7 +711,7 @@
     <ul>
         <li class="ai-explain-option" data-ai="gemini" data-action="text-explain">问Gemini</li>
         <li class="ai-explain-option" data-ai="deepseek" data-action="text-explain">DeepSeek</li>
-        <li class="ai-explain-option" data-ai="gemini" data-action="image-describe">问Gemini (图片)</li>
+        <li class="ai-explain-option" data-ai="gemini" data-action="image-describe">Gemini读图</li>
         <li id="copy-option">📝 复 制</li>
         <li id="delete-option">❌ 删 除</li>
     </ul>
@@ -773,14 +762,13 @@ const appNotification = document.getElementById('app-notification'); // New noti
 
 // --- 全局状态变量 ---
 let allMessages = []; // 存储所有消息数据
-let messageIdSet = new Set(); // ✨ 新增：用于快速去重
-let messageQueue = []; // ✨ 新增：消息队列，用于批量处理新消息
-let rafScheduled = false; // ✨ 新增：requestAnimationFrame 调度标志
-const MESSAGE_BATCH_SIZE = 5; // ✨ 新增：批量处理消息的最小数量
-const MESSAGE_BATCH_DEBOUNCE_MS = 50; // ✨ 新增：批量处理消息的防抖时间
+let messageIdSet = new Set(); // 用于快速去重
+let messageQueue = []; // 消息队列，用于批量处理新消息
+let rafScheduled = false; // requestAnimationFrame 调度标志
+let messageProcessTimeoutId = null; // 用于 appendChatMessage 的防抖定时器ID
+const MESSAGE_BATCH_DEBOUNCE_MS = 50; // 批量处理消息的防抖时间 (保持批处理，即便人数少，也能让UI更流畅)
 
-let isVirtualScrollInitialized = false; // 标志位，跟踪虚拟滚动是否准备就绪
-let historicalMessagesLoading = false; // ✨ 新增：标志位，表示历史消息是否正在加载
+let historicalMessagesLoading = false; // 标志位，表示历史消息是否正在加载
 
 let selectedFile = null;
 let mediaRecorder;
@@ -810,6 +798,7 @@ const pathParts = window.location.pathname.split('/');
 const roomName = pathParts.find(p => p.trim()) || 'general';
 
 
+// --- 工具函数 ---
 function escapeHTML(str) {
     if (typeof str !== 'string') return '';
     const map = {
@@ -830,7 +819,7 @@ function formatFileSize(bytes) {
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }
 
-// 节流函数
+// 节流函数 (继续保留，通用实用)
 function throttle(func, delay) {
     let timeoutId;
     let lastArgs;
@@ -852,9 +841,8 @@ function throttle(func, delay) {
 }
 
 
-// --- 调试日志系统 (优化版) ---
+// --- 调试日志系统 (保持不变) ---
 function logDebug(message, level = LOG_LEVELS.INFO, data = null) {
-    // 总是记录到控制台，这对调试很重要
     const consoleMethod = level === LOG_LEVELS.ERROR ? 'error' : 
                           level === LOG_LEVELS.WARNING ? 'warn' : 'log';
     
@@ -864,10 +852,8 @@ function logDebug(message, level = LOG_LEVELS.INFO, data = null) {
         console[consoleMethod](`[${level.toUpperCase()}] ${message}`);
     }
     
-    // 如果调试日志被禁用或容器不存在，就不进行DOM操作
     if (!isDebugEnabled || !debugLogContent) return;
     
-    // 使用DocumentFragment减少DOM操作
     const fragment = document.createDocumentFragment();
     const timestamp = new Date().toLocaleTimeString();
     const logEntry = document.createElement('div');
@@ -876,11 +862,9 @@ function logDebug(message, level = LOG_LEVELS.INFO, data = null) {
     let messageHTML = `<span class="log-timestamp">[${timestamp}]</span> <span>${message}</span>`;
     
     if (data) {
-        // 对于大型数据，限制显示长度
         let dataString;
         try {
             if (typeof data === 'object' && data !== null) {
-                // 限制数据大小，避免JSON.stringify占用过多资源
                 const limitedData = JSON.parse(JSON.stringify(data, (k, v) => {
                     if (typeof v === 'string' && v.length > 500) {
                         return v.substring(0, 500) + '... [截断]';
@@ -906,12 +890,10 @@ function logDebug(message, level = LOG_LEVELS.INFO, data = null) {
     fragment.appendChild(logEntry);
     debugLogContent.appendChild(fragment);
     
-    // 保持日志条目数量在限制范围内
     while (debugLogContent.children.length > MAX_LOG_ENTRIES) {
         debugLogContent.removeChild(debugLogContent.firstChild);
     }
     
-    // 使用requestAnimationFrame优化滚动操作
     requestAnimationFrame(() => {
         debugLogContent.scrollTop = debugLogContent.scrollHeight;
     });
@@ -920,10 +902,13 @@ function logDebug(message, level = LOG_LEVELS.INFO, data = null) {
 function initDebugLog() {
     if (clearLogsBtn) clearLogsBtn.addEventListener('click', clearLogs);
     if (copyLogsBtn) copyLogsBtn.addEventListener('click', copyLogs);
-    if (toggleLogsBtn) toggleLogsBtn.addEventListener('click', toggleLogsDisplay); // 绑定到新的切换函数
+    if (toggleLogsBtn) toggleLogsBtn.addEventListener('click', toggleLogsDisplay);
     logDebug('调试日志系统初始化完成', LOG_LEVELS.SUCCESS);
     logDebug(`当前用户: ${username}`, LOG_LEVELS.INFO);
     logDebug(`当前房间: ${roomName}`, LOG_LEVELS.INFO);
+    if (debugLogContent) {
+        debugLogContent.style.display = isDebugEnabled ? '' : 'none';
+    }
 }
 
 function clearLogs() {
@@ -934,21 +919,19 @@ function clearLogs() {
 function copyLogs() {
     const logText = Array.from(debugLogContent.children).map(entry => entry.textContent).join('\n');
     navigator.clipboard.writeText(logText).then(() => {
-        showAppNotification('日志已复制到剪贴板'); // Changed from showCopyFeedback
+        showAppNotification('日志已复制到剪贴板');
         logDebug('日志已复制到剪贴板', LOG_LEVELS.SUCCESS);
     }).catch(err => logDebug(`复制失败: ${err}`, LOG_LEVELS.ERROR));
 }
 
-// 新增：切换调试日志在DOM中的显示状态
 function toggleLogsDisplay() {
-    isDebugEnabled = !isDebugEnabled; // 切换全局标志
+    isDebugEnabled = !isDebugEnabled;
     if (debugLogContent) {
         debugLogContent.style.display = isDebugEnabled ? '' : 'none';
     }
     logDebug(`调试日志显示已${isDebugEnabled ? '开启' : '隐藏'}`, LOG_LEVELS.INFO);
 }
 
-// ✨ 优化后的通用通知函数
 function showAppNotification(message, duration = 2000, isError = false) {
     if (!appNotification) return;
 
@@ -961,10 +944,8 @@ function showAppNotification(message, duration = 2000, isError = false) {
 
 
 // --- UI 渲染和更新逻辑 ---
-// 创建一个节流版本的updateUIFromMessages函数，限制更新频率
-const throttledUpdateUI = throttle(updateUIFromMessages, 1000); // 1秒内最多更新一次UI
+const throttledUpdateUI = throttle(updateUIFromMessages, 1000); 
 
-// 判断用户是否活跃的辅助函数
 function isUserActive(lastSeenTimestamp) {
     if (!lastSeenTimestamp) return false;
     const fiveMinutesInMs = 5 * 60 * 1000;
@@ -972,19 +953,17 @@ function isUserActive(lastSeenTimestamp) {
     return new Date(lastSeenTimestamp).getTime() > fiveMinutesAgo;
 }
 
-// 优化 updateUIFromMessages 函数，使其不再频繁地重置 innerHTML
+// 优化 updateUIFromMessages 函数 (保持DOM协调策略，因为这是好的实践)
 function updateUIFromMessages() {
-    // logDebug('正在从 allMessages 数组更新UI界面 (优化版)...', LOG_LEVELS.INFO); // 避免过于频繁的日志
-
-    const currentUserStates = new Map(); // { username: { lastSeen, messageCount, isActive } }
+    const currentUserStates = new Map(); 
     const activeUsersSet = new Set();
 
-    // 只处理最近的500条消息来提高性能 (与后端同步)
+    // 只处理最近的500条消息
     const recentMessages = allMessages.slice(-500); 
     
     recentMessages.forEach(msg => {
         const { username, timestamp } = msg;
-        if (!username) return; // 跳过无效用户
+        if (!username) return; 
 
         const currentState = currentUserStates.get(username) || { lastSeen: 0, messageCount: 0 };
         currentState.lastSeen = Math.max(currentState.lastSeen, timestamp);
@@ -992,7 +971,6 @@ function updateUIFromMessages() {
         currentUserStates.set(username, currentState);
     });
 
-    // 确定活跃用户和更新活跃状态
     currentUserStates.forEach((state, username) => {
         state.isActive = isUserActive(state.lastSeen);
         if (state.isActive) {
@@ -1002,34 +980,38 @@ function updateUIFromMessages() {
 
     const sortedActiveUsernames = Array.from(activeUsersSet).sort((a, b) => a.localeCompare(b));
 
-    // --- 更新用户昵称列表 (`#user-names`) 和菜单 (`#users-menu-list`) ---
     const userNamesEl = document.getElementById('user-names');
     const menuListEl = document.getElementById('users-menu-list');
 
-    // 移除已离开的用户：遍历当前DOM中的用户，如果不在活跃列表中，就移除
+    const currentUserItems = new Map(); 
     Array.from(userNamesEl.children).forEach(el => {
-        const name = el.dataset.username; // 获取存储在 dataset 中的用户名
-        if (name && !activeUsersSet.has(name)) {
-            el.remove();
-            menuListEl.querySelector(`li[data-username="${escapeHTML(name)}"]`)?.remove();
-        }
+        if (el.dataset.username) currentUserItems.set(el.dataset.username, el);
+    });
+    const currentMenuItems = new Map();
+    Array.from(menuListEl.children).forEach(el => {
+        if (el.dataset.username) currentMenuItems.set(el.dataset.username, el);
     });
 
-    // 添加新用户和更新现有用户：遍历活跃列表
+    const newUserItems = []; 
+    const newMenuItems = [];
+
     sortedActiveUsernames.forEach(name => {
         const safeName = escapeHTML(name);
-        // 如果DOM中不存在该用户，则创建并添加
-        if (!userNamesEl.querySelector(`.user-item[data-username="${safeName}"]`)) {
-            // 添加到侧边栏用户列表
-            const userItem = document.createElement('div');
+        
+        let userItem = currentUserItems.get(name);
+        if (!userItem) {
+            userItem = document.createElement('div');
             userItem.className = 'user-item';
+            userItem.dataset.username = name;
             userItem.textContent = safeName;
-            userItem.dataset.username = safeName; // 存储用户名便于查找和删除
-            userNamesEl.appendChild(userItem); // 直接append，浏览器会优化少量DOM操作
+        }
+        newUserItems.push(userItem);
+        currentUserItems.delete(name); 
 
-            // 添加到头部菜单列表
-            const menuItem = document.createElement('li');
-            menuItem.dataset.username = safeName; // 存储用户名
+        let menuItem = currentMenuItems.get(name);
+        if (!menuItem) {
+            menuItem = document.createElement('li');
+            menuItem.dataset.username = name;
             if (name === username) {
                 menuItem.textContent = `${safeName} (你)`;
             } else {
@@ -1041,7 +1023,6 @@ function updateUIFromMessages() {
                 callBtn.className = 'call-btn';
                 callBtn.textContent = '📞';
                 callBtn.dataset.username = safeName;
-                // 注意：这里callBtn的点击事件无需委托，因为它是随菜单项创建并添加到DOM的
                 callBtn.onclick = (e) => {
                     e.stopPropagation();
                     startCall(callBtn.dataset.username);
@@ -1049,27 +1030,36 @@ function updateUIFromMessages() {
                 };
                 menuItem.appendChild(callBtn);
             }
-            menuListEl.appendChild(menuItem);
         }
-        // 对于已存在的用户，如果需要，可以在这里更新他们的状态或样式
+        newMenuItems.push(menuItem);
+        currentMenuItems.delete(name); 
     });
 
-    // --- 更新活跃用户计数 ---
+    currentUserItems.forEach(el => el.remove());
+    currentMenuItems.forEach(el => el.remove());
+
+    const userNamesFragment = document.createDocumentFragment();
+    newUserItems.forEach(item => userNamesFragment.appendChild(item));
+    userNamesEl.innerHTML = ''; 
+    userNamesEl.appendChild(userNamesFragment);
+
+    const menuListFragment = document.createDocumentFragment();
+    newMenuItems.forEach(item => menuListFragment.appendChild(item));
+    menuListEl.innerHTML = ''; 
+    menuListEl.appendChild(menuListFragment);
+
     document.getElementById('online-count').textContent = sortedActiveUsernames.length;
     onlineDisplay.textContent = `活跃: ${sortedActiveUsernames.length}`;
-    document.getElementById('sidebar-room-name').textContent = roomName; // 确保房间名始终显示
+    document.getElementById('sidebar-room-name').textContent = roomName; 
 
-    // --- 更新用户活动统计 (`#user-stats-list`) ---
     const userStatsListEl = document.getElementById('user-stats-list');
     const allUsersSorted = Array.from(currentUserStates.keys()).sort((a, b) => {
         const aState = currentUserStates.get(a);
         const bState = currentUserStates.get(b);
-        if (aState.isActive !== bState.isActive) return bState.isActive - aState.isActive; // 活跃的在前
-        return (bState.messageCount || 0) - (aState.messageCount || 0); // 消息多的在前
+        if (aState.isActive !== bState.isActive) return bState.isActive - aState.isActive; 
+        return (bState.messageCount || 0) - (aState.messageCount || 0); 
     });
 
-    // 这里可以采用更细致的更新策略，但如果用户统计数量有限，innerHTML清空重绘开销可接受
-    // 暂时保持清空重绘，因为它在侧边栏底部，且更新频率降低
     const statsFragment = document.createDocumentFragment();
     if (allUsersSorted.length === 0) {
         const emptyMsg = document.createElement('p');
@@ -1080,7 +1070,7 @@ function updateUIFromMessages() {
     } else {
         allUsersSorted.forEach(name => {
             const state = currentUserStates.get(name);
-            if (!state) return; // Should not happen
+            if (!state) return; 
 
             const item = document.createElement('div');
             item.className = 'user-stats-item';
@@ -1103,193 +1093,63 @@ function updateUIFromMessages() {
             statsFragment.appendChild(item);
         });
     }
-    userStatsListEl.innerHTML = ''; // 清空旧内容
-    userStatsListEl.appendChild(statsFragment); // 批量添加新内容
+    userStatsListEl.innerHTML = ''; 
+    userStatsListEl.appendChild(statsFragment); 
 }
 
 
-// --- 虚拟滚动相关变量 ---
-const AVERAGE_MESSAGE_HEIGHT = 80; // 预估每条消息的平均高度 (px)
-const OVERSCAN_COUNT = 10; // 在可见区域上方和下方额外渲染的消息数量，用于平滑滚动
-const messageHeights = new Map(); // 存储每条消息实际高度的Map: { messageId: height }
-let topSpacerEl;
-let bottomSpacerEl;
-let messageWrapperEl; // 用于包裹实际消息DOM的容器
+// --- 简化消息显示逻辑 (不再虚拟滚动) ---
 
-let prevScrollTop = 0; // 用于判断滚动方向和是否需要重新渲染
-let lastRenderedRange = { start: -1, end: -1 }; // 上次渲染的消息范围
-
-
-// --- 虚拟滚动核心渲染函数 ---
-function renderVirtualWindow(scrollToBottom = false) {
-    if (!chatWindowEl || !messageWrapperEl) {
-        logDebug('虚拟滚动初始化未完成，无法渲染', 'WARN');
+// `appendMessagesToChatWindow` 函数，用于直接追加消息到聊天窗口
+function appendMessagesToChatWindow(messages, scrollToBottom = true) {
+    if (!chatWindowEl) {
+        logDebug('聊天窗口元素未找到，无法追加消息', LOG_LEVELS.ERROR);
         return;
     }
 
-    const viewportHeight = chatWindowEl.clientHeight;
-    const scrollTop = chatWindowEl.scrollTop;
-
-    let currentScrollY = 0;
-    let startIndex = 0;
-    
-    // 计算起始索引和顶部填充高度
-    for (let i = 0; i < allMessages.length; i++) {
-        const msg = allMessages[i];
-        const msgHeight = messageHeights.get(msg.id) || AVERAGE_MESSAGE_HEIGHT;
-        if (currentScrollY + msgHeight > scrollTop) {
-            startIndex = i;
-            break;
-        }
-        currentScrollY += msgHeight;
-    }
-
-    // 应用overscan
-    startIndex = Math.max(0, startIndex - OVERSCAN_COUNT);
-
-    let endIndex = startIndex;
-    let renderedHeight = 0;
-    
-    // 计算结束索引和渲染区域高度
-    for (let i = startIndex; i < allMessages.length; i++) {
-        const msg = allMessages[i];
-        const msgHeight = messageHeights.get(msg.id) || AVERAGE_MESSAGE_HEIGHT;
-        renderedHeight += msgHeight;
-        endIndex = i;
-        if (renderedHeight >= viewportHeight + (OVERSCAN_COUNT * AVERAGE_MESSAGE_HEIGHT * 2)) { // 包含上下overscan的高度
-            break;
-        }
-    }
-    endIndex = Math.min(allMessages.length - 1, endIndex + OVERSCAN_COUNT);
-
-    // 检查是否需要重新渲染：如果范围没有变化，则不操作
-    if (lastRenderedRange.start === startIndex && lastRenderedRange.end === endIndex && !scrollToBottom) {
-        return;
-    }
-    lastRenderedRange = { start: startIndex, end: endIndex };
-
-    // 计算顶部和底部填充高度
-    let topPaddingHeight = 0;
-    for (let i = 0; i < startIndex; i++) {
-        topPaddingHeight += messageHeights.get(allMessages[i].id) || AVERAGE_MESSAGE_HEIGHT;
-    }
-
-    let totalContentHeight = topPaddingHeight; // 已经计算的顶部高度
-    for (let i = startIndex; i <= endIndex; i++) {
-        totalContentHeight += messageHeights.get(allMessages[i].id) || AVERAGE_MESSAGE_HEIGHT;
-    }
-
-    let bottomPaddingHeight = 0;
-    for (let i = endIndex + 1; i < allMessages.length; i++) {
-        bottomPaddingHeight += messageHeights.get(allMessages[i].id) || AVERAGE_MESSAGE_HEIGHT;
-    }
-    
-    topSpacerEl.style.height = `${topPaddingHeight}px`;
-    bottomSpacerEl.style.height = `${bottomPaddingHeight}px`;
-
-    // 清空并重新添加可见消息
-    messageWrapperEl.innerHTML = ''; // 清空所有旧的DOM消息
     const fragment = document.createDocumentFragment();
-    const currentRenderedIds = new Set(); // 用于跟踪当前渲染的ID
-
-    for (let i = startIndex; i <= endIndex; i++) {
-        const msg = allMessages[i];
-        const existingEl = messageWrapperEl.querySelector(`[data-id="${msg.id}"]`); // 检查是否已存在
-        if (existingEl) {
-            fragment.appendChild(existingEl); 
-        } else {
-            const msgEl = createMessageElement(msg);
-            fragment.appendChild(msgEl);
-            currentRenderedIds.add(msg.id);
+    messages.forEach(msg => {
+        if (!msg || !msg.id) {
+            logDebug("尝试追加无效消息", LOG_LEVELS.ERROR, msg);
+            return;
         }
-    }
-    messageWrapperEl.appendChild(fragment);
-
-    // 测量新添加消息的实际高度并缓存
-    messageWrapperEl.querySelectorAll('.message').forEach(el => {
-        const msgId = el.dataset.id;
-        if (currentRenderedIds.has(msgId)) { // 仅测量新添加的或可能变化高度的
-            const actualHeight = el.offsetHeight + 16; // 加上margin-bottom
-            if (messageHeights.get(msgId) !== actualHeight) {
-                messageHeights.set(msgId, actualHeight);
-            }
-        }
+        const msgEl = createMessageElement(msg);
+        fragment.appendChild(msgEl);
     });
 
-    // 如果是滚动到底部，确保滚动到位
+    chatWindowEl.appendChild(fragment);
+
     if (scrollToBottom) {
         requestAnimationFrame(() => {
             chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
         });
     }
-
-    // 调整一下总高度，以防测量后总高度发生变化
-    const newTotalHeight = topPaddingHeight + messageWrapperEl.offsetHeight + bottomPaddingHeight;
-    // logDebug(`渲染窗口：${startIndex}-${endIndex}, 顶部: ${topPaddingHeight.toFixed(0)}, 底部: ${bottomPaddingHeight.toFixed(0)}, 总高: ${newTotalHeight.toFixed(0)}`, 'INFO');
 }
 
-
-// --- 初始化虚拟滚动结构 ---
-function initVirtualScrolling() {
-    if (chatWindowEl.querySelector('.virtual-scroll-spacer')) { // 避免重复初始化
-        logDebug('虚拟滚动已初始化，跳过', 'INFO');
-        return;
-    }
-
-    // 清空原始内容
-    chatWindowEl.innerHTML = '';
-
-    // 创建顶部填充元素
-    topSpacerEl = document.createElement('div');
-    topSpacerEl.className = 'virtual-scroll-spacer top';
-    topSpacerEl.style.height = '0px';
-
-    // 创建消息容器，用于容纳实际渲染的消息
-    messageWrapperEl = document.createElement('div');
-    messageWrapperEl.className = 'message-container-wrapper';
-    
-    // 创建底部填充元素
-    bottomSpacerEl = document.createElement('div');
-    bottomSpacerEl.className = 'virtual-scroll-spacer bottom';
-    bottomSpacerEl.style.height = '0px';
-
-    // 将这些元素添加到聊天窗口
-    chatWindowEl.appendChild(topSpacerEl);
-    chatWindowEl.appendChild(messageWrapperEl);
-    chatWindowEl.appendChild(bottomSpacerEl);
-
-    // 绑定滚动事件监听器（节流）
+// `initChatDisplay` 函数，替代原先的 `initVirtualScrolling`
+function initChatDisplay() {
+    // 清空所有旧消息
+    chatWindowEl.innerHTML = ''; 
+    logDebug('聊天显示初始化完成', LOG_LEVELS.SUCCESS);
+    // 对于非虚拟滚动，滚动事件监听器通常不需要复杂的渲染逻辑
+    // 如果未来需要“加载更多”等功能，可以再完善此处的滚动处理
     chatWindowEl.addEventListener('scroll', throttle(() => {
-        const currentScrollTop = chatWindowEl.scrollTop;
-        const scrollDelta = Math.abs(currentScrollTop - prevScrollTop);
-
-        // 只有当滚动距离超过一定阈值（如100px）时才重新渲染，减少不必要的渲染
-        // 或者，在所有消息都已测量高度后，可以更精确地计算是否需要渲染
-        if (scrollDelta > AVERAGE_MESSAGE_HEIGHT / 2 || allMessages.length === 0) {
-             renderVirtualWindow();
-        }
-        prevScrollTop = currentScrollTop;
-    }, 100)); // 滚动事件节流，每100ms最多执行一次
-
-    logDebug('虚拟滚动结构初始化完成', 'SUCCESS');
-    renderVirtualWindow(true); // 首次渲染并滚动到底部
+        // 可以在这里添加滚动到顶部时加载更多历史消息的逻辑
+    }, 150)); 
 }
 
 
-// --- 消息渲染函数 (优化版，用于创建单个DOM元素) ---
-// 此函数只负责创建消息DOM，不负责添加到DOM或滚动
+// --- 消息渲染函数 (创建单个DOM元素，保持不变) ---
 function createMessageElement(msg) {
     const msgEl = document.createElement('div');
     msgEl.className = 'message';
     
-    // 确保所有相关数据都存入dataset
     msgEl.dataset.id = msg.id;
-    // 优先使用 caption 作为 messageText，如果没有则使用 text
     msgEl.dataset.messageText = msg.caption || msg.text || ''; 
     msgEl.dataset.timestamp = msg.timestamp;
     msgEl.dataset.messageType = msg.type;
     if (msg.type === 'image') {
-        msgEl.dataset.imageUrl = msg.imageUrl; // 图片消息需要存储URL
+        msgEl.dataset.imageUrl = msg.imageUrl;
     }
 
     if (msg.username === username) msgEl.classList.add('self');
@@ -1305,18 +1165,13 @@ function createMessageElement(msg) {
     
     let contentHTML = `<div class="info"><span class="username">${escapeHTML(msg.username)}</span> <span class="timestamp">${displayTime}</span></div>`;
             
-    // 消息内容渲染
     if (msg.type === 'image') {
         contentHTML += `<div class="message-image" onclick="showImageModal('${msg.imageUrl}')"><img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy"></div>`;
-        // 无论 caption 是否为空，都添加一个 .text div
-        // marked.parse('') 会返回空字符串，不会造成问题
         contentHTML += `<div class="text">${marked.parse(msg.caption || '')}</div>`; 
     } else if (msg.type === 'audio') {
         contentHTML += `<div class="message-audio"><audio controls src="${msg.audioUrl}"></audio></div>`;
-        // 无论 text 是否为空，都添加一个 .text div
         contentHTML += `<div class="text">${marked.parse(msg.text || '')}</div>`; 
-    } else { // text (及其他未定义的类型，会 fallback到text处理)
-        // 确保 text 字段始终被处理，即使为空字符串
+    } else { 
         contentHTML += `<div class="text">${marked.parse(msg.text || '')}</div>`;
     }
         
@@ -1324,40 +1179,48 @@ function createMessageElement(msg) {
     return msgEl;
 }
 
-// ✨ 消息队列处理函数，在 requestAnimationFrame 中执行
+// 消息队列处理函数，在 requestAnimationFrame 中执行
 function processMessageQueue() {
+    if (historicalMessagesLoading) {
+        logDebug("历史消息加载中，暂停处理新消息队列。", LOG_LEVELS.INFO);
+        rafScheduled = false; // 取消RAF调度，等待历史加载完成
+        return;
+    }
+
     if (messageQueue.length === 0) {
         rafScheduled = false;
         return;
     }
 
-    const messagesToProcess = messageQueue.splice(0, Math.max(MESSAGE_BATCH_SIZE, messageQueue.length)); // 处理至少批次大小或所有剩余消息
+    // 处理所有当前在队列中的消息 (因为人数少，直接处理所有积压的即可)
+    const messagesToProcess = messageQueue.splice(0, messageQueue.length); 
 
-    logDebug(`处理消息队列: 移除 ${messagesToProcess.length} 条消息`, 'INFO');
+    logDebug(`处理消息队列: 移除并追加 ${messagesToProcess.length} 条消息`, LOG_LEVELS.INFO);
 
-    // 批量添加消息并更新缓存
     messagesToProcess.forEach(msg => {
         if (!messageIdSet.has(msg.id)) {
             allMessages.push(msg);
             messageIdSet.add(msg.id);
         } else {
-            logDebug(`消息 ${msg.id} 已存在，跳过`, 'INFO');
+            logDebug(`消息 ${msg.id} 已存在，跳过`, LOG_LEVELS.INFO);
         }
     });
 
-    // 限制总消息数组的大小，防止内存无限增长
-    const MAX_ALL_MESSAGES = 500; // 保持与后端一致的缓存策略，避免前端缓存过多导致内存问题
+    const MAX_ALL_MESSAGES = 500; 
     while (allMessages.length > MAX_ALL_MESSAGES) {
-        const removedMsg = allMessages.shift(); // 移除最老的一条
-        messageHeights.delete(removedMsg.id); // 从高度缓存中也移除
-        messageIdSet.delete(removedMsg.id); // ✨ 从 ID 集合中移除
+        const removedMsg = allMessages.shift(); 
+        messageIdSet.delete(removedMsg.id); 
+        // 移除了虚拟滚动，所以不需要 messageHeights.delete(removedMsg.id);
+        // 同时，如果 chatWindowEl 中的 DOM 元素数量超过 MAX_ALL_MESSAGES，需要手动移除最旧的DOM
+        // 对于低并发场景，通常不主动移除旧DOM，而是依赖用户刷新或页面关闭。
+        // 如果需要，可以根据 `allMessages` 的长度，移除 `chatWindowEl.firstChild`。
+        // 但为了简化，暂时不在此处主动移除DOM，只维护数据。
     }
 
-    // 触发虚拟窗口渲染，并强制滚动到底部
-    renderVirtualWindow(true); 
+    appendMessagesToChatWindow(messagesToProcess, true); // 追加新消息并滚动到底部
     throttledUpdateUI(); // 触发用户列表更新
 
-    // 如果队列中还有消息，继续调度下一个 requestAnimationFrame
+    // 如果队列中还有消息（虽然上面一次性取完了），这表示可能在处理期间又有新消息入队了
     if (messageQueue.length > 0) {
         requestAnimationFrame(processMessageQueue);
     } else {
@@ -1365,117 +1228,102 @@ function processMessageQueue() {
     }
 }
 
-// ✨ 修改 appendChatMessage，只负责入队和调度
+// appendChatMessage (保持批处理防抖机制，有助于UI流畅性)
 function appendChatMessage(msg) {
     if (!msg || !msg.id) {
-        logDebug("appendChatMessage 收到无效消息", 'error', msg);
+        logDebug("appendChatMessage 收到无效消息", LOG_LEVELS.ERROR, msg);
         return;
     }
     
     if (messageIdSet.has(msg.id)) {
-        logDebug(`收到重复消息 (ID: ${msg.id})，已忽略`, 'INFO');
+        logDebug(`收到重复消息 (ID: ${msg.id})，已忽略`, LOG_LEVELS.INFO);
         return;
     }
 
     messageQueue.push(msg);
-    logDebug(`消息入队 (ID: ${msg.id}). 队列长度: ${messageQueue.length}`, 'INFO');
+    logDebug(`消息入队 (ID: ${msg.id}). 队列长度: ${messageQueue.length}`, LOG_LEVELS.INFO);
 
-    // 如果还没有调度，则调度一个 requestAnimationFrame
-    if (!rafScheduled) {
-        rafScheduled = true;
-        // 使用 setTimeout 引入一个小的防抖，避免消息频繁到来时立即触发 RAF
-        setTimeout(() => {
-            if (rafScheduled) { // 再次检查确保没有被取消
-                requestAnimationFrame(processMessageQueue);
-            }
-        }, MESSAGE_BATCH_DEBOUNCE_MS);
+    if (messageProcessTimeoutId) {
+        clearTimeout(messageProcessTimeoutId);
     }
+
+    messageProcessTimeoutId = setTimeout(() => {
+        messageProcessTimeoutId = null; 
+        if (!rafScheduled) { 
+            rafScheduled = true;
+            requestAnimationFrame(processMessageQueue);
+        }
+    }, MESSAGE_BATCH_DEBOUNCE_MS);
 }
 
 
-// --- 上下文菜单和 AI 解释逻辑 ---
-// (这部分保持不变，因为它不直接影响消息渲染性能，但与消息元素互动)
+// --- 上下文菜单和 AI 解释逻辑 (保持不变) ---
 function showContextMenu(element, x, y) {
-    currentMessageElement = element; // 将当前右键点击的消息元素存为全局变量
+    currentMessageElement = element; 
     
-    // 定位菜单
     contextMenu.style.top = `${y}px`;
     contextMenu.style.left = `${x}px`;
     contextMenu.style.display = 'block';
 
     const messageType = element.dataset.messageType;
-    const isSelf = element.classList.contains('self'); // 判断是否是自己发的消息
+    const isSelf = element.classList.contains('self'); 
 
-    // 获取所有菜单项
     const geminiTextOption = contextMenu.querySelector('[data-ai="gemini"][data-action="text-explain"]');
     const deepseekTextOption = contextMenu.querySelector('[data-ai="deepseek"][data-action="text-explain"]');
     const geminiImageOption = contextMenu.querySelector('[data-ai="gemini"][data-action="image-describe"]');
     const copyOption = document.getElementById('copy-option');
     const deleteOption = document.getElementById('delete-option');
 
-    // --- 根据消息类型动态显示/隐藏菜单项 ---
-
-    // 默认先隐藏所有特定功能的菜单项
     geminiTextOption.style.display = 'none';
     deepseekTextOption.style.display = 'none';
     geminiImageOption.style.display = 'none';
     copyOption.style.display = 'none';
     
-    // 根据类型决定显示哪些
     if (messageType === 'image') {
-        geminiImageOption.style.display = 'flex'; // 显示图片解释
+        geminiImageOption.style.display = 'flex'; 
     } else if (messageType === 'text') {
-        geminiTextOption.style.display = 'flex'; // 显示文本解释
+        geminiTextOption.style.display = 'flex'; 
         deepseekTextOption.style.display = 'flex';
-        copyOption.style.display = 'flex';       // 显示复制
+        copyOption.style.display = 'flex';       
     }
-    // 对于音频等其他类型，所有AI和复制功能都保持隐藏
 
-    // --- 根据是否为自己的消息，决定是否显示删除按钮 ---
     deleteOption.style.display = isSelf ? 'flex' : 'none';
     
-    if (navigator.vibrate) navigator.vibrate(50); // 移动端震动反馈
+    if (navigator.vibrate) navigator.vibrate(50); 
 }
 
 contextMenu.addEventListener('click', async (e) => {
     const clickedOption = e.target;
-    // 确保点击的是菜单项，而不是菜单背景或其他地方
     if (!clickedOption.closest('li')) return; 
 
     const action = clickedOption.dataset.action;
     const model = clickedOption.dataset.ai;
     
-    // 获取原始消息内容
     const originalMessageText = currentMessageElement?.dataset.messageText;
     const originalImageUrl = currentMessageElement?.dataset.imageUrl;
     const messageType = currentMessageElement?.dataset.messageType;
 
-    // 清除当前的右键菜单
     contextMenu.style.display = 'none';
 
-    // 处理复制选项
     if (clickedOption.id === 'copy-option') {
         if (originalMessageText) {
             navigator.clipboard.writeText(originalMessageText)
                 .then(() => showAppNotification('文本已复制!'))
                 .catch(err => logDebug(`复制失败: ${err}`, LOG_LEVELS.ERROR));
         }
-        return; // 处理完复制就返回
+        return; 
     }
 
-    // 处理删除选项
     if (clickedOption.id === 'delete-option') {
         if (currentMessageElement?.dataset.id) {
-            // 可以在这里加一个确认弹窗
             if (confirm("确定要删除这条消息吗？")) {
                 socket.send(JSON.stringify({ type: 'delete', payload: { id: currentMessageElement.dataset.id } }));
                 logDebug(`发送删除消息指令: ${currentMessageElement.dataset.id}`, LOG_LEVELS.INFO);
             }
         }
-        return; // 处理完删除就返回
+        return; 
     }
 
-    // 处理AI解释/描述选项
     let explanationText = "";
     let requestBody = {};
     let apiUrl = '';
@@ -1496,22 +1344,20 @@ contextMenu.addEventListener('click', async (e) => {
         apiUrl = '/ai-explain';
         requestBody = { text: originalMessageText, model: model };
         explanationText = `正在通过 ${model} 模型思考中...`;
-    } else if (action === 'custom-prompt' && messageType === 'text') { // 如果需要自定义提示词功能
+    } else if (action === 'custom-prompt' && messageType === 'text') { 
         const customPrompt = prompt("请输入您的提示词:");
         if (!customPrompt || !originalMessageText) {
             logDebug("自定义提示词：用户取消或缺少文本内容", LOG_LEVELS.INFO);
             return;
         }
         apiUrl = '/ai-explain';
-        requestBody = { text: `${originalMessageText}\n\n${customPrompt}`, model: 'gemini' }; // 默认使用Gemini处理自定义提示
+        requestBody = { text: `${originalMessageText}\n\n${customPrompt}`, model: 'gemini' }; 
         explanationText = `正在使用您的自定义提示词通过 Gemini 模型思考中...`;
     } else {
-        // 未知或不匹配的 AI 动作，或类型不符，直接返回
         logDebug(`AI操作失败：未知动作或消息类型不匹配。Action: ${action}, Type: ${messageType}`, LOG_LEVELS.WARNING);
         return;
     }
 
-    // 在消息下方显示 AI 解释容器
     const existingExplanation = currentMessageElement.querySelector('.ai-explanation');
     if (existingExplanation) {
         existingExplanation.remove();
@@ -1531,13 +1377,13 @@ contextMenu.addEventListener('click', async (e) => {
 
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(errorText); // 抛出后端返回的错误信息
+            throw new Error(errorText); 
         }
         
         const data = await response.json();
-        const explanationContent = data.explanation || data.description; // 兼容两种 AI 响应
+        const explanationContent = data.explanation || data.description; 
         
-        explanationEl.innerHTML = ''; // 清空加载提示
+        explanationEl.innerHTML = ''; 
         const buttonContainer = document.createElement('div');
         buttonContainer.className = 'ai-explanation-buttons';
 
@@ -1574,24 +1420,25 @@ contextMenu.addEventListener('click', async (e) => {
         logDebug(`请求AI解释失败: ${error.message}`, LOG_LEVELS.ERROR, error);
         const errorModelName = (action === 'image-describe') ? 'AI图片描述' : (model || '未知AI模型');
         explanationEl.innerHTML = `<p>😞 抱歉，无法从 ${errorModelName} 获取解释: ${escapeHTML(error.message)}</p>`;
-        setTimeout(() => { if (explanationEl.parentNode) explanationEl.remove(); }, 6000); // 错误信息显示6秒后自动消失
+        setTimeout(() => { if (explanationEl.parentNode) explanationEl.remove(); }, 6000); 
     }
 });
 
 
-// --- 图片和媒体处理函数 ---
+// --- 图片和媒体处理函数 (保持不变) ---
 async function handleImageSelection(e) {
     const file = e.target.files[0];
     if (!file || !file.type.startsWith('image/')) return;
     try {
         uploadProgress.style.display = 'block';
+        uploadProgress.textContent = '压缩中...';
         imagePreview.classList.add('show', 'uploading');
         const compressedBlob = await compressImage(file);
         selectedFile = new File([compressedBlob], file.name, { type: 'image/jpeg', lastModified: Date.now() });
         showImagePreview(selectedFile);
     } catch (error) {
         logDebug('图片处理失败: ' + error, LOG_LEVELS.ERROR);
-        showAppNotification('图片处理失败，请重试', 3000, true); // Changed from alert
+        showAppNotification('图片处理失败，请重试', 3000, true); 
     } finally {
         uploadProgress.style.display = 'none';
         imagePreview.classList.remove('uploading');
@@ -1648,7 +1495,7 @@ async function handleRecordButtonClick() {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const mimeType = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'].find(t => MediaRecorder.isTypeSupported(t));
         if (!mimeType) {
-            showAppNotification('您的浏览器不支持录音功能。', 3000, true); // Changed from alert
+            showAppNotification('您的浏览器不支持录音功能。', 3000, true); 
             return;
         }
         mediaRecorder = new MediaRecorder(stream, { mimeType });
@@ -1670,7 +1517,7 @@ async function handleRecordButtonClick() {
         mediaRecorder.start();
     } catch (error) {
         logDebug('无法访问麦克风: ' + error, LOG_LEVELS.ERROR);
-        showAppNotification('无法访问麦克风，请检查权限。', 3000, true); // Changed from alert
+        showAppNotification('无法访问麦克风，请检查权限。', 3000, true); 
     }
 }
 
@@ -1679,7 +1526,7 @@ function checkSendButtonState() {
 }
 
 
-// --- 消息发送函数 (简化版) ---
+// --- 消息发送函数 (保持不变) ---
 messageForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const text = messageInput.value.trim();
@@ -1690,56 +1537,48 @@ messageForm.addEventListener('submit', async (e) => {
         return;
     }
     
-    // 禁用发送按钮防止重复提交
     sendButton.disabled = true;
     
     try {
         if (selectedFile) {
-            // 发送图片消息
             await sendImageMessage(selectedFile, text);
         } else if (text) {
-            // 乐观更新：前端先生成一个临时ID和时间戳
             const tempId = crypto.randomUUID();
             const tempTimestamp = Date.now();
             
             socket.send(JSON.stringify({ 
                 type: 'chat', 
                 payload: { 
-                    id: tempId,          // 包含临时ID
-                    timestamp: tempTimestamp, // 包含临时时间戳
+                    id: tempId,          
+                    timestamp: tempTimestamp, 
                     type: 'text',
                     text: text 
                 } 
             }));
             
-            // 清理输入框
             messageInput.value = '';
             messageInput.style.height = 'auto';
         }
     } catch (error) {
-        logDebug('发送消息过程中出现错误: ' + error, 'error', error);
-        showAppNotification('发送失败，请重试', 3000, true); // Changed from alert
+        logDebug('发送消息过程中出现错误: ' + error, LOG_LEVELS.ERROR, error);
+        showAppNotification('发送失败，请重试', 3000, true); 
     } finally {
-        // 恢复UI状态
         removeImagePreview();
         checkSendButtonState();
     }
 });
 
-// --- 图片文件上传函数 (简化版) ---
+// --- 图片文件上传函数 (保持不变) ---
 async function sendImageMessage(file, caption = '') {
     try {
         logDebug(`开始上传图片: ${file.name}`, LOG_LEVELS.INFO);
         
-        // 显示上传进度UI
         uploadProgress.style.display = 'block';
         uploadProgress.textContent = '上传中...';
         imagePreview.classList.add('uploading');
         
-        // 创建FormData并添加正确文件名的文件
         const safeFileName = encodeURIComponent(file.name);
         
-        // 上传文件到R2存储
         const response = await fetch('/upload', {
             method: 'POST',
             body: file,
@@ -1761,19 +1600,17 @@ async function sendImageMessage(file, caption = '') {
         
         logDebug(`图片上传成功，获取URL: ${data.url}`, LOG_LEVELS.SUCCESS);
         
-        // 乐观更新：前端先生成一个临时ID和时间戳
         const tempId = crypto.randomUUID();
         const tempTimestamp = Date.now();
 
-        // 发送图片消息通过WebSocket
         const payload = {
             type: 'image',
             text: caption, 
             caption: caption,
-            imageUrl: data.url, // 发送服务器返回的URL
+            imageUrl: data.url, 
             filename: file.name,
             size: file.size,
-            id: tempId,          // 包含临时ID和时间戳
+            id: tempId,          
             timestamp: tempTimestamp
         };
         
@@ -1784,7 +1621,6 @@ async function sendImageMessage(file, caption = '') {
         
         logDebug("图片消息已通过WebSocket发送", LOG_LEVELS.SUCCESS);
         
-        // 清理UI
         messageInput.value = '';
         messageInput.style.height = 'auto';
         removeImagePreview();
@@ -1792,26 +1628,23 @@ async function sendImageMessage(file, caption = '') {
         return true;
     } catch (error) {
         logDebug(`图片上传失败: ${error.message}`, LOG_LEVELS.ERROR, error);
-        showAppNotification(`图片上传失败: ${error.message}`, 3000, true); // Changed from alert
+        showAppNotification(`图片上传失败: ${error.message}`, 3000, true); 
         throw error;
     } finally {
-        // 隐藏上传进度UI
         uploadProgress.style.display = 'none';
         imagePreview.classList.remove('uploading');
     }
 }
 
-// --- 音频文件上传函数 (简化版) ---
+// --- 音频文件上传函数 (保持不变) ---
 async function sendAudioMessage(audioBlob, mimeType) {
     try {
         logDebug(`开始上传音频`, LOG_LEVELS.INFO, { size: audioBlob.size, type: mimeType });
         
-        // 生成音频文件名
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const filename = `audio-${timestamp}.${mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
         const safeFileName = encodeURIComponent(filename);
         
-        // 上传音频到R2存储
         const response = await fetch('/upload', {
             method: 'POST',
             body: audioBlob,
@@ -1833,18 +1666,16 @@ async function sendAudioMessage(audioBlob, mimeType) {
         
         logDebug(`音频上传成功，获取URL: ${data.url}`, LOG_LEVELS.SUCCESS);
         
-        // 乐观更新：前端先生成一个临时ID和时间戳
         const tempId = crypto.randomUUID();
         const tempTimestamp = Date.now();
 
-        // 发送音频消息通过WebSocket
         const payload = {
             type: 'audio',
-            text: '', // 核心修正：为音频消息添加空的 text 字段
-            audioUrl: data.url, // 发送服务器返回的URL
+            text: '', 
+            audioUrl: data.url, 
             filename: filename,
             size: audioBlob.size,
-            id: tempId,          // 包含临时ID和时间戳
+            id: tempId,          
             timestamp: tempTimestamp
         };
         
@@ -1858,88 +1689,88 @@ async function sendAudioMessage(audioBlob, mimeType) {
         return true;
     } catch (error) {
         logDebug(`音频上传失败: ${error.message}`, LOG_LEVELS.ERROR, error);
-        showAppNotification(`音频上传失败: ${error.message}`, 3000, true); // Changed from alert
+        showAppNotification(`音频上传失败: ${error.message}`, 3000, true); 
         throw error;
     }
 }
 
-// ✨ 优化的历史消息处理函数
+// 优化后的历史消息处理函数 (移除虚拟滚动相关逻辑)
 async function processHistoryMessages(history) {
     if (!Array.isArray(history)) {
-        logDebug("历史记录格式不正确，已忽略。", 'warn');
-        isVirtualScrollInitialized = true; 
+        logDebug("历史记录格式不正确，已忽略。", LOG_LEVELS.WARNING);
         historicalMessagesLoading = false;
-        processMessageQueue(); // 尝试处理队列中的任何暂存消息
+        processMessageQueue(); 
         return;
     }
     
     logDebug(`开始处理 ${history.length} 条历史记录...`);
-    historicalMessagesLoading = true; // 标记正在加载历史
+    historicalMessagesLoading = true; 
     
-    // 重置状态
-    chatWindowEl.innerHTML = ''; // 清空
+    // 重置状态：直接清空聊天窗口和消息数据
     allMessages = [];
-    messageIdSet.clear(); // ✨ 清空 ID 集合
-    messageHeights.clear();
-    isVirtualScrollInitialized = false; 
-    
-    // 初始化虚拟滚动结构
-    initVirtualScrolling(); 
+    messageIdSet.clear(); 
+    chatWindowEl.innerHTML = ''; 
     
     const CHUNK_SIZE = 50; // 每次处理50条消息
     let processedCount = 0;
 
     const processChunk = (deadline) => {
-        let chunkStartTime = Date.now();
-        while (processedCount < history.length && (deadline.timeRemaining() > 0 || (Date.now() - chunkStartTime < 16))) {
+        const messagesInChunk = [];
+        let i = 0;
+        // 在空闲时间内处理 CHUNK_SIZE 条消息，或者直到空闲时间耗尽
+        // `i === 0` 确保在没有空闲时间时至少处理第一条消息，避免无限等待
+        while (i < CHUNK_SIZE && processedCount < history.length && (deadline.timeRemaining() > 0 || i === 0)) {
             const msg = history[processedCount];
             if (msg && msg.id && !messageIdSet.has(msg.id)) {
                 allMessages.push(msg);
                 messageIdSet.add(msg.id);
+                messagesInChunk.push(msg);
             } else if (msg && msg.id && messageIdSet.has(msg.id)) {
-                logDebug(`历史消息中发现重复ID: ${msg.id}, 已跳过。`, 'INFO');
+                logDebug(`历史消息中发现重复ID: ${msg.id}, 已跳过。`, LOG_LEVELS.INFO);
             } else {
-                logDebug(`历史消息中发现无效消息，已跳过。`, 'WARN', msg);
+                logDebug(`历史消息中发现无效消息，已跳过。`, LOG_LEVELS.WARNING, msg);
             }
             processedCount++;
+            i++;
         }
 
-        renderVirtualWindow(true); // 每次处理完一个 chunk 后渲染一次，并保持滚动到底部
+        appendMessagesToChatWindow(messagesInChunk, false); // 追加这批消息，但不强制滚动到底部
+        // 用户列表更新可以在历史消息全部加载完成后进行，避免频繁更新
+        // throttledUpdateUI(); // 不在分批加载过程中调用
 
         if (processedCount < history.length) {
-            logDebug(`处理历史中... 已完成 ${processedCount}/${history.length} 条。`, 'INFO');
-            // 如果还有剩余消息，请求下一个空闲回调
+            logDebug(`处理历史中... 已完成 ${processedCount}/${history.length} 条。`, LOG_LEVELS.INFO);
             requestIdleCallback(processChunk, { timeout: 1000 });
         } else {
-            logDebug("所有历史记录处理完毕。", 'SUCCESS');
-            isVirtualScrollInitialized = true;
+            logDebug("所有历史记录处理完毕。", LOG_LEVELS.SUCCESS);
             historicalMessagesLoading = false;
-            // 历史处理完成后，立即处理所有暂存的新消息
-            processMessageQueue(); 
+            // 历史加载完成后，滚动到底部
+            requestAnimationFrame(() => {
+                chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
+            });
+            processMessageQueue(); // 历史消息处理完毕后，开始处理消息队列中积压的新消息
         }
     };
 
-    // 启动第一个空闲回调来处理历史记录
     if (history.length > 0 && 'requestIdleCallback' in window) {
         requestIdleCallback(processChunk, { timeout: 1000 });
     } else {
-        // 如果浏览器不支持 requestIdleCallback 或没有历史记录，则立即处理
+        // Fallback: synchronous processing if requestIdleCallback is not available or no history
+        logDebug("requestIdleCallback 不可用或无历史消息，同步处理历史。", LOG_LEVELS.INFO); 
         history.forEach(msg => {
             if (msg && msg.id && !messageIdSet.has(msg.id)) {
                 allMessages.push(msg);
                 messageIdSet.add(msg.id);
             }
         });
-        logDebug("历史记录处理完毕 (无requestIdleCallback或无历史).", 'SUCCESS');
-        isVirtualScrollInitialized = true;
+        appendMessagesToChatWindow(allMessages, true); // 同步加载则直接追加所有并滚动到底部
         historicalMessagesLoading = false;
-        renderVirtualWindow(true);
-        processMessageQueue(); // 立即处理队列中的任何暂存消息
+        processMessageQueue(); 
     }
 }
 
 
-// --- WebSocket 事件处理器 (优化版) ---
+// --- WebSocket 事件处理器 (保持不变) ---
 function connectWebSocket() {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProtocol}//${window.location.host}/${roomName}?username=${encodeURIComponent(username)}`;
@@ -1954,16 +1785,19 @@ function connectWebSocket() {
 function onSocketOpen() {
     statusEl.textContent = '已连接';
     connectionDot.classList.remove('disconnected');
-    reconnectInterval = 1000; // 重置重连间隔
+    reconnectInterval = 1000; 
     checkSendButtonState();
     logDebug('WebSocket连接已建立', LOG_LEVELS.SUCCESS);
-    // 启动用户列表定时更新（如果之前没有）
     if (!window.userListInterval) {
-        window.userListInterval = setInterval(updateUIFromMessages, 60000); // 1分钟更新一次用户列表，比之前10分钟更频繁
+        window.userListInterval = setInterval(throttledUpdateUI, 60000); 
+    }
+    // 连接成功后，立即触发一次队列处理，以防在断线期间有消息积压
+    if (messageQueue.length > 0 && !rafScheduled) {
+        rafScheduled = true;
+        requestAnimationFrame(processMessageQueue);
     }
 }
 
-// ✨ 策略模式优化: 消息处理函数映射
 const messageHandlers = {
     welcome: (payload) => {
         const history = payload?.history;
@@ -1976,11 +1810,8 @@ const messageHandlers = {
     chat: (payload) => {
         const newMessage = payload;
         if (newMessage && newMessage.id) {
-            // 如果历史消息正在加载，新消息先入队，不直接处理
-            // appendChatMessage 会自动进行去重
             appendChatMessage(newMessage);
         }
-        throttledUpdateUI(); // 触发用户列表等UI的更新
     },
     user_join: (payload) => {
         logDebug(`前端消息: ${payload.username} 加入了`, LOG_LEVELS.INFO, payload);
@@ -1995,15 +1826,18 @@ const messageHandlers = {
         if (messageId) {
             logDebug(`收到删除指令，准备移除消息: ${messageId}`, LOG_LEVELS.WARNING);
             allMessages = allMessages.filter(m => m.id !== messageId);
-            messageIdSet.delete(messageId); // ✨ 从 ID 集合中移除
-            messageHeights.delete(messageId); 
-            renderVirtualWindow(); 
+            messageIdSet.delete(messageId); 
+            // 直接从 DOM 移除对应的消息元素
+            const msgElToDelete = chatWindowEl.querySelector(`[data-id="${messageId}"]`);
+            if (msgElToDelete) {
+                msgElToDelete.remove();
+            }
             throttledUpdateUI(); 
         }
     },
     error: (payload) => {
         logDebug(`收到后端错误通知: ${payload?.message}`, LOG_LEVELS.ERROR, payload);
-        showAppNotification(payload?.message || "发生未知错误", 5000, true); // Changed from alert
+        showAppNotification(payload?.message || "发生未知错误", 5000, true); 
         sendButton.disabled = false;
     },
     offer: (payload) => handleOffer(payload),
@@ -2014,29 +1848,23 @@ const messageHandlers = {
         logDebug(`[后端日志] ${payload.message}`, payload.level.toLowerCase(), payload.data);
     },
     heartbeat: () => {
-        // 心跳消息不需要在DOM日志中显示，控制台已处理
-        // 且不需要其他处理，这里留空以快速跳过
     },
-    system_notification: (payload) => { // ✨ 新增：处理系统通知
+    system_notification: (payload) => { 
         logDebug(`[系统通知] ${payload.message}`, payload.level.toLowerCase(), payload);
         showAppNotification(payload.message, 5000, payload.level === 'ERROR');
     }
 };
 
-// onSocketMessage (策略模式版)
 async function onSocketMessage(event) {
-    // 快速过滤心跳消息，避免不必要的JSON.parse
-    if (event.data === '{"type":"heartbeat","payload":{"timestamp":' + Date.now() + '}}') { // 简单字符串匹配，实际可能需要更灵活
-        // logDebug('收到心跳包 (快速过滤)', 'HEARTBEAT'); // 如果需要更详细的日志
+    if (event.data.startsWith('{"type":"heartbeat"') && event.data.endsWith('}}')) { 
         return;
     }
 
     let data;
     try {
         data = JSON.parse(event.data);
-        // 如果日志级别不是 HEARTBEAT，才打印原始数据，避免日志过载
-        if (data.type !== 'heartbeat') {
-            logDebug(`收到 WebSocket 数据包 (${data.type})`, 'info', data); 
+        if (data.type !== 'heartbeat') { 
+            logDebug(`收到 WebSocket 数据包 (${data.type})`, LOG_LEVELS.INFO, data); 
         }
     } catch (parseError) {
         const rawMessageSnippet = String(event.data).substring(0, 500);
@@ -2044,7 +1872,7 @@ async function onSocketMessage(event) {
             error: parseError.message,
             raw: rawMessageSnippet
         });
-        showAppNotification("客户端收到服务器发来的格式错误消息，请刷新页面。", 5000, true); // Changed from alert
+        showAppNotification("客户端收到服务器发来的格式错误消息，请刷新页面。", 5000, true); 
         return;
     }
 
@@ -2061,32 +1889,32 @@ function onSocketClose(event) {
     connectionDot.classList.add('disconnected');
     let reason = `Code: ${event.code}, Reason: ${event.reason || '无'}, Was Clean: ${event.wasClean}`;
     logDebug(`WebSocket连接已断开。${reason}`, LOG_LEVELS.WARNING);
-    showAppNotification(`连接已断开，尝试重连中... (${event.reason || '无'})`, 3000, true); // Added notification
+    showAppNotification(`连接已断开，尝试重连中... (${event.reason || '无'})`, 3000, true); 
     logDebug(`将在${reconnectInterval/1000}秒后重连`, LOG_LEVELS.WARNING);
     setTimeout(connectWebSocket, reconnectInterval);
-    reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval); // 指数退避
+    reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval); 
 }
 
 function onSocketError(error) {
     let errorMessage = `WebSocket发生未知错误。Type: ${error.type}`;
     logDebug(errorMessage, LOG_LEVELS.ERROR);
     statusEl.textContent = "连接错误";
-    showAppNotification("WebSocket连接错误，请检查网络。", 3000, true); // Added notification
-    socket.close(); // 强制关闭，触发onSocketClose进行重连
+    showAppNotification("WebSocket连接错误，请检查网络。", 3000, true); 
+    socket.close(); 
 }
 
 
-// --- WebRTC 相关函数 ---
-// (所有 WebRTC 函数保持不变，只包含在这里便于查看完整性)
+// --- WebRTC 相关函数 (保持不变) ---
 async function initLocalMedia() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         logDebug('麦克风访问权限已获取', LOG_LEVELS.SUCCESS);
         return localStream;
-    } catch (err) {
+    }
+    catch (err) {
         logDebug('无法获取麦克风权限: ' + err, LOG_LEVELS.ERROR);
-        showAppNotification('无法获取麦克风，通话功能不可用。请检查权限。', 4000, true); // Changed from alert
-        return null; // 不抛出错误，让应用继续运行
+        showAppNotification('无法获取麦克风，通话功能不可用。请检查权限。', 4000, true);
+        return null;
     }
 }
 
@@ -2107,7 +1935,7 @@ function hideCallUI(targetUsername) {
 
 async function startCall(target) {
     if (!localStream) {
-        showAppNotification('本地音频未就绪，请检查麦克风权限。', 3000, true); // Changed from alert
+        showAppNotification('本地音频未就绪，请检查麦克风权限。', 3000, true); 
         return;
     }
     if (peerConnections[target]) return;
@@ -2173,12 +2001,11 @@ function playRemoteStream(username, stream) {
         remoteAudioContainer.appendChild(audioEl);
     }
     audioEl.srcObject = stream;
-    audioEl.muted = true; // 默认静音以避免浏览器自动播放策略问题
+    audioEl.muted = true; 
     audioEl.play().then(() => {
-        audioEl.muted = false; // 播放成功后取消静音
+        audioEl.muted = false; 
     }).catch(error => {
         logDebug(`Autoplay for ${username} failed: ${error}`, LOG_LEVELS.WARNING);
-        // 如果自动播放失败，提示用户手动开启声音
         const panel = document.getElementById(`call-control-${username}`);
         if (panel && !panel.querySelector('.unmute-notice')) {
             const unmuteNotice = document.createElement('button');
@@ -2195,30 +2022,26 @@ function playRemoteStream(username, stream) {
 
 
 // --- 页面初始化和事件监听器设置 ---
-// 定义全局变量来管理触摸事件的状态 (事件委托用)
 let touchStartTime;
 let touchLongPressTimer; 
 let currentTouchMsgEl = null;
 
-// 初始化函数，在DOMContentLoaded后调用
 function initializeChat() {
-    // 设置DOM元素文本
     roomNameEl.textContent = roomName;
     document.getElementById('sidebar-room-name').textContent = roomName;
     usernameDisplayEl.textContent = username;
 
-    // 先初始化日志系统
-    initDebugLog();
+    initDebugLog(); 
     
-    // 异步初始化媒体
+    // 调用简化的聊天显示初始化
+    initChatDisplay(); 
+    
     initLocalMedia().catch(err => {
         logDebug('初始化媒体失败: ' + err, LOG_LEVELS.WARNING);
     });
     
-    // 尝试连接WebSocket
     connectWebSocket();
     
-    // 添加页面可见性监听，在页面重新可见时刷新连接
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
             if (socket?.readyState !== WebSocket.OPEN) {
@@ -2228,16 +2051,13 @@ function initializeChat() {
         }
     });
     
-    // 定期检查连接状态
     setInterval(() => {
         if (socket?.readyState !== WebSocket.OPEN) {
             logDebug('检测到WebSocket连接已断开，尝试重新连接', LOG_LEVELS.WARNING);
             connectWebSocket();
         }
-    }, 30000); // 每30秒检查一次
+    }, 30000); 
 
-
-    // --- 核心UI事件监听器 (只绑定一次) ---
     sidebarToggle.addEventListener('click', () => {
         sidebar.classList.toggle('open');
         overlay.classList.toggle('show');
@@ -2285,65 +2105,51 @@ function initializeChat() {
         }
     });
 
-    // --- 事件委托设置 (只绑定一次到父元素) ---
-    // 为 chatWindowEl 绑定右键菜单事件
     chatWindowEl.addEventListener('contextmenu', e => {
-        const msgEl = e.target.closest('.message'); // 查找最近的 .message 祖先元素
+        const msgEl = e.target.closest('.message'); 
         if (msgEl) {
-            e.preventDefault(); // 阻止浏览器默认的右键菜单
+            e.preventDefault(); 
             showContextMenu(msgEl, e.pageX, e.pageY);
         } else {
-            // 如果在消息区域外右击，隐藏上下文菜单
             contextMenu.style.display = 'none';
         }
     });
 
-    // 为 chatWindowEl 绑定触摸开始事件 (用于长按)
     chatWindowEl.addEventListener('touchstart', e => {
         const msgEl = e.target.closest('.message');
         if (msgEl) {
-            // 不再阻止默认行为，允许滚动
-            currentTouchMsgEl = msgEl; // 记录当前触摸的消息元素
-            touchStartTime = Date.now(); // 记录触摸开始时间
+            currentTouchMsgEl = msgEl; 
+            touchStartTime = Date.now(); 
 
-            // 设置一个短时间定时器，如果手指在这个时间内没有移动且未抬起，则视为长按
             touchLongPressTimer = setTimeout(() => {
-                // 再次检查确保是同一个元素且时间足够长
                 if (currentTouchMsgEl === msgEl && (Date.now() - touchStartTime) >= 500) {
-                    // 只有在长按时才阻止默认行为
                     e.preventDefault();
                     showContextMenu(msgEl, e.touches[0].pageX, e.touches[0].pageY);
-                    if (navigator.vibrate) navigator.vibrate(50); // 移动端震动反馈
+                    if (navigator.vibrate) navigator.vibrate(50); 
                 }
-            }, 500); // 长按阈值：500毫秒
+            }, 500); 
         } else {
-            // 如果触摸开始在消息区域外，隐藏上下文菜单
             contextMenu.style.display = 'none';
         }
-    }, { passive: true }); // 使用 passive: true 提高滚动性能
+    }, { passive: true }); 
 
-    // 为 chatWindowEl 绑定触摸结束事件
     chatWindowEl.addEventListener('touchend', () => {
-        clearTimeout(touchLongPressTimer); // 清除任何正在进行的计时器
-        currentTouchMsgEl = null; // 重置当前触摸的元素
+        clearTimeout(touchLongPressTimer); 
+        currentTouchMsgEl = null; 
     });
 
-    // 为 chatWindowEl 绑定触摸移动事件
     chatWindowEl.addEventListener('touchmove', () => {
-        clearTimeout(touchLongPressTimer); // 如果手指移动，则不是长按，清除计时器
-        currentTouchMsgEl = null; // 重置当前触摸的元素
-    }, { passive: true }); // 使用 passive: true 提高滚动性能
+        clearTimeout(touchLongPressTimer); 
+        currentTouchMsgEl = null; 
+    }, { passive: true }); 
 
-    // 全局点击监听器，用于在点击其他地方时关闭菜单
     document.addEventListener('click', (e) => {
-        // 只有当点击目标不是菜单本身或其子元素时才关闭
         if (!usersMenu.contains(e.target) && !contextMenu.contains(e.target)) {
             usersMenu.classList.remove('show');
             contextMenu.style.display = 'none';
         }
     });
     
-    // 添加全局的图片模态框功能
     window.showImageModal = function(imageUrl) {
         if (!imageModal || !modalImage) return;
         modalImage.src = imageUrl;
@@ -2351,7 +2157,6 @@ function initializeChat() {
     };
 }
 
-// 页面加载完成后调用初始化函数
 document.addEventListener('DOMContentLoaded', initializeChat);
 
 </script>

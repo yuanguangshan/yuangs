@@ -11,6 +11,10 @@ const MSG_TYPE_USER_JOIN = 'user_join';
 const MSG_TYPE_USER_LEAVE = 'user_leave';
 const MSG_TYPE_DEBUG_LOG = 'debug_log';
 const MSG_TYPE_HEARTBEAT = 'heartbeat';
+const MSG_TYPE_OFFER = 'offer';
+const MSG_TYPE_ANSWER = 'answer';
+const MSG_TYPE_CANDIDATE = 'candidate';
+const MSG_TYPE_CALL_END = 'call_end';
 
 export class HibernatingChatRoom extends DurableObject {
     constructor(ctx, env) {
@@ -383,6 +387,8 @@ export class HibernatingChatRoom extends DurableObject {
 
         return new Response("API endpoint not found", { status: 404 });
     }
+
+
 // ============ 辅助方法 ============
 
     /**
@@ -427,6 +433,7 @@ export class HibernatingChatRoom extends DurableObject {
             this.debugLog(`⚠️ Target user "${payload.target}" for RTC signal not found or not connected.`, 'WARN');
         }
     }
+
     // ============ WebSocket 会话处理 ============
     async handleWebSocketSession(ws, url) {
         const username = decodeURIComponent(url.searchParams.get("username") || "Anonymous");
@@ -481,7 +488,7 @@ export class HibernatingChatRoom extends DurableObject {
     }
 
     // ============ WebSocket 事件处理器 ============
- // ============ WebSocket 事件处理器 (修正版) ============
+// ============ WebSocket 事件处理器 (修正版) ============
     async webSocketMessage(ws, message) {
         const sessionId = ws.sessionId;
         const session = this.sessions.get(sessionId);
@@ -528,11 +535,35 @@ export class HibernatingChatRoom extends DurableObject {
         }
     }
 
-    webSocketClose(ws, code, reason, wasClean) {
-        this.cleanupSession(ws.sessionId, { code, reason, wasClean });
+    async webSocketClose(ws, code, reason, wasClean) {
+        const sessionId = ws.sessionId;
+        const session = this.sessions.get(sessionId);
+        
+        if (session) {
+            this.debugLog(`🔌 断开其连接: ${session.username} (Session: ${sessionId}). Code: ${code}, 原因: ${reason}, 清理: ${wasClean}`);
+            
+            // 从会话列表中移除
+            this.sessions.delete(sessionId);
+            
+            // 广播用户离开消息
+            this.broadcast({ 
+                type: MSG_TYPE_USER_LEAVE, 
+                payload: { 
+                    username: session.username,
+                    userCount: this.sessions.size
+                } 
+            });
+            
+            this.debugLog(`📊 Remaining sessions: ${this.sessions.size}`);
+            
+            // 保存状态
+            await this.saveState();
+        } else {
+            this.debugLog(`🔌 断开未知连接： (SessionId: ${sessionId}). Code: ${code}`);
+        }
     }
     
-    webSocketError(ws, error) {
+    async webSocketError(ws, error) {
         const sessionId = ws.sessionId;
         const session = this.sessions.get(sessionId);
         const username = session ? session.username : 'unknown';
