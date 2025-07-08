@@ -1,4 +1,4 @@
-// 文件: src/chatroom_do.js (完整整合版本)
+// 文件: src/chatroom_do.js (Final Integrated Version)
 
 import { DurableObject } from "cloudflare:workers";
 
@@ -18,7 +18,7 @@ export class HibernatingChatRoom extends DurableObject {
         this.ctx = ctx;
         this.env = env;
         this.messages = null;
-        this.sessions = new Map(); // 使用 Map 来更好地管理会话
+        this.sessions = new Map();
         this.debugLogs = [];
         this.maxDebugLogs = 100;
         this.isInitialized = false;
@@ -31,14 +31,14 @@ export class HibernatingChatRoom extends DurableObject {
     }
 
     // ============ 调试日志系统 ============
-    debugLog(message, level = 'INFO', data = null) { // 增加 data 参数
+    debugLog(message, level = 'INFO', data = null) {
         const timestamp = new Date().toISOString();
         const logEntry = {
             timestamp,
             level,
             message,
             id: crypto.randomUUID().substring(0, 8),
-            data // 存储额外数据
+            data
         };
         
         // 添加到内存日志
@@ -67,7 +67,7 @@ export class HibernatingChatRoom extends DurableObject {
             payload: logEntry
         });
         
-        this.sessions.forEach((session, sessionId) => {
+        this.sessions.forEach((session) => {
             try {
                 if (session.ws.readyState === WebSocket.OPEN) {
                     session.ws.send(message);
@@ -79,8 +79,8 @@ export class HibernatingChatRoom extends DurableObject {
     }
 
     // ============ 状态管理 ============
-    async loadState() {
-        if (this.messages !== null) return;
+    async initialize() {
+        if (this.isInitialized) return;
         
         // 加载消息历史
         this.messages = (await this.ctx.storage.get("messages")) || [];
@@ -98,9 +98,6 @@ export class HibernatingChatRoom extends DurableObject {
     async saveState() {
         if (this.messages === null) return;
         
-        await this.ctx.storage.put("messages", this.messages);
-        
-        // 保存会话元数据（不包括 WebSocket 对象）
         const sessionMetadata = Array.from(this.sessions.entries()).map(([id, session]) => ({
             id,
             username: session.username,
@@ -108,9 +105,20 @@ export class HibernatingChatRoom extends DurableObject {
             lastSeen: session.lastSeen
         }));
         
-        await this.ctx.storage.put("sessions_metadata", sessionMetadata);
+        const savePromise = Promise.all([
+            this.ctx.storage.put("messages", this.messages),
+            this.ctx.storage.put("sessions_metadata", sessionMetadata)
+        ]);
         
-        this.debugLog(`💾 状态已保存. Messages: ${this.messages.length}, Sessions: ${this.sessions.size}`);
+        // 使用 waitUntil 确保存储操作在实例休眠前完成
+        this.ctx.waitUntil(savePromise);
+        
+        try {
+            await savePromise;
+            this.debugLog(`💾 状态已保存. Messages: ${this.messages.length}, Sessions: ${this.sessions.size}`);
+        } catch (e) {
+            this.debugLog(`💥 状态保存失败: ${e.message}`, 'ERROR');
+        }
     }
 
     // ============ 心跳机制 ============
@@ -152,11 +160,7 @@ export class HibernatingChatRoom extends DurableObject {
         
         // 清理断开的会话
         disconnectedSessions.forEach(sessionId => {
-            const session = this.sessions.get(sessionId);
-            if (session) {
-                this.debugLog(`🧹 清除断开的连接🔗session: ${session.username}`);
-                this.sessions.delete(sessionId);
-            }
+            this.cleanupSession(sessionId, { code: 1011, reason: 'Heartbeat failed', wasClean: false });
         });
         
         if (activeSessions > 0) {
@@ -165,37 +169,28 @@ export class HibernatingChatRoom extends DurableObject {
     }
 
     // ============ RPC 方法 ============
-
-    /**
-     * 【新增】RPC方法，用于系统/机器人发送消息
-     */
     async postBotMessage(payload, secret) {
-        // 安全检查 (可选，但推荐)
+        // 安全检查
         if (this.env.CRON_SECRET && secret !== this.env.CRON_SECRET) {
             this.debugLog("BOT POST: Unauthorized attempt!", 'ERROR');
             return;
         }
         
         this.debugLog(`🤖 机器人自动发帖...`, 'INFO', payload);
-        await this.loadState();
+        await this.initialize();
         
         const message = {
             id: crypto.randomUUID(),
-            username: "机器人小助手", // 机器人的名字
+            username: "机器人小助手", 
             timestamp: Date.now(),
             ...payload 
         };
         
-        this.messages.push(message);
-        if (this.messages.length > 500) this.messages.shift();
-        
-        await this.saveState();
-        this.broadcast({ type: 'chat', payload: message });
+        await this.addAndBroadcastMessage(message);
     }
 
-
     /**
-     * 【替换】旧的 cronPost 方法
+     * 兼容旧的 cronPost 方法
      */
     async cronPost(text, secret) {
         this.debugLog(`🤖 收到定时任务, 自动发送文本消息: ${text}`);
@@ -209,9 +204,7 @@ export class HibernatingChatRoom extends DurableObject {
         this.debugLog(`📥 服务端入站请求: ${request.method} ${url.pathname}`);
 
         // 确保状态已加载
-        if (!this.isInitialized) {
-            await this.loadState();
-        }
+        await this.initialize();
 
         // 处理 WebSocket 升级请求
         if (request.headers.get("Upgrade") === "websocket") {
@@ -457,6 +450,7 @@ export class HibernatingChatRoom extends DurableObject {
                     type: MSG_TYPE_ERROR,
                     payload: { message: "会话已失效，请刷新页面重新连接" }
                 }));
+                ws.close(1011, "Session not found");
             } catch (e) {
                 this.debugLog(`❌ 无法发送错误信息: ${e.message}`, 'ERROR');
             }
@@ -472,16 +466,15 @@ export class HibernatingChatRoom extends DurableObject {
         try {
             const data = JSON.parse(message);
             
-        if (data.type === MSG_TYPE_CHAT) {
-            // 这里 data.payload 就是前端发送的 { type: 'text', text: '...' } 或 { type: 'image', ... }
-            await this.handleChatMessage(session, data.payload); 
-        } else if (data.type === MSG_TYPE_DELETE) {
-            await this.handleDeleteMessage(session, data.payload);
-        } else if (data.type === MSG_TYPE_HEARTBEAT) {
-            this.debugLog(`💓 收到其心跳包💓 ${session.username}`, 'HEARTBEAT');
-        } else {
-            this.debugLog(`⚠️ Unhandled message type: ${data.type}`, 'WARN', data);
-        }
+            if (data.type === MSG_TYPE_CHAT) {
+                await this.handleChatMessage(session, data.payload); 
+            } else if (data.type === MSG_TYPE_DELETE) {
+                await this.handleDeleteMessage(session, data.payload);
+            } else if (data.type === MSG_TYPE_HEARTBEAT) {
+                this.debugLog(`💓 收到其心跳包💓 ${session.username}`, 'HEARTBEAT');
+            } else {
+                this.debugLog(`⚠️ Unhandled message type: ${data.type}`, 'WARN', data);
+            }
         } catch (e) { 
             this.debugLog(`❌ Failed to parse WebSocket message: ${e.message}`, 'ERROR');
             try {
@@ -495,35 +488,11 @@ export class HibernatingChatRoom extends DurableObject {
         }
     }
 
-    async webSocketClose(ws, code, reason, wasClean) {
-        const sessionId = ws.sessionId;
-        const session = this.sessions.get(sessionId);
-        
-        if (session) {
-            this.debugLog(`🔌 断开其连接: ${session.username} (Session: ${sessionId}). Code: ${code}, 原因: ${reason}, 清理: ${wasClean}`);
-            
-            // 从会话列表中移除
-            this.sessions.delete(sessionId);
-            
-            // 广播用户离开消息
-            this.broadcast({ 
-                type: MSG_TYPE_USER_LEAVE, 
-                payload: { 
-                    username: session.username,
-                    userCount: this.sessions.size
-                } 
-            });
-            
-            this.debugLog(`📊 Remaining sessions: ${this.sessions.size}`);
-            
-            // 保存状态
-            await this.saveState();
-        } else {
-            this.debugLog(`🔌 断开未知连接： (SessionId: ${sessionId}). Code: ${code}`);
-        }
+    webSocketClose(ws, code, reason, wasClean) {
+        this.cleanupSession(ws.sessionId, { code, reason, wasClean });
     }
     
-    async webSocketError(ws, error) {
+    webSocketError(ws, error) {
         const sessionId = ws.sessionId;
         const session = this.sessions.get(sessionId);
         const username = session ? session.username : 'unknown';
@@ -531,18 +500,13 @@ export class HibernatingChatRoom extends DurableObject {
         this.debugLog(`💥 WebSocket error for ${username}: ${error}`, 'ERROR');
         
         // 触发关闭处理
-        await this.webSocketClose(ws, 1011, "An error occurred", false);
+        this.cleanupSession(sessionId, { code: 1011, reason: "An error occurred", wasClean: false });
     }
 
     // ============ 核心业务逻辑 ============
     async handleChatMessage(session, payload) {
         // 打印完整的 payload 方便调试，可以确认内部 type
         this.debugLog(`💬 Handling chat message from ${session.username}`, 'INFO', payload);
-        
-        // 确保状态已加载
-        if (!this.isInitialized) {
-            await this.loadState();
-        }
         
         let messageContentValid = false;
         // 获取内部 payload 的 type
@@ -621,18 +585,7 @@ export class HibernatingChatRoom extends DurableObject {
             message.size = payload.size;
         }
         
-        this.messages.push(message);
-        
-        // 限制消息数量
-        if (this.messages.length > 500) {
-            this.messages.shift();
-        }
-        
-        await this.saveState();
-        
-        this.debugLog(`📤 Broadcasting message to ${this.sessions.size} sessions`);
-        // 广播时，使用 MSG_TYPE_CHAT 作为外层类型，内部 payload 为规范后的消息对象
-        this.broadcast({ type: MSG_TYPE_CHAT, payload: message });
+        await this.addAndBroadcastMessage(message);
     }
 
     async handleDeleteMessage(session, payload) { 
@@ -646,7 +599,6 @@ export class HibernatingChatRoom extends DurableObject {
         const messageToDelete = this.messages.find(m => m.id === messageId);
 
         // 安全检查：确保消息存在，并且是该用户自己发送的
-        // 或者，如果你希望管理员可以删除任何消息，可以添加 ADMIN_SECRET 检查
         if (messageToDelete && messageToDelete.username === session.username) {
             this.messages = this.messages.filter(m => m.id !== messageId);
             
@@ -676,6 +628,39 @@ export class HibernatingChatRoom extends DurableObject {
     }
 
     // ============ 辅助方法 ============
+    async addAndBroadcastMessage(message) {
+        this.messages.push(message);
+        if (this.messages.length > 500) this.messages.shift();
+        
+        await this.saveState();
+        
+        this.broadcast({ type: MSG_TYPE_CHAT, payload: message });
+    }
+
+    // 统一的会话清理函数
+    cleanupSession(sessionId, closeInfo = {}) {
+        const session = this.sessions.get(sessionId);
+        if (session) {
+            this.sessions.delete(sessionId);
+            const { code = 'N/A', reason = 'N/A', wasClean = 'N/A' } = closeInfo;
+            this.debugLog(`🔌 断开其连接: ${session.username} (Session: ${sessionId}). Code: ${code}, 原因: ${reason}, 清理: ${wasClean}`);
+            
+            // 广播用户离开消息
+            this.broadcast({ 
+                type: MSG_TYPE_USER_LEAVE, 
+                payload: { 
+                    username: session.username,
+                    userCount: this.sessions.size
+                } 
+            });
+            
+            this.debugLog(`📊 Remaining sessions: ${this.sessions.size}`);
+            
+            // 使用 waitUntil 确保状态保存在实例休眠前完成
+            this.ctx.waitUntil(this.saveState());
+        }
+    }
+
     fetchHistory(since = 0) {
         return since > 0 ? this.messages.filter(msg => msg.timestamp > since) : this.messages;
     }
@@ -705,11 +690,7 @@ export class HibernatingChatRoom extends DurableObject {
         
         // 清理断开的会话
         disconnectedSessions.forEach(sessionId => {
-            const session = this.sessions.get(sessionId);
-            if (session) {
-                this.debugLog(`🧹 Cleaning up failed session: ${session.username}`);
-                this.sessions.delete(sessionId);
-            }
+            this.cleanupSession(sessionId, { code: 1011, reason: 'Broadcast failed', wasClean: false });
         });
         
         // 避免调试日志的广播产生无限循环
