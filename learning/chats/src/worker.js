@@ -214,20 +214,38 @@ export default {
     /**
      * 【重构后】处理由Cron Trigger触发的定时事件。
      */
-    async scheduled(event, env, ctx) {
+async scheduled(event, env, ctx) {
         console.log(`[Worker] Cron Trigger firing! Rule: ${event.cron}`);
 
-        // 从 Map 中查找与当前 cron 规则匹配的任务函数
         const taskFunction = taskMap.get(event.cron);
 
         if (taskFunction) {
-            // 如果找到匹配的任务，则执行它
             console.log(`[Worker] Executing task for cron rule: ${event.cron}`);
-            // 使用 await 是可选的，但可以确保在日志中看到执行完成（如果函数不复杂）
-            // 对于重量级任务，函数内部已经使用了 ctx.waitUntil，所以这里的 await 不是必须的
-            await taskFunction(env, ctx);
+            
+            // 【关键修改】: 执行任务并获取返回的状态结果
+            const result = await taskFunction(env, ctx);
+            
+            // 如果任务函数返回了结果，就进行广播通知
+            if (result && result.roomName) {
+                try {
+                    const doId = env.CHAT_ROOM_DO.idFromName(result.roomName);
+                    const stub = env.CHAT_ROOM_DO.get(doId);
+                    
+                    // 准备要广播的系统消息内容
+                    const systemMessagePayload = result.success 
+                        ? { message: `✅ 定时任务'${event.cron}'执行成功: ${result.message}`, level: 'SUCCESS' }
+                        : { message: `❌ 定时任务'${event.cron}'执行失败: ${result.error}`, level: 'ERROR', data: result };
+
+                    // 调用新的RPC方法来广播通知
+                    // 同样使用 waitUntil 确保它在后台完成
+                    ctx.waitUntil(stub.broadcastSystemMessage(systemMessagePayload, env.CRON_SECRET));
+
+                } catch(e) {
+                    console.error(`[Worker] Failed to broadcast cron status for room ${result.roomName}:`, e);
+                }
+            }
+
         } else {
-            // 如果没有找到匹配的任务，发出警告
             console.warn(`[Worker] No task defined for cron rule: ${event.cron}`);
         }
     },
