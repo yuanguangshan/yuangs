@@ -35,7 +35,7 @@
       if (e.type==='touchend') e.preventDefault();
       const ac = new AudioCtx();
       if (ac.state==='suspended') ac.resume();
-      new Audio("data:audio/mp3;base64,SUQz…").play().catch(()=>{});
+      new Audio("data:audio/mp3;base64,SUQz...").play().catch(()=>{}); // 这里的音频数据应该是一个完整的Base64编码MP3数据
       document.body.removeEventListener('click', unlockAudioContext);
       document.body.removeEventListener('touchend', unlockAudioContext);
     }
@@ -236,6 +236,8 @@
             overscroll-behavior: contain; /* 确保滚动行为被包含 */
             touch-action: pan-y; /* 明确启用垂直平移 */
             position: relative; /* 确保正确定位 */
+            display: flex; /* 确保虚拟滚动元素能正确布局 */
+            flex-direction: column; /* 确保虚拟滚动元素能正确布局 */
         }
         #chat-window::-webkit-scrollbar { width: 4px; }
         #chat-window::-webkit-scrollbar-track { background: transparent; }
@@ -925,6 +927,10 @@ function initDebugLog() {
     logDebug('调试日志系统初始化完成', LOG_LEVELS.SUCCESS);
     logDebug(`当前用户: ${username}`, LOG_LEVELS.INFO);
     logDebug(`当前房间: ${roomName}`, LOG_LEVELS.INFO);
+    // 初始化时根据 isDebugEnabled 决定是否显示
+    if (debugLogContent) {
+        debugLogContent.style.display = isDebugEnabled ? '' : 'none';
+    }
 }
 
 function clearLogs() {
@@ -973,7 +979,7 @@ function isUserActive(lastSeenTimestamp) {
     return new Date(lastSeenTimestamp).getTime() > fiveMinutesAgo;
 }
 
-// 优化 updateUIFromMessages 函数，使其不再频繁地重置 innerHTML
+// 优化 updateUIFromMessages 函数，实现 DOM 协调 (Reconciliation)
 function updateUIFromMessages() {
     const currentUserStates = new Map(); // { username: { lastSeen, messageCount, isActive } }
     const activeUsersSet = new Set();
@@ -1005,30 +1011,37 @@ function updateUIFromMessages() {
     const userNamesEl = document.getElementById('user-names');
     const menuListEl = document.getElementById('users-menu-list');
 
-    // 移除已离开的用户：遍历当前DOM中的用户，如果不在活跃列表中，就移除
+    // 1. 收集当前 DOM 中的元素
+    const currentUserItems = new Map(); // username -> DOM Element
     Array.from(userNamesEl.children).forEach(el => {
-        const name = el.dataset.username; // 获取存储在 dataset 中的用户名
-        if (name && !activeUsersSet.has(name)) {
-            el.remove();
-            menuListEl.querySelector(`li[data-username="${escapeHTML(name)}"]`)?.remove();
-        }
+        if (el.dataset.username) currentUserItems.set(el.dataset.username, el);
+    });
+    const currentMenuItems = new Map();
+    Array.from(menuListEl.children).forEach(el => {
+        if (el.dataset.username) currentMenuItems.set(el.dataset.username, el);
     });
 
-    // 添加新用户和更新现有用户：遍历活跃列表
+    // 2. 遍历新数据，添加或更新
+    const newUserItems = []; // 用于批量添加，保持顺序
+    const newMenuItems = [];
+
     sortedActiveUsernames.forEach(name => {
         const safeName = escapeHTML(name);
-        // 如果DOM中不存在该用户，则创建并添加
-        if (!userNamesEl.querySelector(`.user-item[data-username="${safeName}"]`)) {
-            // 添加到侧边栏用户列表
-            const userItem = document.createElement('div');
+        
+        let userItem = currentUserItems.get(name);
+        if (!userItem) {
+            userItem = document.createElement('div');
             userItem.className = 'user-item';
+            userItem.dataset.username = name;
             userItem.textContent = safeName;
-            userItem.dataset.username = safeName; // 存储用户名便于查找和删除
-            userNamesEl.appendChild(userItem); // 直接append，浏览器会优化少量DOM操作
+        }
+        newUserItems.push(userItem);
+        currentUserItems.delete(name); // 标记为已处理
 
-            // 添加到头部菜单列表
-            const menuItem = document.createElement('li');
-            menuItem.dataset.username = safeName; // 存储用户名
+        let menuItem = currentMenuItems.get(name);
+        if (!menuItem) {
+            menuItem = document.createElement('li');
+            menuItem.dataset.username = name;
             if (name === username) {
                 menuItem.textContent = `${safeName} (你)`;
             } else {
@@ -1040,7 +1053,6 @@ function updateUIFromMessages() {
                 callBtn.className = 'call-btn';
                 callBtn.textContent = '📞';
                 callBtn.dataset.username = safeName;
-                // 注意：这里callBtn的点击事件无需委托，因为它是随菜单项创建并添加到DOM的
                 callBtn.onclick = (e) => {
                     e.stopPropagation();
                     startCall(callBtn.dataset.username);
@@ -1048,10 +1060,26 @@ function updateUIFromMessages() {
                 };
                 menuItem.appendChild(callBtn);
             }
-            menuListEl.appendChild(menuItem);
         }
-        // 对于已存在的用户，如果需要，可以在这里更新他们的状态或样式
+        newMenuItems.push(menuItem);
+        currentMenuItems.delete(name); // 标记为已处理
     });
+
+    // 3. 移除未在当前活跃列表中的旧元素
+    currentUserItems.forEach(el => el.remove());
+    currentMenuItems.forEach(el => el.remove());
+
+    // 4. 重新构建用户列表和菜单 (批量添加，避免多次重排)
+    const userNamesFragment = document.createDocumentFragment();
+    newUserItems.forEach(item => userNamesFragment.appendChild(item));
+    userNamesEl.innerHTML = ''; // 清空后重新填充，因为顺序可能变动
+    userNamesEl.appendChild(userNamesFragment);
+
+    const menuListFragment = document.createDocumentFragment();
+    newMenuItems.forEach(item => menuListFragment.appendChild(item));
+    menuListEl.innerHTML = ''; // 清空后重新填充
+    menuListEl.appendChild(menuListFragment);
+
 
     // --- 更新活跃用户计数 ---
     document.getElementById('online-count').textContent = sortedActiveUsernames.length;
@@ -1191,6 +1219,7 @@ function renderVirtualWindow(scrollToBottom = false) {
     });
 
     const elementsToMeasureLater = []; // 收集新创建的元素，稍后批量测量高度
+    const fragment = document.createDocumentFragment(); // 用于批量添加
 
     let prevElementInDesiredOrder = null; // 跟踪在目标顺序中前一个已处理的 DOM 元素
 
@@ -1202,21 +1231,26 @@ function renderVirtualWindow(scrollToBottom = false) {
             // 元素不在 DOM 中，需要创建
             messageElement = createMessageElement(messageData);
             elementsToMeasureLater.push(messageElement); // 标记为新元素，稍后测量
+            fragment.appendChild(messageElement); // 添加到 DocumentFragment
         } else {
             // 元素已存在于 DOM 中，从 currentDomMap 中删除，表示它将被保留
             currentDomMap.delete(messageData.id); 
-        }
 
-        // 确保 messageElement 在 messageWrapperEl 中处于正确的位置
-        const targetNextSibling = prevElementInDesiredOrder ? prevElementInDesiredOrder.nextSibling : messageWrapperEl.firstChild;
-
-        // 只有当元素不在 DOM 中，或者它在 DOM 中但位置不正确时才进行插入/移动操作
-        if (messageElement.parentNode !== messageWrapperEl || messageElement !== targetNextSibling) {
-            messageWrapperEl.insertBefore(messageElement, targetNextSibling);
+            // 如果元素位置不对，也需要移动。将其从旧位置移除，稍后在正确位置插入
+            if (messageElement.parentNode === messageWrapperEl && 
+                (prevElementInDesiredOrder ? messageElement !== prevElementInDesiredOrder.nextSibling : messageElement !== messageWrapperEl.firstChild)) {
+                messageWrapperEl.removeChild(messageElement);
+                fragment.appendChild(messageElement); // 移动到 DocumentFragment 待插入
+            }
         }
-        
         prevElementInDesiredOrder = messageElement; // 更新前一个元素引用
     }
+
+    // 批量添加/移动元素到 messageWrapperEl
+    if (fragment.children.length > 0) {
+        messageWrapperEl.appendChild(fragment); // 一次性插入所有新/移动的元素
+    }
+
 
     // 遍历 currentDomMap 中剩余的元素，这些是旧的、不再需要的元素，将它们从 DOM 中移除
     currentDomMap.forEach(element => {
@@ -1243,12 +1277,14 @@ function renderVirtualWindow(scrollToBottom = false) {
 
 // --- 初始化虚拟滚动结构 ---
 function initVirtualScrolling() {
-    if (chatWindowEl.querySelector('.virtual-scroll-spacer')) { // 避免重复初始化
-        logDebug('虚拟滚动已初始化，跳过', LOG_LEVELS.INFO);
-        return;
+    // 每次重新初始化时，确保清空旧的虚拟滚动结构
+    if (topSpacerEl && messageWrapperEl && bottomSpacerEl) {
+        topSpacerEl.remove();
+        messageWrapperEl.remove();
+        bottomSpacerEl.remove();
     }
 
-    // 清空原始内容
+    // 清空原始内容，以防有非虚拟滚动相关的元素
     chatWindowEl.innerHTML = '';
 
     // 创建顶部填充元素
@@ -1338,12 +1374,20 @@ function createMessageElement(msg) {
 
 // ✨ 消息队列处理函数，在 requestAnimationFrame 中执行
 function processMessageQueue() {
+    if (historicalMessagesLoading) {
+        // 如果历史消息还在加载中，暂停处理新消息队列，等待历史消息处理完毕
+        rafScheduled = false; // 取消当前的 RAF 调度，等待历史消息处理完成后再次调度
+        logDebug("历史消息加载中，暂停处理新消息队列。", LOG_LEVELS.INFO);
+        return;
+    }
+
     if (messageQueue.length === 0) {
         rafScheduled = false;
         return;
     }
 
-    const messagesToProcess = messageQueue.splice(0, Math.max(MESSAGE_BATCH_SIZE, messageQueue.length)); // 处理至少批次大小或所有剩余消息
+    // 每次处理一个批次的消息
+    const messagesToProcess = messageQueue.splice(0, MESSAGE_BATCH_SIZE); 
 
     logDebug(`处理消息队列: 移除 ${messagesToProcess.length} 条消息`, LOG_LEVELS.INFO);
 
@@ -1579,6 +1623,7 @@ async function handleImageSelection(e) {
     if (!file || !file.type.startsWith('image/')) return;
     try {
         uploadProgress.style.display = 'block';
+        uploadProgress.textContent = '压缩中...'; // 添加压缩提示
         imagePreview.classList.add('show', 'uploading');
         const compressedBlob = await compressImage(file);
         selectedFile = new File([compressedBlob], file.name, { type: 'image/jpeg', lastModified: Date.now() });
@@ -1855,20 +1900,22 @@ async function processHistoryMessages(history) {
     historicalMessagesLoading = true; 
     
     // 重置状态
-    chatWindowEl.innerHTML = ''; // 清空虚拟滚动结构，会在initVirtualScrolling中重新创建
+    // 不再清空 chatWindowEl.innerHTML，而是依赖 initVirtualScrolling 来重置结构
     allMessages = [];
     messageIdSet.clear(); 
     messageHeights.clear();
-    isVirtualScrollInitialized = false; 
     
-    initVirtualScrolling(); 
+    if (!isVirtualScrollInitialized) {
+        initVirtualScrolling(); // 确保虚拟滚动结构已准备好
+    }
     
     const CHUNK_SIZE = 50; // 每次处理50条消息
     let processedCount = 0;
 
     const processChunk = (deadline) => {
         let chunkStartTime = Date.now();
-        while (processedCount < history.length && (deadline.timeRemaining() > 0 || (Date.now() - chunkStartTime < 16))) {
+        // 在空闲时间内或至少处理一个批次
+        while (processedCount < history.length && (deadline.timeRemaining() > 0 || (Date.now() - chunkStartTime < 16 && processedCount % CHUNK_SIZE !== 0))) {
             const msg = history[processedCount];
             if (msg && msg.id && !messageIdSet.has(msg.id)) {
                 allMessages.push(msg);
@@ -1890,7 +1937,7 @@ async function processHistoryMessages(history) {
             logDebug("所有历史记录处理完毕。", LOG_LEVELS.SUCCESS);
             isVirtualScrollInitialized = true;
             historicalMessagesLoading = false;
-            processMessageQueue(); 
+            processMessageQueue(); // 历史消息处理完毕后，开始处理消息队列中积压的新消息
         }
     };
 
@@ -1907,7 +1954,7 @@ async function processHistoryMessages(history) {
         isVirtualScrollInitialized = true;
         historicalMessagesLoading = false;
         renderVirtualWindow(true);
-        processMessageQueue(); 
+        processMessageQueue(); // 历史消息处理完毕后，开始处理消息队列中积压的新消息
     }
 }
 
@@ -1931,7 +1978,12 @@ function onSocketOpen() {
     checkSendButtonState();
     logDebug('WebSocket连接已建立', LOG_LEVELS.SUCCESS);
     if (!window.userListInterval) {
-        window.userListInterval = setInterval(updateUIFromMessages, 60000); 
+        window.userListInterval = setInterval(throttledUpdateUI, 60000); // 使用节流后的函数
+    }
+    // 连接成功后，立即触发一次队列处理，以防在断线期间有消息积压
+    if (messageQueue.length > 0 && !rafScheduled) {
+        rafScheduled = true;
+        requestAnimationFrame(processMessageQueue);
     }
 }
 
@@ -1950,7 +2002,6 @@ const messageHandlers = {
         if (newMessage && newMessage.id) {
             appendChatMessage(newMessage);
         }
-        throttledUpdateUI(); 
     },
     user_join: (payload) => {
         logDebug(`前端消息: ${payload.username} 加入了`, LOG_LEVELS.INFO, payload);
@@ -1967,7 +2018,7 @@ const messageHandlers = {
             allMessages = allMessages.filter(m => m.id !== messageId);
             messageIdSet.delete(messageId); 
             messageHeights.delete(messageId); 
-            renderVirtualWindow(); 
+            renderVirtualWindow(); // 强制重新渲染以移除消息
             throttledUpdateUI(); 
         }
     },
@@ -1984,6 +2035,7 @@ const messageHandlers = {
         logDebug(`[后端日志] ${payload.message}`, payload.level.toLowerCase(), payload.data);
     },
     heartbeat: () => {
+        // 心跳消息不记录到 DOM 日志，只在控制台记录（由 logDebug 内部处理）
     },
     system_notification: (payload) => { 
         logDebug(`[系统通知] ${payload.message}`, payload.level.toLowerCase(), payload);
@@ -1995,7 +2047,8 @@ const messageHandlers = {
 async function onSocketMessage(event) {
     // 预处理快速过滤心跳消息，避免不必要的 JSON.parse
     // 注意: 这里假设心跳消息的格式非常固定。如果后端心跳格式可能变化，请改为 JSON.parse 后再判断 type。
-    if (event.data === '{"type":"heartbeat","payload":{"timestamp":' + Date.now() + '}}') { 
+    // 更安全的判断方式是检查字符串开头和结尾
+    if (event.data.startsWith('{"type":"heartbeat"') && event.data.endsWith('}}')) { 
         return;
     }
 
@@ -2169,7 +2222,10 @@ function initializeChat() {
     document.getElementById('sidebar-room-name').textContent = roomName;
     usernameDisplayEl.textContent = username;
 
-    initDebugLog();
+    initDebugLog(); // 初始化调试日志，包括控制按钮
+
+    // 确保虚拟滚动在连接WebSocket和处理历史消息之前初始化
+    initVirtualScrolling();
     
     initLocalMedia().catch(err => {
         logDebug('初始化媒体失败: ' + err, LOG_LEVELS.WARNING);
