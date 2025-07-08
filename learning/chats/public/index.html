@@ -600,7 +600,7 @@
             transform: scale(1.05);
         }
 
-        .copy-feedback {
+        .copy-feedback, .app-notification {
             position: fixed;
             bottom: 20px;
             left: 50%;
@@ -613,9 +613,10 @@
             z-index: 9999;
             opacity: 0;
             transition: opacity 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }
 
-        .copy-feedback.show {
+        .copy-feedback.show, .app-notification.show {
             opacity: 1;
         }
 
@@ -728,6 +729,8 @@
 </div>
 <div id="call-controls-container"></div>
 <div id="remote-audio-container"></div>
+<div id="app-notification" class="app-notification"></div>
+
 
 <script type="module">
     // --- DOM Elements ---
@@ -765,10 +768,20 @@ const debugLogContent = document.getElementById('debug-log-content');
 const clearLogsBtn = document.getElementById('clear-logs-btn');
 const copyLogsBtn = document.getElementById('copy-logs-btn');
 const toggleLogsBtn = document.getElementById('toggle-logs-btn');
+const appNotification = document.getElementById('app-notification'); // New notification element
 
 
 // --- 全局状态变量 ---
 let allMessages = []; // 存储所有消息数据
+let messageIdSet = new Set(); // ✨ 新增：用于快速去重
+let messageQueue = []; // ✨ 新增：消息队列，用于批量处理新消息
+let rafScheduled = false; // ✨ 新增：requestAnimationFrame 调度标志
+const MESSAGE_BATCH_SIZE = 5; // ✨ 新增：批量处理消息的最小数量
+const MESSAGE_BATCH_DEBOUNCE_MS = 50; // ✨ 新增：批量处理消息的防抖时间
+
+let isVirtualScrollInitialized = false; // 标志位，跟踪虚拟滚动是否准备就绪
+let historicalMessagesLoading = false; // ✨ 新增：标志位，表示历史消息是否正在加载
+
 let selectedFile = null;
 let mediaRecorder;
 let audioChunks = [];
@@ -797,7 +810,6 @@ const pathParts = window.location.pathname.split('/');
 const roomName = pathParts.find(p => p.trim()) || 'general';
 
 
-// --- 工具函数 ---
 function escapeHTML(str) {
     if (typeof str !== 'string') return '';
     const map = {
@@ -922,7 +934,7 @@ function clearLogs() {
 function copyLogs() {
     const logText = Array.from(debugLogContent.children).map(entry => entry.textContent).join('\n');
     navigator.clipboard.writeText(logText).then(() => {
-        showCopyFeedback('日志已复制到剪贴板');
+        showAppNotification('日志已复制到剪贴板'); // Changed from showCopyFeedback
         logDebug('日志已复制到剪贴板', LOG_LEVELS.SUCCESS);
     }).catch(err => logDebug(`复制失败: ${err}`, LOG_LEVELS.ERROR));
 }
@@ -936,16 +948,15 @@ function toggleLogsDisplay() {
     logDebug(`调试日志显示已${isDebugEnabled ? '开启' : '隐藏'}`, LOG_LEVELS.INFO);
 }
 
-function showCopyFeedback(message) {
-    let feedback = document.querySelector('.copy-feedback');
-    if (!feedback) {
-        feedback = document.createElement('div');
-        feedback.className = 'copy-feedback';
-        document.body.appendChild(feedback);
-    }
-    feedback.textContent = message;
-    feedback.classList.add('show');
-    setTimeout(() => feedback.classList.remove('show'), 2000);
+// ✨ 优化后的通用通知函数
+function showAppNotification(message, duration = 2000, isError = false) {
+    if (!appNotification) return;
+
+    appNotification.textContent = message;
+    appNotification.style.backgroundColor = isError ? '#e74c3c' : 'rgba(102, 126, 234, 0.9)';
+    appNotification.classList.add('show');
+
+    setTimeout(() => appNotification.classList.remove('show'), duration);
 }
 
 
@@ -1185,8 +1196,6 @@ function renderVirtualWindow(scrollToBottom = false) {
         const msg = allMessages[i];
         const existingEl = messageWrapperEl.querySelector(`[data-id="${msg.id}"]`); // 检查是否已存在
         if (existingEl) {
-            // 如果已存在，直接添加到fragment（通常不会发生，因为我们清空了）
-            // 或者，可以在这里做更细致的diffing来避免重建，但innerHTML=清空+fragment.appendChild对于少量DOM足够快
             fragment.appendChild(existingEl); 
         } else {
             const msgEl = createMessageElement(msg);
@@ -1215,7 +1224,6 @@ function renderVirtualWindow(scrollToBottom = false) {
     }
 
     // 调整一下总高度，以防测量后总高度发生变化
-    // 这里需要重新计算一次总高度并可能调整bottomSpacer
     const newTotalHeight = topPaddingHeight + messageWrapperEl.offsetHeight + bottomPaddingHeight;
     // logDebug(`渲染窗口：${startIndex}-${endIndex}, 顶部: ${topPaddingHeight.toFixed(0)}, 底部: ${bottomPaddingHeight.toFixed(0)}, 总高: ${newTotalHeight.toFixed(0)}`, 'INFO');
 }
@@ -1316,37 +1324,72 @@ function createMessageElement(msg) {
     return msgEl;
 }
 
-// 这个函数现在只负责将消息数据添加到 allMessages 数组，并触发渲染
+// ✨ 消息队列处理函数，在 requestAnimationFrame 中执行
+function processMessageQueue() {
+    if (messageQueue.length === 0) {
+        rafScheduled = false;
+        return;
+    }
+
+    const messagesToProcess = messageQueue.splice(0, Math.max(MESSAGE_BATCH_SIZE, messageQueue.length)); // 处理至少批次大小或所有剩余消息
+
+    logDebug(`处理消息队列: 移除 ${messagesToProcess.length} 条消息`, 'INFO');
+
+    // 批量添加消息并更新缓存
+    messagesToProcess.forEach(msg => {
+        if (!messageIdSet.has(msg.id)) {
+            allMessages.push(msg);
+            messageIdSet.add(msg.id);
+        } else {
+            logDebug(`消息 ${msg.id} 已存在，跳过`, 'INFO');
+        }
+    });
+
+    // 限制总消息数组的大小，防止内存无限增长
+    const MAX_ALL_MESSAGES = 500; // 保持与后端一致的缓存策略，避免前端缓存过多导致内存问题
+    while (allMessages.length > MAX_ALL_MESSAGES) {
+        const removedMsg = allMessages.shift(); // 移除最老的一条
+        messageHeights.delete(removedMsg.id); // 从高度缓存中也移除
+        messageIdSet.delete(removedMsg.id); // ✨ 从 ID 集合中移除
+    }
+
+    // 触发虚拟窗口渲染，并强制滚动到底部
+    renderVirtualWindow(true); 
+    throttledUpdateUI(); // 触发用户列表更新
+
+    // 如果队列中还有消息，继续调度下一个 requestAnimationFrame
+    if (messageQueue.length > 0) {
+        requestAnimationFrame(processMessageQueue);
+    } else {
+        rafScheduled = false;
+    }
+}
+
+// ✨ 修改 appendChatMessage，只负责入队和调度
 function appendChatMessage(msg) {
     if (!msg || !msg.id) {
-        logDebug("致命错误：传入的 msg 对象无效或缺少ID！", 'error', msg);
+        logDebug("appendChatMessage 收到无效消息", 'error', msg);
         return;
     }
     
-    // 检查是否是需要替换的乐观更新消息
-    const existingIndex = allMessages.findIndex(m => m.id === msg.id);
-    if (existingIndex > -1) {
-        // 如果找到同ID消息，替换数据
-        allMessages[existingIndex] = msg;
-        logDebug(`消息 ${msg.id} 已更新/确认`, 'INFO');
-    } else {
-        // 否则，添加新消息
-        allMessages.push(msg);
-        logDebug(`新消息 ${msg.id} 已添加`, 'INFO');
-    }
-    
-    // 限制 allMessages 数组的大小，避免内存无限增长
-    const MAX_ALL_MESSAGES = 1000; // 调整这个值以控制总消息量
-    if (allMessages.length > MAX_ALL_MESSAGES) {
-        const removedMessages = allMessages.splice(0, allMessages.length - MAX_ALL_MESSAGES);
-        removedMessages.forEach(removedMsg => {
-            messageHeights.delete(removedMsg.id); // 从高度缓存中移除
-        });
-        logDebug(`消息数组已截断，移除 ${removedMessages.length} 条旧消息`, 'INFO');
+    if (messageIdSet.has(msg.id)) {
+        logDebug(`收到重复消息 (ID: ${msg.id})，已忽略`, 'INFO');
+        return;
     }
 
-    // 触发虚拟窗口渲染，并滚动到底部（如果需要）
-    renderVirtualWindow(true); 
+    messageQueue.push(msg);
+    logDebug(`消息入队 (ID: ${msg.id}). 队列长度: ${messageQueue.length}`, 'INFO');
+
+    // 如果还没有调度，则调度一个 requestAnimationFrame
+    if (!rafScheduled) {
+        rafScheduled = true;
+        // 使用 setTimeout 引入一个小的防抖，避免消息频繁到来时立即触发 RAF
+        setTimeout(() => {
+            if (rafScheduled) { // 再次检查确保没有被取消
+                requestAnimationFrame(processMessageQueue);
+            }
+        }, MESSAGE_BATCH_DEBOUNCE_MS);
+    }
 }
 
 
@@ -1414,7 +1457,7 @@ contextMenu.addEventListener('click', async (e) => {
     if (clickedOption.id === 'copy-option') {
         if (originalMessageText) {
             navigator.clipboard.writeText(originalMessageText)
-                .then(() => showCopyFeedback('文本已复制!'))
+                .then(() => showAppNotification('文本已复制!'))
                 .catch(err => logDebug(`复制失败: ${err}`, LOG_LEVELS.ERROR));
         }
         return; // 处理完复制就返回
@@ -1512,7 +1555,7 @@ contextMenu.addEventListener('click', async (e) => {
         copyBtn.title = '复制内容';
         copyBtn.onclick = () => {
             navigator.clipboard.writeText(explanationContent)
-                .then(() => showCopyFeedback('AI解释已复制!'))
+                .then(() => showAppNotification('AI解释已复制!'))
                 .catch(err => logDebug(`AI解释复制失败: ${err}`, LOG_LEVELS.ERROR));
         };
 
@@ -1548,7 +1591,7 @@ async function handleImageSelection(e) {
         showImagePreview(selectedFile);
     } catch (error) {
         logDebug('图片处理失败: ' + error, LOG_LEVELS.ERROR);
-        alert('图片处理失败，请重试');
+        showAppNotification('图片处理失败，请重试', 3000, true); // Changed from alert
     } finally {
         uploadProgress.style.display = 'none';
         imagePreview.classList.remove('uploading');
@@ -1605,7 +1648,7 @@ async function handleRecordButtonClick() {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const mimeType = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'].find(t => MediaRecorder.isTypeSupported(t));
         if (!mimeType) {
-            alert('您的浏览器不支持录音功能。');
+            showAppNotification('您的浏览器不支持录音功能。', 3000, true); // Changed from alert
             return;
         }
         mediaRecorder = new MediaRecorder(stream, { mimeType });
@@ -1627,7 +1670,7 @@ async function handleRecordButtonClick() {
         mediaRecorder.start();
     } catch (error) {
         logDebug('无法访问麦克风: ' + error, LOG_LEVELS.ERROR);
-        alert('无法访问麦克风，请检查权限。');
+        showAppNotification('无法访问麦克风，请检查权限。', 3000, true); // Changed from alert
     }
 }
 
@@ -1655,10 +1698,15 @@ messageForm.addEventListener('submit', async (e) => {
             // 发送图片消息
             await sendImageMessage(selectedFile, text);
         } else if (text) {
-            // 简化版本 - 直接发送文本消息，不进行乐观更新
+            // 乐观更新：前端先生成一个临时ID和时间戳
+            const tempId = crypto.randomUUID();
+            const tempTimestamp = Date.now();
+            
             socket.send(JSON.stringify({ 
                 type: 'chat', 
                 payload: { 
+                    id: tempId,          // 包含临时ID
+                    timestamp: tempTimestamp, // 包含临时时间戳
                     type: 'text',
                     text: text 
                 } 
@@ -1670,7 +1718,7 @@ messageForm.addEventListener('submit', async (e) => {
         }
     } catch (error) {
         logDebug('发送消息过程中出现错误: ' + error, 'error', error);
-        alert('发送失败，请重试');
+        showAppNotification('发送失败，请重试', 3000, true); // Changed from alert
     } finally {
         // 恢复UI状态
         removeImagePreview();
@@ -1713,6 +1761,10 @@ async function sendImageMessage(file, caption = '') {
         
         logDebug(`图片上传成功，获取URL: ${data.url}`, LOG_LEVELS.SUCCESS);
         
+        // 乐观更新：前端先生成一个临时ID和时间戳
+        const tempId = crypto.randomUUID();
+        const tempTimestamp = Date.now();
+
         // 发送图片消息通过WebSocket
         const payload = {
             type: 'image',
@@ -1722,7 +1774,7 @@ async function sendImageMessage(file, caption = '') {
             filename: file.name,
             size: file.size,
             id: tempId,          // 包含临时ID和时间戳
-            timestamp: tempMsg.timestamp
+            timestamp: tempTimestamp
         };
         
         socket.send(JSON.stringify({
@@ -1740,7 +1792,7 @@ async function sendImageMessage(file, caption = '') {
         return true;
     } catch (error) {
         logDebug(`图片上传失败: ${error.message}`, LOG_LEVELS.ERROR, error);
-        alert(`图片上传失败: ${error.message}`);
+        showAppNotification(`图片上传失败: ${error.message}`, 3000, true); // Changed from alert
         throw error;
     } finally {
         // 隐藏上传进度UI
@@ -1781,6 +1833,10 @@ async function sendAudioMessage(audioBlob, mimeType) {
         
         logDebug(`音频上传成功，获取URL: ${data.url}`, LOG_LEVELS.SUCCESS);
         
+        // 乐观更新：前端先生成一个临时ID和时间戳
+        const tempId = crypto.randomUUID();
+        const tempTimestamp = Date.now();
+
         // 发送音频消息通过WebSocket
         const payload = {
             type: 'audio',
@@ -1789,7 +1845,7 @@ async function sendAudioMessage(audioBlob, mimeType) {
             filename: filename,
             size: audioBlob.size,
             id: tempId,          // 包含临时ID和时间戳
-            timestamp: tempMsg.timestamp
+            timestamp: tempTimestamp
         };
         
         socket.send(JSON.stringify({
@@ -1802,194 +1858,86 @@ async function sendAudioMessage(audioBlob, mimeType) {
         return true;
     } catch (error) {
         logDebug(`音频上传失败: ${error.message}`, LOG_LEVELS.ERROR, error);
-        alert(`音频上传失败: ${error.message}`);
+        showAppNotification(`音频上传失败: ${error.message}`, 3000, true); // Changed from alert
         throw error;
     }
 }
-// 优化的历史消息处理函数 - 完整版本
+
+// ✨ 优化的历史消息处理函数
 async function processHistoryMessages(history) {
-    if (!Array.isArray(history) || history.length === 0) {
-        logDebug("历史记录为空或格式不正确", LOG_LEVELS.WARNING);
-        updateUIFromMessages();
+    if (!Array.isArray(history)) {
+        logDebug("历史记录格式不正确，已忽略。", 'warn');
+        isVirtualScrollInitialized = true; 
+        historicalMessagesLoading = false;
+        processMessageQueue(); // 尝试处理队列中的任何暂存消息
         return;
     }
     
-    logDebug(`开始处理 ${history.length} 条历史记录，使用优化的批处理方式`);
+    logDebug(`开始处理 ${history.length} 条历史记录...`);
+    historicalMessagesLoading = true; // 标记正在加载历史
     
-    // 清空现有消息和DOM
-    chatWindowEl.innerHTML = '';
+    // 重置状态
+    chatWindowEl.innerHTML = ''; // 清空
     allMessages = [];
+    messageIdSet.clear(); // ✨ 清空 ID 集合
+    messageHeights.clear();
+    isVirtualScrollInitialized = false; 
     
-    // 过滤无效消息
-    const validHistory = history.filter(msg => msg && msg.id);
-    if (validHistory.length < history.length) {
-        logDebug(`数据清洗：过滤掉了 ${history.length - validHistory.length} 条无效的历史记录。`, LOG_LEVELS.WARNING);
-    }
+    // 初始化虚拟滚动结构
+    initVirtualScrolling(); 
     
-    // 设置批量大小和处理状态
-    const batchSize = 15;
+    const CHUNK_SIZE = 50; // 每次处理50条消息
     let processedCount = 0;
-    const totalMessages = validHistory.length;
-    
-    // 预先在内存中准备批次索引
-    const batchIndices = [];
-    for (let i = 0; i < totalMessages; i += batchSize) {
-        batchIndices.push(i);
-    }
-    
-    // 使用requestAnimationFrame的递归处理函数
-    function processNextBatch(batchIndex) {
-        if (batchIndex >= batchIndices.length) {
-            // 所有批次处理完成
-            finalizeBatchProcessing();
-            return;
-        }
-        
-        const startIndex = batchIndices[batchIndex];
-        const endIndex = Math.min(startIndex + batchSize, totalMessages);
-        const currentBatch = validHistory.slice(startIndex, endIndex);
-        
-        // 使用DocumentFragment减少DOM操作
-        const fragment = document.createDocumentFragment();
-        
-        // 处理当前批次的所有消息
-        currentBatch.forEach(msg => {
-            // 检查是否有乐观更新的临时消息，如果有则替换
-            const existingTempMsgIndex = allMessages.findIndex(m => 
-                m.id === msg.id || 
-                (m.id.startsWith('temp-') && 
-                 m.text === msg.text && 
-                 m.username === msg.username && 
-                 m.timestamp + 5000 > msg.timestamp)
-            );
-            
-            if (existingTempMsgIndex > -1) {
-                // 替换内存中的临时消息
-                allMessages[existingTempMsgIndex] = msg;
-                // 如果DOM中已有此元素，需要删除它
-                const tempEl = chatWindowEl.querySelector(`[data-id="${allMessages[existingTempMsgIndex].id}"]`);
-                if (tempEl) tempEl.remove();
-            } else {
-                // 添加新消息到内存数组
+
+    const processChunk = (deadline) => {
+        let chunkStartTime = Date.now();
+        while (processedCount < history.length && (deadline.timeRemaining() > 0 || (Date.now() - chunkStartTime < 16))) {
+            const msg = history[processedCount];
+            if (msg && msg.id && !messageIdSet.has(msg.id)) {
                 allMessages.push(msg);
+                messageIdSet.add(msg.id);
+            } else if (msg && msg.id && messageIdSet.has(msg.id)) {
+                logDebug(`历史消息中发现重复ID: ${msg.id}, 已跳过。`, 'INFO');
+            } else {
+                logDebug(`历史消息中发现无效消息，已跳过。`, 'WARN', msg);
             }
-            
-            // 创建消息DOM元素并添加到文档片段
-            const msgEl = createMessageElement(msg);
-            if (msgEl) {
-                fragment.appendChild(msgEl);
-            }
-        });
-        
-        // 一次性将整个批次添加到DOM
-        chatWindowEl.appendChild(fragment);
-        
-        // 更新进度计数
-        processedCount += currentBatch.length;
-        
-        // 可选：显示加载进度
-        if (totalMessages > 100) {
-            const progress = Math.round((processedCount / totalMessages) * 100);
-            logDebug(`历史记录加载进度: ${progress}%`);
+            processedCount++;
         }
-        
-        // 使用requestAnimationFrame安排下一批处理
-        // 如果浏览器繁忙，可以延迟处理下一批
-        if (batchIndex < 5 || processedCount % 50 === 0) {
-            // 前几批和每50条消息后立即处理下一批，确保快速显示部分内容
-            requestAnimationFrame(() => processNextBatch(batchIndex + 1));
+
+        renderVirtualWindow(true); // 每次处理完一个 chunk 后渲染一次，并保持滚动到底部
+
+        if (processedCount < history.length) {
+            logDebug(`处理历史中... 已完成 ${processedCount}/${history.length} 条。`, 'INFO');
+            // 如果还有剩余消息，请求下一个空闲回调
+            requestIdleCallback(processChunk, { timeout: 1000 });
         } else {
-            // 其他批次使用setTimeout增加间隙，减轻主线程负担
-            setTimeout(() => {
-                requestAnimationFrame(() => processNextBatch(batchIndex + 1));
-            }, 20);
+            logDebug("所有历史记录处理完毕。", 'SUCCESS');
+            isVirtualScrollInitialized = true;
+            historicalMessagesLoading = false;
+            // 历史处理完成后，立即处理所有暂存的新消息
+            processMessageQueue(); 
         }
-    }
-    
-    // 处理完所有批次后的最终步骤
-    function finalizeBatchProcessing() {
-        // 更新用户列表UI
-        updateUIFromMessages();
-        
-        // 滚动到底部，使用requestAnimationFrame确保在DOM更新后执行
-        requestAnimationFrame(() => {
-            chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
-            logDebug(`历史记录加载完成，共 ${processedCount} 条消息`, LOG_LEVELS.SUCCESS);
+    };
+
+    // 启动第一个空闲回调来处理历史记录
+    if (history.length > 0 && 'requestIdleCallback' in window) {
+        requestIdleCallback(processChunk, { timeout: 1000 });
+    } else {
+        // 如果浏览器不支持 requestIdleCallback 或没有历史记录，则立即处理
+        history.forEach(msg => {
+            if (msg && msg.id && !messageIdSet.has(msg.id)) {
+                allMessages.push(msg);
+                messageIdSet.add(msg.id);
+            }
         });
+        logDebug("历史记录处理完毕 (无requestIdleCallback或无历史).", 'SUCCESS');
+        isVirtualScrollInitialized = true;
+        historicalMessagesLoading = false;
+        renderVirtualWindow(true);
+        processMessageQueue(); // 立即处理队列中的任何暂存消息
     }
-    
-    // 创建单个消息元素的辅助函数
-    function createMessageElement(msg) {
-        try {
-            if (!msg || !msg.id) {
-                logDebug("无效的消息对象", LOG_LEVELS.ERROR, msg);
-                return null;
-            }
-            
-            const msgEl = document.createElement('div');
-            msgEl.className = 'message';
-            
-            // 设置消息数据属性
-            msgEl.dataset.id = msg.id;
-            msgEl.dataset.messageText = msg.caption || msg.text || '';
-            msgEl.dataset.timestamp = msg.timestamp;
-            msgEl.dataset.messageType = msg.type;
-            
-            if (msg.type === 'image') {
-                msgEl.dataset.imageUrl = msg.imageUrl;
-            }
-            
-            if (msg.username === username) msgEl.classList.add('self');
-            
-            // 格式化消息时间戳
-            const messageDate = new Date(msg.timestamp);
-            const now = new Date();
-            const diffSeconds = Math.floor((now - messageDate) / 1000);
-            let displayTime;
-            
-            if (diffSeconds < 60) displayTime = '刚刚';
-            else if (diffSeconds < 3600) displayTime = `${Math.floor(diffSeconds / 60)}分钟前`;
-            else if (diffSeconds < 86400) displayTime = `${Math.floor(diffSeconds / 3600)}小时前`;
-            else displayTime = messageDate.toLocaleString([], { 
-                year: 'numeric', month: 'numeric', day: 'numeric', 
-                hour: '2-digit', minute: '2-digit' 
-            });
-            
-            // 构建消息内容HTML
-            let contentHTML = `<div class="info">
-                <span class="username">${escapeHTML(msg.username)}</span> 
-                <span class="timestamp">${displayTime}</span>
-            </div>`;
-            
-            // 根据消息类型渲染不同内容
-            if (msg.type === 'image') {
-                contentHTML += `<div class="message-image" onclick="showImageModal('${msg.imageUrl}')">
-                    <img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy">
-                </div>`;
-                contentHTML += `<div class="text">${marked.parse(msg.caption || '')}</div>`;
-            } else if (msg.type === 'audio') {
-                contentHTML += `<div class="message-audio">
-                    <audio controls src="${msg.audioUrl}"></audio>
-                </div>`;
-                contentHTML += `<div class="text">${marked.parse(msg.text || '')}</div>`;
-            } else { // 文本消息
-                contentHTML += `<div class="text">${marked.parse(msg.text || '')}</div>`;
-            }
-            
-            msgEl.innerHTML = contentHTML;
-            return msgEl;
-            
-        } catch (e) {
-            logDebug(`创建消息元素出错: ${e.message}`, LOG_LEVELS.ERROR, { 
-                error: e.toString(), stack: e.stack, originalMessage: msg 
-            });
-            return null;
-        }
-    }
-    
-    // 开始处理第一批
-    processNextBatch(0);
 }
+
 
 // --- WebSocket 事件处理器 (优化版) ---
 function connectWebSocket() {
@@ -2011,22 +1959,84 @@ function onSocketOpen() {
     logDebug('WebSocket连接已建立', LOG_LEVELS.SUCCESS);
     // 启动用户列表定时更新（如果之前没有）
     if (!window.userListInterval) {
-        window.userListInterval = setInterval(updateUIFromMessages, 600000); // 10分钟更新一次用户列表
+        window.userListInterval = setInterval(updateUIFromMessages, 60000); // 1分钟更新一次用户列表，比之前10分钟更频繁
     }
 }
 
-// onSocketMessage (优化版)
+// ✨ 策略模式优化: 消息处理函数映射
+const messageHandlers = {
+    welcome: (payload) => {
+        const history = payload?.history;
+        if (Array.isArray(history)) {
+            processHistoryMessages(history);
+        } else {
+            logDebug("收到的欢迎消息中 history 格式不正确或不存在。", LOG_LEVELS.ERROR, payload);
+        }
+    },
+    chat: (payload) => {
+        const newMessage = payload;
+        if (newMessage && newMessage.id) {
+            // 如果历史消息正在加载，新消息先入队，不直接处理
+            // appendChatMessage 会自动进行去重
+            appendChatMessage(newMessage);
+        }
+        throttledUpdateUI(); // 触发用户列表等UI的更新
+    },
+    user_join: (payload) => {
+        logDebug(`前端消息: ${payload.username} 加入了`, LOG_LEVELS.INFO, payload);
+        throttledUpdateUI(); 
+    },
+    user_leave: (payload) => {
+        logDebug(`前端消息: ${payload.username} 离开了`, LOG_LEVELS.INFO, payload);
+        throttledUpdateUI(); 
+    },
+    delete: (payload) => {
+        const { messageId } = payload;
+        if (messageId) {
+            logDebug(`收到删除指令，准备移除消息: ${messageId}`, LOG_LEVELS.WARNING);
+            allMessages = allMessages.filter(m => m.id !== messageId);
+            messageIdSet.delete(messageId); // ✨ 从 ID 集合中移除
+            messageHeights.delete(messageId); 
+            renderVirtualWindow(); 
+            throttledUpdateUI(); 
+        }
+    },
+    error: (payload) => {
+        logDebug(`收到后端错误通知: ${payload?.message}`, LOG_LEVELS.ERROR, payload);
+        showAppNotification(payload?.message || "发生未知错误", 5000, true); // Changed from alert
+        sendButton.disabled = false;
+    },
+    offer: (payload) => handleOffer(payload),
+    answer: (payload) => handleAnswer(payload),
+    candidate: (payload) => handleCandidate(payload),
+    call_end: (payload) => handleCallEnd(payload),
+    debug_log: (payload) => {
+        logDebug(`[后端日志] ${payload.message}`, payload.level.toLowerCase(), payload.data);
+    },
+    heartbeat: () => {
+        // 心跳消息不需要在DOM日志中显示，控制台已处理
+        // 且不需要其他处理，这里留空以快速跳过
+    },
+    system_notification: (payload) => { // ✨ 新增：处理系统通知
+        logDebug(`[系统通知] ${payload.message}`, payload.level.toLowerCase(), payload);
+        showAppNotification(payload.message, 5000, payload.level === 'ERROR');
+    }
+};
+
+// onSocketMessage (策略模式版)
 async function onSocketMessage(event) {
+    // 快速过滤心跳消息，避免不必要的JSON.parse
+    if (event.data === '{"type":"heartbeat","payload":{"timestamp":' + Date.now() + '}}') { // 简单字符串匹配，实际可能需要更灵活
+        // logDebug('收到心跳包 (快速过滤)', 'HEARTBEAT'); // 如果需要更详细的日志
+        return;
+    }
+
     let data;
     try {
         data = JSON.parse(event.data);
-        if (data.type === 'welcome' && Array.isArray(data.payload?.history)) {
-            logDebug(`收到欢迎消息，包含 ${data.payload.history.length} 条历史记录`);
-        } else {
-            // 如果日志级别不是 HEARTBEAT，才打印原始数据，避免日志过载
-            if (data.type !== 'heartbeat') {
-                logDebug(`收到 WebSocket 数据包 (${data.type})`, 'info', data); 
-            }
+        // 如果日志级别不是 HEARTBEAT，才打印原始数据，避免日志过载
+        if (data.type !== 'heartbeat') {
+            logDebug(`收到 WebSocket 数据包 (${data.type})`, 'info', data); 
         }
     } catch (parseError) {
         const rawMessageSnippet = String(event.data).substring(0, 500);
@@ -2034,79 +2044,15 @@ async function onSocketMessage(event) {
             error: parseError.message,
             raw: rawMessageSnippet
         });
-        alert("客户端收到服务器发来的格式错误消息，请刷新页面。");
+        showAppNotification("客户端收到服务器发来的格式错误消息，请刷新页面。", 5000, true); // Changed from alert
         return;
     }
 
-    switch (data.type) {
-           case 'welcome': {
-                const history = data.payload?.history;
-                if (Array.isArray(history)) {
-                    // 使用优化的函数处理历史记录
-                    processHistoryMessages(history);
-                } else {
-                    logDebug("收到的欢迎消息中 history 格式不正确或不存在。", LOG_LEVELS.ERROR, data.payload);
-                }
-                break;
-            }
-      
-// onSocketMessage 中 case 'chat' 的简化版
-case 'chat': {
-    const newMessage = data.payload;
-    if (newMessage && newMessage.id) {
-        // 如果不使用乐观更新，只需确保不重复添加即可
-        if (!allMessages.some(m => m.id === newMessage.id)) {
-            allMessages.push(newMessage);
-            appendChatMessage(newMessage);
-            throttledUpdateUI();
-        }
-    }
-    break;
-        }
-        case 'user_join':
-        case 'user_leave':
-            logDebug(`前端消息: ${data.payload.username} ${data.type === 'user_join' ? '加入了' : '离开了'}`, LOG_LEVELS.INFO, data.payload);
-            // 延迟更新UI以避免频繁更新，使用节流函数
-            throttledUpdateUI(); 
-            break;
-        case 'delete': {
-            const { messageId } = data.payload;
-            if (messageId) {
-                logDebug(`收到删除指令，准备移除消息: ${messageId}`, LOG_LEVELS.WARNING);
-                // 直接从 allMessages 中移除，然后触发重新渲染
-                allMessages = allMessages.filter(m => m.id !== messageId);
-                messageHeights.delete(messageId); // 从高度缓存中移除
-                renderVirtualWindow(); // 重新渲染以反映删除
-                throttledUpdateUI(); // 删除后也更新用户列表统计
-            }
-            break;
-        }
-        case 'error': // <-- 这是后端 Durable Object 发送的错误通知
-            logDebug(`收到后端错误通知: ${data.payload?.message}`, LOG_LEVELS.ERROR, data.payload);
-            alert(data.payload?.message);
-            sendButton.disabled = false;
-            break;
-        case 'offer':
-            await handleOffer(data.payload);
-            break;
-        case 'answer':
-            await handleAnswer(data.payload);
-            break;
-        case 'candidate':
-            await handleCandidate(data.payload);
-            break;
-        case 'call_end':
-            handleCallEnd(data.payload);
-            break;
-        case 'debug_log': // 客户端收到后端DO的调试日志
-            // 此时 payload 就是后端 logEntry 对象
-            logDebug(`[后端日志] ${data.payload.message}`, data.payload.level.toLowerCase(), data.payload.data);
-            break;
-        case 'heartbeat': // 客户端收到后端DO的心跳
-            // 心跳消息不需要在DOM日志中显示，控制台已处理
-            break;
-        default:
-            logDebug(`收到未知 WebSocket 消息类型: ${data.type}`, LOG_LEVELS.WARNING, data);
+    const handler = messageHandlers[data.type];
+    if (handler) {
+        handler(data.payload);
+    } else {
+        logDebug(`收到未知 WebSocket 消息类型: ${data.type}`, LOG_LEVELS.WARNING, data);
     }
 }
 
@@ -2115,6 +2061,7 @@ function onSocketClose(event) {
     connectionDot.classList.add('disconnected');
     let reason = `Code: ${event.code}, Reason: ${event.reason || '无'}, Was Clean: ${event.wasClean}`;
     logDebug(`WebSocket连接已断开。${reason}`, LOG_LEVELS.WARNING);
+    showAppNotification(`连接已断开，尝试重连中... (${event.reason || '无'})`, 3000, true); // Added notification
     logDebug(`将在${reconnectInterval/1000}秒后重连`, LOG_LEVELS.WARNING);
     setTimeout(connectWebSocket, reconnectInterval);
     reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval); // 指数退避
@@ -2124,6 +2071,7 @@ function onSocketError(error) {
     let errorMessage = `WebSocket发生未知错误。Type: ${error.type}`;
     logDebug(errorMessage, LOG_LEVELS.ERROR);
     statusEl.textContent = "连接错误";
+    showAppNotification("WebSocket连接错误，请检查网络。", 3000, true); // Added notification
     socket.close(); // 强制关闭，触发onSocketClose进行重连
 }
 
@@ -2137,7 +2085,7 @@ async function initLocalMedia() {
         return localStream;
     } catch (err) {
         logDebug('无法获取麦克风权限: ' + err, LOG_LEVELS.ERROR);
-        alert('无法获取麦克风，通话功能不可用。请检查权限。');
+        showAppNotification('无法获取麦克风，通话功能不可用。请检查权限。', 4000, true); // Changed from alert
         return null; // 不抛出错误，让应用继续运行
     }
 }
@@ -2158,7 +2106,10 @@ function hideCallUI(targetUsername) {
 }
 
 async function startCall(target) {
-    if (!localStream) return alert('本地音频未就绪，请检查麦克风权限。');
+    if (!localStream) {
+        showAppNotification('本地音频未就绪，请检查麦克风权限。', 3000, true); // Changed from alert
+        return;
+    }
     if (peerConnections[target]) return;
     showCallUI(target);
     const pc = new RTCPeerConnection(rtcConfig);
@@ -2235,7 +2186,7 @@ function playRemoteStream(username, stream) {
             unmuteNotice.textContent = '🔇 点此开启声音';
             unmuteNotice.onclick = () => {
                 audioEl.muted = false;
-                audioEl.play().then(() => unmuteNotice.remove()).catch(err => alert('还是无法播放声音: ' + err));
+                audioEl.play().then(() => unmuteNotice.remove()).catch(err => showAppNotification('还是无法播放声音: ' + err, 3000, true));
             };
             panel.appendChild(unmuteNotice);
         }
