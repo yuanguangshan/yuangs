@@ -2,6 +2,7 @@
 * 自动化任务均在此撰写  
 */
 import { generateAndPostCharts } from './chart_generator.js';
+import { getDeepSeekExplanation } from './ai.js';
 
 /**
  * 1. 定义 Cron 表达式常量
@@ -9,9 +10,9 @@ import { generateAndPostCharts } from './chart_generator.js';
  */
 const CRON_TRIGGERS = {
     // 假设每天早上8点发送文本消息 (注意：这里的时间可以自定义)
-    DAILY_TEXT_MESSAGE: "*/10 2-10 * * *",
+    DAILY_TEXT_MESSAGE: "*/2 2-10 * * *",
     // 盘中和夜盘时段，每小时整点生成图表
-    HOURLY_CHART_GENERATION:   "*/15 17-23,2-7 * * 1-5" // 周一到周五的指定小时
+    HOURLY_CHART_GENERATION:   "*/15 17-23,2-10 * * 1-5" // 周一到周五的指定小时
 };
 
 /**
@@ -25,11 +26,13 @@ const CRON_TRIGGERS = {
  */
 async function executeTextTask(env, ctx) {
     const roomName = 'test'; // 目标房间
-    const content = `[每日播报] 早上好！现在是北京时间 ${new Date(Date.now() + 8 * 3600 * 1000).toLocaleTimeString('zh-CN')}。`;
+    const prompt = '你是deepseek小助于，每天自动向用户问好，并且每次附上一句名人名言，及每日一句精典英文句子，并仔细分析名言和英文句子的意思及衍生意义，帮助用户提升自我，最后鼓励用户好好工作，好好学习，好好生活。';
     
     console.log(`[Cron Task] Executing daily text task for room: ${roomName}`);
     try {
         if (!env.CHAT_ROOM_DO) throw new Error("Durable Object 'CHAT_ROOM_DO' is not bound.");
+        
+        const content = await getDeepSeekExplanation(prompt, env);
         
         const doId = env.CHAT_ROOM_DO.idFromName(roomName);
         const stub = env.CHAT_ROOM_DO.get(doId);
