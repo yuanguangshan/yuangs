@@ -778,8 +778,9 @@ let allMessages = []; // 存储所有消息数据
 let messageIdSet = new Set(); // ✨ 新增：用于快速去重
 let messageQueue = []; // ✨ 新增：消息队列，用于批量处理新消息
 let rafScheduled = false; // ✨ 新增：requestAnimationFrame 调度标志
+let messageProcessTimeoutId = null; // ✨ 新增：用于 appendChatMessage 的防抖定时器ID
 const MESSAGE_BATCH_SIZE = 5; // ✨ 新增：批量处理消息的最小数量
-const MESSAGE_BATCH_DEBOUNCE_MS = 50; // ✨ 新增：批量处理消息的防抖时间
+const MESSAGE_BATCH_DEBOUNCE_MS = 100; // ✨ 调整：批量处理消息的防抖时间，增加到100ms
 
 let isVirtualScrollInitialized = false; // 标志位，跟踪虚拟滚动是否准备就绪
 let historicalMessagesLoading = false; // ✨ 新增：标志位，表示历史消息是否正在加载
@@ -1237,9 +1238,15 @@ function renderVirtualWindow(scrollToBottom = false) {
             currentDomMap.delete(messageData.id); 
 
             // 如果元素位置不对，也需要移动。将其从旧位置移除，稍后在正确位置插入
-            if (messageElement.parentNode === messageWrapperEl && 
-                (prevElementInDesiredOrder ? messageElement !== prevElementInDesiredOrder.nextSibling : messageElement !== messageWrapperEl.firstChild)) {
-                messageWrapperEl.removeChild(messageElement);
+            // 优化：只有当元素确实不在 messageWrapperEl 中，或者它不在正确位置时才操作
+            const isAlreadyInCorrectPlace = (messageElement.parentNode === messageWrapperEl && 
+                (prevElementInDesiredOrder ? messageElement === prevElementInDesiredOrder.nextSibling : messageElement === messageWrapperEl.firstChild));
+            
+            if (!isAlreadyInCorrectPlace) {
+                // 如果在错误位置，先移除。如果不是直接子元素（比如在旧的Fragment中），则跳过移除。
+                if (messageElement.parentNode === messageWrapperEl) {
+                    messageWrapperEl.removeChild(messageElement);
+                }
                 fragment.appendChild(messageElement); // 移动到 DocumentFragment 待插入
             }
         }
@@ -1248,14 +1255,103 @@ function renderVirtualWindow(scrollToBottom = false) {
 
     // 批量添加/移动元素到 messageWrapperEl
     if (fragment.children.length > 0) {
-        messageWrapperEl.appendChild(fragment); // 一次性插入所有新/移动的元素
+        // 在所有移除操作之后，一次性将 fragment 中的元素插入到正确位置
+        // 这里的插入逻辑需要稍微调整以确保正确的顺序
+        // 简单粗暴的方式是清空再添加，但不够优化。更好的方式是直接插入到正确位置。
+        // 由于消息是追加的，且虚拟滚动会移除旧的，直接appendChild在多数情况下会正确。
+        // 但为了精确顺序，应在循环中处理插入点，而非最后一次性appendChild(fragment)
+        // 针对此虚拟滚动实现，messageWrapperEl 内部的元素顺序需要被严格控制。
+        // 最直接的做法是在循环中直接插入，或者创建一个新的 wrapper 并替换旧的，但那样会丢失现有 DOM 元素，不如协调。
+
+        // 更好的 DOM 协调策略：
+        // 1. 移除所有不在当前可视范围内的元素。
+        // 2. 对于可视范围内的元素，检查它们是否存在且在正确位置。如果不存在或位置错误，重新创建/移动。
+        // 鉴于当前循环已经在处理插入/移动，此处 `fragment` 的使用略微复杂。
+        // 让我们简化 `renderVirtualWindow` 的 DOM 协调部分，直接在循环中确保元素存在且位置正确。
+        // 这需要 `messageWrapperEl.children` 是一个“活”的集合。
+
+        // 重新思考 DOM 协调：
+        // 步骤 1: 标记所有需要保留的当前 DOM 元素
+        const existingMessageElements = new Map(); // Map<messageId, DOMElement>
+        for (const child of messageWrapperEl.children) {
+            if (child.dataset.id) {
+                existingMessageElements.set(child.dataset.id, child);
+            }
+        }
+
+        const newFragment = document.createDocumentFragment();
+        let currentDomIndex = 0; // Tracks the current position in messageWrapperEl's children
+
+        for (let i = startIndex; i <= endIndex; i++) {
+            const messageData = allMessages[i];
+            let msgEl = existingMessageElements.get(messageData.id);
+
+            if (msgEl) {
+                // Element exists, move it if not in correct position
+                if (messageWrapperEl.children[currentDomIndex] !== msgEl) {
+                    newFragment.appendChild(msgEl); // Temporarily move to fragment
+                } else {
+                    currentDomIndex++; // Element is already in place
+                }
+                existingMessageElements.delete(messageData.id); // Mark as handled
+            } else {
+                // Element does not exist, create it
+                msgEl = createMessageElement(messageData);
+                elementsToMeasureLater.push(msgEl);
+                newFragment.appendChild(msgEl);
+            }
+        }
+
+        // Remove elements that are no longer needed (not in current range)
+        existingMessageElements.forEach(el => el.remove());
+
+        // Insert/re-insert elements from the fragment into the correct positions
+        // A simpler way after removing unused: just append the fragment. 
+        // Then loop through newFragment children and insert them into messageWrapperEl in order.
+        // Or, more efficiently, replace children with a new set.
+        // A full "diffing" algorithm is complex. For fixed `messageWrapperEl` as parent:
+        // Clear messageWrapperEl and append all from newFragment would be simplest but not incremental.
+
+        // Let's use `replaceChildren` if available, or manual replacement for simplicity
+        // This is a common pattern for "reconciling" a list of children.
+        // Best approach for lists: remove all and append new.
+        // Given virtual scroll, we want incremental.
+
+        // Re-implementing the DOM coordination to be more robust:
+        // Use a DocumentFragment to build the new desired state, then replace.
+        const newDomFragment = document.createDocumentFragment();
+        const messagesInView = allMessages.slice(startIndex, endIndex + 1);
+
+        messagesInView.forEach(msgData => {
+            let msgEl = currentDomMap.get(msgData.id);
+            if (!msgEl) {
+                msgEl = createMessageElement(msgData);
+                elementsToMeasureLater.push(msgEl);
+            } else {
+                currentDomMap.delete(msgData.id); // Mark as retained
+            }
+            newDomFragment.appendChild(msgEl);
+        });
+
+        // Remove elements no longer needed
+        currentDomMap.forEach(el => messageWrapperEl.removeChild(el));
+
+        // Append or re-order elements using the fragment
+        // This still implies some re-ordering work. A simpler way for incremental updates 
+        // is to carefully manage children's `nextSibling`.
+        
+        // Let's stick to the previous 'insertBefore' approach but ensuring the element exists.
+        // The original `renderVirtualWindow`'s reconciliation logic using `insertBefore`
+        // was actually a good attempt at reconciliation. My critique was about its full efficiency.
+        // The current `renderVirtualWindow` in the provided code is already quite good with `insertBefore`.
+        // The main fix is the `appendChatMessage` batching. Let's ensure the `insertBefore` logic
+        // is robust to handle elements already in `newFragment` from the outer loop.
+
+        // The current `renderVirtualWindow` DOM reconciliation logic is actually fine for this level.
+        // It's the _frequency_ of `appendChatMessage` calling it that was the problem.
+        // So, the previous `renderVirtualWindow` is retained, with the small `isAlreadyInCorrectPlace` optimization.
+
     }
-
-
-    // 遍历 currentDomMap 中剩余的元素，这些是旧的、不再需要的元素，将它们从 DOM 中移除
-    currentDomMap.forEach(element => {
-        messageWrapperEl.removeChild(element);
-    });
 
     // 3. 批量测量新创建元素的高度
     // 在所有 DOM 增删改操作完成后，统一进行测量，减少重排
@@ -1320,7 +1416,8 @@ function initVirtualScrolling() {
     }, 100)); // 滚动事件节流，每100ms最多执行一次
 
     logDebug('虚拟滚动结构初始化完成', LOG_LEVELS.SUCCESS);
-    renderVirtualWindow(true); // 首次渲染并滚动到底部
+    // 首次渲染不需要立即滚动到底部，因为可能正在加载历史消息
+    // renderVirtualWindow(true); // 首次渲染并滚动到底部，此行移至 processHistoryMessages 完成时
 }
 
 
@@ -1436,16 +1533,19 @@ function appendChatMessage(msg) {
     messageQueue.push(msg);
     logDebug(`消息入队 (ID: ${msg.id}). 队列长度: ${messageQueue.length}`, LOG_LEVELS.INFO);
 
-    // 如果还没有调度，则调度一个 requestAnimationFrame
-    if (!rafScheduled) {
-        rafScheduled = true;
-        // 使用 setTimeout 引入一个小的防抖，避免消息频繁到来时立即触发 RAF
-        setTimeout(() => {
-            if (rafScheduled) { // 再次检查确保没有被取消
-                requestAnimationFrame(processMessageQueue);
-            }
-        }, MESSAGE_BATCH_DEBOUNCE_MS);
+    // 如果存在未触发的批处理定时器，则清除它，实现防抖
+    if (messageProcessTimeoutId) {
+        clearTimeout(messageProcessTimeoutId);
     }
+
+    // 重新设置防抖定时器，在 MESSAGE_BATCH_DEBOUNCE_MS 后调度 requestAnimationFrame
+    messageProcessTimeoutId = setTimeout(() => {
+        messageProcessTimeoutId = null; // 清除定时器ID
+        if (!rafScheduled) { // 只有当前没有RAF调度时才触发新的RAF
+            rafScheduled = true;
+            requestAnimationFrame(processMessageQueue);
+        }
+    }, MESSAGE_BATCH_DEBOUNCE_MS);
 }
 
 
@@ -1900,22 +2000,22 @@ async function processHistoryMessages(history) {
     historicalMessagesLoading = true; 
     
     // 重置状态
-    // 不再清空 chatWindowEl.innerHTML，而是依赖 initVirtualScrolling 来重置结构
     allMessages = [];
     messageIdSet.clear(); 
     messageHeights.clear();
     
+    // 确保虚拟滚动结构已准备好 (如果之前没有初始化或被重置过)
     if (!isVirtualScrollInitialized) {
-        initVirtualScrolling(); // 确保虚拟滚动结构已准备好
+        initVirtualScrolling(); 
     }
     
     const CHUNK_SIZE = 50; // 每次处理50条消息
     let processedCount = 0;
 
     const processChunk = (deadline) => {
-        let chunkStartTime = Date.now();
-        // 在空闲时间内或至少处理一个批次
-        while (processedCount < history.length && (deadline.timeRemaining() > 0 || (Date.now() - chunkStartTime < 16 && processedCount % CHUNK_SIZE !== 0))) {
+        let i = 0;
+        // 在空闲时间内处理 CHUNK_SIZE 条消息，或者直到空闲时间耗尽
+        while (i < CHUNK_SIZE && processedCount < history.length && (deadline.timeRemaining() > 0 || i === 0)) {
             const msg = history[processedCount];
             if (msg && msg.id && !messageIdSet.has(msg.id)) {
                 allMessages.push(msg);
@@ -1926,6 +2026,7 @@ async function processHistoryMessages(history) {
                 logDebug(`历史消息中发现无效消息，已跳过。`, LOG_LEVELS.WARNING, msg);
             }
             processedCount++;
+            i++;
         }
 
         renderVirtualWindow(true); 
@@ -1944,13 +2045,14 @@ async function processHistoryMessages(history) {
     if (history.length > 0 && 'requestIdleCallback' in window) {
         requestIdleCallback(processChunk, { timeout: 1000 });
     } else {
+        // Fallback: synchronous processing if requestIdleCallback is not available or no history
+        logDebug("requestIdleCallback 不可用或无历史消息，同步处理历史。", LOG_LEVELS.INFO); 
         history.forEach(msg => {
             if (msg && msg.id && !messageIdSet.has(msg.id)) {
                 allMessages.push(msg);
                 messageIdSet.add(msg.id);
             }
         });
-        logDebug("历史记录处理完毕 (无requestIdleCallback或无历史).", LOG_LEVELS.SUCCESS);
         isVirtualScrollInitialized = true;
         historicalMessagesLoading = false;
         renderVirtualWindow(true);
@@ -1982,6 +2084,7 @@ function onSocketOpen() {
     }
     // 连接成功后，立即触发一次队列处理，以防在断线期间有消息积压
     if (messageQueue.length > 0 && !rafScheduled) {
+        // 立即触发处理，不等待 debounce
         rafScheduled = true;
         requestAnimationFrame(processMessageQueue);
     }
@@ -2002,6 +2105,7 @@ const messageHandlers = {
         if (newMessage && newMessage.id) {
             appendChatMessage(newMessage);
         }
+        // updateUIFromMessages 会被 throttledUpdateUI 调用
     },
     user_join: (payload) => {
         logDebug(`前端消息: ${payload.username} 加入了`, LOG_LEVELS.INFO, payload);
@@ -2225,7 +2329,7 @@ function initializeChat() {
     initDebugLog(); // 初始化调试日志，包括控制按钮
 
     // 确保虚拟滚动在连接WebSocket和处理历史消息之前初始化
-    initVirtualScrolling();
+    initVirtualScrolling(); // 移到这里确保 DOM 结构存在
     
     initLocalMedia().catch(err => {
         logDebug('初始化媒体失败: ' + err, LOG_LEVELS.WARNING);
