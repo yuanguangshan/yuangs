@@ -235,15 +235,13 @@
             -webkit-overflow-scrolling: touch; /* 关键: 使iOS设备上的滚动更流畅 */
             overscroll-behavior: contain; /* 确保滚动行为被包含 */
             touch-action: pan-y; /* 明确启用垂直平移 */
-            position: relative; /* 确保正确定位 */
-            display: flex; /* 确保内容撑开 */
-            flex-direction: column; /* 确保内容撑开 */
+            /* 移除了虚拟滚动相关的 flex 布局和 order 属性 */
         }
         #chat-window::-webkit-scrollbar { width: 4px; }
         #chat-window::-webkit-scrollbar-track { background: transparent; }
         #chat-window::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
         #chat-window::-webkit-scrollbar-thumb:hover { background: #999; }
-        /* 虚拟滚动相关的填充元素和包装器不再需要 */
+        /* 虚拟滚动相关的填充元素样式不再需要 */
 
 
         /* --- MESSAGE STYLES --- */
@@ -770,7 +768,6 @@ let rafScheduled = false; // requestAnimationFrame 调度标志
 let messageProcessTimeoutId = null; // 用于 appendChatMessage 的防抖定时器ID
 const MESSAGE_BATCH_DEBOUNCE_MS = 50; // 批量处理消息的防抖时间 (保持批处理，即便人数少，也能让UI更流畅)
 
-// let isVirtualScrollInitialized = false; // 不再需要虚拟滚动的标志
 let historicalMessagesLoading = false; // 标志位，表示历史消息是否正在加载
 
 let selectedFile = null;
@@ -1102,10 +1099,8 @@ function updateUIFromMessages() {
 
 
 // --- 简化消息显示逻辑 (不再虚拟滚动) ---
-// 移除 `topSpacerEl`, `bottomSpacerEl`, `messageWrapperEl`
-// 移除 `AVERAGE_MESSAGE_HEIGHT`, `OVERSCAN_COUNT`, `messageHeights`, `prevScrollTop`, `lastRenderedRange`
 
-// 简化 `renderVirtualWindow` 为 `appendMessagesToChatWindow`
+// `appendMessagesToChatWindow` 函数，用于直接追加消息到聊天窗口
 function appendMessagesToChatWindow(messages, scrollToBottom = true) {
     if (!chatWindowEl) {
         logDebug('聊天窗口元素未找到，无法追加消息', LOG_LEVELS.ERROR);
@@ -1131,15 +1126,15 @@ function appendMessagesToChatWindow(messages, scrollToBottom = true) {
     }
 }
 
-// 简化 `initVirtualScrolling` 为 `initChatDisplay`
+// `initChatDisplay` 函数，替代原先的 `initVirtualScrolling`
 function initChatDisplay() {
     // 清空所有旧消息
     chatWindowEl.innerHTML = ''; 
     logDebug('聊天显示初始化完成', LOG_LEVELS.SUCCESS);
-    // 滚动事件监听器也简化，因为不再需要虚拟滚动复杂的渲染逻辑
+    // 对于非虚拟滚动，滚动事件监听器通常不需要复杂的渲染逻辑
+    // 如果未来需要“加载更多”等功能，可以再完善此处的滚动处理
     chatWindowEl.addEventListener('scroll', throttle(() => {
-        // 对于非虚拟滚动，这个滚动事件监听器主要是为了性能调试或未来的“加载更多”功能预留
-        // 实际不需要在每次滚动时重绘整个视图
+        // 可以在这里添加滚动到顶部时加载更多历史消息的逻辑
     }, 150)); 
 }
 
@@ -1711,17 +1706,19 @@ async function processHistoryMessages(history) {
     logDebug(`开始处理 ${history.length} 条历史记录...`);
     historicalMessagesLoading = true; 
     
-    // 重置状态
+    // 重置状态：直接清空聊天窗口和消息数据
     allMessages = [];
     messageIdSet.clear(); 
-    chatWindowEl.innerHTML = ''; // 直接清空聊天窗口
+    chatWindowEl.innerHTML = ''; 
     
-    const CHUNK_SIZE = 50; 
+    const CHUNK_SIZE = 50; // 每次处理50条消息
     let processedCount = 0;
 
     const processChunk = (deadline) => {
         const messagesInChunk = [];
         let i = 0;
+        // 在空闲时间内处理 CHUNK_SIZE 条消息，或者直到空闲时间耗尽
+        // `i === 0` 确保在没有空闲时间时至少处理第一条消息，避免无限等待
         while (i < CHUNK_SIZE && processedCount < history.length && (deadline.timeRemaining() > 0 || i === 0)) {
             const msg = history[processedCount];
             if (msg && msg.id && !messageIdSet.has(msg.id)) {
@@ -1737,9 +1734,9 @@ async function processHistoryMessages(history) {
             i++;
         }
 
-        appendMessagesToChatWindow(messagesInChunk, false); // 追加这批消息，但不强制滚动
-        // 对于历史消息，只在全部加载完成后滚动一次。
-        // throttledUpdateUI(); // 历史消息加载过程中不频繁更新用户列表
+        appendMessagesToChatWindow(messagesInChunk, false); // 追加这批消息，但不强制滚动到底部
+        // 用户列表更新可以在历史消息全部加载完成后进行，避免频繁更新
+        // throttledUpdateUI(); // 不在分批加载过程中调用
 
         if (processedCount < history.length) {
             logDebug(`处理历史中... 已完成 ${processedCount}/${history.length} 条。`, LOG_LEVELS.INFO);
@@ -1758,6 +1755,7 @@ async function processHistoryMessages(history) {
     if (history.length > 0 && 'requestIdleCallback' in window) {
         requestIdleCallback(processChunk, { timeout: 1000 });
     } else {
+        // Fallback: synchronous processing if requestIdleCallback is not available or no history
         logDebug("requestIdleCallback 不可用或无历史消息，同步处理历史。", LOG_LEVELS.INFO); 
         history.forEach(msg => {
             if (msg && msg.id && !messageIdSet.has(msg.id)) {
@@ -1793,6 +1791,7 @@ function onSocketOpen() {
     if (!window.userListInterval) {
         window.userListInterval = setInterval(throttledUpdateUI, 60000); 
     }
+    // 连接成功后，立即触发一次队列处理，以防在断线期间有消息积压
     if (messageQueue.length > 0 && !rafScheduled) {
         rafScheduled = true;
         requestAnimationFrame(processMessageQueue);
@@ -1828,12 +1827,11 @@ const messageHandlers = {
             logDebug(`收到删除指令，准备移除消息: ${messageId}`, LOG_LEVELS.WARNING);
             allMessages = allMessages.filter(m => m.id !== messageId);
             messageIdSet.delete(messageId); 
-            // 直接从 DOM 移除
+            // 直接从 DOM 移除对应的消息元素
             const msgElToDelete = chatWindowEl.querySelector(`[data-id="${messageId}"]`);
             if (msgElToDelete) {
                 msgElToDelete.remove();
             }
-            // 不需要 renderVirtualWindow()
             throttledUpdateUI(); 
         }
     },
@@ -1912,10 +1910,11 @@ async function initLocalMedia() {
         localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         logDebug('麦克风访问权限已获取', LOG_LEVELS.SUCCESS);
         return localStream;
-    } catch (err) {
+    }
+    catch (err) {
         logDebug('无法获取麦克风权限: ' + err, LOG_LEVELS.ERROR);
-        showAppNotification('无法获取麦克风，通话功能不可用。请检查权限。', 4000, true); 
-        return null; 
+        showAppNotification('无法获取麦克风，通话功能不可用。请检查权限。', 4000, true);
+        return null;
     }
 }
 
