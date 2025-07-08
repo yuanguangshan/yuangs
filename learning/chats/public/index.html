@@ -55,6 +55,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            overscroll-behavior: none; /* 防止整页橡皮筋效果 */
         }
         
         .chat-container {
@@ -231,7 +232,11 @@
             min-height: 0; 
             background: #f8f9fa; 
             scroll-behavior: smooth;
-            -webkit-overflow-scrolling: touch; }
+            -webkit-overflow-scrolling: touch; /* 关键: 使iOS设备上的滚动更流畅 */
+            overscroll-behavior: contain; /* 确保滚动行为被包含 */
+            touch-action: pan-y; /* 明确启用垂直平移 */
+            position: relative; /* 确保正确定位 */
+        }
         #chat-window::-webkit-scrollbar { width: 4px; }
         #chat-window::-webkit-scrollbar-track { background: transparent; }
         #chat-window::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
@@ -449,18 +454,48 @@
         /* --- RESPONSIVE --- */
         @media (max-width: 768px) {
             html, body { 
-                overflow: visible; 
-                align-items: flex-start;
-                display: block; 
-             }
+                height: 100%; /* 使用固定高度 */
+                overflow: hidden; /* 防止整页滚动 */
+                position: fixed; /* 固定整个页面 */
+                width: 100%; /* 确保宽度100% */
+                top: 0;
+                left: 0;
+            }
             .chat-container { 
                 width: 100%; 
                 height: 100%; 
                 max-width: 100%; /* 覆盖桌面端的 max-width */
                 border-radius: 0;
                 box-shadow: none;
-                 }
-            .sidebar { position: absolute; left: -280px; top: 0; height: 100%; z-index: 1000; transition: left 0.3s ease; }
+                position: absolute; /* 固定聊天容器 */
+                top: 0;
+                left: 0;
+                display: flex;
+                flex-direction: column; /* 移动端改为列布局 */
+            }
+            .main-chat {
+                flex: 1;
+                width: 100%;
+                position: relative;
+                overflow: hidden; /* 防止容器外溢出 */
+                display: flex;
+                flex-direction: column;
+            }
+            #chat-window {
+                flex: 1;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch; /* 关键属性 */
+                position: relative;
+                z-index: 1; /* 确保滚动区域在顶部 */
+            }
+            .sidebar { 
+                position: fixed; 
+                left: -280px; 
+                top: 0; 
+                height: 100%; 
+                z-index: 1000; 
+                transition: left 0.3s ease; 
+            }
             .sidebar.open { left: 0; }
             .sidebar-toggle { display: flex; }
             .chat-header { padding: 10px 15px; }
@@ -469,18 +504,19 @@
             .room-name { font-size: 1em; }
             .user-status { font-size: 0.75em; }
             .online-users-display { margin-left: auto; font-size: 0.75em; padding: 4px 8px; }
-            #chat-window { 
-                padding: 15px; 
-                padding-bottom: calc(15px + env(safe-area-inset-bottom, 0px));
-                -webkit-overflow-scrolling: touch; }
-            .message-image { max-width: 250px; }
-            #message-form { padding: 12px 15px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+            #message-form { 
+                padding: 12px 15px; 
+                padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+                position: relative;
+                z-index: 2; /* 确保输入区域在顶部 */
+            }
             #message-input { padding: 10px 40px 10px 15px; font-size: 16px; }
             .users-menu { right: 15px; }
             .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; }
             .overlay.show { display: block; }
             .user-row { flex-direction: column; align-items: stretch; gap: 12px; }
             .user-names, .user-info { flex: none; width: 100%; }
+            .message-image { max-width: 250px; }
         }
             .header-users {
                 display: none;
@@ -2139,7 +2175,7 @@ function initializeChat() {
     chatWindowEl.addEventListener('touchstart', e => {
         const msgEl = e.target.closest('.message');
         if (msgEl) {
-            e.preventDefault(); // 阻止默认的滚动或文本选择
+            // 不再阻止默认行为，允许滚动
             currentTouchMsgEl = msgEl; // 记录当前触摸的消息元素
             touchStartTime = Date.now(); // 记录触摸开始时间
 
@@ -2147,6 +2183,8 @@ function initializeChat() {
             touchLongPressTimer = setTimeout(() => {
                 // 再次检查确保是同一个元素且时间足够长
                 if (currentTouchMsgEl === msgEl && (Date.now() - touchStartTime) >= 500) {
+                    // 只有在长按时才阻止默认行为
+                    e.preventDefault();
                     showContextMenu(msgEl, e.touches[0].pageX, e.touches[0].pageY);
                     if (navigator.vibrate) navigator.vibrate(50); // 移动端震动反馈
                 }
@@ -2155,7 +2193,7 @@ function initializeChat() {
             // 如果触摸开始在消息区域外，隐藏上下文菜单
             contextMenu.style.display = 'none';
         }
-    }, { passive: false }); // `passive: false` 允许在事件处理器内部调用 `preventDefault`
+    }, { passive: true }); // 使用 passive: true 提高滚动性能
 
     // 为 chatWindowEl 绑定触摸结束事件
     chatWindowEl.addEventListener('touchend', () => {
@@ -2167,13 +2205,20 @@ function initializeChat() {
     chatWindowEl.addEventListener('touchmove', () => {
         clearTimeout(touchLongPressTimer); // 如果手指移动，则不是长按，清除计时器
         currentTouchMsgEl = null; // 重置当前触摸的元素
-    });
+    }, { passive: true }); // 使用 passive: true 提高滚动性能
 
     // 全局点击监听器，用于在点击其他地方时关闭菜单
     document.addEventListener('click', () => {
         usersMenu.classList.remove('show');
         contextMenu.style.display = 'none';
     });
+    
+    // 添加全局的图片模态框功能
+    window.showImageModal = function(imageUrl) {
+        if (!imageModal || !modalImage) return;
+        modalImage.src = imageUrl;
+        imageModal.classList.add('show');
+    };
 }
 
 // 页面加载完成后调用初始化函数
