@@ -35,7 +35,7 @@
       if (e.type==='touchend') e.preventDefault();
       const ac = new AudioCtx();
       if (ac.state==='suspended') ac.resume();
-      new Audio("data:audio/mp3;base64,SUQz…").play().catch(()=>{});
+      new Audio("data:audio/mp3;base64,SUQz...").play().catch(()=>{}); // 这里的音频数据应该是一个完整的Base64编码MP3数据
       document.body.removeEventListener('click', unlockAudioContext);
       document.body.removeEventListener('touchend', unlockAudioContext);
     }
@@ -50,18 +50,18 @@
             height: 100%;
             margin: 0;
             padding: 0;
-            overflow: hidden;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             display: flex;
             justify-content: center;
             align-items: center;
+            overscroll-behavior: none; /* 防止整页橡皮筋效果 */
         }
         
         .chat-container {
             width: 90%;
             max-width: 800px;
-            height: 90vh;
+            height: 100%;
             background: white;
             border-radius: 12px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
@@ -224,11 +224,25 @@
         .users-menu li:hover { background: #f5f5f5; }
 
         /* --- CHAT WINDOW --- */
-        #chat-window { flex: 1; padding: 20px 25px; overflow-y: auto; min-height: 0; background: #f8f9fa; scroll-behavior: smooth; }
+        #chat-window { 
+            flex: 1; 
+            padding: 20px 25px;
+            padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); 
+            overflow-y: auto; 
+            min-height: 0; 
+            background: #f8f9fa; 
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch; /* 关键: 使iOS设备上的滚动更流畅 */
+            overscroll-behavior: contain; /* 确保滚动行为被包含 */
+            touch-action: pan-y; /* 明确启用垂直平移 */
+            /* 移除了虚拟滚动相关的 flex 布局和 order 属性 */
+        }
         #chat-window::-webkit-scrollbar { width: 4px; }
         #chat-window::-webkit-scrollbar-track { background: transparent; }
         #chat-window::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
         #chat-window::-webkit-scrollbar-thumb:hover { background: #999; }
+        /* 虚拟滚动相关的填充元素样式不再需要 */
+
 
         /* --- MESSAGE STYLES --- */
         .message { margin-bottom: 16px; display: flex; flex-direction: column; animation: fadeInUp 0.3s ease; }
@@ -318,7 +332,7 @@
         .preview-remove:hover { background: #c0392b; }
         .uploading { opacity: 0.6; pointer-events: none; }
         .upload-progress { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(102, 126, 234, 0.9); color: white; padding: 8px 12px; border-radius: 8px; font-size: 0.8em; font-weight: 500; }
-        #send-button { padding: 10px 20px; border: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 22px; cursor: pointer; font-size: 0.9em; font-weight: 600; transition: all 0.3s ease; box-shadow: 0 3px 12px rgba(102, 126, 234, 0.3); min-width: 70px; }
+        #send-button { padding: 10px 20px; border: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 22px; cursor; font-size: 0.9em; font-weight: 600; transition: all 0.3s ease; box-shadow: 0 3px 12px rgba(102, 126, 234, 0.3); min-width: 70px; }
         #send-button:hover { transform: translateY(-1px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); }
         #send-button:active { transform: translateY(0); }
         #send-button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
@@ -441,9 +455,49 @@
 
         /* --- RESPONSIVE --- */
         @media (max-width: 768px) {
-            html, body { overflow: visible; align-items: flex-start; }
-            .chat-container { width: 100%; height: 100%; border-radius: 0; box-shadow: none; }
-            .sidebar { position: absolute; left: -280px; top: 0; height: 100%; z-index: 1000; transition: left 0.3s ease; }
+            html, body { 
+                height: 100%; /* 使用固定高度 */
+                overflow: hidden; /* 防止整页滚动 */
+                position: fixed; /* 固定整个页面 */
+                width: 100%; /* 确保宽度100% */
+                top: 0;
+                left: 0;
+            }
+            .chat-container { 
+                width: 100%; 
+                height: 100%; 
+                max-width: 100%; /* 覆盖桌面端的 max-width */
+                border-radius: 0;
+                box-shadow: none;
+                position: absolute; /* 固定聊天容器 */
+                top: 0;
+                left: 0;
+                display: flex;
+                flex-direction: column; /* 移动端改为列布局 */
+            }
+            .main-chat {
+                flex: 1;
+                width: 100%;
+                position: relative;
+                overflow: hidden; /* 防止容器外溢出 */
+                display: flex;
+                flex-direction: column;
+            }
+            #chat-window {
+                flex: 1;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch; /* 关键属性 */
+                position: relative;
+                z-index: 1; /* 确保滚动区域在顶部 */
+            }
+            .sidebar { 
+                position: fixed; 
+                left: -280px; 
+                top: 0; 
+                height: 100%; 
+                z-index: 1000; 
+                transition: left 0.3s ease; 
+            }
             .sidebar.open { left: 0; }
             .sidebar-toggle { display: flex; }
             .chat-header { padding: 10px 15px; }
@@ -452,15 +506,19 @@
             .room-name { font-size: 1em; }
             .user-status { font-size: 0.75em; }
             .online-users-display { margin-left: auto; font-size: 0.75em; padding: 4px 8px; }
-            #chat-window { padding: 15px; -webkit-overflow-scrolling: touch; }
-            .message-image { max-width: 250px; }
-            #message-form { padding: 12px 15px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+            #message-form { 
+                padding: 12px 15px; 
+                padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+                position: relative;
+                z-index: 2; /* 确保输入区域在顶部 */
+            }
             #message-input { padding: 10px 40px 10px 15px; font-size: 16px; }
             .users-menu { right: 15px; }
             .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; }
             .overlay.show { display: block; }
             .user-row { flex-direction: column; align-items: stretch; gap: 12px; }
             .user-names, .user-info { flex: none; width: 100%; }
+            .message-image { max-width: 250px; }
         }
             .header-users {
                 display: none;
@@ -471,7 +529,7 @@
             padding: 20px;
             border-top: 1px solid rgba(255,255,255,0.1);
             background: rgba(0,0,0,0.2);
-            max-height: 300px;
+            max-height: 950px;
             overflow-y: auto;
         }
 
@@ -481,7 +539,7 @@
             color: #e0e0e0;
             white-space: pre-wrap;
             word-break: break-all;
-            max-height: 300px;
+            max-height: 920px;
             overflow-y: auto;
             background: rgba(0,0,0,0.3);
             border-radius: 8px;
@@ -517,6 +575,7 @@
             background: rgba(255,255,255,0.1);
             border: none;
             border-radius: 4px;
+            margin-right: 8px; 
             color: white;
             width: 24px;
             height: 24px;
@@ -530,7 +589,7 @@
             transform: scale(1.05);
         }
 
-        .copy-feedback {
+        .copy-feedback, .app-notification {
             position: fixed;
             bottom: 20px;
             left: 50%;
@@ -543,9 +602,10 @@
             z-index: 9999;
             opacity: 0;
             transition: opacity 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }
 
-        .copy-feedback.show {
+        .copy-feedback.show, .app-notification.show {
             opacity: 1;
         }
 
@@ -651,148 +711,1353 @@
     <ul>
         <li class="ai-explain-option" data-ai="gemini" data-action="text-explain">问Gemini</li>
         <li class="ai-explain-option" data-ai="deepseek" data-action="text-explain">DeepSeek</li>
-        <li class="ai-explain-option" data-ai="gemini" data-action="image-describe">问Gemini (图片)</li>
+        <li class="ai-explain-option" data-ai="gemini" data-action="image-describe">Gemini读图</li>
         <li id="copy-option">📝 复 制</li>
         <li id="delete-option">❌ 删 除</li>
     </ul>
 </div>
 <div id="call-controls-container"></div>
 <div id="remote-audio-container"></div>
+<div id="app-notification" class="app-notification"></div>
+
 
 <script type="module">
     // --- DOM Elements ---
-    const sidebarToggle = document.getElementById('sidebar-toggle');
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('overlay');
-    const onlineDisplay = document.getElementById('online-users-display');
-    const usersMenu = document.getElementById('users-menu');
-    const attachmentBtn = document.getElementById('attachment-btn');
-    const imageInput = document.getElementById('image-input');
-    const imagePreview = document.getElementById('image-preview');
-    const previewImage = document.getElementById('preview-image');
-    const previewName = document.getElementById('preview-name');
-    const previewSize = document.getElementById('preview-size');
-    const previewRemove = document.getElementById('preview-remove');
-    const uploadProgress = document.getElementById('upload-progress');
-    const imageModal = document.getElementById('image-modal');
-    const modalImage = document.getElementById('modal-image');
-    const modalClose = document.getElementById('modal-close');
-    const recordButton = document.getElementById('record-button');
-    const messageInput = document.getElementById('message-input');
-    const roomNameEl = document.getElementById('room-name');
-    const statusEl = document.getElementById('status');
-    const usernameDisplayEl = document.getElementById('username-display');
-    const connectionDot = document.getElementById('connection-dot');
-    const chatWindowEl = document.getElementById('chat-window');
-    const messageForm = document.getElementById('message-form');
-    const sendButton = document.getElementById('send-button');
-    const contextMenu = document.getElementById('context-menu');
-    const copyOption = document.getElementById('copy-option');
-    const deleteOption = document.getElementById('delete-option');
-    const callControlsContainer = document.getElementById('call-controls-container');
-    const remoteAudioContainer = document.getElementById('remote-audio-container');
-    const debugLogContent = document.getElementById('debug-log-content');
-    const clearLogsBtn = document.getElementById('clear-logs-btn');
-    const copyLogsBtn = document.getElementById('copy-logs-btn');
-    const toggleLogsBtn = document.getElementById('toggle-logs-btn');
+const sidebarToggle = document.getElementById('sidebar-toggle');
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('overlay');
+const onlineDisplay = document.getElementById('online-users-display');
+const usersMenu = document.getElementById('users-menu');
+const attachmentBtn = document.getElementById('attachment-btn');
+const imageInput = document.getElementById('image-input');
+const imagePreview = document.getElementById('image-preview');
+const previewImage = document.getElementById('preview-image');
+const previewName = document.getElementById('preview-name');
+const previewSize = document.getElementById('preview-size');
+const previewRemove = document.getElementById('preview-remove');
+const uploadProgress = document.getElementById('upload-progress');
+const imageModal = document.getElementById('image-modal');
+const modalImage = document.getElementById('modal-image');
+const modalClose = document.getElementById('modal-close');
+const recordButton = document.getElementById('record-button');
+const messageInput = document.getElementById('message-input');
+const roomNameEl = document.getElementById('room-name');
+const statusEl = document.getElementById('status');
+const usernameDisplayEl = document.getElementById('username-display');
+const connectionDot = document.getElementById('connection-dot');
+const chatWindowEl = document.getElementById('chat-window');
+const messageForm = document.getElementById('message-form');
+const sendButton = document.getElementById('send-button');
+const contextMenu = document.getElementById('context-menu');
+const copyOption = document.getElementById('copy-option');
+const deleteOption = document.getElementById('delete-option');
+const callControlsContainer = document.getElementById('call-controls-container');
+const remoteAudioContainer = document.getElementById('remote-audio-container');
+const debugLogContent = document.getElementById('debug-log-content');
+const clearLogsBtn = document.getElementById('clear-logs-btn');
+const copyLogsBtn = document.getElementById('copy-logs-btn');
+const toggleLogsBtn = document.getElementById('toggle-logs-btn');
+const appNotification = document.getElementById('app-notification'); // New notification element
 
-    // --- 日志功能 ---
-    const LOG_LEVELS = { INFO: 'info', SUCCESS: 'success', WARNING: 'warning', ERROR: 'error' };
-    const MAX_LOG_ENTRIES = 100;
 
-    function initDebugLog() {
-        if (clearLogsBtn) clearLogsBtn.addEventListener('click', clearLogs);
-        if (copyLogsBtn) copyLogsBtn.addEventListener('click', copyLogs);
-        if (toggleLogsBtn) toggleLogsBtn.addEventListener('click', toggleLogs);
-        logDebug('调试日志系统初始化完成', LOG_LEVELS.SUCCESS);
-        logDebug(`当前用户: ${username}`, LOG_LEVELS.INFO);
-        logDebug(`当前房间: ${roomName}`, LOG_LEVELS.INFO);
-    }
+// --- 全局状态变量 ---
+let allMessages = []; // 存储所有消息数据
+let messageIdSet = new Set(); // 用于快速去重
+let messageQueue = []; // 消息队列，用于批量处理新消息
+let rafScheduled = false; // requestAnimationFrame 调度标志
+let messageProcessTimeoutId = null; // 用于 appendChatMessage 的防抖定时器ID
+const MESSAGE_BATCH_DEBOUNCE_MS = 50; // 批量处理消息的防抖时间 (保持批处理，即便人数少，也能让UI更流畅)
 
-    function logDebug(message, level = LOG_LEVELS.INFO) {
-        if (!debugLogContent) return;
-        const timestamp = new Date().toLocaleTimeString();
-        const logEntry = document.createElement('div');
-        logEntry.className = `debug-log-entry ${level}`;
-        logEntry.innerHTML = `<span class="log-timestamp">[${timestamp}]</span> <span>${message}</span>`;
-        debugLogContent.appendChild(logEntry);
-        if (debugLogContent.children.length > MAX_LOG_ENTRIES) {
-            debugLogContent.removeChild(debugLogContent.firstChild);
+let historicalMessagesLoading = false; // 标志位，表示历史消息是否正在加载
+
+let selectedFile = null;
+let mediaRecorder;
+let audioChunks = [];
+let isRecording = false;
+let currentMessageElement = null; // 用于存储当前右键点击的消息元素
+let socket;
+let reconnectInterval = 1000;
+const maxReconnectInterval = 30000;
+let localStream = null;
+const peerConnections = {};
+const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+// --- 日志功能变量 ---
+const LOG_LEVELS = { INFO: 'info', SUCCESS: 'success', WARNING: 'warning', ERROR: 'error' };
+const MAX_LOG_ENTRIES = 100;
+let isDebugEnabled = true; // 控制是否在DOM中显示调试日志
+
+
+// --- 初始化用户和房间信息 ---
+let username = localStorage.getItem('chat_username');
+if (!username) {
+    username = prompt("请输入您的姓名:") || "匿名用户";
+    localStorage.setItem('chat_username', username);
+}
+const pathParts = window.location.pathname.split('/');
+const roomName = pathParts.find(p => p.trim()) || 'general';
+
+
+// --- 工具函数 ---
+function escapeHTML(str) {
+    if (typeof str !== 'string') return '';
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    };
+    return str.replace(/[&<>"']/g, m => map[m]);
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+}
+
+// 节流函数 (继续保留，通用实用)
+function throttle(func, delay) {
+    let timeoutId;
+    let lastArgs;
+    let lastThis;
+
+    return function(...args) {
+        lastArgs = args;
+        lastThis = this;
+
+        if (!timeoutId) {
+            timeoutId = setTimeout(() => {
+                func.apply(lastThis, lastArgs);
+                timeoutId = null;
+                lastArgs = null;
+                lastThis = null;
+            }, delay);
         }
-        debugLogContent.scrollTop = debugLogContent.scrollHeight;
-        console[level === LOG_LEVELS.ERROR ? 'error' : level === LOG_LEVELS.WARNING ? 'warn' : 'log'](`[${level.toUpperCase()}] ${message}`);
+    };
+}
+
+
+// --- 调试日志系统 (保持不变) ---
+function logDebug(message, level = LOG_LEVELS.INFO, data = null) {
+    const consoleMethod = level === LOG_LEVELS.ERROR ? 'error' : 
+                          level === LOG_LEVELS.WARNING ? 'warn' : 'log';
+    
+    if (data) {
+        console[consoleMethod](`[${level.toUpperCase()}] ${message}`, data);
+    } else {
+        console[consoleMethod](`[${level.toUpperCase()}] ${message}`);
     }
-
-    function clearLogs() {
-        debugLogContent.innerHTML = '';
-        logDebug('日志已清空', LOG_LEVELS.INFO);
-    }
-
-    function copyLogs() {
-        const logText = Array.from(debugLogContent.children).map(entry => entry.textContent).join('\n');
-        navigator.clipboard.writeText(logText).then(() => {
-            showCopyFeedback('日志已复制到剪贴板');
-            logDebug('日志已复制到剪贴板', LOG_LEVELS.SUCCESS);
-        }).catch(err => logDebug(`复制失败: ${err}`, LOG_LEVELS.ERROR));
-    }
-
-    function toggleLogs() {
-        const isHidden = debugLogContent.style.display === 'none';
-        debugLogContent.style.display = isHidden ? '' : 'none';
-        logDebug(`日志显示已${isHidden ? '开启' : '隐藏'}`, LOG_LEVELS.INFO);
-    }
-
-    function showCopyFeedback(message) {
-        let feedback = document.querySelector('.copy-feedback');
-        if (!feedback) {
-            feedback = document.createElement('div');
-            feedback.className = 'copy-feedback';
-            document.body.appendChild(feedback);
-        }
-        feedback.textContent = message;
-        feedback.classList.add('show');
-        setTimeout(() => feedback.classList.remove('show'), 2000);
-    }
-
-    // --- State Variables ---
-    let allMessages = []; // 单一事实来源
-    let selectedFile = null;
-    let mediaRecorder;
-    let audioChunks = [];
-    let isRecording = false;
-    let currentMessageElement = null;
-    let socket;
-    let reconnectInterval = 1000;
-    const maxReconnectInterval = 30000;
-    let localStream = null;
-    const peerConnections = {};
-    const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-
-    // --- Initialization ---
-    let username = localStorage.getItem('chat_username');
-    if (!username) {
-        username = prompt("请输入您的姓名:") || "匿名用户";
-        localStorage.setItem('chat_username', username);
-    }
-    const pathParts = window.location.pathname.split('/');
-    const roomName = pathParts.find(p => p.trim()) || 'general';
-    roomNameEl.textContent = roomName;
-    document.getElementById('sidebar-room-name').textContent = roomName;
-
-    usernameDisplayEl.textContent = username;
-    usernameDisplayEl.addEventListener('click', () => {
-        const newUsername = prompt("请输入新的用户名:", username);
-        if (newUsername && newUsername.trim() && newUsername !== username) {
-            username = newUsername.trim();
-            localStorage.setItem('chat_username', username);
-            usernameDisplayEl.textContent = username;
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({ type: 'rename', payload: { newUsername: username } }));
+    
+    if (!isDebugEnabled || !debugLogContent) return;
+    
+    const fragment = document.createDocumentFragment();
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = document.createElement('div');
+    logEntry.className = `debug-log-entry ${level}`;
+    
+    let messageHTML = `<span class="log-timestamp">[${timestamp}]</span> <span>${message}</span>`;
+    
+    if (data) {
+        let dataString;
+        try {
+            if (typeof data === 'object' && data !== null) {
+                const limitedData = JSON.parse(JSON.stringify(data, (k, v) => {
+                    if (typeof v === 'string' && v.length > 500) {
+                        return v.substring(0, 500) + '... [截断]';
+                    }
+                    return v;
+                }));
+                dataString = JSON.stringify(limitedData, null, 2);
+            } else {
+                dataString = String(data);
             }
+        } catch (e) {
+            dataString = `[无法序列化的数据: ${e.message}]`;
+        }
+        
+        if (dataString.length > 1000) {
+            dataString = dataString.substring(0, 1000) + '... [数据过大，已截断]';
+        }
+        
+        messageHTML += `<pre style="white-space: pre-wrap; word-break: break-all; margin-top: 5px; background: rgba(0,0,0,0.2); padding: 5px; border-radius: 4px;">${escapeHTML(dataString)}</pre>`;
+    }
+    
+    logEntry.innerHTML = messageHTML;
+    fragment.appendChild(logEntry);
+    debugLogContent.appendChild(fragment);
+    
+    while (debugLogContent.children.length > MAX_LOG_ENTRIES) {
+        debugLogContent.removeChild(debugLogContent.firstChild);
+    }
+    
+    requestAnimationFrame(() => {
+        debugLogContent.scrollTop = debugLogContent.scrollHeight;
+    });
+}
+
+function initDebugLog() {
+    if (clearLogsBtn) clearLogsBtn.addEventListener('click', clearLogs);
+    if (copyLogsBtn) copyLogsBtn.addEventListener('click', copyLogs);
+    if (toggleLogsBtn) toggleLogsBtn.addEventListener('click', toggleLogsDisplay);
+    logDebug('调试日志系统初始化完成', LOG_LEVELS.SUCCESS);
+    logDebug(`当前用户: ${username}`, LOG_LEVELS.INFO);
+    logDebug(`当前房间: ${roomName}`, LOG_LEVELS.INFO);
+    if (debugLogContent) {
+        debugLogContent.style.display = isDebugEnabled ? '' : 'none';
+    }
+}
+
+function clearLogs() {
+    debugLogContent.innerHTML = '';
+    logDebug('日志已清空', LOG_LEVELS.INFO);
+}
+
+function copyLogs() {
+    const logText = Array.from(debugLogContent.children).map(entry => entry.textContent).join('\n');
+    navigator.clipboard.writeText(logText).then(() => {
+        showAppNotification('日志已复制到剪贴板');
+        logDebug('日志已复制到剪贴板', LOG_LEVELS.SUCCESS);
+    }).catch(err => logDebug(`复制失败: ${err}`, LOG_LEVELS.ERROR));
+}
+
+function toggleLogsDisplay() {
+    isDebugEnabled = !isDebugEnabled;
+    if (debugLogContent) {
+        debugLogContent.style.display = isDebugEnabled ? '' : 'none';
+    }
+    logDebug(`调试日志显示已${isDebugEnabled ? '开启' : '隐藏'}`, LOG_LEVELS.INFO);
+}
+
+function showAppNotification(message, duration = 2000, isError = false) {
+    if (!appNotification) return;
+
+    appNotification.textContent = message;
+    appNotification.style.backgroundColor = isError ? '#e74c3c' : 'rgba(102, 126, 234, 0.9)';
+    appNotification.classList.add('show');
+
+    setTimeout(() => appNotification.classList.remove('show'), duration);
+}
+
+
+// --- UI 渲染和更新逻辑 ---
+const throttledUpdateUI = throttle(updateUIFromMessages, 1000); 
+
+function isUserActive(lastSeenTimestamp) {
+    if (!lastSeenTimestamp) return false;
+    const fiveMinutesInMs = 5 * 60 * 1000;
+    const fiveMinutesAgo = Date.now() - fiveMinutesInMs;
+    return new Date(lastSeenTimestamp).getTime() > fiveMinutesAgo;
+}
+
+// 优化 updateUIFromMessages 函数 (保持DOM协调策略，因为这是好的实践)
+function updateUIFromMessages() {
+    const currentUserStates = new Map(); 
+    const activeUsersSet = new Set();
+
+    // 只处理最近的500条消息
+    const recentMessages = allMessages.slice(-500); 
+    
+    recentMessages.forEach(msg => {
+        const { username, timestamp } = msg;
+        if (!username) return; 
+
+        const currentState = currentUserStates.get(username) || { lastSeen: 0, messageCount: 0 };
+        currentState.lastSeen = Math.max(currentState.lastSeen, timestamp);
+        currentState.messageCount++;
+        currentUserStates.set(username, currentState);
+    });
+
+    currentUserStates.forEach((state, username) => {
+        state.isActive = isUserActive(state.lastSeen);
+        if (state.isActive) {
+            activeUsersSet.add(username);
         }
     });
 
-    // --- UI Event Listeners ---
+    const sortedActiveUsernames = Array.from(activeUsersSet).sort((a, b) => a.localeCompare(b));
+
+    const userNamesEl = document.getElementById('user-names');
+    const menuListEl = document.getElementById('users-menu-list');
+
+    const currentUserItems = new Map(); 
+    Array.from(userNamesEl.children).forEach(el => {
+        if (el.dataset.username) currentUserItems.set(el.dataset.username, el);
+    });
+    const currentMenuItems = new Map();
+    Array.from(menuListEl.children).forEach(el => {
+        if (el.dataset.username) currentMenuItems.set(el.dataset.username, el);
+    });
+
+    const newUserItems = []; 
+    const newMenuItems = [];
+
+    sortedActiveUsernames.forEach(name => {
+        const safeName = escapeHTML(name);
+        
+        let userItem = currentUserItems.get(name);
+        if (!userItem) {
+            userItem = document.createElement('div');
+            userItem.className = 'user-item';
+            userItem.dataset.username = name;
+            userItem.textContent = safeName;
+        }
+        newUserItems.push(userItem);
+        currentUserItems.delete(name); 
+
+        let menuItem = currentMenuItems.get(name);
+        if (!menuItem) {
+            menuItem = document.createElement('li');
+            menuItem.dataset.username = name;
+            if (name === username) {
+                menuItem.textContent = `${safeName} (你)`;
+            } else {
+                menuItem.className = 'user-menu-item-with-call';
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = safeName;
+                menuItem.appendChild(nameSpan);
+                const callBtn = document.createElement('button');
+                callBtn.className = 'call-btn';
+                callBtn.textContent = '📞';
+                callBtn.dataset.username = safeName;
+                callBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    startCall(callBtn.dataset.username);
+                    usersMenu.classList.remove('show');
+                };
+                menuItem.appendChild(callBtn);
+            }
+        }
+        newMenuItems.push(menuItem);
+        currentMenuItems.delete(name); 
+    });
+
+    currentUserItems.forEach(el => el.remove());
+    currentMenuItems.forEach(el => el.remove());
+
+    const userNamesFragment = document.createDocumentFragment();
+    newUserItems.forEach(item => userNamesFragment.appendChild(item));
+    userNamesEl.innerHTML = ''; 
+    userNamesEl.appendChild(userNamesFragment);
+
+    const menuListFragment = document.createDocumentFragment();
+    newMenuItems.forEach(item => menuListFragment.appendChild(item));
+    menuListEl.innerHTML = ''; 
+    menuListEl.appendChild(menuListFragment);
+
+    document.getElementById('online-count').textContent = sortedActiveUsernames.length;
+    onlineDisplay.textContent = `活跃: ${sortedActiveUsernames.length}`;
+    document.getElementById('sidebar-room-name').textContent = roomName; 
+
+    const userStatsListEl = document.getElementById('user-stats-list');
+    const allUsersSorted = Array.from(currentUserStates.keys()).sort((a, b) => {
+        const aState = currentUserStates.get(a);
+        const bState = currentUserStates.get(b);
+        if (aState.isActive !== bState.isActive) return bState.isActive - aState.isActive; 
+        return (bState.messageCount || 0) - (aState.messageCount || 0); 
+    });
+
+    const statsFragment = document.createDocumentFragment();
+    if (allUsersSorted.length === 0) {
+        const emptyMsg = document.createElement('p');
+        emptyMsg.style.color = 'rgba(255,255,255,0.7)';
+        emptyMsg.style.fontSize = '0.8em';
+        emptyMsg.textContent = '暂无用户活动。';
+        statsFragment.appendChild(emptyMsg);
+    } else {
+        allUsersSorted.forEach(name => {
+            const state = currentUserStates.get(name);
+            if (!state) return; 
+
+            const item = document.createElement('div');
+            item.className = 'user-stats-item';
+            const isActive = state.isActive;
+            const lastSeenString = state.lastSeen ? new Date(state.lastSeen).toLocaleString() : '未知';
+            
+            item.innerHTML = `
+                <div class="stat-row">
+                    <strong>${escapeHTML(name)}</strong>
+                    <span class="${isActive ? 'online-status' : 'offline-status'}">${isActive ? '活跃' : '离线'}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">发言:</span>
+                    <span class="stat-value">${state.messageCount}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">最近发言:</span>
+                    <span class="stat-value">${lastSeenString}</span>
+                </div>`;
+            statsFragment.appendChild(item);
+        });
+    }
+    userStatsListEl.innerHTML = ''; 
+    userStatsListEl.appendChild(statsFragment); 
+}
+
+
+// --- 简化消息显示逻辑 (不再虚拟滚动) ---
+
+// `appendMessagesToChatWindow` 函数，用于直接追加消息到聊天窗口
+function appendMessagesToChatWindow(messages, scrollToBottom = true) {
+    if (!chatWindowEl) {
+        logDebug('聊天窗口元素未找到，无法追加消息', LOG_LEVELS.ERROR);
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    messages.forEach(msg => {
+        if (!msg || !msg.id) {
+            logDebug("尝试追加无效消息", LOG_LEVELS.ERROR, msg);
+            return;
+        }
+        const msgEl = createMessageElement(msg);
+        fragment.appendChild(msgEl);
+    });
+
+    chatWindowEl.appendChild(fragment);
+
+    if (scrollToBottom) {
+        requestAnimationFrame(() => {
+            chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
+        });
+    }
+}
+
+// `initChatDisplay` 函数，替代原先的 `initVirtualScrolling`
+function initChatDisplay() {
+    // 清空所有旧消息
+    chatWindowEl.innerHTML = ''; 
+    logDebug('聊天显示初始化完成', LOG_LEVELS.SUCCESS);
+    // 对于非虚拟滚动，滚动事件监听器通常不需要复杂的渲染逻辑
+    // 如果未来需要“加载更多”等功能，可以再完善此处的滚动处理
+    chatWindowEl.addEventListener('scroll', throttle(() => {
+        // 可以在这里添加滚动到顶部时加载更多历史消息的逻辑
+    }, 150)); 
+}
+
+
+// --- 消息渲染函数 (创建单个DOM元素，保持不变) ---
+function createMessageElement(msg) {
+    const msgEl = document.createElement('div');
+    msgEl.className = 'message';
+    
+    msgEl.dataset.id = msg.id;
+    msgEl.dataset.messageText = msg.caption || msg.text || ''; 
+    msgEl.dataset.timestamp = msg.timestamp;
+    msgEl.dataset.messageType = msg.type;
+    if (msg.type === 'image') {
+        msgEl.dataset.imageUrl = msg.imageUrl;
+    }
+
+    if (msg.username === username) msgEl.classList.add('self');
+    
+    const messageDate = new Date(msg.timestamp);
+    const now = new Date();
+    const diffSeconds = Math.floor((now - messageDate) / 1000);
+    let displayTime;
+    if (diffSeconds < 60) displayTime = '刚刚';
+    else if (diffSeconds < 3600) displayTime = `${Math.floor(diffSeconds / 60)}分钟前`;
+    else if (diffSeconds < 86400) displayTime = `${Math.floor(diffSeconds / 3600)}小时前`;
+    else displayTime = messageDate.toLocaleString([], { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    
+    let contentHTML = `<div class="info"><span class="username">${escapeHTML(msg.username)}</span> <span class="timestamp">${displayTime}</span></div>`;
+            
+    if (msg.type === 'image') {
+        contentHTML += `<div class="message-image" onclick="showImageModal('${msg.imageUrl}')"><img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy"></div>`;
+        contentHTML += `<div class="text">${marked.parse(msg.caption || '')}</div>`; 
+    } else if (msg.type === 'audio') {
+        contentHTML += `<div class="message-audio"><audio controls src="${msg.audioUrl}"></audio></div>`;
+        contentHTML += `<div class="text">${marked.parse(msg.text || '')}</div>`; 
+    } else { 
+        contentHTML += `<div class="text">${marked.parse(msg.text || '')}</div>`;
+    }
+        
+    msgEl.innerHTML = contentHTML;
+    return msgEl;
+}
+
+// 消息队列处理函数，在 requestAnimationFrame 中执行
+function processMessageQueue() {
+    if (historicalMessagesLoading) {
+        logDebug("历史消息加载中，暂停处理新消息队列。", LOG_LEVELS.INFO);
+        rafScheduled = false; // 取消RAF调度，等待历史加载完成
+        return;
+    }
+
+    if (messageQueue.length === 0) {
+        rafScheduled = false;
+        return;
+    }
+
+    // 处理所有当前在队列中的消息 (因为人数少，直接处理所有积压的即可)
+    const messagesToProcess = messageQueue.splice(0, messageQueue.length); 
+
+    logDebug(`处理消息队列: 移除并追加 ${messagesToProcess.length} 条消息`, LOG_LEVELS.INFO);
+
+    messagesToProcess.forEach(msg => {
+        if (!messageIdSet.has(msg.id)) {
+            allMessages.push(msg);
+            messageIdSet.add(msg.id);
+        } else {
+            logDebug(`消息 ${msg.id} 已存在，跳过`, LOG_LEVELS.INFO);
+        }
+    });
+
+    const MAX_ALL_MESSAGES = 500; 
+    while (allMessages.length > MAX_ALL_MESSAGES) {
+        const removedMsg = allMessages.shift(); 
+        messageIdSet.delete(removedMsg.id); 
+        // 移除了虚拟滚动，所以不需要 messageHeights.delete(removedMsg.id);
+        // 同时，如果 chatWindowEl 中的 DOM 元素数量超过 MAX_ALL_MESSAGES，需要手动移除最旧的DOM
+        // 对于低并发场景，通常不主动移除旧DOM，而是依赖用户刷新或页面关闭。
+        // 如果需要，可以根据 `allMessages` 的长度，移除 `chatWindowEl.firstChild`。
+        // 但为了简化，暂时不在此处主动移除DOM，只维护数据。
+    }
+
+    appendMessagesToChatWindow(messagesToProcess, true); // 追加新消息并滚动到底部
+    throttledUpdateUI(); // 触发用户列表更新
+
+    // 如果队列中还有消息（虽然上面一次性取完了），这表示可能在处理期间又有新消息入队了
+    if (messageQueue.length > 0) {
+        requestAnimationFrame(processMessageQueue);
+    } else {
+        rafScheduled = false;
+    }
+}
+
+// appendChatMessage (保持批处理防抖机制，有助于UI流畅性)
+function appendChatMessage(msg) {
+    if (!msg || !msg.id) {
+        logDebug("appendChatMessage 收到无效消息", LOG_LEVELS.ERROR, msg);
+        return;
+    }
+    
+    if (messageIdSet.has(msg.id)) {
+        logDebug(`收到重复消息 (ID: ${msg.id})，已忽略`, LOG_LEVELS.INFO);
+        return;
+    }
+
+    messageQueue.push(msg);
+    logDebug(`消息入队 (ID: ${msg.id}). 队列长度: ${messageQueue.length}`, LOG_LEVELS.INFO);
+
+    if (messageProcessTimeoutId) {
+        clearTimeout(messageProcessTimeoutId);
+    }
+
+    messageProcessTimeoutId = setTimeout(() => {
+        messageProcessTimeoutId = null; 
+        if (!rafScheduled) { 
+            rafScheduled = true;
+            requestAnimationFrame(processMessageQueue);
+        }
+    }, MESSAGE_BATCH_DEBOUNCE_MS);
+}
+
+
+// --- 上下文菜单和 AI 解释逻辑 (保持不变) ---
+function showContextMenu(element, x, y) {
+    currentMessageElement = element; 
+    
+    contextMenu.style.top = `${y}px`;
+    contextMenu.style.left = `${x}px`;
+    contextMenu.style.display = 'block';
+
+    const messageType = element.dataset.messageType;
+    const isSelf = element.classList.contains('self'); 
+
+    const geminiTextOption = contextMenu.querySelector('[data-ai="gemini"][data-action="text-explain"]');
+    const deepseekTextOption = contextMenu.querySelector('[data-ai="deepseek"][data-action="text-explain"]');
+    const geminiImageOption = contextMenu.querySelector('[data-ai="gemini"][data-action="image-describe"]');
+    const copyOption = document.getElementById('copy-option');
+    const deleteOption = document.getElementById('delete-option');
+
+    geminiTextOption.style.display = 'none';
+    deepseekTextOption.style.display = 'none';
+    geminiImageOption.style.display = 'none';
+    copyOption.style.display = 'none';
+    
+    if (messageType === 'image') {
+        geminiImageOption.style.display = 'flex'; 
+    } else if (messageType === 'text') {
+        geminiTextOption.style.display = 'flex'; 
+        deepseekTextOption.style.display = 'flex';
+        copyOption.style.display = 'flex';       
+    }
+
+    deleteOption.style.display = isSelf ? 'flex' : 'none';
+    
+    if (navigator.vibrate) navigator.vibrate(50); 
+}
+
+contextMenu.addEventListener('click', async (e) => {
+    const clickedOption = e.target;
+    if (!clickedOption.closest('li')) return; 
+
+    const action = clickedOption.dataset.action;
+    const model = clickedOption.dataset.ai;
+    
+    const originalMessageText = currentMessageElement?.dataset.messageText;
+    const originalImageUrl = currentMessageElement?.dataset.imageUrl;
+    const messageType = currentMessageElement?.dataset.messageType;
+
+    contextMenu.style.display = 'none';
+
+    if (clickedOption.id === 'copy-option') {
+        if (originalMessageText) {
+            navigator.clipboard.writeText(originalMessageText)
+                .then(() => showAppNotification('文本已复制!'))
+                .catch(err => logDebug(`复制失败: ${err}`, LOG_LEVELS.ERROR));
+        }
+        return; 
+    }
+
+    if (clickedOption.id === 'delete-option') {
+        if (currentMessageElement?.dataset.id) {
+            if (confirm("确定要删除这条消息吗？")) {
+                socket.send(JSON.stringify({ type: 'delete', payload: { id: currentMessageElement.dataset.id } }));
+                logDebug(`发送删除消息指令: ${currentMessageElement.dataset.id}`, LOG_LEVELS.INFO);
+            }
+        }
+        return; 
+    }
+
+    let explanationText = "";
+    let requestBody = {};
+    let apiUrl = '';
+
+    if (action === 'image-describe' && messageType === 'image') {
+        if (!originalImageUrl) {
+            logDebug("图片描述：缺少图片URL", LOG_LEVELS.WARNING);
+            return;
+        }
+        apiUrl = '/ai-describe-image';
+        requestBody = { imageUrl: originalImageUrl };
+        explanationText = "正在通过AI模型解读图片...";
+    } else if (action === 'text-explain' && messageType === 'text') {
+        if (!originalMessageText) {
+            logDebug("文本解释：缺少文本内容", LOG_LEVELS.WARNING);
+            return;
+        }
+        apiUrl = '/ai-explain';
+        requestBody = { text: originalMessageText, model: model };
+        explanationText = `正在通过 ${model} 模型思考中...`;
+    } else if (action === 'custom-prompt' && messageType === 'text') { 
+        const customPrompt = prompt("请输入您的提示词:");
+        if (!customPrompt || !originalMessageText) {
+            logDebug("自定义提示词：用户取消或缺少文本内容", LOG_LEVELS.INFO);
+            return;
+        }
+        apiUrl = '/ai-explain';
+        requestBody = { text: `${originalMessageText}\n\n${customPrompt}`, model: 'gemini' }; 
+        explanationText = `正在使用您的自定义提示词通过 Gemini 模型思考中...`;
+    } else {
+        logDebug(`AI操作失败：未知动作或消息类型不匹配。Action: ${action}, Type: ${messageType}`, LOG_LEVELS.WARNING);
+        return;
+    }
+
+    const existingExplanation = currentMessageElement.querySelector('.ai-explanation');
+    if (existingExplanation) {
+        existingExplanation.remove();
+    }
+    
+    const explanationEl = document.createElement('div');
+    explanationEl.className = 'ai-explanation';
+    explanationEl.innerHTML = `<p>🤖 ${explanationText}<span class="loading-dots"></span></p>`;
+    currentMessageElement.appendChild(explanationEl);
+
+    try {
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText); 
+        }
+        
+        const data = await response.json();
+        const explanationContent = data.explanation || data.description; 
+        
+        explanationEl.innerHTML = ''; 
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'ai-explanation-buttons';
+
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'ai-explanation-close';
+        closeBtn.innerHTML = '×';
+        closeBtn.onclick = () => {
+            explanationEl.remove();
+            logDebug('AI解释已关闭。', LOG_LEVELS.INFO);
+        };
+
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'ai-explanation-copy';
+        copyBtn.innerHTML = '📋';
+        copyBtn.title = '复制内容';
+        copyBtn.onclick = () => {
+            navigator.clipboard.writeText(explanationContent)
+                .then(() => showAppNotification('AI解释已复制!'))
+                .catch(err => logDebug(`AI解释复制失败: ${err}`, LOG_LEVELS.ERROR));
+        };
+
+        buttonContainer.appendChild(copyBtn);
+        buttonContainer.appendChild(closeBtn);
+
+        const markdownContainer = document.createElement('div');
+        markdownContainer.className = 'markdown-content';
+        markdownContainer.innerHTML = marked.parse(explanationContent, { gfm: true, breaks: true, sanitize: true });
+        
+        explanationEl.appendChild(buttonContainer);
+        explanationEl.appendChild(markdownContainer);
+        logDebug(`AI解释成功，模型: ${model || '图片描述'}.`, LOG_LEVELS.SUCCESS);
+
+    } catch (error) {
+        logDebug(`请求AI解释失败: ${error.message}`, LOG_LEVELS.ERROR, error);
+        const errorModelName = (action === 'image-describe') ? 'AI图片描述' : (model || '未知AI模型');
+        explanationEl.innerHTML = `<p>😞 抱歉，无法从 ${errorModelName} 获取解释: ${escapeHTML(error.message)}</p>`;
+        setTimeout(() => { if (explanationEl.parentNode) explanationEl.remove(); }, 6000); 
+    }
+});
+
+
+// --- 图片和媒体处理函数 (保持不变) ---
+async function handleImageSelection(e) {
+    const file = e.target.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    try {
+        uploadProgress.style.display = 'block';
+        uploadProgress.textContent = '压缩中...';
+        imagePreview.classList.add('show', 'uploading');
+        const compressedBlob = await compressImage(file);
+        selectedFile = new File([compressedBlob], file.name, { type: 'image/jpeg', lastModified: Date.now() });
+        showImagePreview(selectedFile);
+    } catch (error) {
+        logDebug('图片处理失败: ' + error, LOG_LEVELS.ERROR);
+        showAppNotification('图片处理失败，请重试', 3000, true); 
+    } finally {
+        uploadProgress.style.display = 'none';
+        imagePreview.classList.remove('uploading');
+        checkSendButtonState();
+    }
+}
+
+function compressImage(file, maxWidth = 800, maxHeight = 600, quality = 0.8) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            let { width, height } = img;
+            if (width > height) {
+                if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
+            } else {
+                if (height > maxHeight) { width *= maxHeight / height; height = maxHeight; }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob(resolve, 'image/jpeg', quality);
+        };
+        img.onerror = reject;
+        img.src = URL.createObjectURL(file);
+    });
+}
+
+function showImagePreview(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        previewImage.src = e.target.result;
+        previewName.textContent = file.name;
+        previewSize.textContent = formatFileSize(file.size);
+        imagePreview.classList.add('show');
+    };
+    reader.readAsDataURL(file);
+}
+
+function removeImagePreview() {
+    selectedFile = null;
+    imagePreview.classList.remove('show');
+    imageInput.value = '';
+    checkSendButtonState();
+}
+
+async function handleRecordButtonClick() {
+    if (isRecording) {
+        mediaRecorder.stop();
+        return;
+    }
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mimeType = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'].find(t => MediaRecorder.isTypeSupported(t));
+        if (!mimeType) {
+            showAppNotification('您的浏览器不支持录音功能。', 3000, true); 
+            return;
+        }
+        mediaRecorder = new MediaRecorder(stream, { mimeType });
+        audioChunks = [];
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.onstart = () => {
+            recordButton.textContent = '🛑';
+            isRecording = true;
+            checkSendButtonState();
+        };
+        mediaRecorder.onstop = () => {
+            const audioBlob = new Blob(audioChunks, { type: mimeType });
+            sendAudioMessage(audioBlob, mimeType);
+            stream.getTracks().forEach(track => track.stop());
+            recordButton.textContent = '🎤';
+            isRecording = false;
+            checkSendButtonState();
+        };
+        mediaRecorder.start();
+    } catch (error) {
+        logDebug('无法访问麦克风: ' + error, LOG_LEVELS.ERROR);
+        showAppNotification('无法访问麦克风，请检查权限。', 3000, true); 
+    }
+}
+
+function checkSendButtonState() {
+    sendButton.disabled = (messageInput.value.trim() === '' && selectedFile === null && !isRecording);
+}
+
+
+// --- 消息发送函数 (保持不变) ---
+messageForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = messageInput.value.trim();
+    const isSocketReady = socket && socket.readyState === WebSocket.OPEN;
+
+    if ((!text && !selectedFile && !isRecording) || !isSocketReady) {
+        checkSendButtonState();
+        return;
+    }
+    
+    sendButton.disabled = true;
+    
+    try {
+        if (selectedFile) {
+            await sendImageMessage(selectedFile, text);
+        } else if (text) {
+            const tempId = crypto.randomUUID();
+            const tempTimestamp = Date.now();
+            
+            socket.send(JSON.stringify({ 
+                type: 'chat', 
+                payload: { 
+                    id: tempId,          
+                    timestamp: tempTimestamp, 
+                    type: 'text',
+                    text: text 
+                } 
+            }));
+            
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+        }
+    } catch (error) {
+        logDebug('发送消息过程中出现错误: ' + error, LOG_LEVELS.ERROR, error);
+        showAppNotification('发送失败，请重试', 3000, true); 
+    } finally {
+        removeImagePreview();
+        checkSendButtonState();
+    }
+});
+
+// --- 图片文件上传函数 (保持不变) ---
+async function sendImageMessage(file, caption = '') {
+    try {
+        logDebug(`开始上传图片: ${file.name}`, LOG_LEVELS.INFO);
+        
+        uploadProgress.style.display = 'block';
+        uploadProgress.textContent = '上传中...';
+        imagePreview.classList.add('uploading');
+        
+        const safeFileName = encodeURIComponent(file.name);
+        
+        const response = await fetch('/upload', {
+            method: 'POST',
+            body: file,
+            headers: {
+                'X-Filename': safeFileName,
+                'Content-Type': file.type
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`上传失败: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.url) {
+            throw new Error('服务器没有返回有效的文件URL');
+        }
+        
+        logDebug(`图片上传成功，获取URL: ${data.url}`, LOG_LEVELS.SUCCESS);
+        
+        const tempId = crypto.randomUUID();
+        const tempTimestamp = Date.now();
+
+        const payload = {
+            type: 'image',
+            text: caption, 
+            caption: caption,
+            imageUrl: data.url, 
+            filename: file.name,
+            size: file.size,
+            id: tempId,          
+            timestamp: tempTimestamp
+        };
+        
+        socket.send(JSON.stringify({
+            type: 'chat',
+            payload: payload
+        }));
+        
+        logDebug("图片消息已通过WebSocket发送", LOG_LEVELS.SUCCESS);
+        
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
+        removeImagePreview();
+        
+        return true;
+    } catch (error) {
+        logDebug(`图片上传失败: ${error.message}`, LOG_LEVELS.ERROR, error);
+        showAppNotification(`图片上传失败: ${error.message}`, 3000, true); 
+        throw error;
+    } finally {
+        uploadProgress.style.display = 'none';
+        imagePreview.classList.remove('uploading');
+    }
+}
+
+// --- 音频文件上传函数 (保持不变) ---
+async function sendAudioMessage(audioBlob, mimeType) {
+    try {
+        logDebug(`开始上传音频`, LOG_LEVELS.INFO, { size: audioBlob.size, type: mimeType });
+        
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `audio-${timestamp}.${mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
+        const safeFileName = encodeURIComponent(filename);
+        
+        const response = await fetch('/upload', {
+            method: 'POST',
+            body: audioBlob,
+            headers: {
+                'X-Filename': safeFileName,
+                'Content-Type': mimeType
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`上传失败: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.url) {
+            throw new Error('服务器没有返回有效的文件URL');
+        }
+        
+        logDebug(`音频上传成功，获取URL: ${data.url}`, LOG_LEVELS.SUCCESS);
+        
+        const tempId = crypto.randomUUID();
+        const tempTimestamp = Date.now();
+
+        const payload = {
+            type: 'audio',
+            text: '', 
+            audioUrl: data.url, 
+            filename: filename,
+            size: audioBlob.size,
+            id: tempId,          
+            timestamp: tempTimestamp
+        };
+        
+        socket.send(JSON.stringify({
+            type: 'chat',
+            payload: payload
+        }));
+        
+        logDebug("音频消息已通过WebSocket发送", LOG_LEVELS.SUCCESS);
+        
+        return true;
+    } catch (error) {
+        logDebug(`音频上传失败: ${error.message}`, LOG_LEVELS.ERROR, error);
+        showAppNotification(`音频上传失败: ${error.message}`, 3000, true); 
+        throw error;
+    }
+}
+
+// 优化后的历史消息处理函数 (移除虚拟滚动相关逻辑)
+async function processHistoryMessages(history) {
+    if (!Array.isArray(history)) {
+        logDebug("历史记录格式不正确，已忽略。", LOG_LEVELS.WARNING);
+        historicalMessagesLoading = false;
+        processMessageQueue(); 
+        return;
+    }
+    
+    logDebug(`开始处理 ${history.length} 条历史记录...`);
+    historicalMessagesLoading = true; 
+    
+    // 重置状态：直接清空聊天窗口和消息数据
+    allMessages = [];
+    messageIdSet.clear(); 
+    chatWindowEl.innerHTML = ''; 
+    
+    const CHUNK_SIZE = 50; // 每次处理50条消息
+    let processedCount = 0;
+
+    const processChunk = (deadline) => {
+        const messagesInChunk = [];
+        let i = 0;
+        // 在空闲时间内处理 CHUNK_SIZE 条消息，或者直到空闲时间耗尽
+        // `i === 0` 确保在没有空闲时间时至少处理第一条消息，避免无限等待
+        while (i < CHUNK_SIZE && processedCount < history.length && (deadline.timeRemaining() > 0 || i === 0)) {
+            const msg = history[processedCount];
+            if (msg && msg.id && !messageIdSet.has(msg.id)) {
+                allMessages.push(msg);
+                messageIdSet.add(msg.id);
+                messagesInChunk.push(msg);
+            } else if (msg && msg.id && messageIdSet.has(msg.id)) {
+                logDebug(`历史消息中发现重复ID: ${msg.id}, 已跳过。`, LOG_LEVELS.INFO);
+            } else {
+                logDebug(`历史消息中发现无效消息，已跳过。`, LOG_LEVELS.WARNING, msg);
+            }
+            processedCount++;
+            i++;
+        }
+
+        appendMessagesToChatWindow(messagesInChunk, false); // 追加这批消息，但不强制滚动到底部
+        // 用户列表更新可以在历史消息全部加载完成后进行，避免频繁更新
+        // throttledUpdateUI(); // 不在分批加载过程中调用
+
+        if (processedCount < history.length) {
+            logDebug(`处理历史中... 已完成 ${processedCount}/${history.length} 条。`, LOG_LEVELS.INFO);
+            requestIdleCallback(processChunk, { timeout: 1000 });
+        } else {
+            logDebug("所有历史记录处理完毕。", LOG_LEVELS.SUCCESS);
+            historicalMessagesLoading = false;
+            // 历史加载完成后，滚动到底部
+            requestAnimationFrame(() => {
+                chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
+            });
+            processMessageQueue(); // 历史消息处理完毕后，开始处理消息队列中积压的新消息
+        }
+    };
+
+    if (history.length > 0 && 'requestIdleCallback' in window) {
+        requestIdleCallback(processChunk, { timeout: 1000 });
+    } else {
+        // Fallback: synchronous processing if requestIdleCallback is not available or no history
+        logDebug("requestIdleCallback 不可用或无历史消息，同步处理历史。", LOG_LEVELS.INFO); 
+        history.forEach(msg => {
+            if (msg && msg.id && !messageIdSet.has(msg.id)) {
+                allMessages.push(msg);
+                messageIdSet.add(msg.id);
+            }
+        });
+        appendMessagesToChatWindow(allMessages, true); // 同步加载则直接追加所有并滚动到底部
+        historicalMessagesLoading = false;
+        processMessageQueue(); 
+    }
+}
+
+
+// --- WebSocket 事件处理器 (保持不变) ---
+function connectWebSocket() {
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}/${roomName}?username=${encodeURIComponent(username)}`;
+    logDebug(`开始连接WebSocket: ${wsUrl}`, LOG_LEVELS.INFO);
+    socket = new WebSocket(wsUrl);
+    socket.onopen = onSocketOpen;
+    socket.onmessage = onSocketMessage;
+    socket.onclose = onSocketClose;
+    socket.onerror = onSocketError;
+}
+
+function onSocketOpen() {
+    statusEl.textContent = '已连接';
+    connectionDot.classList.remove('disconnected');
+    reconnectInterval = 1000; 
+    checkSendButtonState();
+    logDebug('WebSocket连接已建立', LOG_LEVELS.SUCCESS);
+    if (!window.userListInterval) {
+        window.userListInterval = setInterval(throttledUpdateUI, 60000); 
+    }
+    // 连接成功后，立即触发一次队列处理，以防在断线期间有消息积压
+    if (messageQueue.length > 0 && !rafScheduled) {
+        rafScheduled = true;
+        requestAnimationFrame(processMessageQueue);
+    }
+}
+
+const messageHandlers = {
+    welcome: (payload) => {
+        const history = payload?.history;
+        if (Array.isArray(history)) {
+            processHistoryMessages(history);
+        } else {
+            logDebug("收到的欢迎消息中 history 格式不正确或不存在。", LOG_LEVELS.ERROR, payload);
+        }
+    },
+    chat: (payload) => {
+        const newMessage = payload;
+        if (newMessage && newMessage.id) {
+            appendChatMessage(newMessage);
+        }
+    },
+    user_join: (payload) => {
+        logDebug(`前端消息: ${payload.username} 加入了`, LOG_LEVELS.INFO, payload);
+        throttledUpdateUI(); 
+    },
+    user_leave: (payload) => {
+        logDebug(`前端消息: ${payload.username} 离开了`, LOG_LEVELS.INFO, payload);
+        throttledUpdateUI(); 
+    },
+    delete: (payload) => {
+        const { messageId } = payload;
+        if (messageId) {
+            logDebug(`收到删除指令，准备移除消息: ${messageId}`, LOG_LEVELS.WARNING);
+            allMessages = allMessages.filter(m => m.id !== messageId);
+            messageIdSet.delete(messageId); 
+            // 直接从 DOM 移除对应的消息元素
+            const msgElToDelete = chatWindowEl.querySelector(`[data-id="${messageId}"]`);
+            if (msgElToDelete) {
+                msgElToDelete.remove();
+            }
+            throttledUpdateUI(); 
+        }
+    },
+    error: (payload) => {
+        logDebug(`收到后端错误通知: ${payload?.message}`, LOG_LEVELS.ERROR, payload);
+        showAppNotification(payload?.message || "发生未知错误", 5000, true); 
+        sendButton.disabled = false;
+    },
+    offer: (payload) => handleOffer(payload),
+    answer: (payload) => handleAnswer(payload),
+    candidate: (payload) => handleCandidate(payload),
+    call_end: (payload) => handleCallEnd(payload),
+    debug_log: (payload) => {
+        logDebug(`[后端日志] ${payload.message}`, payload.level.toLowerCase(), payload.data);
+    },
+    heartbeat: () => {
+    },
+    system_notification: (payload) => { 
+        logDebug(`[系统通知] ${payload.message}`, payload.level.toLowerCase(), payload);
+        showAppNotification(payload.message, 5000, payload.level === 'ERROR');
+    }
+};
+
+async function onSocketMessage(event) {
+    if (event.data.startsWith('{"type":"heartbeat"') && event.data.endsWith('}}')) { 
+        return;
+    }
+
+    let data;
+    try {
+        data = JSON.parse(event.data);
+        if (data.type !== 'heartbeat') { 
+            logDebug(`收到 WebSocket 数据包 (${data.type})`, LOG_LEVELS.INFO, data); 
+        }
+    } catch (parseError) {
+        const rawMessageSnippet = String(event.data).substring(0, 500);
+        logDebug(`❌ 收到格式错误的 WebSocket 数据包`, LOG_LEVELS.ERROR, {
+            error: parseError.message,
+            raw: rawMessageSnippet
+        });
+        showAppNotification("客户端收到服务器发来的格式错误消息，请刷新页面。", 5000, true); 
+        return;
+    }
+
+    const handler = messageHandlers[data.type];
+    if (handler) {
+        handler(data.payload);
+    } else {
+        logDebug(`收到未知 WebSocket 消息类型: ${data.type}`, LOG_LEVELS.WARNING, data);
+    }
+}
+
+function onSocketClose(event) {
+    statusEl.textContent = "连接已断开";
+    connectionDot.classList.add('disconnected');
+    let reason = `Code: ${event.code}, Reason: ${event.reason || '无'}, Was Clean: ${event.wasClean}`;
+    logDebug(`WebSocket连接已断开。${reason}`, LOG_LEVELS.WARNING);
+    showAppNotification(`连接已断开，尝试重连中... (${event.reason || '无'})`, 3000, true); 
+    logDebug(`将在${reconnectInterval/1000}秒后重连`, LOG_LEVELS.WARNING);
+    setTimeout(connectWebSocket, reconnectInterval);
+    reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval); 
+}
+
+function onSocketError(error) {
+    let errorMessage = `WebSocket发生未知错误。Type: ${error.type}`;
+    logDebug(errorMessage, LOG_LEVELS.ERROR);
+    statusEl.textContent = "连接错误";
+    showAppNotification("WebSocket连接错误，请检查网络。", 3000, true); 
+    socket.close(); 
+}
+
+
+// --- WebRTC 相关函数 (保持不变) ---
+async function initLocalMedia() {
+    try {
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        logDebug('麦克风访问权限已获取', LOG_LEVELS.SUCCESS);
+        return localStream;
+    }
+    catch (err) {
+        logDebug('无法获取麦克风权限: ' + err, LOG_LEVELS.ERROR);
+        showAppNotification('无法获取麦克风，通话功能不可用。请检查权限。', 4000, true);
+        return null;
+    }
+}
+
+function showCallUI(targetUsername) {
+    if (document.getElementById(`call-control-${targetUsername}`)) return;
+    const panel = document.createElement('div');
+    panel.id = `call-control-${targetUsername}`;
+    panel.className = 'call-control-panel';
+    panel.innerHTML = `<span>与 ${escapeHTML(targetUsername)} 通话中...</span><button class="hang-up-btn" data-username="${targetUsername}">📞</button>`;
+    callControlsContainer.appendChild(panel);
+    panel.querySelector('.hang-up-btn').onclick = () => endCall(targetUsername);
+}
+
+function hideCallUI(targetUsername) {
+    document.getElementById(`call-control-${targetUsername}`)?.remove();
+    document.getElementById(`audio-${targetUsername}`)?.remove();
+}
+
+async function startCall(target) {
+    if (!localStream) {
+        showAppNotification('本地音频未就绪，请检查麦克风权限。', 3000, true); 
+        return;
+    }
+    if (peerConnections[target]) return;
+    showCallUI(target);
+    const pc = new RTCPeerConnection(rtcConfig);
+    peerConnections[target] = pc;
+    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+    pc.ontrack = event => playRemoteStream(target, event.streams[0]);
+    pc.onicecandidate = event => { if (event.candidate) socket.send(JSON.stringify({ type: 'candidate', payload: { target, candidate: event.candidate } })); };
+    pc.onconnectionstatechange = () => { if (['disconnected', 'closed', 'failed'].includes(pc.connectionState)) endCall(target); };
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.send(JSON.stringify({ type: 'offer', payload: { target, sdp: pc.localDescription } }));
+}
+
+async function handleOffer({ from, sdp }) {
+    if (!localStream) return;
+    if (peerConnections[from]) return;
+    if (!window.confirm(`${from} 正在呼叫您，是否接听？`)) return;
+    showCallUI(from);
+    const pc = new RTCPeerConnection(rtcConfig);
+    peerConnections[from] = pc;
+    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+    pc.ontrack = event => playRemoteStream(from, event.streams[0]);
+    pc.onicecandidate = event => { if (event.candidate) socket.send(JSON.stringify({ type: 'candidate', payload: { target: from, candidate: event.candidate } })); };
+    pc.onconnectionstatechange = () => { if (['disconnected', 'closed', 'failed'].includes(pc.connectionState)) endCall(from); };
+    await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    socket.send(JSON.stringify({ type: 'answer', payload: { target: from, sdp: pc.localDescription } }));
+}
+
+async function handleAnswer({ from, sdp }) {
+    const pc = peerConnections[from];
+    if (!pc) return;
+    await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+}
+
+async function handleCandidate({ from, candidate }) {
+    const pc = peerConnections[from];
+    if (!pc || !candidate) return;
+    await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => logDebug('Add ICE candidate failed: ' + e, LOG_LEVELS.ERROR));
+}
+
+function handleCallEnd({ from }) {
+    const pc = peerConnections[from];
+    if (pc) { pc.close(); delete peerConnections[from]; }
+    hideCallUI(from);
+}
+
+function endCall(target) {
+    if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'call_end', payload: { target } }));
+    handleCallEnd({ from: target });
+}
+
+function playRemoteStream(username, stream) {
+    let audioEl = document.getElementById(`audio-${username}`);
+    if (!audioEl) {
+        audioEl = document.createElement('audio');
+        audioEl.id = `audio-${username}`;
+        audioEl.autoplay = true;
+        audioEl.playsInline = true;
+        remoteAudioContainer.appendChild(audioEl);
+    }
+    audioEl.srcObject = stream;
+    audioEl.muted = true; 
+    audioEl.play().then(() => {
+        audioEl.muted = false; 
+    }).catch(error => {
+        logDebug(`Autoplay for ${username} failed: ${error}`, LOG_LEVELS.WARNING);
+        const panel = document.getElementById(`call-control-${username}`);
+        if (panel && !panel.querySelector('.unmute-notice')) {
+            const unmuteNotice = document.createElement('button');
+            unmuteNotice.className = 'unmute-notice';
+            unmuteNotice.textContent = '🔇 点此开启声音';
+            unmuteNotice.onclick = () => {
+                audioEl.muted = false;
+                audioEl.play().then(() => unmuteNotice.remove()).catch(err => showAppNotification('还是无法播放声音: ' + err, 3000, true));
+            };
+            panel.appendChild(unmuteNotice);
+        }
+    });
+}
+
+
+// --- 页面初始化和事件监听器设置 ---
+let touchStartTime;
+let touchLongPressTimer; 
+let currentTouchMsgEl = null;
+
+function initializeChat() {
+    roomNameEl.textContent = roomName;
+    document.getElementById('sidebar-room-name').textContent = roomName;
+    usernameDisplayEl.textContent = username;
+
+    initDebugLog(); 
+    
+    // 调用简化的聊天显示初始化
+    initChatDisplay(); 
+    
+    initLocalMedia().catch(err => {
+        logDebug('初始化媒体失败: ' + err, LOG_LEVELS.WARNING);
+    });
+    
+    connectWebSocket();
+    
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            if (socket?.readyState !== WebSocket.OPEN) {
+                logDebug('页面重新可见，尝试重新连接WebSocket', LOG_LEVELS.INFO);
+                connectWebSocket();
+            }
+        }
+    });
+    
+    setInterval(() => {
+        if (socket?.readyState !== WebSocket.OPEN) {
+            logDebug('检测到WebSocket连接已断开，尝试重新连接', LOG_LEVELS.WARNING);
+            connectWebSocket();
+        }
+    }, 30000); 
+
     sidebarToggle.addEventListener('click', () => {
         sidebar.classList.toggle('open');
         overlay.classList.toggle('show');
@@ -805,13 +2070,19 @@
         e.stopPropagation();
         usersMenu.classList.toggle('show');
     });
-    document.addEventListener('click', () => {
-        usersMenu.classList.remove('show');
-        contextMenu.style.display = 'none';
-    });
-    usersMenu.addEventListener('click', e => e.stopPropagation());
 
-    // --- Image & Media Functions ---
+    usernameDisplayEl.addEventListener('click', () => {
+        const newUsername = prompt("请输入新的用户名:", username);
+        if (newUsername && newUsername.trim() && newUsername !== username) {
+            username = newUsername.trim();
+            localStorage.setItem('chat_username', username);
+            usernameDisplayEl.textContent = username;
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ type: 'rename', payload: { newUsername: username } }));
+            }
+        }
+    });
+
     attachmentBtn.addEventListener('click', () => imageInput.click());
     imageInput.addEventListener('change', handleImageSelection);
     previewRemove.addEventListener('click', removeImagePreview);
@@ -820,621 +2091,74 @@
         if (e.target === imageModal) imageModal.classList.remove('show');
     });
     recordButton.addEventListener('click', handleRecordButtonClick);
-    window.showImageModal = (src) => {
-        modalImage.src = src;
-        imageModal.classList.add('show');
-    };
 
-    function formatFileSize(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-    }
-
-    async function handleImageSelection(e) {
-        const file = e.target.files[0];
-        if (!file || !file.type.startsWith('image/')) return;
-        try {
-            uploadProgress.style.display = 'block';
-            imagePreview.classList.add('show', 'uploading');
-            const compressedBlob = await compressImage(file);
-            selectedFile = new File([compressedBlob], file.name, { type: 'image/jpeg', lastModified: Date.now() });
-            showImagePreview(selectedFile);
-        } catch (error) {
-            logDebug('图片处理失败: ' + error, LOG_LEVELS.ERROR);
-            alert('图片处理失败，请重试');
-        } finally {
-            uploadProgress.style.display = 'none';
-            imagePreview.classList.remove('uploading');
-            checkSendButtonState();
-        }
-    }
-
-    function compressImage(file, maxWidth = 800, maxHeight = 600, quality = 0.8) {
-        return new Promise((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => {
-                let { width, height } = img;
-                if (width > height) {
-                    if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
-                } else {
-                    if (height > maxHeight) { width *= maxHeight / height; height = maxHeight; }
-                }
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-                canvas.toBlob(resolve, 'image/jpeg', quality);
-            };
-            img.onerror = reject;
-            img.src = URL.createObjectURL(file);
-        });
-    }
-    
-    function showImagePreview(file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            previewImage.src = e.target.result;
-            previewName.textContent = file.name;
-            previewSize.textContent = formatFileSize(file.size);
-            imagePreview.classList.add('show');
-        };
-        reader.readAsDataURL(file);
-    }
-
-    function removeImagePreview() {
-        selectedFile = null;
-        imagePreview.classList.remove('show');
-        imageInput.value = '';
-        checkSendButtonState();
-    }
-
-    async function handleRecordButtonClick() {
-        if (isRecording) {
-            mediaRecorder.stop();
-            return;
-        }
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mimeType = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'].find(t => MediaRecorder.isTypeSupported(t));
-            if (!mimeType) {
-                alert('您的浏览器不支持录音功能。');
-                return;
-            }
-            mediaRecorder = new MediaRecorder(stream, { mimeType });
-            audioChunks = [];
-            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-            mediaRecorder.onstart = () => {
-                recordButton.textContent = '🛑';
-                isRecording = true;
-                checkSendButtonState();
-            };
-            mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(audioChunks, { type: mimeType });
-                sendAudioMessage(audioBlob, mimeType);
-                stream.getTracks().forEach(track => track.stop());
-                recordButton.textContent = '🎤';
-                isRecording = false;
-                checkSendButtonState();
-            };
-            mediaRecorder.start();
-        } catch (error) {
-            logDebug('无法访问麦克风: ' + error, LOG_LEVELS.ERROR);
-            alert('无法访问麦克风，请检查权限。');
-        }
-    }
-    
     messageInput.addEventListener('input', function() {
         this.style.height = 'auto';
         this.style.height = `${Math.min(this.scrollHeight, 100)}px`;
         checkSendButtonState();
     });
-    
+
     messageInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             messageForm.dispatchEvent(new Event('submit'));
         }
     });
-    
-    function checkSendButtonState() {
-        sendButton.disabled = (messageInput.value.trim() === '' && selectedFile === null) || isRecording;
-    }
 
-    // --- WebSocket & Chat Logic ---
-    function connectWebSocket() {
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${wsProtocol}//${window.location.host}/${roomName}?username=${encodeURIComponent(username)}`;
-        logDebug(`开始连接WebSocket: ${wsUrl}`, LOG_LEVELS.INFO);
-        socket = new WebSocket(wsUrl);
-        socket.onopen = onSocketOpen;
-        socket.onmessage = onSocketMessage;
-        socket.onclose = onSocketClose;
-        socket.onerror = onSocketError;
-    }
-    
-    function onSocketOpen() {
-        statusEl.textContent = '已连接';
-        connectionDot.classList.remove('disconnected');
-        reconnectInterval = 1000;
-        checkSendButtonState();
-        logDebug('WebSocket连接已建立', LOG_LEVELS.SUCCESS);
-        
-        // 1. 获取历史记录 (这将填充 allMessages 并首次更新UI)
-        fetchHistoryMessages();
-        
-        // 2. 设置定时器，周期性调用核心函数以更新用户活跃状态
-        if (window.userListInterval) clearInterval(window.userListInterval);
-        window.userListInterval = setInterval(updateUIFromMessages, 15000); // 每15秒检查一次
-    }
-
-    async function onSocketMessage(event) {
-        const data = JSON.parse(event.data);
-        logDebug(`收到消息: type=${data.type}`, LOG_LEVELS.INFO);
-        
-        switch (data.type) {
-            case 'chat': {
-                const newMessage = data.payload;
-                allMessages.push(newMessage);
-                appendChatMessage(newMessage);
-                updateUIFromMessages();
-                break;
-            }
-            case 'delete': {
-                const { id } = data.payload;
-                allMessages = allMessages.filter(msg => msg.id !== id);
-                const msgEl = chatWindowEl.querySelector(`[data-id="${id}"]`);
-                if (msgEl) msgEl.remove();
-                updateUIFromMessages();
-                break;
-            }
-            case 'error':
-                logDebug(`收到错误: ${data.payload.message}`, LOG_LEVELS.ERROR);
-                alert(data.payload.message);
-                sendButton.disabled = false;
-                break;
-            case 'offer': await handleOffer(data.payload); break;
-            case 'answer': await handleAnswer(data.payload); break;
-            case 'candidate': await handleCandidate(data.payload); break;
-            case 'call_end': handleCallEnd(data.payload); break;
-        }
-    }
-    
-function onSocketClose(event) {
-    statusEl.textContent = "连接已断开";
-    connectionDot.classList.add('disconnected');
-    
-    // event 包含了断开的详细信息
-    let reason = `Code: ${event.code}, Reason: ${event.reason || '无'}, Was Clean: ${event.wasClean}`;
-    logDebug(`WebSocket连接已断开。${reason}`, LOG_LEVELS.WARNING);
-    
-    logDebug(`将在${reconnectInterval/1000}秒后重连`, LOG_LEVELS.WARNING);
-    setTimeout(connectWebSocket, reconnectInterval);
-    reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval);
-}
-
- function onSocketError(error) {
-    // error 是一个 Event 对象，我们需要查看它的具体内容
-    // 对于错误事件，通常没有太多有用信息，但可以尝试记录 type
-    let errorMessage = `WebSocket发生未知错误。Type: ${error.type}`;
-    logDebug(errorMessage, LOG_LEVELS.ERROR);
-    
-    statusEl.textContent = "连接错误";
-    socket.close(); // 主动关闭，会触发 onclose 里的重连逻辑
-}
-
-    messageForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const text = messageInput.value.trim();
-        if ((!text && !selectedFile) || socket.readyState !== WebSocket.OPEN) return;
-        sendButton.disabled = true;
-        try {
-            if (selectedFile) await sendImageMessage(selectedFile, text);
-            else if (text) socket.send(JSON.stringify({ type: 'chat', payload: { text } }));
-            messageInput.value = '';
-            messageInput.style.height = 'auto';
-            removeImagePreview();
-        } catch (error) {
-            logDebug('发送消息失败: ' + error, LOG_LEVELS.ERROR);
-            alert('发送失败，请重试');
-        } finally {
-            checkSendButtonState();
+    chatWindowEl.addEventListener('contextmenu', e => {
+        const msgEl = e.target.closest('.message'); 
+        if (msgEl) {
+            e.preventDefault(); 
+            showContextMenu(msgEl, e.pageX, e.pageY);
+        } else {
+            contextMenu.style.display = 'none';
         }
     });
 
-    async function sendImageMessage(file, caption = '') {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const message = { type: 'chat', payload: { type: 'image', image: e.target.result, filename: file.name, size: file.size, caption: caption } };
-            socket.send(JSON.stringify(message));
-        };
-        reader.readAsDataURL(file);
-    }
-    
-    async function sendAudioMessage(blob, mimeType) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const fileExtension = mimeType.split('/')[1].split(';')[0];
-            const message = { type: 'chat', payload: { type: 'audio', audio: e.target.result, filename: `voice-${Date.now()}.${fileExtension}`, size: blob.size, mimeType: mimeType } };
-            socket.send(JSON.stringify(message));
-        };
-        reader.readAsDataURL(blob);
-    }
+    chatWindowEl.addEventListener('touchstart', e => {
+        const msgEl = e.target.closest('.message');
+        if (msgEl) {
+            currentTouchMsgEl = msgEl; 
+            touchStartTime = Date.now(); 
 
-    // --- UI Rendering ---
-    function escapeHTML(str) {
-        if (typeof str !== 'string') return '';
-        return str.replace(/[&<>"]/g, m => ({'&':'&','<':'<','>':'>','"':'"'})[m]);
-    }
-
-    /**
-     * 根据全局 allMessages 数组推断并更新所有用户相关的UI。
-     */
-    function updateUIFromMessages() {
-        logDebug('从 allMessages 数组更新UI...', LOG_LEVELS.INFO);
-
-        const userLastSeen = new Map();
-        const userMessageCount = new Map();
-
-        allMessages.forEach(msg => {
-            const { username, timestamp } = msg;
-            if (username && timestamp) {
-                if (!userLastSeen.has(username) || timestamp > userLastSeen.get(username)) {
-                    userLastSeen.set(username, timestamp);
+            touchLongPressTimer = setTimeout(() => {
+                if (currentTouchMsgEl === msgEl && (Date.now() - touchStartTime) >= 500) {
+                    e.preventDefault();
+                    showContextMenu(msgEl, e.touches[0].pageX, e.touches[0].pageY);
+                    if (navigator.vibrate) navigator.vibrate(50); 
                 }
-                userMessageCount.set(username, (userMessageCount.get(username) || 0) + 1);
-            }
-        });
-
-        const activeUsernames = Array.from(userLastSeen.keys()).filter(name => isUserActive(userLastSeen.get(name)));
-        activeUsernames.sort((a, b) => a.localeCompare(b));
-
-        // --- Render Active User List ---
-        const userNamesEl = document.getElementById('user-names');
-        const menuListEl = document.getElementById('users-menu-list');
-        userNamesEl.innerHTML = '';
-        menuListEl.innerHTML = '';
-        activeUsernames.forEach(name => {
-            const safeName = escapeHTML(name);
-            userNamesEl.insertAdjacentHTML('beforeend', `<div class="user-item">${safeName}</div>`);
-            if (name === username) {
-                menuListEl.insertAdjacentHTML('beforeend', `<li>${safeName} (你)</li>`);
-            } else {
-                menuListEl.insertAdjacentHTML('beforeend', `<li class="user-menu-item-with-call"><span>${safeName}</span><button class="call-btn" data-username="${safeName}">📞</button></li>`);
-            }
-        });
-        document.querySelectorAll('.call-btn').forEach(btn => {
-            btn.onclick = (e) => {
-                e.stopPropagation();
-                startCall(btn.dataset.username);
-                usersMenu.classList.remove('show');
-            };
-        });
-        document.getElementById('online-count').textContent = activeUsernames.length;
-        onlineDisplay.textContent = `活跃: ${activeUsernames.length}`;
-
-        // --- Render User Stats Panel ---
-        const userStatsListEl = document.getElementById('user-stats-list');
-        userStatsListEl.innerHTML = '';
-        const allUsers = Array.from(userLastSeen.keys());
-        allUsers.sort((a, b) => {
-            const aIsActive = activeUsernames.includes(a);
-            const bIsActive = activeUsernames.includes(b);
-            if (aIsActive !== bIsActive) return bIsActive - aIsActive;
-            return (userMessageCount.get(b) || 0) - (userMessageCount.get(a) || 0);
-        });
-
-        if (allUsers.length === 0) {
-            userStatsListEl.innerHTML = '<p style="color: rgba(255,255,255,0.7); font-size: 0.8em;">暂无用户活动。</p>';
+            }, 500); 
         } else {
-            allUsers.forEach(name => {
-                const item = document.createElement('div');
-                item.className = 'user-stats-item';
-                const isActive = activeUsernames.includes(name);
-                const lastSeen = userLastSeen.get(name);
-                const lastSeenString = lastSeen ? new Date(lastSeen).toLocaleString() : '未知';
-                item.innerHTML = `
-                    <div class="stat-row">
-                        <strong>${escapeHTML(name)}</strong>
-                        <span class="${isActive ? 'online-status' : 'offline-status'}">${isActive ? '活跃' : '离线'}</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">发言:</span>
-                        <span class="stat-value">${userMessageCount.get(name) || 0}</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">最近发言:</span>
-                        <span class="stat-value">${lastSeenString}</span>
-                    </div>`;
-                userStatsListEl.appendChild(item);
-            });
+            contextMenu.style.display = 'none';
         }
-    }
-        
-    function appendChatMessage(msg) {
-        const msgEl = document.createElement('div');
-        msgEl.className = 'message';
-        msgEl.dataset.id = msg.id;
-        msgEl.dataset.messageText = msg.text || (msg.caption || '');
-        msgEl.dataset.timestamp = msg.timestamp;
-        if (msg.username === username) msgEl.classList.add('self');
-        msgEl.dataset.messageType = msg.type;
+    }, { passive: true }); 
 
-        const messageDate = new Date(msg.timestamp);
-        const now = new Date();
-        const diffSeconds = Math.floor((now - messageDate) / 1000);
-        let displayTime;
-
-        if (diffSeconds < 60) displayTime = '刚刚';
-        else if (diffSeconds < 3600) displayTime = `${Math.floor(diffSeconds / 60)}分钟前`;
-        else if (diffSeconds < 86400) displayTime = `${Math.floor(diffSeconds / 3600)}小时前`;
-        else displayTime = messageDate.toLocaleString([], { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-        
-        let contentHTML = `<div class="info"><span class="username">${escapeHTML(msg.username)}</span> <span class="timestamp">${displayTime}</span></div>`;
-
-        if (msg.type === 'image') {
-            contentHTML += `<div class="message-image" onclick="showImageModal('${msg.imageUrl}')"><img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy"></div>`;
-            if (msg.caption) contentHTML += `<div class="text">${marked.parse(msg.caption)}</div>`;
-            msgEl.dataset.imageUrl = msg.imageUrl;
-        } else if (msg.type === 'audio') {
-            contentHTML += `<div class="message-audio"><audio controls src="${msg.audioUrl}"></audio></div>`;
-        } else {
-            contentHTML += `<div class="text">${marked.parse(msg.text)}</div>`;
-        }
-        msgEl.innerHTML = contentHTML;
-
-        msgEl.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(msgEl, e.pageX, e.pageY); });
-        
-        let longPressTimer;
-        msgEl.addEventListener('touchstart', e => { longPressTimer = setTimeout(() => showContextMenu(msgEl, e.touches[0].pageX, e.touches[0].pageY), 500); }, { passive: true });
-        msgEl.addEventListener('touchend', () => clearTimeout(longPressTimer));
-        msgEl.addEventListener('touchmove', () => clearTimeout(longPressTimer));
-        
-        chatWindowEl.appendChild(msgEl);
-        const isScrolledToBottom = chatWindowEl.scrollHeight - chatWindowEl.clientHeight <= chatWindowEl.scrollTop + 1;
-        if (isScrolledToBottom) {
-            chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
-        }
-    }
-
-    function isUserActive(lastSeenTimestamp) {
-        if (!lastSeenTimestamp) return false;
-        const fiveMinutesInMs = 5 * 60 * 1000;
-        const fiveMinutesAgo = Date.now() - fiveMinutesInMs;
-        return new Date(lastSeenTimestamp).getTime() > fiveMinutesAgo;
-    }
-    
-    function showContextMenu(element, x, y) {
-        currentMessageElement = element;
-        contextMenu.style.top = `${y}px`;
-        contextMenu.style.left = `${x}px`;
-        contextMenu.style.display = 'block';
-
-        const messageType = element.dataset.messageType;
-        const geminiTextOption = contextMenu.querySelector('[data-ai="gemini"][data-action="text-explain"]');
-        const deepseekTextOption = contextMenu.querySelector('[data-ai="deepseek"][data-action="text-explain"]');
-        const geminiImageOption = contextMenu.querySelector('[data-ai="gemini"][data-action="image-describe"]');
-
-        geminiTextOption.style.display = (messageType !== 'image') ? 'flex' : 'none';
-        deepseekTextOption.style.display = (messageType !== 'image') ? 'flex' : 'none';
-        copyOption.style.display = (messageType !== 'image') ? 'flex' : 'none';
-        geminiImageOption.style.display = (messageType === 'image') ? 'flex' : 'none';
-        
-        if (navigator.vibrate) navigator.vibrate(50);
-    }
-
-    // --- Context Menu Actions ---
-    copyOption.addEventListener('click', () => {
-        if (currentMessageElement?.dataset.messageText) {
-            navigator.clipboard.writeText(currentMessageElement.dataset.messageText);
-        }
-        contextMenu.style.display = 'none';
+    chatWindowEl.addEventListener('touchend', () => {
+        clearTimeout(touchLongPressTimer); 
+        currentTouchMsgEl = null; 
     });
 
-    deleteOption.addEventListener('click', () => {
-        if (currentMessageElement?.dataset.id && socket?.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ type: 'delete', payload: { id: currentMessageElement.dataset.id } }));
-        }
-        contextMenu.style.display = 'none';
-    });
-    
-    contextMenu.addEventListener('click', async (e) => {
-        const clickedOption = e.target;
-        if (!clickedOption.matches('.ai-explain-option')) return;
-        contextMenu.style.display = 'none';
+    chatWindowEl.addEventListener('touchmove', () => {
+        clearTimeout(touchLongPressTimer); 
+        currentTouchMsgEl = null; 
+    }, { passive: true }); 
 
-        const action = clickedOption.dataset.action;
-        const model = clickedOption.dataset.ai;
-        let explanationText = "";
-        let requestBody = {};
-        let apiUrl = '';
-
-        if (action === 'image-describe') {
-            if (!currentMessageElement.dataset.imageUrl) return;
-            apiUrl = '/ai-describe-image';
-            requestBody = { imageUrl: currentMessageElement.dataset.imageUrl };
-            explanationText = "正在通过AI模型解读图片...";
-        } else if (action === 'text-explain') {
-            if (!currentMessageElement.dataset.messageText) return;
-            apiUrl = '/ai-explain';
-            requestBody = { text: currentMessageElement.dataset.messageText, model };
-            explanationText = `正在通过 ${model} 模型思考中...`;
-        } else {
-            return;
-        }
-
-        currentMessageElement.querySelector('.ai-explanation')?.remove();
-        
-        const explanationEl = document.createElement('div');
-        explanationEl.className = 'ai-explanation';
-        explanationEl.innerHTML = `<p>🤖 ${explanationText}<span class="loading-dots"></span></p>`;
-        currentMessageElement.appendChild(explanationEl);
-
-        try {
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
-            });
-            if (!response.ok) throw new Error(await response.text());
-            
-            const data = await response.json();
-            const explanation = data.explanation || data.description;
-            
-            explanationEl.innerHTML = `
-                <div class="ai-explanation-buttons">
-                    <button class="ai-explanation-copy" title="复制内容">📋</button>
-                    <button class="ai-explanation-close" title="关闭">×</button>
-                </div>
-                <div class="markdown-content">${marked.parse(explanation, { gfm: true, breaks: true, sanitize: false })}</div>`;
-
-            explanationEl.querySelector('.ai-explanation-close').onclick = () => explanationEl.remove();
-            explanationEl.querySelector('.ai-explanation-copy').onclick = () => navigator.clipboard.writeText(explanation).then(() => showCopyFeedback('已复制!'));
-
-        } catch (error) {
-            logDebug(`AI请求失败: ${error}`, LOG_LEVELS.ERROR);
-            explanationEl.innerHTML = `<p>😞 抱歉，无法从 ${model} 获取解释。</p>`;
-            setTimeout(() => explanationEl.remove(), 4000);
+    document.addEventListener('click', (e) => {
+        if (!usersMenu.contains(e.target) && !contextMenu.contains(e.target)) {
+            usersMenu.classList.remove('show');
+            contextMenu.style.display = 'none';
         }
     });
-
-    // --- History & WebRTC Functions ---
-    async function fetchHistoryMessages() {
-        try {
-            logDebug(`开始获取房间 ${roomName} 的历史消息`, LOG_LEVELS.INFO);
-            const workerBaseUrl = window.location.origin;
-            const response = await fetch(`${workerBaseUrl}/api/messages/history?roomName=${roomName}`);
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            
-            const messages = await response.json();
-            logDebug(`获取历史消息成功: ${messages.length}条`, LOG_LEVELS.SUCCESS);
-
-            allMessages = messages;
-            chatWindowEl.innerHTML = '';
-            allMessages.forEach(msg => appendChatMessage(msg));
-            updateUIFromMessages();
-            chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
-
-        } catch (error) {
-            logDebug(`获取历史消息失败: ${error.message}`, LOG_LEVELS.ERROR);
-        }
-    }
-
-    async function initLocalMedia() {
-        try {
-            localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        } catch (err) {
-            alert('无法获取麦克风，通话功能不可用。请检查权限。');
-            logDebug('无法获取麦克风: ' + err, LOG_LEVELS.ERROR);
-        }
-    }
-
-    function showCallUI(targetUsername) {
-        if (document.getElementById(`call-control-${targetUsername}`)) return;
-        const panel = document.createElement('div');
-        panel.id = `call-control-${targetUsername}`;
-        panel.className = 'call-control-panel';
-        panel.innerHTML = `<span>与 ${escapeHTML(targetUsername)} 通话中...</span><button class="hang-up-btn" data-username="${targetUsername}">📞</button>`;
-        callControlsContainer.appendChild(panel);
-        panel.querySelector('.hang-up-btn').onclick = () => endCall(targetUsername);
-    }
-
-    function hideCallUI(targetUsername) {
-        document.getElementById(`call-control-${targetUsername}`)?.remove();
-        document.getElementById(`audio-${targetUsername}`)?.remove();
-    }
-
-    async function startCall(target) {
-        if (!localStream) return alert('本地音频未就绪，请检查麦克风权限。');
-        if (peerConnections[target]) return;
-        showCallUI(target);
-        const pc = new RTCPeerConnection(rtcConfig);
-        peerConnections[target] = pc;
-        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-        pc.ontrack = event => playRemoteStream(target, event.streams[0]);
-        pc.onicecandidate = event => { if (event.candidate) socket.send(JSON.stringify({ type: 'candidate', payload: { target, candidate: event.candidate } })); };
-        pc.onconnectionstatechange = () => { if (['disconnected', 'closed', 'failed'].includes(pc.connectionState)) endCall(target); };
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        socket.send(JSON.stringify({ type: 'offer', payload: { target, sdp: pc.localDescription } }));
-    }
-
-    async function handleOffer({ from, sdp }) {
-        if (!localStream) return;
-        if (peerConnections[from]) return;
-        if (!window.confirm(`${from} 正在呼叫您，是否接听？`)) return;
-        showCallUI(from);
-        const pc = new RTCPeerConnection(rtcConfig);
-        peerConnections[from] = pc;
-        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-        pc.ontrack = event => playRemoteStream(from, event.streams[0]);
-        pc.onicecandidate = event => { if (event.candidate) socket.send(JSON.stringify({ type: 'candidate', payload: { target: from, candidate: event.candidate } })); };
-        pc.onconnectionstatechange = () => { if (['disconnected', 'closed', 'failed'].includes(pc.connectionState)) endCall(from); };
-        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        socket.send(JSON.stringify({ type: 'answer', payload: { target: from, sdp: pc.localDescription } }));
-    }
-
-    async function handleAnswer({ from, sdp }) {
-        const pc = peerConnections[from];
-        if (!pc) return;
-        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-    }
-
-    async function handleCandidate({ from, candidate }) {
-        const pc = peerConnections[from];
-        if (!pc || !candidate) return;
-        await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => logDebug('Add ICE candidate failed: ' + e, LOG_LEVELS.ERROR));
-    }
-
-    function handleCallEnd({ from }) {
-        const pc = peerConnections[from];
-        if (pc) { pc.close(); delete peerConnections[from]; }
-        hideCallUI(from);
-    }
-
-    function endCall(target) {
-        if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'call_end', payload: { target } }));
-        handleCallEnd({ from: target });
-    }
     
-    function playRemoteStream(username, stream) {
-        let audioEl = document.getElementById(`audio-${username}`);
-        if (!audioEl) {
-            audioEl = document.createElement('audio');
-            audioEl.id = `audio-${username}`;
-            audioEl.autoplay = true;
-            audioEl.playsInline = true;
-            remoteAudioContainer.appendChild(audioEl);
-        }
-        audioEl.srcObject = stream;
-        audioEl.muted = true;
-        audioEl.play().then(() => {
-            audioEl.muted = false;
-        }).catch(error => {
-            logDebug(`Autoplay for ${username} failed: ${error}`, LOG_LEVELS.WARNING);
-            const panel = document.getElementById(`call-control-${username}`);
-            if (panel && !panel.querySelector('.unmute-notice')) {
-                const unmuteNotice = document.createElement('button');
-                unmuteNotice.className = 'unmute-notice';
-                unmuteNotice.textContent = '🔇 点此开启声音';
-                unmuteNotice.onclick = () => {
-                    audioEl.muted = false;
-                    audioEl.play().then(() => unmuteNotice.remove()).catch(err => alert('还是无法播放声音: ' + err));
-                };
-                panel.appendChild(unmuteNotice);
-            }
-        });
-    }
+    window.showImageModal = function(imageUrl) {
+        if (!imageModal || !modalImage) return;
+        modalImage.src = imageUrl;
+        imageModal.classList.add('show');
+    };
+}
 
-    // --- Initial Connection ---
-    initDebugLog();
-    initLocalMedia();
-    connectWebSocket();
+document.addEventListener('DOMContentLoaded', initializeChat);
+
 </script>
 </body>
 </html>

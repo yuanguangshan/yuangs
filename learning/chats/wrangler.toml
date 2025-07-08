@@ -1,29 +1,29 @@
-# wrangler.toml
 name = "chats"
 main = "src/worker.js"
-compatibility_date = "2024-03-01"
+compatibility_date = "2024-07-08"
 
+# 启用 nodejs_compat 以便 ECharts 库能正常工作
+compatibility_flags = [ "nodejs_compat" ]
+
+# 静态网站托管配置
+[site]
+bucket = "./public"
+
+# Durable Object 绑定
 [[durable_objects.bindings]]
 name       = "CHAT_ROOM_DO"
 class_name = "HibernatingChatRoom"
+script_name = "chats"
 
-# --- 新增的继承配置 ---
-[[durable_objects.bindings.migrations]]
-# 这是一个特殊的“空”迁移，用于将环境变量附加到现有类
-tag = "v5-inherit-secrets" # 使用一个新的、唯一的标签
-# 从主Worker继承这些密钥
-inherit = ["CRON_SECRET", "DEEPSEEK_API_KEY", "GEMINI_API_KEY"] 
-
+# R2 存储桶绑定 (聊天媒体和图表共用)
 [[r2_buckets]]
 binding     = "R2_BUCKET"
-bucket_name = "yuangs"
+bucket_name = "yuangs" # ✨ 请确保这是您正确的R2桶名
 
-# wrangler.toml
-
-
-# --- 新增：定时触发器配置 ---
+# 定时触发器
 [triggers]
-# crons 是一个数组，您可以定义多个定时任务
-# 格式是标准的 Cron 表达式: 分 时 日 月 周
-# 下面这个例子表示：在每小时的第30分钟执行一次
-crons = [ "*/1 * * * *" ]
+crons = [
+  "0 0-10 * * *",             # 对应 DAILY_TEXT_MESSAGE
+  "*/15 17-23,2-10 * * 1-5"   # 对应 HOURLY_CHART_GENERATION
+]
+

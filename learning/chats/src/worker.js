@@ -1,4 +1,4 @@
-// src/worker.js (Final, Cleaned, and Corrected Version)
+// src/worker.js (Merged, Final Version - CORRECTED)
 
 /*
  * 这个 `worker.js` 文件是 Cloudflare Worker 的入口点，它扮演着“前台总机”的角色。
@@ -8,8 +8,19 @@
  * 3. 响应定时触发器（Cron Triggers），并调度Durable Object执行定时任务。
  * 4. 为用户提供初始的HTML页面。
  */
+// src/worker.js
+
+// --- ✨ 核心修正：添加 polyfill 来定义 global ---
+// Cloudflare Workers环境没有`global`，但有些npm包（如echarts）会依赖它。
+// 我们在这里创建一个全局的 `global` 变量，并让它指向Worker环境的全局对象 `self`。
+globalThis.global = globalThis;
+
+
 import { HibernatingChatRoom } from './chatroom_do.js';
 import html from '../public/index.html';
+import { generateAndPostCharts } from './chart_generator.js';
+import { taskMap } from './autoTasks.js';
+import { getDeepSeekExplanation, getGeminiExplanation, getGeminiImageDescription } from './ai.js';
 
 // 导出Durable Object类，以便Cloudflare平台能够识别和实例化它。
 export { HibernatingChatRoom };
@@ -38,97 +49,18 @@ function handleOptions(request) {
     }
 }
 
-// --- AI Service Functions (Modularized) ---
-
-/**
- * 调用 DeepSeek API 获取文本解释。
- */
-async function getDeepSeekExplanation(text, env) {
-    const apiKey = env.DEEPSEEK_API_KEY;
-    if (!apiKey) throw new Error('Server config error: DEEPSEEK_API_KEY is not set.');
-
-    const response = await fetch("https://api.deepseek.com/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-        body: JSON.stringify({
-            model: "deepseek-chat",
-            messages: [{ role: "system", content: "你是一个有用的，善于用简洁的markdown语言来解释下面的文本." }, { role: "user", content: `你是一位非常耐心的小学老师，专门给小学生讲解新知识。  我是一名小学三年级学生，我特别渴望弄明白事物的含义。  请你用精准、详细的语言解释（Markdown 格式）：1. 用通俗易懂的语言解释下面这段文字。2. 给出关键概念的定义。3. 用生活中的比喻或小故事帮助理解。4. 举一个具体例子，并示范“举一反三”的思考方法。5. 最后用一至两个问题来引导我延伸思考。:\n\n${text}` }]
-        })
-    });
-    if (!response.ok) throw new Error(`DeepSeek API error: ${await response.text()}`);
-    const data = await response.json();
-    const explanation = data?.choices?.[0]?.message?.content;
-    if (!explanation) throw new Error('Unexpected AI response format from DeepSeek.');
-    return explanation;
-}
-
-/**
- * 调用 Google Gemini API 获取文本解释。
- */
-async function getGeminiExplanation(text, env) {
-    const apiKey = env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error('Server config error: GEMINI_API_KEY is not set.');
-    
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
-    const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            contents: [{ parts: [{ text: `你是一位非常耐心的小学老师，专门给小学生讲解新知识。  我是一名小学三年级学生，我特别渴望弄明白事物的含义。  请你用精准、详细的语言解释（Markdown 格式）：1. 用通俗易懂的语言解释下面这段文字。2. 给出关键概念的定义。3. 用生活中的比喻或小故事帮助理解。4. 举一个具体例子，并示范“举一反三”的思考方法。5. 最后用一至两个问题来引导我延伸思考。：:\n\n${text}` }] }]
-        })
-    });
-    if (!response.ok) throw new Error(`Gemini API error: ${await response.text()}`);
-    const data = await response.json();
-    const explanation = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!explanation) throw new Error('Unexpected AI response format from Gemini.');
-    return explanation;
-}
-
-/**
- * 从URL获取图片并转换为Base64编码。
- */
-async function fetchImageAsBase64(imageUrl) {
-    const response = await fetch(imageUrl);
-    if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
-    const contentType = response.headers.get('content-type') || 'image/jpeg';
-    const buffer = await response.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
-    return { base64, contentType };
-}
-
-/**
- * 调用 Google Gemini API 获取图片描述。
- */
-async function getGeminiImageDescription(imageUrl, env) {
-    const apiKey = env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error('Server config error: GEMINI_API_KEY is not set.');
-
-    const { base64, contentType } = await fetchImageAsBase64(imageUrl);
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
-    const prompt = "请仔细描述图片的内容，如果图片中识别出有文字，则在回复的内容中返回这些文字，并且这些文字支持复制，之后是对文字的仔细描述，格式为：图片中包含文字：{文字内容}；图片的描述：{图片描述}";
-
-    const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: contentType, data: base64 } }] }]
-        })
-    });
-    if (!response.ok) throw new Error(`Gemini Vision API error: ${await response.text()}`);
-    const data = await response.json();
-    const description = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!description) throw new Error('Unexpected AI response format from Gemini Vision.');
-    return description;
-}
+// --- AI Service Functions are now in src/ai.js ---
+// 文件: src/worker.js
 
 /**
  * 独立的、顶级的辅助函数，用于向指定的房间发送自动帖子。
  * @param {object} env 环境变量
  * @param {string} roomName 要发帖的房间名
  * @param {string} text 帖子的内容
+ * @param {object} ctx 执行上下文，用于 waitUntil
  */
-async function sendAutoPost(env, roomName, text) {
-    console.log(`Sending auto-post to room: ${roomName}`);
+async function sendAutoPost(env, roomName, text, ctx) {
+    console.log(`Dispatching auto-post to room: ${roomName} via RPC`);
     try {
         if (!env.CHAT_ROOM_DO) {
             throw new Error("Durable Object 'CHAT_ROOM_DO' is not bound.");
@@ -137,103 +69,184 @@ async function sendAutoPost(env, roomName, text) {
         const doId = env.CHAT_ROOM_DO.idFromName(roomName);
         const stub = env.CHAT_ROOM_DO.get(doId);
 
-        const response = await stub.fetch(new Request(`https://scheduler.internal/internal/auto-post`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                text: text,
-                secret: env.CRON_SECRET
-            })
-        }));
+        // 【重大修改】从 fetch 调用改为 RPC 调用
+        // 使用传入的 ctx.waitUntil 来确保 RPC 调用执行完毕
+        ctx.waitUntil(stub.cronPost(text, env.CRON_SECRET));
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Auto-post failed: DO returned ${response.status} - ${errorText}`);
-        }
-        console.log(`Successfully sent auto-post to room: ${roomName}`);
+        console.log(`Successfully dispatched auto-post RPC to room: ${roomName}`);
     } catch (error) {
         console.error(`Error in sendAutoPost for room ${roomName}:`, error.stack || error);
     }
 }
 
 
-// --- 主Worker入口点 ---
-export default {
-    /**
-     * 处理所有传入的HTTP请求。
-     */
-    async fetch(request, env, ctx) {
-        if (request.method === 'OPTIONS') {
-            return handleOptions(request);
-        }
 
-        const url = new URL(request.url);
-        const pathname = url.pathname;
-        
-        // --- 路由 1: 全局API (与特定房间无关) ---
-        
-        if (pathname === '/upload') {
-            try {
-                if (!env.R2_BUCKET) return new Response('Server config error: R2_BUCKET not bound.', { status: 500 });
-                const filename = request.headers.get('X-Filename') || `upload-${Date.now()}`;
-                const object = await env.R2_BUCKET.put(filename, request.body, { httpMetadata: request.headers });
-                const publicUrl = `https://pub-8dfbdda6df204465aae771b4c080140b.r2.dev/${object.key}`;
-                return new Response(JSON.stringify({ url: publicUrl }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
-            } catch (error) {
-                console.error('Upload error:', error.stack);
-                return new Response('Error uploading file.', { status: 500 });
+
+// --- 主Worker入口点 ---
+// 在 worker.js 的 fetch 函数中
+
+export default {
+    async fetch(request, env, ctx) {
+        try {
+            if (request.method === 'OPTIONS') {
+                return handleOptions(request);
             }
-        }
-        
-        if (pathname === '/ai-explain') {
-            try {
+
+            const url = new URL(request.url);
+            const pathname = url.pathname;
+
+            // --- 路由 1: 全局独立API (不需转发) ---
+            
+            // 将所有全局API的判断合并到一个if/else if结构中
+            if (pathname === '/upload') {
+                // --- ✨ 这是唯一且正确的 /upload 处理逻辑 ✨ ---
+                // (基于您提供的“改进版”代码，并修正了key的使用)
+                if (request.method !== 'POST') {
+                    return new Response('Method Not Allowed', { status: 405, headers: corsHeaders });
+                }
+                try {
+                    if (!env.R2_BUCKET) {
+                        throw new Error('Server config error: R2_BUCKET not bound.');
+                    }
+                    
+                    const filenameHeader = request.headers.get('X-Filename');
+                    if (!filenameHeader) {
+                        throw new Error('Missing X-Filename header');
+                    }
+                    
+                    const filename = decodeURIComponent(filenameHeader);
+                    const contentType = request.headers.get('Content-Type') || 'application/octet-stream';
+                    
+                    // 正确生成包含目录的、唯一的R2对象Key
+                    const r2ObjectKey = `chats/${Date.now()}-${crypto.randomUUID().substring(0, 8)}-${filename}`;
+                    
+                    // 使用正确的key上传到R2
+                    const object = await env.R2_BUCKET.put(r2ObjectKey, request.body, {
+                         httpMetadata: { contentType: contentType },
+                    });
+                    
+                    // 生成与存储路径完全匹配的公开URL
+                    const r2PublicDomain = "pub-8dfbdda6df204465aae771b4c080140b.r2.dev";
+                    const publicUrl = `https://${r2PublicDomain}/${object.key}`; // object.key 现在是 "chats/..."
+                    
+                    return new Response(JSON.stringify({ url: publicUrl }), {
+                        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+                    });
+
+                } catch (error) {
+                    console.error('R2 Upload error:', error.stack || error);
+                    return new Response(`Error uploading file: ${error.message}`, { 
+                        status: 500, 
+                        headers: corsHeaders 
+                    });
+                }
+
+            } else if (pathname === '/ai-explain') {
+                // ... /ai-explain 的逻辑 ...
                 const { text, model = 'gemini' } = await request.json();
                 if (!text) return new Response('Missing "text"', { status: 400, headers: corsHeaders });
-                const explanation = model === 'gemini' ? await getGeminiExplanation(text, env) : await getDeepSeekExplanation(text, env);
+
+                // 修正：移除硬编码的prompt，直接使用传入的text
+                const fullPrompt = `你是一位非常耐心的小学老师，专门给小学生讲解新知识。  我是一名小学三年级学生，我特别渴望弄明白事物的含义。  请你用精准、详细的语言解释（Markdown 格式）：1. 用通俗易懂的语言解释下面这段文字。2. 给出关键概念的定义。3. 用生活中的比喻或小故事帮助理解。4. 举一个具体例子，并示范“举一反三”的思考方法。5. 最后用一至两个问题来引导我延伸思考。:\n\n${text}`;
+                
+                const explanation = model === 'gemini' 
+                    ? await getGeminiExplanation(fullPrompt, env) 
+                    : await getDeepSeekExplanation(fullPrompt, env);
+
                 return new Response(JSON.stringify({ explanation }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
-            } catch (error) { return new Response(error.message, { status: 500, headers: corsHeaders }); }
-        }
-        
-        if (pathname === '/ai-describe-image') {
-            try {
+
+            } else if (pathname === '/ai-describe-image') {
+                // ... /ai-describe-image 的逻辑 ...
                 const { imageUrl } = await request.json();
                 if (!imageUrl) return new Response('Missing "imageUrl"', { status: 400, headers: corsHeaders });
                 const description = await getGeminiImageDescription(imageUrl, env);
                 return new Response(JSON.stringify({ description }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
-            } catch (error) { return new Response(error.message, { status: 500, headers: corsHeaders }); }
-        }
+            }
 
-        // --- 路由 2: 房间相关请求 (转发给Durable Object) ---
-        
-        const pathParts = pathname.slice(1).split('/');
-        const roomName = pathParts[0];
+            // --- 路由 2: 需要转发给 DO 的 API ---
+            // 明确列出所有需要转发的API路径前缀
+            if (pathname.startsWith('/api/')) {
+                let roomName;
+                // 对于这些API，房间名在查询参数里
+                if (pathname.startsWith('/api/messages/history') || pathname.startsWith('/api/reset-room')) {
+                    roomName = url.searchParams.get('roomName');
+                }
+                // (未来可以为其他API在这里添加 roomName 的获取逻辑)
 
-        if (!roomName) {
+                if (!roomName) {
+                    return new Response('API request requires a roomName parameter', { status: 400 });
+                }
+
+                if (!env.CHAT_ROOM_DO) throw new Error("Durable Object 'CHAT_ROOM_DO' is not bound.");
+                const doId = env.CHAT_ROOM_DO.idFromName(roomName);
+                const stub = env.CHAT_ROOM_DO.get(doId);
+                return stub.fetch(request); // 直接转发并返回DO的响应
+            }
+
+            // --- 路由 3: 房间页面加载 和 WebSocket 连接 ---
+            // 匹配所有不以 /api/ 开头的路径，例如 /test, /general
+            const pathParts = pathname.slice(1).split('/');
+            const roomNameFromPath = pathParts[0];
+
+            // 过滤掉空的路径部分和 favicon.ico 请求
+            if (roomNameFromPath && roomNameFromPath !== 'favicon.ico') {
+                 if (!env.CHAT_ROOM_DO) throw new Error("Durable Object 'CHAT_ROOM_DO' is not bound.");
+                 const doId = env.CHAT_ROOM_DO.idFromName(roomNameFromPath);
+                 const stub = env.CHAT_ROOM_DO.get(doId);
+                 const response = await stub.fetch(request);
+
+                 // 只有在DO明确要求时，才返回HTML
+                 if (response.headers.get("X-DO-Request-HTML") === "true") {
+                     return new Response(html, { headers: { 'Content-Type': 'text/html;charset=UTF-8' } });
+                 }
+                 return response;
+            }
+
+            // --- 路由 4: 根路径 或 其他未匹配路径，直接返回HTML ---
             return new Response(html, { headers: { 'Content-Type': 'text/html;charset=UTF-8' } });
+
+        } catch (e) {
+            console.error("Critical error in main Worker fetch:", e.stack || e);
+            return new Response("An unexpected error occurred.", { status: 500 });
         }
-        
-        if (!env.CHAT_ROOM_DO) {
-            console.error("Durable Object 'CHAT_ROOM_DO' is not bound.");
-            return new Response('Server configuration error.', { status: 500 });
-        }
-        
-        const doId = env.CHAT_ROOM_DO.idFromName(roomName);
-        const stub = env.CHAT_ROOM_DO.get(doId);
-        
-        return stub.fetch(request);
     },
 
     /**
-     * 处理由Cron Trigger触发的定时事件。
+     * 【重构后】处理由Cron Trigger触发的定时事件。
      */
-    async scheduled(event, env, ctx) {
-        console.log(`Cron Trigger firing! Rule: ${event.cron}`);
-        
-        const tasks = [
-            // 直接调用顶级的辅助函数，不再使用`this`
-            sendAutoPost(env, 'test', '大家好，这是一个由定时任务发送的自动消息。')
-        ];
-        
-        ctx.waitUntil(Promise.allSettled(tasks));
+async scheduled(event, env, ctx) {
+        console.log(`[Worker] Cron Trigger firing! Rule: ${event.cron}`);
+
+        const taskFunction = taskMap.get(event.cron);
+
+        if (taskFunction) {
+            console.log(`[Worker] Executing task for cron rule: ${event.cron}`);
+            
+            // 【关键修改】: 执行任务并获取返回的状态结果
+            const result = await taskFunction(env, ctx);
+            
+            // 如果任务函数返回了结果，就进行广播通知
+            if (result && result.roomName) {
+                try {
+                    const doId = env.CHAT_ROOM_DO.idFromName(result.roomName);
+                    const stub = env.CHAT_ROOM_DO.get(doId);
+                    
+                    // 准备要广播的系统消息内容
+                    const systemMessagePayload = result.success 
+                        ? { message: `✅ 定时任务'${event.cron}'执行成功: ${result.message}`, level: 'SUCCESS' }
+                        : { message: `❌ 定时任务'${event.cron}'执行失败: ${result.error}`, level: 'ERROR', data: result };
+
+                    // 调用新的RPC方法来广播通知
+                    // 同样使用 waitUntil 确保它在后台完成
+                    ctx.waitUntil(stub.broadcastSystemMessage(systemMessagePayload, env.CRON_SECRET));
+
+                } catch(e) {
+                    console.error(`[Worker] Failed to broadcast cron status for room ${result.roomName}:`, e);
+                }
+            }
+
+        } else {
+            console.warn(`[Worker] No task defined for cron rule: ${event.cron}`);
+        }
     },
 };
