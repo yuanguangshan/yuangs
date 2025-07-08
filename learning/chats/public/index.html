@@ -236,25 +236,14 @@
             overscroll-behavior: contain; /* 确保滚动行为被包含 */
             touch-action: pan-y; /* 明确启用垂直平移 */
             position: relative; /* 确保正确定位 */
-            display: flex; /* 确保虚拟滚动元素能正确布局 */
-            flex-direction: column; /* 确保虚拟滚动元素能正确布局 */
+            display: flex; /* 确保内容撑开 */
+            flex-direction: column; /* 确保内容撑开 */
         }
         #chat-window::-webkit-scrollbar { width: 4px; }
         #chat-window::-webkit-scrollbar-track { background: transparent; }
         #chat-window::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
         #chat-window::-webkit-scrollbar-thumb:hover { background: #999; }
-        /* 虚拟滚动填充元素 */
-        .virtual-scroll-spacer {
-            flex-shrink: 0; /* 不会被压缩 */
-            width: 100%;
-        }
-        .virtual-scroll-spacer.top { order: 1; } /* 顶部填充在最前面 */
-        .virtual-scroll-spacer.bottom { order: 3; } /* 底部填充在最后面 */
-        .message-container-wrapper {
-            order: 2; /* 实际消息容器在中间 */
-            width: 100%;
-            position: relative; /* 消息相对这个容器定位 */
-        }
+        /* 虚拟滚动相关的填充元素和包装器不再需要 */
 
 
         /* --- MESSAGE STYLES --- */
@@ -775,15 +764,14 @@ const appNotification = document.getElementById('app-notification'); // New noti
 
 // --- 全局状态变量 ---
 let allMessages = []; // 存储所有消息数据
-let messageIdSet = new Set(); // ✨ 新增：用于快速去重
-let messageQueue = []; // ✨ 新增：消息队列，用于批量处理新消息
-let rafScheduled = false; // ✨ 新增：requestAnimationFrame 调度标志
-let messageProcessTimeoutId = null; // ✨ 新增：用于 appendChatMessage 的防抖定时器ID
-const MESSAGE_BATCH_SIZE = 5; // ✨ 新增：批量处理消息的最小数量
-const MESSAGE_BATCH_DEBOUNCE_MS = 100; // ✨ 调整：批量处理消息的防抖时间，增加到100ms
+let messageIdSet = new Set(); // 用于快速去重
+let messageQueue = []; // 消息队列，用于批量处理新消息
+let rafScheduled = false; // requestAnimationFrame 调度标志
+let messageProcessTimeoutId = null; // 用于 appendChatMessage 的防抖定时器ID
+const MESSAGE_BATCH_DEBOUNCE_MS = 50; // 批量处理消息的防抖时间 (保持批处理，即便人数少，也能让UI更流畅)
 
-let isVirtualScrollInitialized = false; // 标志位，跟踪虚拟滚动是否准备就绪
-let historicalMessagesLoading = false; // ✨ 新增：标志位，表示历史消息是否正在加载
+// let isVirtualScrollInitialized = false; // 不再需要虚拟滚动的标志
+let historicalMessagesLoading = false; // 标志位，表示历史消息是否正在加载
 
 let selectedFile = null;
 let mediaRecorder;
@@ -834,7 +822,7 @@ function formatFileSize(bytes) {
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }
 
-// 节流函数
+// 节流函数 (继续保留，通用实用)
 function throttle(func, delay) {
     let timeoutId;
     let lastArgs;
@@ -856,9 +844,8 @@ function throttle(func, delay) {
 }
 
 
-// --- 调试日志系统 (优化版) ---
+// --- 调试日志系统 (保持不变) ---
 function logDebug(message, level = LOG_LEVELS.INFO, data = null) {
-    // 总是记录到控制台，这对调试很重要
     const consoleMethod = level === LOG_LEVELS.ERROR ? 'error' : 
                           level === LOG_LEVELS.WARNING ? 'warn' : 'log';
     
@@ -868,10 +855,8 @@ function logDebug(message, level = LOG_LEVELS.INFO, data = null) {
         console[consoleMethod](`[${level.toUpperCase()}] ${message}`);
     }
     
-    // 如果调试日志被禁用或容器不存在，就不进行DOM操作
     if (!isDebugEnabled || !debugLogContent) return;
     
-    // 使用DocumentFragment减少DOM操作
     const fragment = document.createDocumentFragment();
     const timestamp = new Date().toLocaleTimeString();
     const logEntry = document.createElement('div');
@@ -880,11 +865,9 @@ function logDebug(message, level = LOG_LEVELS.INFO, data = null) {
     let messageHTML = `<span class="log-timestamp">[${timestamp}]</span> <span>${message}</span>`;
     
     if (data) {
-        // 对于大型数据，限制显示长度
         let dataString;
         try {
             if (typeof data === 'object' && data !== null) {
-                // 限制数据大小，避免JSON.stringify占用过多资源
                 const limitedData = JSON.parse(JSON.stringify(data, (k, v) => {
                     if (typeof v === 'string' && v.length > 500) {
                         return v.substring(0, 500) + '... [截断]';
@@ -910,12 +893,10 @@ function logDebug(message, level = LOG_LEVELS.INFO, data = null) {
     fragment.appendChild(logEntry);
     debugLogContent.appendChild(fragment);
     
-    // 保持日志条目数量在限制范围内
     while (debugLogContent.children.length > MAX_LOG_ENTRIES) {
         debugLogContent.removeChild(debugLogContent.firstChild);
     }
     
-    // 使用requestAnimationFrame优化滚动操作
     requestAnimationFrame(() => {
         debugLogContent.scrollTop = debugLogContent.scrollHeight;
     });
@@ -924,11 +905,10 @@ function logDebug(message, level = LOG_LEVELS.INFO, data = null) {
 function initDebugLog() {
     if (clearLogsBtn) clearLogsBtn.addEventListener('click', clearLogs);
     if (copyLogsBtn) copyLogsBtn.addEventListener('click', copyLogs);
-    if (toggleLogsBtn) toggleLogsBtn.addEventListener('click', toggleLogsDisplay); // 绑定到新的切换函数
+    if (toggleLogsBtn) toggleLogsBtn.addEventListener('click', toggleLogsDisplay);
     logDebug('调试日志系统初始化完成', LOG_LEVELS.SUCCESS);
     logDebug(`当前用户: ${username}`, LOG_LEVELS.INFO);
     logDebug(`当前房间: ${roomName}`, LOG_LEVELS.INFO);
-    // 初始化时根据 isDebugEnabled 决定是否显示
     if (debugLogContent) {
         debugLogContent.style.display = isDebugEnabled ? '' : 'none';
     }
@@ -942,21 +922,19 @@ function clearLogs() {
 function copyLogs() {
     const logText = Array.from(debugLogContent.children).map(entry => entry.textContent).join('\n');
     navigator.clipboard.writeText(logText).then(() => {
-        showAppNotification('日志已复制到剪贴板'); // Changed from showCopyFeedback
+        showAppNotification('日志已复制到剪贴板');
         logDebug('日志已复制到剪贴板', LOG_LEVELS.SUCCESS);
     }).catch(err => logDebug(`复制失败: ${err}`, LOG_LEVELS.ERROR));
 }
 
-// 新增：切换调试日志在DOM中的显示状态
 function toggleLogsDisplay() {
-    isDebugEnabled = !isDebugEnabled; // 切换全局标志
+    isDebugEnabled = !isDebugEnabled;
     if (debugLogContent) {
         debugLogContent.style.display = isDebugEnabled ? '' : 'none';
     }
     logDebug(`调试日志显示已${isDebugEnabled ? '开启' : '隐藏'}`, LOG_LEVELS.INFO);
 }
 
-// ✨ 优化后的通用通知函数
 function showAppNotification(message, duration = 2000, isError = false) {
     if (!appNotification) return;
 
@@ -969,10 +947,8 @@ function showAppNotification(message, duration = 2000, isError = false) {
 
 
 // --- UI 渲染和更新逻辑 ---
-// 创建一个节流版本的updateUIFromMessages函数，限制更新频率
-const throttledUpdateUI = throttle(updateUIFromMessages, 1000); // 1秒内最多更新一次用户列表UI
+const throttledUpdateUI = throttle(updateUIFromMessages, 1000); 
 
-// 判断用户是否活跃的辅助函数
 function isUserActive(lastSeenTimestamp) {
     if (!lastSeenTimestamp) return false;
     const fiveMinutesInMs = 5 * 60 * 1000;
@@ -980,17 +956,17 @@ function isUserActive(lastSeenTimestamp) {
     return new Date(lastSeenTimestamp).getTime() > fiveMinutesAgo;
 }
 
-// 优化 updateUIFromMessages 函数，实现 DOM 协调 (Reconciliation)
+// 优化 updateUIFromMessages 函数 (保持DOM协调策略，因为这是好的实践)
 function updateUIFromMessages() {
-    const currentUserStates = new Map(); // { username: { lastSeen, messageCount, isActive } }
+    const currentUserStates = new Map(); 
     const activeUsersSet = new Set();
 
-    // 只处理最近的500条消息来提高性能 (与后端同步)
+    // 只处理最近的500条消息
     const recentMessages = allMessages.slice(-500); 
     
     recentMessages.forEach(msg => {
         const { username, timestamp } = msg;
-        if (!username) return; // 跳过无效用户
+        if (!username) return; 
 
         const currentState = currentUserStates.get(username) || { lastSeen: 0, messageCount: 0 };
         currentState.lastSeen = Math.max(currentState.lastSeen, timestamp);
@@ -998,7 +974,6 @@ function updateUIFromMessages() {
         currentUserStates.set(username, currentState);
     });
 
-    // 确定活跃用户和更新活跃状态
     currentUserStates.forEach((state, username) => {
         state.isActive = isUserActive(state.lastSeen);
         if (state.isActive) {
@@ -1008,12 +983,10 @@ function updateUIFromMessages() {
 
     const sortedActiveUsernames = Array.from(activeUsersSet).sort((a, b) => a.localeCompare(b));
 
-    // --- 更新用户昵称列表 (`#user-names`) 和菜单 (`#users-menu-list`) ---
     const userNamesEl = document.getElementById('user-names');
     const menuListEl = document.getElementById('users-menu-list');
 
-    // 1. 收集当前 DOM 中的元素
-    const currentUserItems = new Map(); // username -> DOM Element
+    const currentUserItems = new Map(); 
     Array.from(userNamesEl.children).forEach(el => {
         if (el.dataset.username) currentUserItems.set(el.dataset.username, el);
     });
@@ -1022,8 +995,7 @@ function updateUIFromMessages() {
         if (el.dataset.username) currentMenuItems.set(el.dataset.username, el);
     });
 
-    // 2. 遍历新数据，添加或更新
-    const newUserItems = []; // 用于批量添加，保持顺序
+    const newUserItems = []; 
     const newMenuItems = [];
 
     sortedActiveUsernames.forEach(name => {
@@ -1037,7 +1009,7 @@ function updateUIFromMessages() {
             userItem.textContent = safeName;
         }
         newUserItems.push(userItem);
-        currentUserItems.delete(name); // 标记为已处理
+        currentUserItems.delete(name); 
 
         let menuItem = currentMenuItems.get(name);
         if (!menuItem) {
@@ -1063,41 +1035,34 @@ function updateUIFromMessages() {
             }
         }
         newMenuItems.push(menuItem);
-        currentMenuItems.delete(name); // 标记为已处理
+        currentMenuItems.delete(name); 
     });
 
-    // 3. 移除未在当前活跃列表中的旧元素
     currentUserItems.forEach(el => el.remove());
     currentMenuItems.forEach(el => el.remove());
 
-    // 4. 重新构建用户列表和菜单 (批量添加，避免多次重排)
     const userNamesFragment = document.createDocumentFragment();
     newUserItems.forEach(item => userNamesFragment.appendChild(item));
-    userNamesEl.innerHTML = ''; // 清空后重新填充，因为顺序可能变动
+    userNamesEl.innerHTML = ''; 
     userNamesEl.appendChild(userNamesFragment);
 
     const menuListFragment = document.createDocumentFragment();
     newMenuItems.forEach(item => menuListFragment.appendChild(item));
-    menuListEl.innerHTML = ''; // 清空后重新填充
+    menuListEl.innerHTML = ''; 
     menuListEl.appendChild(menuListFragment);
 
-
-    // --- 更新活跃用户计数 ---
     document.getElementById('online-count').textContent = sortedActiveUsernames.length;
     onlineDisplay.textContent = `活跃: ${sortedActiveUsernames.length}`;
-    document.getElementById('sidebar-room-name').textContent = roomName; // 确保房间名始终显示
+    document.getElementById('sidebar-room-name').textContent = roomName; 
 
-    // --- 更新用户活动统计 (`#user-stats-list`) ---
     const userStatsListEl = document.getElementById('user-stats-list');
     const allUsersSorted = Array.from(currentUserStates.keys()).sort((a, b) => {
         const aState = currentUserStates.get(a);
         const bState = currentUserStates.get(b);
-        if (aState.isActive !== bState.isActive) return bState.isActive - aState.isActive; // 活跃的在前
-        return (bState.messageCount || 0) - (aState.messageCount || 0); // 消息多的在前
+        if (aState.isActive !== bState.isActive) return bState.isActive - aState.isActive; 
+        return (bState.messageCount || 0) - (aState.messageCount || 0); 
     });
 
-    // 这里可以采用更细致的更新策略，但如果用户统计数量有限，innerHTML清空重绘开销可接受
-    // 暂时保持清空重绘，因为它在侧边栏底部，且更新频率降低
     const statsFragment = document.createDocumentFragment();
     if (allUsersSorted.length === 0) {
         const emptyMsg = document.createElement('p');
@@ -1108,7 +1073,7 @@ function updateUIFromMessages() {
     } else {
         allUsersSorted.forEach(name => {
             const state = currentUserStates.get(name);
-            if (!state) return; // Should not happen
+            if (!state) return; 
 
             const item = document.createElement('div');
             item.className = 'user-stats-item';
@@ -1131,238 +1096,34 @@ function updateUIFromMessages() {
             statsFragment.appendChild(item);
         });
     }
-    userStatsListEl.innerHTML = ''; // 清空旧内容
-    userStatsListEl.appendChild(statsFragment); // 批量添加新内容
+    userStatsListEl.innerHTML = ''; 
+    userStatsListEl.appendChild(statsFragment); 
 }
 
 
-// --- 虚拟滚动相关变量 ---
-const AVERAGE_MESSAGE_HEIGHT = 80; // 预估每条消息的平均高度 (px)
-const OVERSCAN_COUNT = 10; // 在可见区域上方和下方额外渲染的消息数量，用于平滑滚动
-const messageHeights = new Map(); // 存储每条消息实际高度的Map: { messageId: height }
-let topSpacerEl;
-let bottomSpacerEl;
-let messageWrapperEl; // 用于包裹实际消息DOM的容器
+// --- 简化消息显示逻辑 (不再虚拟滚动) ---
+// 移除 `topSpacerEl`, `bottomSpacerEl`, `messageWrapperEl`
+// 移除 `AVERAGE_MESSAGE_HEIGHT`, `OVERSCAN_COUNT`, `messageHeights`, `prevScrollTop`, `lastRenderedRange`
 
-let prevScrollTop = 0; // 用于判断滚动方向和是否需要重新渲染
-let lastRenderedRange = { start: -1, end: -1 }; // 上次渲染的消息范围
-
-
-// --- 虚拟滚动核心渲染函数 (优化 DOM 操作版) ---
-function renderVirtualWindow(scrollToBottom = false) {
-    if (!chatWindowEl || !messageWrapperEl) {
-        logDebug('虚拟滚动初始化未完成，无法渲染', LOG_LEVELS.WARNING);
+// 简化 `renderVirtualWindow` 为 `appendMessagesToChatWindow`
+function appendMessagesToChatWindow(messages, scrollToBottom = true) {
+    if (!chatWindowEl) {
+        logDebug('聊天窗口元素未找到，无法追加消息', LOG_LEVELS.ERROR);
         return;
     }
 
-    const viewportHeight = chatWindowEl.clientHeight;
-    const scrollTop = chatWindowEl.scrollTop;
-
-    // --- 1. 计算可见消息范围 (startIndex, endIndex) 和填充高度 ---
-    let currentEstimatedScrollY = 0;
-    let startIndex = 0;
-    
-    // 根据滚动位置计算起始索引
-    for (let i = 0; i < allMessages.length; i++) {
-        const msgHeight = messageHeights.get(allMessages[i].id) || AVERAGE_MESSAGE_HEIGHT;
-        if (currentEstimatedScrollY + msgHeight > scrollTop) {
-            startIndex = i;
-            break;
+    const fragment = document.createDocumentFragment();
+    messages.forEach(msg => {
+        if (!msg || !msg.id) {
+            logDebug("尝试追加无效消息", LOG_LEVELS.ERROR, msg);
+            return;
         }
-        currentEstimatedScrollY += msgHeight;
-    }
-
-    startIndex = Math.max(0, startIndex - OVERSCAN_COUNT); // 应用顶部超视距
-
-    let endIndex = startIndex;
-    let renderedContentHeightEstimate = 0;
-    
-    // 计算结束索引
-    for (let i = startIndex; i < allMessages.length; i++) {
-        const msgHeight = messageHeights.get(allMessages[i].id) || AVERAGE_MESSAGE_HEIGHT;
-        renderedContentHeightEstimate += msgHeight;
-        endIndex = i;
-        // 渲染足够的内容以填充视口并包含上下超视距区域
-        if (renderedContentHeightEstimate >= viewportHeight + (OVERSCAN_COUNT * AVERAGE_MESSAGE_HEIGHT * 2)) {
-            break;
-        }
-    }
-    endIndex = Math.min(allMessages.length - 1, endIndex + OVERSCAN_COUNT); // 应用底部超视距
-
-    // 如果可见范围没有变化，且不是强制滚动到底部，则提前返回，避免不必要的 DOM 操作
-    if (lastRenderedRange.start === startIndex && lastRenderedRange.end === endIndex && !scrollToBottom) {
-        return; 
-    }
-    lastRenderedRange = { start: startIndex, end: endIndex };
-
-    // 计算顶部和底部填充元素的高度
-    let topPaddingHeight = 0;
-    for (let i = 0; i < startIndex; i++) {
-        topPaddingHeight += messageHeights.get(allMessages[i].id) || AVERAGE_MESSAGE_HEIGHT;
-    }
-
-    let bottomPaddingHeight = 0;
-    for (let i = endIndex + 1; i < allMessages.length; i++) {
-        bottomPaddingHeight += messageHeights.get(allMessages[i].id) || AVERAGE_MESSAGE_HEIGHT;
-    }
-    
-    topSpacerEl.style.height = `${topPaddingHeight}px`;
-    bottomSpacerEl.style.height = `${bottomPaddingHeight}px`;
-
-    // --- 2. DOM 协调 (Reconciliation) ---
-    // 目标: 确保 messageWrapperEl 中只包含 startIndex 到 endIndex 对应的消息元素，且顺序正确
-
-    const currentDomMap = new Map(); // 存储当前在 DOM 中的 { messageId -> DOMElement } 映射
-    Array.from(messageWrapperEl.children).forEach(child => {
-        if (child.dataset.id) {
-            currentDomMap.set(child.dataset.id, child);
-        }
+        const msgEl = createMessageElement(msg);
+        fragment.appendChild(msgEl);
     });
 
-    const elementsToMeasureLater = []; // 收集新创建的元素，稍后批量测量高度
-    const fragment = document.createDocumentFragment(); // 用于批量添加
+    chatWindowEl.appendChild(fragment);
 
-    let prevElementInDesiredOrder = null; // 跟踪在目标顺序中前一个已处理的 DOM 元素
-
-    for (let i = startIndex; i <= endIndex; i++) {
-        const messageData = allMessages[i];
-        let messageElement = currentDomMap.get(messageData.id);
-
-        if (!messageElement) {
-            // 元素不在 DOM 中，需要创建
-            messageElement = createMessageElement(messageData);
-            elementsToMeasureLater.push(messageElement); // 标记为新元素，稍后测量
-            fragment.appendChild(messageElement); // 添加到 DocumentFragment
-        } else {
-            // 元素已存在于 DOM 中，从 currentDomMap 中删除，表示它将被保留
-            currentDomMap.delete(messageData.id); 
-
-            // 如果元素位置不对，也需要移动。将其从旧位置移除，稍后在正确位置插入
-            // 优化：只有当元素确实不在 messageWrapperEl 中，或者它不在正确位置时才操作
-            const isAlreadyInCorrectPlace = (messageElement.parentNode === messageWrapperEl && 
-                (prevElementInDesiredOrder ? messageElement === prevElementInDesiredOrder.nextSibling : messageElement === messageWrapperEl.firstChild));
-            
-            if (!isAlreadyInCorrectPlace) {
-                // 如果在错误位置，先移除。如果不是直接子元素（比如在旧的Fragment中），则跳过移除。
-                if (messageElement.parentNode === messageWrapperEl) {
-                    messageWrapperEl.removeChild(messageElement);
-                }
-                fragment.appendChild(messageElement); // 移动到 DocumentFragment 待插入
-            }
-        }
-        prevElementInDesiredOrder = messageElement; // 更新前一个元素引用
-    }
-
-    // 批量添加/移动元素到 messageWrapperEl
-    if (fragment.children.length > 0) {
-        // 在所有移除操作之后，一次性将 fragment 中的元素插入到正确位置
-        // 这里的插入逻辑需要稍微调整以确保正确的顺序
-        // 简单粗暴的方式是清空再添加，但不够优化。更好的方式是直接插入到正确位置。
-        // 由于消息是追加的，且虚拟滚动会移除旧的，直接appendChild在多数情况下会正确。
-        // 但为了精确顺序，应在循环中处理插入点，而非最后一次性appendChild(fragment)
-        // 针对此虚拟滚动实现，messageWrapperEl 内部的元素顺序需要被严格控制。
-        // 最直接的做法是在循环中直接插入，或者创建一个新的 wrapper 并替换旧的，但那样会丢失现有 DOM 元素，不如协调。
-
-        // 更好的 DOM 协调策略：
-        // 1. 移除所有不在当前可视范围内的元素。
-        // 2. 对于可视范围内的元素，检查它们是否存在且在正确位置。如果不存在或位置错误，重新创建/移动。
-        // 鉴于当前循环已经在处理插入/移动，此处 `fragment` 的使用略微复杂。
-        // 让我们简化 `renderVirtualWindow` 的 DOM 协调部分，直接在循环中确保元素存在且位置正确。
-        // 这需要 `messageWrapperEl.children` 是一个“活”的集合。
-
-        // 重新思考 DOM 协调：
-        // 步骤 1: 标记所有需要保留的当前 DOM 元素
-        const existingMessageElements = new Map(); // Map<messageId, DOMElement>
-        for (const child of messageWrapperEl.children) {
-            if (child.dataset.id) {
-                existingMessageElements.set(child.dataset.id, child);
-            }
-        }
-
-        const newFragment = document.createDocumentFragment();
-        let currentDomIndex = 0; // Tracks the current position in messageWrapperEl's children
-
-        for (let i = startIndex; i <= endIndex; i++) {
-            const messageData = allMessages[i];
-            let msgEl = existingMessageElements.get(messageData.id);
-
-            if (msgEl) {
-                // Element exists, move it if not in correct position
-                if (messageWrapperEl.children[currentDomIndex] !== msgEl) {
-                    newFragment.appendChild(msgEl); // Temporarily move to fragment
-                } else {
-                    currentDomIndex++; // Element is already in place
-                }
-                existingMessageElements.delete(messageData.id); // Mark as handled
-            } else {
-                // Element does not exist, create it
-                msgEl = createMessageElement(messageData);
-                elementsToMeasureLater.push(msgEl);
-                newFragment.appendChild(msgEl);
-            }
-        }
-
-        // Remove elements that are no longer needed (not in current range)
-        existingMessageElements.forEach(el => el.remove());
-
-        // Insert/re-insert elements from the fragment into the correct positions
-        // A simpler way after removing unused: just append the fragment. 
-        // Then loop through newFragment children and insert them into messageWrapperEl in order.
-        // Or, more efficiently, replace children with a new set.
-        // A full "diffing" algorithm is complex. For fixed `messageWrapperEl` as parent:
-        // Clear messageWrapperEl and append all from newFragment would be simplest but not incremental.
-
-        // Let's use `replaceChildren` if available, or manual replacement for simplicity
-        // This is a common pattern for "reconciling" a list of children.
-        // Best approach for lists: remove all and append new.
-        // Given virtual scroll, we want incremental.
-
-        // Re-implementing the DOM coordination to be more robust:
-        // Use a DocumentFragment to build the new desired state, then replace.
-        const newDomFragment = document.createDocumentFragment();
-        const messagesInView = allMessages.slice(startIndex, endIndex + 1);
-
-        messagesInView.forEach(msgData => {
-            let msgEl = currentDomMap.get(msgData.id);
-            if (!msgEl) {
-                msgEl = createMessageElement(msgData);
-                elementsToMeasureLater.push(msgEl);
-            } else {
-                currentDomMap.delete(msgData.id); // Mark as retained
-            }
-            newDomFragment.appendChild(msgEl);
-        });
-
-        // Remove elements no longer needed
-        currentDomMap.forEach(el => messageWrapperEl.removeChild(el));
-
-        // Append or re-order elements using the fragment
-        // This still implies some re-ordering work. A simpler way for incremental updates 
-        // is to carefully manage children's `nextSibling`.
-        
-        // Let's stick to the previous 'insertBefore' approach but ensuring the element exists.
-        // The original `renderVirtualWindow`'s reconciliation logic using `insertBefore`
-        // was actually a good attempt at reconciliation. My critique was about its full efficiency.
-        // The current `renderVirtualWindow` in the provided code is already quite good with `insertBefore`.
-        // The main fix is the `appendChatMessage` batching. Let's ensure the `insertBefore` logic
-        // is robust to handle elements already in `newFragment` from the outer loop.
-
-        // The current `renderVirtualWindow` DOM reconciliation logic is actually fine for this level.
-        // It's the _frequency_ of `appendChatMessage` calling it that was the problem.
-        // So, the previous `renderVirtualWindow` is retained, with the small `isAlreadyInCorrectPlace` optimization.
-
-    }
-
-    // 3. 批量测量新创建元素的高度
-    // 在所有 DOM 增删改操作完成后，统一进行测量，减少重排
-    elementsToMeasureLater.forEach(el => {
-        const actualHeight = el.offsetHeight + 16; // 加上 margin-bottom
-        if (messageHeights.get(el.dataset.id) !== actualHeight) {
-            messageHeights.set(el.dataset.id, actualHeight);
-        }
-    });
-
-    // 4. 处理滚动到底部
     if (scrollToBottom) {
         requestAnimationFrame(() => {
             chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
@@ -1370,71 +1131,30 @@ function renderVirtualWindow(scrollToBottom = false) {
     }
 }
 
-
-// --- 初始化虚拟滚动结构 ---
-function initVirtualScrolling() {
-    // 每次重新初始化时，确保清空旧的虚拟滚动结构
-    if (topSpacerEl && messageWrapperEl && bottomSpacerEl) {
-        topSpacerEl.remove();
-        messageWrapperEl.remove();
-        bottomSpacerEl.remove();
-    }
-
-    // 清空原始内容，以防有非虚拟滚动相关的元素
-    chatWindowEl.innerHTML = '';
-
-    // 创建顶部填充元素
-    topSpacerEl = document.createElement('div');
-    topSpacerEl.className = 'virtual-scroll-spacer top';
-    topSpacerEl.style.height = '0px';
-
-    // 创建消息容器，用于容纳实际渲染的消息
-    messageWrapperEl = document.createElement('div');
-    messageWrapperEl.className = 'message-container-wrapper';
-    
-    // 创建底部填充元素
-    bottomSpacerEl = document.createElement('div');
-    bottomSpacerEl.className = 'virtual-scroll-spacer bottom';
-    bottomSpacerEl.style.height = '0px';
-
-    // 将这些元素添加到聊天窗口
-    chatWindowEl.appendChild(topSpacerEl);
-    chatWindowEl.appendChild(messageWrapperEl);
-    chatWindowEl.appendChild(bottomSpacerEl);
-
-    // 绑定滚动事件监听器（节流）
+// 简化 `initVirtualScrolling` 为 `initChatDisplay`
+function initChatDisplay() {
+    // 清空所有旧消息
+    chatWindowEl.innerHTML = ''; 
+    logDebug('聊天显示初始化完成', LOG_LEVELS.SUCCESS);
+    // 滚动事件监听器也简化，因为不再需要虚拟滚动复杂的渲染逻辑
     chatWindowEl.addEventListener('scroll', throttle(() => {
-        const currentScrollTop = chatWindowEl.scrollTop;
-        const scrollDelta = Math.abs(currentScrollTop - prevScrollTop);
-
-        // 只有当滚动距离超过一定阈值（如 AVERAGE_MESSAGE_HEIGHT / 2）时才重新渲染，减少不必要的渲染
-        // 或者，在所有消息都已测量高度后，可以更精确地计算是否需要渲染
-        if (scrollDelta > AVERAGE_MESSAGE_HEIGHT / 2 || allMessages.length === 0) {
-             renderVirtualWindow();
-        }
-        prevScrollTop = currentScrollTop;
-    }, 100)); // 滚动事件节流，每100ms最多执行一次
-
-    logDebug('虚拟滚动结构初始化完成', LOG_LEVELS.SUCCESS);
-    // 首次渲染不需要立即滚动到底部，因为可能正在加载历史消息
-    // renderVirtualWindow(true); // 首次渲染并滚动到底部，此行移至 processHistoryMessages 完成时
+        // 对于非虚拟滚动，这个滚动事件监听器主要是为了性能调试或未来的“加载更多”功能预留
+        // 实际不需要在每次滚动时重绘整个视图
+    }, 150)); 
 }
 
 
-// --- 消息渲染函数 (优化版，用于创建单个DOM元素) ---
-// 此函数只负责创建消息DOM，不负责添加到DOM或滚动
+// --- 消息渲染函数 (创建单个DOM元素，保持不变) ---
 function createMessageElement(msg) {
     const msgEl = document.createElement('div');
     msgEl.className = 'message';
     
-    // 确保所有相关数据都存入dataset
     msgEl.dataset.id = msg.id;
-    // 优先使用 caption 作为 messageText，如果没有则使用 text
     msgEl.dataset.messageText = msg.caption || msg.text || ''; 
     msgEl.dataset.timestamp = msg.timestamp;
     msgEl.dataset.messageType = msg.type;
     if (msg.type === 'image') {
-        msgEl.dataset.imageUrl = msg.imageUrl; // 图片消息需要存储URL
+        msgEl.dataset.imageUrl = msg.imageUrl;
     }
 
     if (msg.username === username) msgEl.classList.add('self');
@@ -1450,18 +1170,13 @@ function createMessageElement(msg) {
     
     let contentHTML = `<div class="info"><span class="username">${escapeHTML(msg.username)}</span> <span class="timestamp">${displayTime}</span></div>`;
             
-    // 消息内容渲染
     if (msg.type === 'image') {
         contentHTML += `<div class="message-image" onclick="showImageModal('${msg.imageUrl}')"><img src="${msg.imageUrl}" alt="${escapeHTML(msg.filename || 'Image')}" loading="lazy"></div>`;
-        // 无论 caption 是否为空，都添加一个 .text div
-        // marked.parse('') 会返回空字符串，不会造成问题
         contentHTML += `<div class="text">${marked.parse(msg.caption || '')}</div>`; 
     } else if (msg.type === 'audio') {
         contentHTML += `<div class="message-audio"><audio controls src="${msg.audioUrl}"></audio></div>`;
-        // 无论 text 是否为空，都添加一个 .text div
         contentHTML += `<div class="text">${marked.parse(msg.text || '')}</div>`; 
-    } else { // text (及其他未定义的类型，会 fallback到text处理)
-        // 确保 text 字段始终被处理，即使为空字符串
+    } else { 
         contentHTML += `<div class="text">${marked.parse(msg.text || '')}</div>`;
     }
         
@@ -1469,12 +1184,11 @@ function createMessageElement(msg) {
     return msgEl;
 }
 
-// ✨ 消息队列处理函数，在 requestAnimationFrame 中执行
+// 消息队列处理函数，在 requestAnimationFrame 中执行
 function processMessageQueue() {
     if (historicalMessagesLoading) {
-        // 如果历史消息还在加载中，暂停处理新消息队列，等待历史消息处理完毕
-        rafScheduled = false; // 取消当前的 RAF 调度，等待历史消息处理完成后再次调度
         logDebug("历史消息加载中，暂停处理新消息队列。", LOG_LEVELS.INFO);
+        rafScheduled = false; // 取消RAF调度，等待历史加载完成
         return;
     }
 
@@ -1483,12 +1197,11 @@ function processMessageQueue() {
         return;
     }
 
-    // 每次处理一个批次的消息
-    const messagesToProcess = messageQueue.splice(0, MESSAGE_BATCH_SIZE); 
+    // 处理所有当前在队列中的消息 (因为人数少，直接处理所有积压的即可)
+    const messagesToProcess = messageQueue.splice(0, messageQueue.length); 
 
-    logDebug(`处理消息队列: 移除 ${messagesToProcess.length} 条消息`, LOG_LEVELS.INFO);
+    logDebug(`处理消息队列: 移除并追加 ${messagesToProcess.length} 条消息`, LOG_LEVELS.INFO);
 
-    // 批量添加消息并更新缓存
     messagesToProcess.forEach(msg => {
         if (!messageIdSet.has(msg.id)) {
             allMessages.push(msg);
@@ -1498,19 +1211,21 @@ function processMessageQueue() {
         }
     });
 
-    // 限制总消息数组的大小，防止内存无限增长
-    const MAX_ALL_MESSAGES = 500; // 保持与后端一致的缓存策略，避免前端缓存过多导致内存问题
+    const MAX_ALL_MESSAGES = 500; 
     while (allMessages.length > MAX_ALL_MESSAGES) {
-        const removedMsg = allMessages.shift(); // 移除最老的一条
-        messageHeights.delete(removedMsg.id); // 从高度缓存中也移除
-        messageIdSet.delete(removedMsg.id); // ✨ 从 ID 集合中移除
+        const removedMsg = allMessages.shift(); 
+        messageIdSet.delete(removedMsg.id); 
+        // 移除了虚拟滚动，所以不需要 messageHeights.delete(removedMsg.id);
+        // 同时，如果 chatWindowEl 中的 DOM 元素数量超过 MAX_ALL_MESSAGES，需要手动移除最旧的DOM
+        // 对于低并发场景，通常不主动移除旧DOM，而是依赖用户刷新或页面关闭。
+        // 如果需要，可以根据 `allMessages` 的长度，移除 `chatWindowEl.firstChild`。
+        // 但为了简化，暂时不在此处主动移除DOM，只维护数据。
     }
 
-    // 触发虚拟窗口渲染，并强制滚动到底部
-    renderVirtualWindow(true); 
+    appendMessagesToChatWindow(messagesToProcess, true); // 追加新消息并滚动到底部
     throttledUpdateUI(); // 触发用户列表更新
 
-    // 如果队列中还有消息，继续调度下一个 requestAnimationFrame
+    // 如果队列中还有消息（虽然上面一次性取完了），这表示可能在处理期间又有新消息入队了
     if (messageQueue.length > 0) {
         requestAnimationFrame(processMessageQueue);
     } else {
@@ -1518,7 +1233,7 @@ function processMessageQueue() {
     }
 }
 
-// ✨ 修改 appendChatMessage，只负责入队和调度
+// appendChatMessage (保持批处理防抖机制，有助于UI流畅性)
 function appendChatMessage(msg) {
     if (!msg || !msg.id) {
         logDebug("appendChatMessage 收到无效消息", LOG_LEVELS.ERROR, msg);
@@ -1533,15 +1248,13 @@ function appendChatMessage(msg) {
     messageQueue.push(msg);
     logDebug(`消息入队 (ID: ${msg.id}). 队列长度: ${messageQueue.length}`, LOG_LEVELS.INFO);
 
-    // 如果存在未触发的批处理定时器，则清除它，实现防抖
     if (messageProcessTimeoutId) {
         clearTimeout(messageProcessTimeoutId);
     }
 
-    // 重新设置防抖定时器，在 MESSAGE_BATCH_DEBOUNCE_MS 后调度 requestAnimationFrame
     messageProcessTimeoutId = setTimeout(() => {
-        messageProcessTimeoutId = null; // 清除定时器ID
-        if (!rafScheduled) { // 只有当前没有RAF调度时才触发新的RAF
+        messageProcessTimeoutId = null; 
+        if (!rafScheduled) { 
             rafScheduled = true;
             requestAnimationFrame(processMessageQueue);
         }
@@ -1549,7 +1262,7 @@ function appendChatMessage(msg) {
 }
 
 
-// --- 上下文菜单和 AI 解释逻辑 ---
+// --- 上下文菜单和 AI 解释逻辑 (保持不变) ---
 function showContextMenu(element, x, y) {
     currentMessageElement = element; 
     
@@ -1717,13 +1430,13 @@ contextMenu.addEventListener('click', async (e) => {
 });
 
 
-// --- 图片和媒体处理函数 ---
+// --- 图片和媒体处理函数 (保持不变) ---
 async function handleImageSelection(e) {
     const file = e.target.files[0];
     if (!file || !file.type.startsWith('image/')) return;
     try {
         uploadProgress.style.display = 'block';
-        uploadProgress.textContent = '压缩中...'; // 添加压缩提示
+        uploadProgress.textContent = '压缩中...';
         imagePreview.classList.add('show', 'uploading');
         const compressedBlob = await compressImage(file);
         selectedFile = new File([compressedBlob], file.name, { type: 'image/jpeg', lastModified: Date.now() });
@@ -1818,7 +1531,7 @@ function checkSendButtonState() {
 }
 
 
-// --- 消息发送函数 (简化版) ---
+// --- 消息发送函数 (保持不变) ---
 messageForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const text = messageInput.value.trim();
@@ -1860,7 +1573,7 @@ messageForm.addEventListener('submit', async (e) => {
     }
 });
 
-// --- 图片文件上传函数 (简化版) ---
+// --- 图片文件上传函数 (保持不变) ---
 async function sendImageMessage(file, caption = '') {
     try {
         logDebug(`开始上传图片: ${file.name}`, LOG_LEVELS.INFO);
@@ -1928,7 +1641,7 @@ async function sendImageMessage(file, caption = '') {
     }
 }
 
-// --- 音频文件上传函数 (简化版) ---
+// --- 音频文件上传函数 (保持不变) ---
 async function sendAudioMessage(audioBlob, mimeType) {
     try {
         logDebug(`开始上传音频`, LOG_LEVELS.INFO, { size: audioBlob.size, type: mimeType });
@@ -1986,11 +1699,10 @@ async function sendAudioMessage(audioBlob, mimeType) {
     }
 }
 
-// ✨ 优化的历史消息处理函数
+// 优化后的历史消息处理函数 (移除虚拟滚动相关逻辑)
 async function processHistoryMessages(history) {
     if (!Array.isArray(history)) {
         logDebug("历史记录格式不正确，已忽略。", LOG_LEVELS.WARNING);
-        isVirtualScrollInitialized = true; 
         historicalMessagesLoading = false;
         processMessageQueue(); 
         return;
@@ -2002,24 +1714,20 @@ async function processHistoryMessages(history) {
     // 重置状态
     allMessages = [];
     messageIdSet.clear(); 
-    messageHeights.clear();
+    chatWindowEl.innerHTML = ''; // 直接清空聊天窗口
     
-    // 确保虚拟滚动结构已准备好 (如果之前没有初始化或被重置过)
-    if (!isVirtualScrollInitialized) {
-        initVirtualScrolling(); 
-    }
-    
-    const CHUNK_SIZE = 50; // 每次处理50条消息
+    const CHUNK_SIZE = 50; 
     let processedCount = 0;
 
     const processChunk = (deadline) => {
+        const messagesInChunk = [];
         let i = 0;
-        // 在空闲时间内处理 CHUNK_SIZE 条消息，或者直到空闲时间耗尽
         while (i < CHUNK_SIZE && processedCount < history.length && (deadline.timeRemaining() > 0 || i === 0)) {
             const msg = history[processedCount];
             if (msg && msg.id && !messageIdSet.has(msg.id)) {
                 allMessages.push(msg);
                 messageIdSet.add(msg.id);
+                messagesInChunk.push(msg);
             } else if (msg && msg.id && messageIdSet.has(msg.id)) {
                 logDebug(`历史消息中发现重复ID: ${msg.id}, 已跳过。`, LOG_LEVELS.INFO);
             } else {
@@ -2029,15 +1737,20 @@ async function processHistoryMessages(history) {
             i++;
         }
 
-        renderVirtualWindow(true); 
+        appendMessagesToChatWindow(messagesInChunk, false); // 追加这批消息，但不强制滚动
+        // 对于历史消息，只在全部加载完成后滚动一次。
+        // throttledUpdateUI(); // 历史消息加载过程中不频繁更新用户列表
 
         if (processedCount < history.length) {
             logDebug(`处理历史中... 已完成 ${processedCount}/${history.length} 条。`, LOG_LEVELS.INFO);
             requestIdleCallback(processChunk, { timeout: 1000 });
         } else {
             logDebug("所有历史记录处理完毕。", LOG_LEVELS.SUCCESS);
-            isVirtualScrollInitialized = true;
             historicalMessagesLoading = false;
+            // 历史加载完成后，滚动到底部
+            requestAnimationFrame(() => {
+                chatWindowEl.scrollTop = chatWindowEl.scrollHeight;
+            });
             processMessageQueue(); // 历史消息处理完毕后，开始处理消息队列中积压的新消息
         }
     };
@@ -2045,7 +1758,6 @@ async function processHistoryMessages(history) {
     if (history.length > 0 && 'requestIdleCallback' in window) {
         requestIdleCallback(processChunk, { timeout: 1000 });
     } else {
-        // Fallback: synchronous processing if requestIdleCallback is not available or no history
         logDebug("requestIdleCallback 不可用或无历史消息，同步处理历史。", LOG_LEVELS.INFO); 
         history.forEach(msg => {
             if (msg && msg.id && !messageIdSet.has(msg.id)) {
@@ -2053,15 +1765,14 @@ async function processHistoryMessages(history) {
                 messageIdSet.add(msg.id);
             }
         });
-        isVirtualScrollInitialized = true;
+        appendMessagesToChatWindow(allMessages, true); // 同步加载则直接追加所有并滚动到底部
         historicalMessagesLoading = false;
-        renderVirtualWindow(true);
-        processMessageQueue(); // 历史消息处理完毕后，开始处理消息队列中积压的新消息
+        processMessageQueue(); 
     }
 }
 
 
-// --- WebSocket 事件处理器 (优化版) ---
+// --- WebSocket 事件处理器 (保持不变) ---
 function connectWebSocket() {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProtocol}//${window.location.host}/${roomName}?username=${encodeURIComponent(username)}`;
@@ -2080,17 +1791,14 @@ function onSocketOpen() {
     checkSendButtonState();
     logDebug('WebSocket连接已建立', LOG_LEVELS.SUCCESS);
     if (!window.userListInterval) {
-        window.userListInterval = setInterval(throttledUpdateUI, 60000); // 使用节流后的函数
+        window.userListInterval = setInterval(throttledUpdateUI, 60000); 
     }
-    // 连接成功后，立即触发一次队列处理，以防在断线期间有消息积压
     if (messageQueue.length > 0 && !rafScheduled) {
-        // 立即触发处理，不等待 debounce
         rafScheduled = true;
         requestAnimationFrame(processMessageQueue);
     }
 }
 
-// ✨ 策略模式优化: 消息处理函数映射
 const messageHandlers = {
     welcome: (payload) => {
         const history = payload?.history;
@@ -2105,7 +1813,6 @@ const messageHandlers = {
         if (newMessage && newMessage.id) {
             appendChatMessage(newMessage);
         }
-        // updateUIFromMessages 会被 throttledUpdateUI 调用
     },
     user_join: (payload) => {
         logDebug(`前端消息: ${payload.username} 加入了`, LOG_LEVELS.INFO, payload);
@@ -2121,8 +1828,12 @@ const messageHandlers = {
             logDebug(`收到删除指令，准备移除消息: ${messageId}`, LOG_LEVELS.WARNING);
             allMessages = allMessages.filter(m => m.id !== messageId);
             messageIdSet.delete(messageId); 
-            messageHeights.delete(messageId); 
-            renderVirtualWindow(); // 强制重新渲染以移除消息
+            // 直接从 DOM 移除
+            const msgElToDelete = chatWindowEl.querySelector(`[data-id="${messageId}"]`);
+            if (msgElToDelete) {
+                msgElToDelete.remove();
+            }
+            // 不需要 renderVirtualWindow()
             throttledUpdateUI(); 
         }
     },
@@ -2139,7 +1850,6 @@ const messageHandlers = {
         logDebug(`[后端日志] ${payload.message}`, payload.level.toLowerCase(), payload.data);
     },
     heartbeat: () => {
-        // 心跳消息不记录到 DOM 日志，只在控制台记录（由 logDebug 内部处理）
     },
     system_notification: (payload) => { 
         logDebug(`[系统通知] ${payload.message}`, payload.level.toLowerCase(), payload);
@@ -2147,11 +1857,7 @@ const messageHandlers = {
     }
 };
 
-// onSocketMessage (策略模式版)
 async function onSocketMessage(event) {
-    // 预处理快速过滤心跳消息，避免不必要的 JSON.parse
-    // 注意: 这里假设心跳消息的格式非常固定。如果后端心跳格式可能变化，请改为 JSON.parse 后再判断 type。
-    // 更安全的判断方式是检查字符串开头和结尾
     if (event.data.startsWith('{"type":"heartbeat"') && event.data.endsWith('}}')) { 
         return;
     }
@@ -2159,7 +1865,7 @@ async function onSocketMessage(event) {
     let data;
     try {
         data = JSON.parse(event.data);
-        if (data.type !== 'heartbeat') { // 避免在 DOM 日志中显示心跳，控制台已处理
+        if (data.type !== 'heartbeat') { 
             logDebug(`收到 WebSocket 数据包 (${data.type})`, LOG_LEVELS.INFO, data); 
         }
     } catch (parseError) {
@@ -2200,7 +1906,7 @@ function onSocketError(error) {
 }
 
 
-// --- WebRTC 相关函数 ---
+// --- WebRTC 相关函数 (保持不变) ---
 async function initLocalMedia() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -2326,10 +2032,10 @@ function initializeChat() {
     document.getElementById('sidebar-room-name').textContent = roomName;
     usernameDisplayEl.textContent = username;
 
-    initDebugLog(); // 初始化调试日志，包括控制按钮
-
-    // 确保虚拟滚动在连接WebSocket和处理历史消息之前初始化
-    initVirtualScrolling(); // 移到这里确保 DOM 结构存在
+    initDebugLog(); 
+    
+    // 调用简化的聊天显示初始化
+    initChatDisplay(); 
     
     initLocalMedia().catch(err => {
         logDebug('初始化媒体失败: ' + err, LOG_LEVELS.WARNING);
