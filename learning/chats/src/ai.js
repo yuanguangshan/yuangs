@@ -7,18 +7,65 @@ export async function getDeepSeekExplanation(text, env) {
     const apiKey = env.DEEPSEEK_API_KEY;
     if (!apiKey) throw new Error('Server config error: DEEPSEEK_API_KEY is not set.');
 
+    // 1. 获取当前的北京时间 (小时和分钟)
+    const now = new Date();
+    const beijingTimeFormatter = new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric',    // 小时 (不带前导零，如 "0", "1"...)
+        minute: 'numeric',  // 分钟 (不带前导零，如 "0", "5"...)
+        hour12: false,      // 使用24小时制
+        timeZone: 'Asia/Shanghai' // 指定北京时区
+    });
+
+    const formattedBeijingTime = beijingTimeFormatter.format(now); // 格式如 "0:35", "8:20"
+    const [beijingHourStr, beijingMinuteStr] = formattedBeijingTime.split(':');
+    const beijingHour = parseInt(beijingHourStr, 10);
+    const beijingMinute = parseInt(beijingMinuteStr, 10);
+
+    // 2. 根据北京时间判断使用哪个模型
+    let modelToUse = "deepseek-chat"; // 默认模型
+
+    // 北京时间 00:31-08:29 调用 deepseek-reasoner
+    // 逻辑：
+    // a. 小时是0，且分钟 >= 31 (即 00:31, 00:32 ... 00:59)
+    // b. 小时在 1 到 7 之间 (即 01:xx, 02:xx ... 07:xx)
+    // c. 小时是8，且分钟 <= 29 (即 08:00, 08:01 ... 08:29)
+    if (
+        (beijingHour === 0 && beijingMinute >= 31) ||
+        (beijingHour > 0 && beijingHour < 8) ||
+        (beijingHour === 8 && beijingMinute <= 29)
+    ) {
+        modelToUse = "deepseek-reasoner";
+    }
+
+    // 3. 调用 DeepSeek API
     const response = await fetch("https://api.deepseek.com/chat/completions", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        },
         body: JSON.stringify({
-            model: "deepseek-chat",
-            messages: [{ role: "system", content: "你是一个有用的，善于用简洁的markdown语言来解释下面的文本." }, { role: "user", content: text }]
+            model: modelToUse, // 使用动态选择的模型
+            messages: [{
+                role: "system",
+                content: "你是一个有用的，善于用简洁的markdown语言来解释下面的文本."
+            }, {
+                role: "user",
+                content: text
+            }]
         })
     });
-    if (!response.ok) throw new Error(`DeepSeek API error: ${await response.text()}`);
+
+    // 4. 处理 API 响应
+    if (!response.ok) {
+        throw new Error(`DeepSeek API error: ${await response.text()}`);
+    }
     const data = await response.json();
     const explanation = data?.choices?.[0]?.message?.content;
-    if (!explanation) throw new Error('Unexpected AI response format from DeepSeek.');
+
+    if (!explanation) {
+        throw new Error('Unexpected AI response format from DeepSeek.');
+    }
     return explanation;
 }
 
