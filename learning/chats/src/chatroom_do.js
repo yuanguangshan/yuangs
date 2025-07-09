@@ -1,4 +1,4 @@
-// 文件: src/chatroom_do.js (整合白名单功能的最终完整版)
+// 文件: src/chatroom_do.js (实现了"白名单即房间授权"的最终版)
 
 import { DurableObject } from "cloudflare:workers";
 
@@ -17,7 +17,7 @@ const MSG_TYPE_CANDIDATE = 'candidate';
 const MSG_TYPE_CALL_END = 'call_end';
 const MSG_TYPE_USER_LIST_UPDATE = 'user_list_update';
 
-// 【新增】存储键常量
+// 【修改】存储键常量
 const ALLOWED_USERS_KEY = 'allowed_users';
 
 const JSON_HEADERS = {
@@ -36,7 +36,7 @@ export class HibernatingChatRoom extends DurableObject {
         this.maxDebugLogs = 100;
         this.isInitialized = false;
         this.heartbeatInterval = null;
-        this.allowedUsers = null; // 【新增】用于缓存白名单
+        this.allowedUsers = undefined; // ✨ 初始状态设为undefined，表示"未知"
         
         this.debugLog("🏗️ DO instance created.");
         this.startHeartbeat();
@@ -90,49 +90,62 @@ export class HibernatingChatRoom extends DurableObject {
     async initialize() {
         if (this.isInitialized) return;
         
-        // 【修改】批量加载所有必要的数据，包括白名单
-        const data = await this.ctx.storage.get([
-            "messages", 
-            "sessions_metadata", 
-            ALLOWED_USERS_KEY
-        ]);
-        
-        this.messages = data.get("messages") || [];
-        this.allowedUsers = new Set(data.get(ALLOWED_USERS_KEY) || []); // 【新增】使用Set加载白名单
-        
-        const savedSessionsData = data.get("sessions_metadata");
-        if (savedSessionsData) {
-            this.debugLog(`📁 发现 ${savedSessionsData.length} 个会话元数据。`);
+        // 【修改】只加载白名单，因为其他状态只在会话中才需要
+        const allowed = await this.ctx.storage.get(ALLOWED_USERS_KEY);
+
+        // 【✨ 核心逻辑 ✨】
+        // 如果存储中从未设置过这个key，`get`会返回undefined。
+        // 我们用 `null` 来表示一个"已激活但为空"的白名单，
+        // 而 `undefined` 表示"从未被管理员触碰过"的状态。
+        if (allowed === undefined) {
+            this.allowedUsers = undefined; // 白名单功能未对本房间激活
+            this.debugLog(`ℹ️ 房间白名单未激活。此房间不允许访问。`);
+        } else {
+            this.allowedUsers = new Set(allowed || []); // 已激活，加载用户列表
+            this.debugLog(`📁 已加载白名单. Allowed Users: ${this.allowedUsers.size}`);
         }
         
-        this.debugLog(`📁 已加载. Messages: ${this.messages.length}, Allowed Users: ${this.allowedUsers.size}`);
+        // 只有在实际需要时才加载消息历史
+        this.messages = null; 
+        
         this.isInitialized = true;
     }
 
     async saveState() {
-        if (this.messages === null) return;
-        
-        const sessionMetadata = Array.from(this.sessions.entries()).map(([id, session]) => ({
-            id,
-            username: session.username,
-            joinTime: session.joinTime,
-            lastSeen: session.lastSeen
-        }));
-        
-        // 【修改】同时保存白名单
-        const savePromise = Promise.all([
-            this.ctx.storage.put("messages", this.messages),
-            this.ctx.storage.put("sessions_metadata", sessionMetadata),
-            this.ctx.storage.put(ALLOWED_USERS_KEY, Array.from(this.allowedUsers)) // 【新增】保存白名单
-        ]);
+        if (this.allowedUsers === undefined) {
+            // 如果白名单从未被激活过，我们甚至不创建这个存储键
+            return;
+        }
+
+        const savePromise = this.ctx.storage.put(ALLOWED_USERS_KEY, Array.from(this.allowedUsers));
         
         this.ctx.waitUntil(savePromise);
-        
         try {
             await savePromise;
-            this.debugLog(`✏️ 状态已保存. Messages: ${this.messages.length}, Sessions: ${this.sessions.size}, Allowed: ${this.allowedUsers.size}`);
+            this.debugLog(`💾 白名单状态已保存. Allowed: ${this.allowedUsers.size}`);
         } catch (e) {
-            this.debugLog(`💥 状态保存失败: ${e.message}`, 'ERROR');
+            this.debugLog(`💥 白名单状态保存失败: ${e.message}`, 'ERROR');
+        }
+    }
+
+    // --- 【新增】加载消息历史的独立函数 ---
+    async loadMessages() {
+        if (this.messages === null) {
+            this.messages = (await this.ctx.storage.get("messages")) || [];
+            this.debugLog(`📨 消息历史已加载: ${this.messages.length}条`);
+        }
+    }
+    
+    // --- 【新增】保存消息历史的独立函数 ---
+    async saveMessages() {
+        if (this.messages === null) return;
+        const savePromise = this.ctx.storage.put("messages", this.messages);
+        this.ctx.waitUntil(savePromise);
+        try {
+            await savePromise;
+            this.debugLog(`💾 消息历史已保存: ${this.messages.length}条`);
+        } catch (e) {
+            this.debugLog(`💥 消息历史保存失败: ${e.message}`, 'ERROR');
         }
     }
 
@@ -191,6 +204,13 @@ export class HibernatingChatRoom extends DurableObject {
         this.debugLog(`🤖 机器人自动发帖...`, 'INFO', payload);
         await this.initialize();
         
+        if (this.allowedUsers === undefined) {
+            this.debugLog(`🚫 拒绝机器人发帖: 房间未经授权 (白名单未激活)`, 'WARN');
+            return;
+        }
+        
+        await this.loadMessages();
+        
         const message = {
             id: crypto.randomUUID(),
             username: "机器人小助手", 
@@ -232,20 +252,25 @@ export class HibernatingChatRoom extends DurableObject {
         return new Response("Not Found", { status: 404 });
     }
 
-    // ============ 【新增】WebSocket升级处理器 ============
+    // ============ 【修改】WebSocket升级处理器 ============
     async handleWebSocketUpgrade(request, url) {
         const username = decodeURIComponent(url.searchParams.get("username") || "Anonymous");
         
-        // 【✨ 核心安全检查 ✨】
-        // 如果白名单不为空，并且当前用户不在白名单中，则拒绝连接
-        if (this.allowedUsers.size > 0 && !this.allowedUsers.has(username)) {
-            this.debugLog(`🚫 拒绝未授权用户连接: ${username}`, 'WARN');
-            return new Response("Access Denied: User not on allowed list.", { 
-                status: 403,
-                headers: JSON_HEADERS
-            });
+        // 【✨ 最终版安全检查 ✨】
+        // 1. 检查白名单功能是否已激活 (即 this.allowedUsers 不是 undefined)
+        if (this.allowedUsers === undefined) {
+            this.debugLog(`🚫 拒绝连接: 房间未经授权 (白名单未激活). 用户: ${username}`, 'WARN');
+            return new Response("Room not found or access denied.", { status: 404 });
         }
         
+        // 2. 如果白名单已激活，再检查用户是否在名单上
+        if (!this.allowedUsers.has(username)) {
+            this.debugLog(`🚫 拒绝连接: 用户 ${username} 不在白名单中`, 'WARN');
+            return new Response("Access Denied: You are not on the allowed list for this room.", { status: 403 });
+        }
+        
+        // 如果检查通过，则继续执行WebSocket升级
+        this.debugLog(`✅ 授权用户连接: ${username}`);
         const { 0: client, 1: server } = new WebSocketPair();
         this.ctx.acceptWebSocket(server);
         await this.handleWebSocketSession(server, url, username);
@@ -256,14 +281,22 @@ export class HibernatingChatRoom extends DurableObject {
     async handleApiRequest(request) {
         const url = new URL(request.url);
         
-            // 【新增】用户管理API
+        // 【修改】用户管理API
         if (url.pathname.endsWith('/users/list')) {
-            // 【修改】返回一个包含 users 键的对象，而不是直接返回数组
-        return new Response(JSON.stringify({
-            users: Array.from(this.allowedUsers),
-            count: this.allowedUsers.size
-        }), { headers: JSON_HEADERS });
+            if (this.allowedUsers === undefined) {
+                return new Response(JSON.stringify({
+                    users: [],
+                    count: 0,
+                    active: false
+                }), { headers: JSON_HEADERS });
             }
+            
+            return new Response(JSON.stringify({
+                users: Array.from(this.allowedUsers),
+                count: this.allowedUsers.size,
+                active: true
+            }), { headers: JSON_HEADERS });
+        }
         
         if (url.pathname.endsWith('/users/add') && request.method === 'POST') {
             const secret = url.searchParams.get('secret');
@@ -276,6 +309,13 @@ export class HibernatingChatRoom extends DurableObject {
                 const { username } = await request.json();
                 if (username && username.trim()) {
                     const cleanUsername = username.trim();
+                    
+                    // 【✨ 核心变更】首次添加用户时激活白名单
+                    if (this.allowedUsers === undefined) {
+                        this.allowedUsers = new Set();
+                        this.debugLog(`✨ 房间白名单已激活！`, 'INFO');
+                    }
+                    
                     this.allowedUsers.add(cleanUsername);
                     await this.saveState();
                     this.debugLog(`✅ 用户 ${cleanUsername} 已添加到白名单`);
@@ -283,7 +323,8 @@ export class HibernatingChatRoom extends DurableObject {
                         success: true, 
                         user: cleanUsername, 
                         action: 'added',
-                        totalUsers: this.allowedUsers.size
+                        totalUsers: this.allowedUsers.size,
+                        active: true
                     }), { headers: JSON_HEADERS });
                 }
                 return new Response('Missing or empty username', { status: 400 });
@@ -302,6 +343,11 @@ export class HibernatingChatRoom extends DurableObject {
             try {
                 const { username } = await request.json();
                 if (username && username.trim()) {
+                    // 【修改】检查白名单是否已激活
+                    if (this.allowedUsers === undefined) {
+                        return new Response('Whitelist not active for this room', { status: 404 });
+                    }
+                    
                     const cleanUsername = username.trim();
                     const deleted = this.allowedUsers.delete(cleanUsername);
                     if (deleted) {
@@ -332,12 +378,17 @@ export class HibernatingChatRoom extends DurableObject {
             }
         }
         
-        // 【新增】清空白名单API
+        // 【修改】清空白名单API
         if (url.pathname.endsWith('/users/clear') && request.method === 'POST') {
             const secret = url.searchParams.get('secret');
             if (this.env.ADMIN_SECRET && secret !== this.env.ADMIN_SECRET) {
                 this.debugLog("🚫 Unauthorized user clear attempt", 'WARN');
                 return new Response("Forbidden.", { status: 403 });
+            }
+            
+            // 【修改】检查白名单是否已激活
+            if (this.allowedUsers === undefined) {
+                return new Response('Whitelist not active for this room', { status: 404 });
             }
             
             const previousCount = this.allowedUsers.size;
@@ -352,6 +403,81 @@ export class HibernatingChatRoom extends DurableObject {
             }), { headers: JSON_HEADERS });
         }
         
+        // 【修改】消息历史API
+        if (url.pathname.endsWith('/messages/history')) {
+            // 【修改】检查白名单是否已激活
+            if (this.allowedUsers === undefined) {
+                return new Response('Room not found or not activated', { status: 404 });
+            }
+            
+            await this.loadMessages(); // 延迟加载消息
+            const since = parseInt(url.searchParams.get('since') || '0', 10);
+            const history = this.fetchHistory(since);
+            this.debugLog(`📜 请求历史消息. Since: ${since}, 返回: ${history.length} 条消息`);
+            return new Response(JSON.stringify(history), { headers: JSON_HEADERS });
+        }
+
+        // 【修改】消息删除API
+        if (url.pathname.endsWith('/messages/delete')) {
+            const messageId = url.searchParams.get('id');
+            const secret = url.searchParams.get('secret');
+            
+            // 【修改】检查白名单是否已激活
+            if (this.allowedUsers === undefined) {
+                return new Response('Room not found or not activated', { status: 404 });
+            }
+            
+            if (this.env.ADMIN_SECRET && secret === this.env.ADMIN_SECRET) {
+                await this.loadMessages(); // 延迟加载消息
+                
+                const originalCount = this.messages.length;
+                this.messages = this.messages.filter(msg => msg.id !== messageId);
+                const deleted = originalCount - this.messages.length;
+                
+                if (deleted > 0) {
+                    await this.saveMessages();
+                    this.debugLog(`🗑️ Message deleted: ${messageId}`);
+                    this.broadcast({ type: MSG_TYPE_DELETE, payload: { messageId } });
+                    return new Response(JSON.stringify({
+                        message: "消息删除成功",
+                        deleted: deleted
+                    }), { headers: JSON_HEADERS });
+                } else {
+                    return new Response(JSON.stringify({
+                        message: "Message not found"
+                    }), { status: 404, headers: JSON_HEADERS });
+                }
+            } else {
+                this.debugLog("🚫 Unauthorized delete attempt", 'WARN');
+                return new Response("Forbidden.", { status: 403 });
+            }
+        }
+
+        // 【修改】房间状态API
+        if (url.pathname.endsWith('/room/status')) {
+            let status = {
+                allowedUsers: this.allowedUsers === undefined ? 0 : this.allowedUsers.size,
+                activeSessions: this.sessions.size,
+                isInitialized: this.isInitialized,
+                active: this.allowedUsers !== undefined,
+                timestamp: new Date().toISOString()
+            };
+            
+            // 只有在白名单已激活的情况下才加载消息
+            if (this.allowedUsers !== undefined) {
+                if (this.messages === null) {
+                    const messageCount = (await this.ctx.storage.get("messages_count")) || 0;
+                    status.totalMessages = messageCount;
+                } else {
+                    status.totalMessages = this.messages.length;
+                    status.lastActivity = this.messages.length > 0 ? 
+                        Math.max(...this.messages.map(m => m.timestamp)) : null;
+                }
+            }
+            
+            return new Response(JSON.stringify(status), { headers: JSON_HEADERS });
+        }
+
         // 调试日志API
         if (url.pathname.endsWith('/debug/logs')) {
             this.debugLog(`🔍 请求debug信息. Total logs: ${this.debugLogs.length}`);
@@ -359,7 +485,8 @@ export class HibernatingChatRoom extends DurableObject {
                 logs: this.debugLogs,
                 totalLogs: this.debugLogs.length,
                 activeSessions: this.sessions.size,
-                allowedUsers: this.allowedUsers.size,
+                allowedUsers: this.allowedUsers === undefined ? 0 : this.allowedUsers.size,
+                active: this.allowedUsers !== undefined,
                 timestamp: new Date().toISOString()
             }), { headers: JSON_HEADERS });
         }
@@ -383,7 +510,7 @@ export class HibernatingChatRoom extends DurableObject {
             }), { headers: JSON_HEADERS });
         }
         
-        // 房间重置API
+        // 【修改】房间重置API
         if (url.pathname.endsWith('/reset-room')) {
             const secret = url.searchParams.get('secret');
             if (this.env.ADMIN_SECRET && secret === this.env.ADMIN_SECRET) {
@@ -391,7 +518,7 @@ export class HibernatingChatRoom extends DurableObject {
                 this.messages = [];
                 this.sessions.clear();
                 this.debugLogs = [];
-                this.allowedUsers = new Set(); // 【修改】重置白名单
+                this.allowedUsers = undefined; // 【修改】将白名单重置为未激活状态
                 this.debugLog("🔄 Room reset successfully");
                 this.broadcastUserListUpdate();
                 return new Response("Room has been reset successfully.", { status: 200 });
@@ -399,55 +526,6 @@ export class HibernatingChatRoom extends DurableObject {
                 this.debugLog("🚫 Unauthorized reset attempt", 'WARN');
                 return new Response("Forbidden.", { status: 403 });
             }
-        }
-        
-        // 其他现有API保持不变
-        if (url.pathname.endsWith('/messages/history')) {
-            const since = parseInt(url.searchParams.get('since') || '0', 10);
-            const history = this.fetchHistory(since);
-            this.debugLog(`📜 请求历史消息. Since: ${since}, 返回: ${history.length} 条消息`);
-            return new Response(JSON.stringify(history), { headers: JSON_HEADERS });
-        }
-
-        if (url.pathname.endsWith('/messages/delete')) {
-            const messageId = url.searchParams.get('id');
-            const secret = url.searchParams.get('secret');
-            
-            if (this.env.ADMIN_SECRET && secret === this.env.ADMIN_SECRET) {
-                const originalCount = this.messages.length;
-                this.messages = this.messages.filter(msg => msg.id !== messageId);
-                const deleted = originalCount - this.messages.length;
-                
-                if (deleted > 0) {
-                    await this.saveState();
-                    this.debugLog(`🗑️ Message deleted: ${messageId}`);
-                    this.broadcast({ type: MSG_TYPE_DELETE, payload: { messageId } });
-                    return new Response(JSON.stringify({
-                        message: "消息删除成功",
-                        deleted: deleted
-                    }), { headers: JSON_HEADERS });
-                } else {
-                    return new Response(JSON.stringify({
-                        message: "Message not found"
-                    }), { status: 404, headers: JSON_HEADERS });
-                }
-            } else {
-                this.debugLog("🚫 Unauthorized delete attempt", 'WARN');
-                return new Response("Forbidden.", { status: 403 });
-            }
-        }
-
-        if (url.pathname.endsWith('/room/status')) {
-            const status = {
-                totalMessages: this.messages.length,
-                activeSessions: this.sessions.size,
-                allowedUsers: this.allowedUsers.size,
-                lastActivity: this.messages.length > 0 ? Math.max(...this.messages.map(m => m.timestamp)) : null,
-                isInitialized: this.isInitialized,
-                timestamp: new Date().toISOString()
-            };
-            
-            return new Response(JSON.stringify(status), { headers: JSON_HEADERS });
         }
 
         return new Response("API endpoint not found", { status: 404 });
@@ -535,6 +613,9 @@ export class HibernatingChatRoom extends DurableObject {
         ws.sessionId = sessionId;
 
         this.debugLog(`✅ 接受用户连接: 👦 ${username} (Session: ${sessionId}). Total sessions: ${this.sessions.size}`);
+
+        // 【修改】在用户成功连接后，才加载消息历史
+        await this.loadMessages();
 
         const welcomeMessage = {
             type: MSG_TYPE_WELCOME,
@@ -625,6 +706,9 @@ export class HibernatingChatRoom extends DurableObject {
 
     // ============ 核心业务逻辑 ============
     async handleChatMessage(session, payload) {
+        // 【修改】在处理第一条消息前，确保历史已加载
+        await this.loadMessages();
+        
         this.debugLog(`💬 正在处理用户：👦 ${session.username} 的消息`, 'INFO', payload);
         
         let messageContentValid = false;
@@ -701,6 +785,9 @@ export class HibernatingChatRoom extends DurableObject {
     }
 
     async handleDeleteMessage(session, payload) { 
+        // 【修改】在处理删除消息前，确保历史已加载
+        await this.loadMessages();
+        
         const messageId = payload.id;
         if (!messageId) {
             this.debugLog(`❌ 正在处理用户： 👦 ${session.username} 的消息删除请求，message ID.`, 'WARN');
@@ -715,7 +802,7 @@ export class HibernatingChatRoom extends DurableObject {
             
             if (this.messages.length < initialLength) {
                 this.debugLog(`🗑️ 此消息： ${messageId} 已被用户： 👦 ${session.username}删除.`);
-                await this.saveState();
+                await this.saveMessages();
                 this.broadcast({ type: MSG_TYPE_DELETE, payload: { messageId } });
             }
         } else {
@@ -737,7 +824,7 @@ export class HibernatingChatRoom extends DurableObject {
         this.messages.push(message);
         if (this.messages.length > 500) this.messages.shift();
         
-        await this.saveState();
+        await this.saveMessages();
         this.broadcast({ type: MSG_TYPE_CHAT, payload: message });
     }
 
@@ -762,7 +849,7 @@ export class HibernatingChatRoom extends DurableObject {
                 } 
             });
             
-            // 【新增】用户离开后，广播最新的在线用户列表给所有剩余客户端
+            // 用户离开后，广播最新的在线用户列表给所有剩余客户端
             this.broadcastUserListUpdate();
 
             this.debugLog(`👭 当前有效会话数: ${this.sessions.size}`);
@@ -836,6 +923,9 @@ export class HibernatingChatRoom extends DurableObject {
         }
         
         // 保存最终状态
+        if (this.messages !== null) {
+            await this.saveMessages();
+        }
         await this.saveState();
         
         this.debugLog("🧹 清理结束");
