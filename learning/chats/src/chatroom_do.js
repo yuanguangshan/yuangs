@@ -728,11 +728,13 @@ export class HibernatingChatRoom extends DurableObject {
         return since > 0 ? this.messages.filter(msg => msg.timestamp > since) : this.messages;
     }
 
+   // 【修改此函数】
     broadcast(message, excludeSessionId = null) {
         const stringifiedMessage = JSON.stringify(message);
         let activeSessions = 0;
         const disconnectedSessions = [];
-        
+        const activeUsernames = []; // 新增：用于存储活跃用户的名称
+
         this.sessions.forEach((session, sessionId) => {
             if (sessionId === excludeSessionId) {
                 return;
@@ -742,6 +744,7 @@ export class HibernatingChatRoom extends DurableObject {
                 if (session.ws.readyState === WebSocket.OPEN) {
                     session.ws.send(stringifiedMessage);
                     activeSessions++;
+                    activeUsernames.push(session.username); // 添加用户名到列表
                 } else {
                     disconnectedSessions.push(sessionId);
                 }
@@ -758,10 +761,10 @@ export class HibernatingChatRoom extends DurableObject {
         
         // 避免调试日志的广播产生无限循环
         if (message.type !== MSG_TYPE_DEBUG_LOG) {
-            this.debugLog(`📡 广播消息给 ${activeSessions} 位活跃会话 🟢。`);
+            // 在这里将 activeUsernames 作为 data 传递给 debugLog
+            this.debugLog(`📡 广播消息给 ${activeSessions} 位活跃会话 🟢。`, 'INFO', { users: activeUsernames });
         }
     }
-
     // ============ 清理方法 ============
     async cleanup() {
         if (this.heartbeatInterval) {
