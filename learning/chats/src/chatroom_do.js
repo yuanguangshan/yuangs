@@ -424,7 +424,7 @@ export class HibernatingChatRoom extends DurableObject {
                 userCount: users.length // 也可以包含总数
             }
         });
-        this.debugLog(`🔄 已广播最新在线用户列表，当前 ${users.length} 位在线用户。`);
+        this.debugLog(`📡 已广播最新在线用户列表，当前 ${users.length} 位在线用户。`);
     }
 
 
