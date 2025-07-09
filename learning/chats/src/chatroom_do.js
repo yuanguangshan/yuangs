@@ -762,7 +762,7 @@ export class HibernatingChatRoom extends DurableObject {
         // 避免调试日志的广播产生无限循环
         if (message.type !== MSG_TYPE_DEBUG_LOG) {
             // 在这里将 activeUsernames 作为 data 传递给 debugLog
-            this.debugLog(`📡 广播消息给 ${activeSessions} 位活跃会话 🟢。`, 'INFO', { users: activeUsernames });
+            this.debugLog(`📡 广播消息给 ${activeSessions} 位活跃会话 🟢。`+activeUsernames.join(', '));
         }
     }
     // ============ 清理方法 ============
