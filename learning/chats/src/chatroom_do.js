@@ -119,7 +119,7 @@ export class HibernatingChatRoom extends DurableObject {
         
         try {
             await savePromise;
-            this.debugLog(`✏️ 状态已保存. 最新消息数💬: ${this.messages.length}, 连接数🟢: ${this.sessions.size}`);
+            this.debugLog(`✏️ 状态已保存. 最新消息数 📫: ${this.messages.length}, 连接数🟢: ${this.sessions.size}`);
         } catch (e) {
             this.debugLog(`💥 状态保存失败: ${e.message}`, 'ERROR');
         }
