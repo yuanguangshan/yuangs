@@ -168,7 +168,7 @@ export default {
             if (pathname.startsWith('/api/')) {
                 let roomName;
                 // 对于这些API，房间名在查询参数里
-                if (pathname.startsWith('/api/messages/history') || pathname.startsWith('/api/reset-room')) {
+                if (pathname.startsWith('/api/messages') || pathname.startsWith('/api/reset-room')|| pathname.startsWith('/api/debug')|| pathname.startsWith('/api/room')) {
                     roomName = url.searchParams.get('roomName');
                 }
                 // (未来可以为其他API在这里添加 roomName 的获取逻辑)
@@ -215,12 +215,12 @@ export default {
      * 【重构后】处理由Cron Trigger触发的定时事件。
      */
 async scheduled(event, env, ctx) {
-        console.log(`[Worker] Cron Trigger firing! Rule: ${event.cron}`);
+        console.log(`[Worker] 🚀🚀🚀🚀 Cron Trigger firing! Rule: ${event.cron}🚀🚀🚀`);
 
         const taskFunction = taskMap.get(event.cron);
 
         if (taskFunction) {
-            console.log(`[Worker] Executing task for cron rule: ${event.cron}`);
+            console.log(`[Worker] 🧮 Executing task for cron rule: ${event.cron}`);
             
             // 【关键修改】: 执行任务并获取返回的状态结果
             const result = await taskFunction(env, ctx);

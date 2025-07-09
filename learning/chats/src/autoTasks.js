@@ -10,7 +10,7 @@ import { getDeepSeekExplanation } from './ai.js';
  */
 const CRON_TRIGGERS = {
     // 假设每天早上8点发送文本消息 (注意：这里的时间可以自定义)
-    DAILY_TEXT_MESSAGE: "*/5 * * * *",  
+    DAILY_TEXT_MESSAGE: "0 9 * * *",  
     // 盘中和夜盘时段，每小时整点生成图表
     HOURLY_CHART_GENERATION:   "*/15 17-23,2-10 * * 1-5" // 周一到周五的指定小时
 };
@@ -28,7 +28,7 @@ async function executeTextTask(env, ctx) {
     const roomName = 'test'; // 目标房间
 
     // 基础提示词 (核心内容保持不变)
-    const basePrompt = '你是deepseek小助手，自动向用户问好，并且每次附上一句名人名言，及每日一句精典英文句子，并仔细分析名言和英文句子的意思及衍生意义，帮助用户提升自我，最后鼓励用户好好工作，好好学习，好好生活。';
+    const basePrompt = '忘掉我们之前的所有历史对话，现在你是deepseek小助手，自动向用户问好，并且每次附上一句名人名言，每日一句精典英文句子以及趣味数学知识点或数学家故事，并仔细分析名言。英文句子和数学知识点的意思及衍生意义，帮助用户提升自我，最后鼓励用户好好工作，好好学习，好好生活。';
 
     // 生成一个每次都不同的唯一标识符
     // crypto.randomUUID() 是生成标准 UUID 的推荐方式
@@ -41,7 +41,7 @@ async function executeTextTask(env, ctx) {
     // 使用模板字符串 (backticks) 方便拼接
     const finalPrompt = `${basePrompt} 
     
-请务必生成**全新的**、**未曾出现过**的内容。不要重复任何句子、名言或其解析。此次请求的唯一标识符是：${uniqueId}。`;
+请务必生成**全新的**、**未曾出现过**的内容。不要重复任何句子、名言或其解析。此次请求的唯一标识符是：${uniqueId}。在你回复的尾部，务必用方括号带上此${uniqueId}`;
 
     console.log(`[Cron Task] Executing daily text task for room: ${roomName}`);
     try {
