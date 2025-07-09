@@ -26,13 +26,30 @@ const CRON_TRIGGERS = {
  */
 async function executeTextTask(env, ctx) {
     const roomName = 'test'; // 目标房间
-    const prompt = '你是deepseek小助手，自动向用户问好，并且每次附上一句名人名言，及每日一句精典英文句子，不要与以前的历史记录内容重复，并仔细分析名言和英文句子的意思及衍生意义，帮助用户提升自我，最后鼓励用户好好工作，好好学习，好好生活。';
+
+    // 基础提示词 (核心内容保持不变)
+    const basePrompt = '你是deepseek小助手，自动向用户问好，并且每次附上一句名人名言，及每日一句精典英文句子，并仔细分析名言和英文句子的意思及衍生意义，帮助用户提升自我，最后鼓励用户好好工作，好好学习，好好生活。';
+
+    // 生成一个每次都不同的唯一标识符
+    // crypto.randomUUID() 是生成标准 UUID 的推荐方式
+    const uniqueId = crypto.randomUUID(); 
     
+    // 或者，如果你只是需要一个递增的唯一标识符，也可以用时间戳，但UUID更独特：
+    // const uniqueTimestamp = Date.now(); 
+
+    // 在提示词中加入唯一标识符和明确的“不要重复”指令
+    // 使用模板字符串 (backticks) 方便拼接
+    const finalPrompt = `${basePrompt} 
+    
+请务必生成**全新的**、**未曾出现过**的内容。不要重复任何句子、名言或其解析。此次请求的唯一标识符是：${uniqueId}。`;
+
     console.log(`[Cron Task] Executing daily text task for room: ${roomName}`);
     try {
         if (!env.CHAT_ROOM_DO) throw new Error("Durable Object 'CHAT_ROOM_DO' is not bound.");
         
-        const content = await getDeepSeekExplanation(prompt, env);
+        // 调用 getDeepSeekExplanation，并传入修改后的独特提示词
+        // 确保你的 getDeepSeekExplanation 内部也设置了合适的 temperature (例如 0.7-0.9)
+        const content = await getDeepSeekExplanation(finalPrompt, env); 
         
         const doId = env.CHAT_ROOM_DO.idFromName(roomName);
         const stub = env.CHAT_ROOM_DO.get(doId);
@@ -45,7 +62,6 @@ async function executeTextTask(env, ctx) {
         console.error(`CRON ERROR (text task):`, error.stack || error);
     }
 }
-
 /**
  * 任务：生成并发布图表
  * @param {object} env - 环境变量

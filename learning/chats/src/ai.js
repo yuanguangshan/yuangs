@@ -52,7 +52,8 @@ export async function getDeepSeekExplanation(text, env) {
             }, {
                 role: "user",
                 content: text
-            }]
+            }],
+            temperature: 0.8,
         })
     });
 
