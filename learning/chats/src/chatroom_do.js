@@ -17,6 +17,11 @@ const MSG_TYPE_CANDIDATE = 'candidate';
 const MSG_TYPE_CALL_END = 'call_end';
 const MSG_TYPE_USER_LIST_UPDATE = 'user_list_update'; // 【新增】用户列表更新消息类型
 
+const JSON_HEADERS = {
+    'Content-Type': 'application/json;charset=UTF-8', // ✨ 核心修改
+    'Access-Control-Allow-Origin': '*' // 保持CORS设置
+};
+
 export class HibernatingChatRoom extends DurableObject {
     constructor(ctx, env) {
         super(ctx, env);
@@ -251,10 +256,7 @@ export class HibernatingChatRoom extends DurableObject {
                 activeSessions: this.sessions.size,
                 timestamp: new Date().toISOString()
             }), {
-                headers: { 
-                    'Content-Type': 'application/json', 
-                    'Access-Control-Allow-Origin': '*' 
-                }
+                headers: jsonHeaders
             });
         }
         
@@ -268,10 +270,7 @@ export class HibernatingChatRoom extends DurableObject {
                 totalSessions: this.sessions.size,
                 timestamp: new Date().toISOString()
             }), {
-                headers: { 
-                    'Content-Type': 'application/json', 
-                    'Access-Control-Allow-Origin': '*' 
-                }
+                headers: jsonHeaders
             });
         }
         
@@ -284,10 +283,7 @@ export class HibernatingChatRoom extends DurableObject {
                 message: `Cleared ${clearedCount} debug logs`,
                 timestamp: new Date().toISOString()
             }), {
-                headers: { 
-                    'Content-Type': 'application/json', 
-                    'Access-Control-Allow-Origin': '*' 
-                }
+                headers: jsonHeaders
             });
         }
         
@@ -315,7 +311,7 @@ export class HibernatingChatRoom extends DurableObject {
             const history = this.fetchHistory(since);
             this.debugLog(`📜 请求历史消息. Since: ${since}, 返回: ${history.length} 条消息`);
             return new Response(JSON.stringify(history), {
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+                headers: jsonHeaders
             });
         }
 
@@ -376,10 +372,7 @@ export class HibernatingChatRoom extends DurableObject {
             };
             
             return new Response(JSON.stringify(status), {
-                headers: { 
-                    'Content-Type': 'application/json', 
-                    'Access-Control-Allow-Origin': '*' 
-                }
+                headers: jsonHeaders
             });
         }
 
