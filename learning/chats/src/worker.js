@@ -18,6 +18,7 @@ globalThis.global = globalThis;
 
 import { HibernatingChatRoom } from './chatroom_do.js';
 import html from '../public/index.html';
+import managementHtml from '../public/management.html';
 import { generateAndPostCharts } from './chart_generator.js';
 import { taskMap } from './autoTasks.js';
 import { getDeepSeekExplanation, getGeminiExplanation, getGeminiImageDescription } from './ai.js';
@@ -96,6 +97,25 @@ export default {
             const pathname = url.pathname;
 
             // --- 路由 1: 全局独立API (不需转发) ---
+
+                
+            // --- ✨ 新增：管理页面路由 ---
+            if (pathname === '/management') {
+                return new Response(managementHtml, { headers: { 'Content-Type': 'text/html;charset=UTF-8' } });
+            }
+
+            // --- ✨ 新增：用户管理API路由转发 ---
+            if (pathname.startsWith('/api/users/')) {
+                const roomName = url.searchParams.get('roomName');
+                if (!roomName) {
+                    return new Response('API request requires a roomName parameter', { status: 400 });
+                }
+                const doId = env.CHAT_ROOM_DO.idFromName(roomName);
+                const stub = env.CHAT_ROOM_DO.get(doId);
+                // 将原始请求转发给DO，让DO内部处理
+                return await stub.fetch(request);
+            }
+        
             
             // 将所有全局API的判断合并到一个if/else if结构中
             if (pathname === '/upload') {
