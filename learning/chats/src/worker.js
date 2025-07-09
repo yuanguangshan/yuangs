@@ -168,7 +168,7 @@ export default {
             if (pathname.startsWith('/api/')) {
                 let roomName;
                 // 对于这些API，房间名在查询参数里
-                if (pathname.startsWith('/api/messages/history') || pathname.startsWith('/api/reset-room')) {
+                if (pathname.startsWith('/api/messages') || pathname.startsWith('/api/reset-room')|| pathname.startsWith('/api/debug')|| pathname.startsWith('/api/room')) {
                     roomName = url.searchParams.get('roomName');
                 }
                 // (未来可以为其他API在这里添加 roomName 的获取逻辑)
