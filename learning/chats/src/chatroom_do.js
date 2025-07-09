@@ -256,7 +256,7 @@ export class HibernatingChatRoom extends DurableObject {
                 activeSessions: this.sessions.size,
                 timestamp: new Date().toISOString()
             }), {
-                headers: jsonHeaders
+                headers: JSON_HEADERS
             });
         }
         
@@ -270,7 +270,7 @@ export class HibernatingChatRoom extends DurableObject {
                 totalSessions: this.sessions.size,
                 timestamp: new Date().toISOString()
             }), {
-                headers: jsonHeaders
+                headers: JSON_HEADERS
             });
         }
         
@@ -283,7 +283,7 @@ export class HibernatingChatRoom extends DurableObject {
                 message: `Cleared ${clearedCount} debug logs`,
                 timestamp: new Date().toISOString()
             }), {
-                headers: jsonHeaders
+                headers: JSON_HEADERS
             });
         }
         
@@ -311,7 +311,7 @@ export class HibernatingChatRoom extends DurableObject {
             const history = this.fetchHistory(since);
             this.debugLog(`📜 请求历史消息. Since: ${since}, 返回: ${history.length} 条消息`);
             return new Response(JSON.stringify(history), {
-                headers: jsonHeaders
+                headers: JSON_HEADERS
             });
         }
 
@@ -372,7 +372,7 @@ export class HibernatingChatRoom extends DurableObject {
             };
             
             return new Response(JSON.stringify(status), {
-                headers: jsonHeaders
+                headers: JSON_HEADERS
             });
         }
 
