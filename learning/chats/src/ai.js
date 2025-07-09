@@ -7,8 +7,10 @@ export async function getDeepSeekExplanation(text, env) {
     const apiKey = env.DEEPSEEK_API_KEY;
     if (!apiKey) throw new Error('Server config error: DEEPSEEK_API_KEY is not set.');
 
-    // 1. 获取当前的北京时间 (小时和分钟)
+    // 1. 获取当前的北京时间 (小时和分钟)，以便后续使用log(now);                             
     const now = new Date();
+    console.log(now);          
+
     const beijingTimeFormatter = new Intl.DateTimeFormat('en-US', {
         hour: 'numeric',    // 小时 (不带前导零，如 "0", "1"...)
         minute: 'numeric',  // 分钟 (不带前导零，如 "0", "5"...)
