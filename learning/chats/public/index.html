@@ -2032,7 +2032,37 @@ function initializeChat() {
     usernameDisplayEl.textContent = username;
 
     initDebugLog(); 
-    
+   // 添加粘贴事件监听器，用于处理截图粘贴
+    document.addEventListener('paste', async (e) => {
+        const clipboardItems = e.clipboardData.items; // 获取剪贴板中的数据项
+        for (let i = 0; i < clipboardItems.length; i++) {
+            const item = clipboardItems[i];
+            // 检查数据项是否为文件类型且是图片
+            if (item.kind === 'file' && item.type.startsWith('image/')) {
+                e.preventDefault(); // 阻止默认的粘贴行为，因为我们将手动处理
+                const file = item.getAsFile(); // 获取 File 对象
+
+                // 模拟一个文件输入事件对象，以便 handleImageSelection 可以直接处理
+                const mockChangeEvent = {
+                    target: {
+                        files: [file]
+                    }
+                };
+                
+                logDebug(`检测到粘贴图片: ${file.name} (${formatFileSize(file.size)})`, LOG_LEVELS.INFO);
+                showAppNotification('检测到粘贴图片，正在处理...');
+
+                try {
+                    await handleImageSelection(mockChangeEvent);
+                } catch (error) {
+                    logDebug(`处理粘贴图片失败: ${error.message}`, LOG_LEVELS.ERROR, error);
+                    showAppNotification('粘贴图片处理失败，请重试', 3000, true);
+                }
+                
+                return; // 只处理第一个检测到的图片文件
+            }
+        }
+    }); 
     // 调用简化的聊天显示初始化
     initChatDisplay(); 
     
