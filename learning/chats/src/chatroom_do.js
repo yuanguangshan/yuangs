@@ -577,7 +577,7 @@ export class HibernatingChatRoom extends DurableObject {
     // ============ 核心业务逻辑 ============
     async handleChatMessage(session, payload) {
         // 打印完整的 payload 方便调试，可以确认内部 type
-        this.debugLog(`💬 Handling chat message from ${session.username}`, 'INFO', payload);
+        this.debugLog(`💬 正在处理用户：${session.username}的消息`, 'INFO', payload);
         
         let messageContentValid = false;
         // 获取内部 payload 的 type
@@ -599,7 +599,7 @@ export class HibernatingChatRoom extends DurableObject {
             }
         } else {
             // 未知或不支持的消息类型
-            this.debugLog(`⚠️ Unsupported message type: ${messageType}`, 'WARN', payload);
+            this.debugLog(`⚠️ 不支持的消息类型或无效内容: ${messageType}`, 'WARN', payload);
             try {
                 session.ws.send(JSON.stringify({
                     type: MSG_TYPE_ERROR,
@@ -610,7 +610,7 @@ export class HibernatingChatRoom extends DurableObject {
         }
 
         if (!messageContentValid) {
-            this.debugLog(`❌ Invalid or empty content for message type ${messageType} from ${session.username}`, 'WARN', payload);
+            this.debugLog(`❌ 消息内容无效或为空 ${messageType} from ${session.username}`, 'WARN', payload);
             try {
                 session.ws.send(JSON.stringify({
                     type: MSG_TYPE_ERROR,
@@ -623,7 +623,7 @@ export class HibernatingChatRoom extends DurableObject {
         // 防止文本或标题过长 (仅对文本和图片标题进行长度限制)
         const textContentToCheckLength = payload.text || payload.caption || '';
         if (textContentToCheckLength.length > 10000) {
-            this.debugLog(`❌ Message text/caption too long from ${session.username}`, 'WARN');
+            this.debugLog(`❌ 消息文本或标题过长，请控制在1万字符以内 ${session.username}`, 'WARN');
             try {
                 session.ws.send(JSON.stringify({
                     type: MSG_TYPE_ERROR,
@@ -662,7 +662,7 @@ export class HibernatingChatRoom extends DurableObject {
     async handleDeleteMessage(session, payload) { 
         const messageId = payload.id;
         if (!messageId) {
-            this.debugLog(`❌ Delete request from ${session.username} is missing message ID.`, 'WARN');
+            this.debugLog(`❌ 正在处理肪： ${session.username} 的消息删除请求，message ID.`, 'WARN');
             return;
         }
 
@@ -674,7 +674,7 @@ export class HibernatingChatRoom extends DurableObject {
             this.messages = this.messages.filter(m => m.id !== messageId);
             
             if (this.messages.length < initialLength) {
-                this.debugLog(`🗑️ Message ${messageId} deleted by ${session.username}.`);
+                this.debugLog(`🗑️ 此消息： ${messageId} 已被用户： ${session.username}删除.`);
                 
                 await this.saveState();
                 
@@ -714,7 +714,7 @@ export class HibernatingChatRoom extends DurableObject {
         if (session) {
             this.sessions.delete(sessionId);
             const { code = 'N/A', reason = 'N/A', wasClean = 'N/A' } = closeInfo;
-            this.debugLog(`🔌 断开其连接: ${session.username} (Session: ${sessionId}). Code: ${code}, 原因: ${reason}, 清理: ${wasClean}`);
+            this.debugLog(`🔌 断开用户连接: ${session.username} (Session: ${sessionId}). Code: ${code}, 原因: ${reason}, 清理: ${wasClean}`);
             
             // 广播用户离开消息
             this.broadcast({ 
@@ -725,7 +725,7 @@ export class HibernatingChatRoom extends DurableObject {
                 } 
             });
             
-            this.debugLog(`📊 Remaining sessions: ${this.sessions.size}`);
+            this.debugLog(`📊 当前有效会话数: ${this.sessions.size}`);
             
             // 使用 waitUntil 确保状态保存在实例休眠前完成
             this.ctx.waitUntil(this.saveState());
@@ -766,7 +766,7 @@ export class HibernatingChatRoom extends DurableObject {
         
         // 避免调试日志的广播产生无限循环
         if (message.type !== MSG_TYPE_DEBUG_LOG) {
-            this.debugLog(`📡 Message broadcast to ${activeSessions} active sessions`);
+            this.debugLog(`📡 广播消息给 ${activeSessions} 位活跃会话。`);
         }
     }
 
@@ -780,6 +780,6 @@ export class HibernatingChatRoom extends DurableObject {
         // 保存最终状态
         await this.saveState();
         
-        this.debugLog("🧹 Cleanup completed");
+        this.debugLog("🧹 清理结束");
     }
 }
