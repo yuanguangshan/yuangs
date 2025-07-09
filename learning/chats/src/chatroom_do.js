@@ -119,7 +119,7 @@ export class HibernatingChatRoom extends DurableObject {
         
         try {
             await savePromise;
-            this.debugLog(`💾 状态已保存. Messages: ${this.messages.length}, Sessions: ${this.sessions.size}`);
+            this.debugLog(`💾 状态已保存. 最新消息数: ${this.messages.length}, 连接数: ${this.sessions.size}`);
         } catch (e) {
             this.debugLog(`💥 状态保存失败: ${e.message}`, 'ERROR');
         }
@@ -500,7 +500,7 @@ export class HibernatingChatRoom extends DurableObject {
         }
 
         session.lastSeen = Date.now();
-        this.debugLog(`📨 Received WebSocket message from ${session.username}: ${message.substring(0, 150)}...`);
+        this.debugLog(`📨 收到用户： ${session.username} 的消息: ${message.substring(0, 150)}...`);
 
         try {
             const data = JSON.parse(message);
@@ -577,7 +577,7 @@ export class HibernatingChatRoom extends DurableObject {
     // ============ 核心业务逻辑 ============
     async handleChatMessage(session, payload) {
         // 打印完整的 payload 方便调试，可以确认内部 type
-        this.debugLog(`💬 正在处理用户：${session.username}的消息`, 'INFO', payload);
+        this.debugLog(`💬 正在处理用户：${session.username} 的消息`, 'INFO', payload);
         
         let messageContentValid = false;
         // 获取内部 payload 的 type
