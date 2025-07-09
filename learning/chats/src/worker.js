@@ -215,7 +215,7 @@ export default {
      * 【重构后】处理由Cron Trigger触发的定时事件。
      */
 async scheduled(event, env, ctx) {
-        console.log(`[Worker] Cron Trigger firing! Rule: ${event.cron}`);
+        console.log(`[Worker] 🚀 Cron Trigger firing! Rule: ${event.cron}`);
 
         const taskFunction = taskMap.get(event.cron);
 
