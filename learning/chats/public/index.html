@@ -632,6 +632,7 @@
             <div class="user-list-container">
                 <div class="user-list-title">用户 & 房间信息</div>
                 <div class="user-row">
+                    <!-- 这个user-names div将被直接填充在线用户列表 -->
                     <div class="user-names" id="user-names"></div>
                     <div class="user-info">
                         <div class="info-row">
@@ -644,7 +645,8 @@
                         </div>
                     </div>
                 </div>
-                <ul id="user-list" style="display: none;"></ul>
+                <!-- 这里的 user-list 不再需要，用户列表将直接显示在 user-names 中 -->
+                <ul id="user-list" style="display: none;"></ul> 
             </div>
             <div class="user-stats-container">
                 <div class="user-list-title">用户活动统计</div>
@@ -678,6 +680,7 @@
                 </div>
                 <div class="online-users-display" id="online-users-display">活跃: 0</div>
                 <div class="users-menu" id="users-menu">
+                    <!-- users-menu-list 将被直接填充在线用户列表 -->
                     <ul id="users-menu-list"></ul>
                 </div>
             </header>
@@ -758,6 +761,11 @@ const clearLogsBtn = document.getElementById('clear-logs-btn');
 const copyLogsBtn = document.getElementById('copy-logs-btn');
 const toggleLogsBtn = document.getElementById('toggle-logs-btn');
 const appNotification = document.getElementById('app-notification'); // New notification element
+
+// 【新增】DOM 元素引用
+const userNamesEl = document.getElementById('user-names'); // Sidebar user list
+const menuListEl = document.getElementById('users-menu-list'); // Header dropdown user list
+const onlineCountEl = document.getElementById('online-count'); // Sidebar online count
 
 
 // --- 全局状态变量 ---
@@ -944,7 +952,8 @@ function showAppNotification(message, duration = 2000, isError = false) {
 
 
 // --- UI 渲染和更新逻辑 ---
-const throttledUpdateUI = throttle(updateUIFromMessages, 1000); 
+// 仅用于更新用户活动统计，不再处理在线用户列表的渲染
+const throttledUpdateActivityStats = throttle(updateUserActivityStats, 1000); 
 
 function isUserActive(lastSeenTimestamp) {
     if (!lastSeenTimestamp) return false;
@@ -953,12 +962,11 @@ function isUserActive(lastSeenTimestamp) {
     return new Date(lastSeenTimestamp).getTime() > fiveMinutesAgo;
 }
 
-// 优化 updateUIFromMessages 函数 (保持DOM协调策略，因为这是好的实践)
-function updateUIFromMessages() {
+// 【修改】updateUIFromMessages 更名为 updateUserActivityStats，并仅处理活动统计
+function updateUserActivityStats() {
     const currentUserStates = new Map(); 
-    const activeUsersSet = new Set();
 
-    // 只处理最近的500条消息
+    // 只处理最近的500条消息（或根据需要调整）
     const recentMessages = allMessages.slice(-500); 
     
     recentMessages.forEach(msg => {
@@ -971,93 +979,17 @@ function updateUIFromMessages() {
         currentUserStates.set(username, currentState);
     });
 
+    // 计算活跃状态，虽然这里不渲染活跃用户列表，但统计仍有用
     currentUserStates.forEach((state, username) => {
         state.isActive = isUserActive(state.lastSeen);
-        if (state.isActive) {
-            activeUsersSet.add(username);
-        }
     });
-
-    const sortedActiveUsernames = Array.from(activeUsersSet).sort((a, b) => a.localeCompare(b));
-
-    const userNamesEl = document.getElementById('user-names');
-    const menuListEl = document.getElementById('users-menu-list');
-
-    const currentUserItems = new Map(); 
-    Array.from(userNamesEl.children).forEach(el => {
-        if (el.dataset.username) currentUserItems.set(el.dataset.username, el);
-    });
-    const currentMenuItems = new Map();
-    Array.from(menuListEl.children).forEach(el => {
-        if (el.dataset.username) currentMenuItems.set(el.dataset.username, el);
-    });
-
-    const newUserItems = []; 
-    const newMenuItems = [];
-
-    sortedActiveUsernames.forEach(name => {
-        const safeName = escapeHTML(name);
-        
-        let userItem = currentUserItems.get(name);
-        if (!userItem) {
-            userItem = document.createElement('div');
-            userItem.className = 'user-item';
-            userItem.dataset.username = name;
-            userItem.textContent = safeName;
-        }
-        newUserItems.push(userItem);
-        currentUserItems.delete(name); 
-
-        let menuItem = currentMenuItems.get(name);
-        if (!menuItem) {
-            menuItem = document.createElement('li');
-            menuItem.dataset.username = name;
-            if (name === username) {
-                menuItem.textContent = `${safeName} (你)`;
-            } else {
-                menuItem.className = 'user-menu-item-with-call';
-                const nameSpan = document.createElement('span');
-                nameSpan.textContent = safeName;
-                menuItem.appendChild(nameSpan);
-                const callBtn = document.createElement('button');
-                callBtn.className = 'call-btn';
-                callBtn.textContent = '📞';
-                callBtn.dataset.username = safeName;
-                callBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    startCall(callBtn.dataset.username);
-                    usersMenu.classList.remove('show');
-                };
-                menuItem.appendChild(callBtn);
-            }
-        }
-        newMenuItems.push(menuItem);
-        currentMenuItems.delete(name); 
-    });
-
-    currentUserItems.forEach(el => el.remove());
-    currentMenuItems.forEach(el => el.remove());
-
-    const userNamesFragment = document.createDocumentFragment();
-    newUserItems.forEach(item => userNamesFragment.appendChild(item));
-    userNamesEl.innerHTML = ''; 
-    userNamesEl.appendChild(userNamesFragment);
-
-    const menuListFragment = document.createDocumentFragment();
-    newMenuItems.forEach(item => menuListFragment.appendChild(item));
-    menuListEl.innerHTML = ''; 
-    menuListEl.appendChild(menuListFragment);
-
-    document.getElementById('online-count').textContent = sortedActiveUsernames.length;
-    onlineDisplay.textContent = `活跃: ${sortedActiveUsernames.length}`;
-    document.getElementById('sidebar-room-name').textContent = roomName; 
 
     const userStatsListEl = document.getElementById('user-stats-list');
     const allUsersSorted = Array.from(currentUserStates.keys()).sort((a, b) => {
         const aState = currentUserStates.get(a);
         const bState = currentUserStates.get(b);
-        if (aState.isActive !== bState.isActive) return bState.isActive - aState.isActive; 
-        return (bState.messageCount || 0) - (aState.messageCount || 0); 
+        if (aState.isActive !== bState.isActive) return bState.isActive - aState.isActive; // 活跃用户优先
+        return (bState.messageCount || 0) - (aState.messageCount || 0); // 消息数量多的优先
     });
 
     const statsFragment = document.createDocumentFragment();
@@ -1095,6 +1027,61 @@ function updateUIFromMessages() {
     }
     userStatsListEl.innerHTML = ''; 
     userStatsListEl.appendChild(statsFragment); 
+}
+
+// 【新增函数】根据后端推送的在线用户列表更新UI
+function updateOnlineUserListDisplay(onlineUsers) {
+    // 清空现有列表
+    userNamesEl.innerHTML = '';
+    menuListEl.innerHTML = '';
+
+    const userNamesFragment = document.createDocumentFragment();
+    const menuListFragment = document.createDocumentFragment();
+
+    onlineUsers.forEach(user => {
+        const safeUsername = escapeHTML(user.username);
+
+        // 添加到侧边栏 user-names 列表
+        const userItem = document.createElement('div');
+        userItem.className = 'user-item';
+        userItem.dataset.id = user.id; // 可以存储用户ID
+        userItem.dataset.username = user.username;
+        userItem.textContent = safeUsername;
+        userNamesFragment.appendChild(userItem);
+
+        // 添加到头部下拉菜单 users-menu-list
+        const menuItem = document.createElement('li');
+        menuItem.dataset.id = user.id;
+        menuItem.dataset.username = user.username;
+        if (user.username === username) {
+            menuItem.textContent = `${safeUsername} (你)`;
+        } else {
+            menuItem.className = 'user-menu-item-with-call';
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = safeUsername;
+            menuItem.appendChild(nameSpan);
+            const callBtn = document.createElement('button');
+            callBtn.className = 'call-btn';
+            callBtn.textContent = '📞';
+            callBtn.dataset.username = safeUsername;
+            callBtn.onclick = (e) => {
+                e.stopPropagation();
+                startCall(callBtn.dataset.username);
+                usersMenu.classList.remove('show');
+            };
+            menuItem.appendChild(callBtn);
+        }
+        menuListFragment.appendChild(menuItem);
+    });
+
+    userNamesEl.appendChild(userNamesFragment);
+    menuListEl.appendChild(menuListFragment);
+
+    // 更新在线用户数量显示
+    onlineCountEl.textContent = onlineUsers.length;
+    onlineDisplay.textContent = `活跃: ${onlineUsers.length}`;
+
+    logDebug(`✅ 在线用户列表已更新 (${onlineUsers.length} 人在线)`, LOG_LEVELS.INFO, onlineUsers.map(u => u.username));
 }
 
 
@@ -1210,15 +1197,10 @@ function processMessageQueue() {
     while (allMessages.length > MAX_ALL_MESSAGES) {
         const removedMsg = allMessages.shift(); 
         messageIdSet.delete(removedMsg.id); 
-        // 移除了虚拟滚动，所以不需要 messageHeights.delete(removedMsg.id);
-        // 同时，如果 chatWindowEl 中的 DOM 元素数量超过 MAX_ALL_MESSAGES，需要手动移除最旧的DOM
-        // 对于低并发场景，通常不主动移除旧DOM，而是依赖用户刷新或页面关闭。
-        // 如果需要，可以根据 `allMessages` 的长度，移除 `chatWindowEl.firstChild`。
-        // 但为了简化，暂时不在此处主动移除DOM，只维护数据。
     }
 
     appendMessagesToChatWindow(messagesToProcess, true); // 追加新消息并滚动到底部
-    throttledUpdateUI(); // 触发用户列表更新
+    throttledUpdateActivityStats(); // 【修改】触发用户活动统计更新
 
     // 如果队列中还有消息（虽然上面一次性取完了），这表示可能在处理期间又有新消息入队了
     if (messageQueue.length > 0) {
@@ -1741,7 +1723,7 @@ async function processHistoryMessages(history) {
 
         appendMessagesToChatWindow(messagesInChunk, false); // 追加这批消息，但不强制滚动到底部
         // 用户列表更新可以在历史消息全部加载完成后进行，避免频繁更新
-        // throttledUpdateUI(); // 不在分批加载过程中调用
+        // throttledUpdateActivityStats(); // 不在分批加载过程中调用
 
         if (processedCount < history.length) {
             //logDebug(`✅ 处理历史中... 已完成 ${processedCount}/${history.length} 条。`, LOG_LEVELS.INFO);
@@ -1793,9 +1775,10 @@ function onSocketOpen() {
     reconnectInterval = 1000; 
     checkSendButtonState();
     logDebug('🟢 WebSocket连接已建立', LOG_LEVELS.SUCCESS);
-    if (!window.userListInterval) {
-        window.userListInterval = setInterval(throttledUpdateUI, 60000); 
-    }
+    // 移除这个定时器，因为用户列表现在由后端推送
+    // if (!window.userListInterval) {
+    //     window.userListInterval = setInterval(throttledUpdateActivityStats, 60000); 
+    // }
     // 连接成功后，立即触发一次队列处理，以防在断线期间有消息积压
     if (messageQueue.length > 0 && !rafScheduled) {
         rafScheduled = true;
@@ -1817,14 +1800,16 @@ const messageHandlers = {
         if (newMessage && newMessage.id) {
             appendChatMessage(newMessage);
         }
+        throttledUpdateActivityStats(); // 【新增】每次收到聊天消息后更新活动统计
     },
+    // user_join 和 user_leave 消息不再直接更新列表，而是依赖 user_list_update
     user_join: (payload) => {
         logDebug(`👏 前端消息: ${payload.username} 加入了`, LOG_LEVELS.INFO, payload);
-        throttledUpdateUI(); 
+        //throttledUpdateActivityStats(); // 移除，因为 user_list_update 会处理
     },
     user_leave: (payload) => {
         logDebug(`💤 前端消息: ${payload.username} 离开了`, LOG_LEVELS.INFO, payload);
-        throttledUpdateUI(); 
+        //throttledUpdateActivityStats(); // 移除，因为 user_list_update 会处理
     },
     delete: (payload) => {
         const { messageId } = payload;
@@ -1837,7 +1822,7 @@ const messageHandlers = {
             if (msgElToDelete) {
                 msgElToDelete.remove();
             }
-            throttledUpdateUI(); 
+            throttledUpdateActivityStats(); // 消息删除后更新活动统计
         }
     },
     error: (payload) => {
@@ -1857,6 +1842,15 @@ const messageHandlers = {
     system_notification: (payload) => { 
         logDebug(`[系统通知] ${payload.message}`, payload.level.toLowerCase(), payload);
         showAppNotification(payload.message, 5000, payload.level === 'ERROR');
+    },
+    // 【新增】处理在线用户列表更新消息
+    user_list_update: (payload) => {
+        if (Array.isArray(payload.users)) {
+            updateOnlineUserListDisplay(payload.users);
+            logDebug(`✅ 收到在线用户列表更新，当前 ${payload.users.length} 位在线`, LOG_LEVELS.INFO, payload.users.map(u => u.username));
+        } else {
+            logDebug("❗ 收到用户列表更新，但格式不正确。", LOG_LEVELS.ERROR, payload);
+        }
     }
 };
 
@@ -1868,6 +1862,7 @@ async function onSocketMessage(event) {
     let data;
     try {
         data = JSON.parse(event.data);
+        // heartbeat 消息太多，不打印详细日志
         if (data.type !== 'heartbeat') { 
             logDebug(`⬇️ 收到 WebSocket 数据包 (${data.type})`, LOG_LEVELS.INFO, data); 
         }
@@ -2113,7 +2108,11 @@ function initializeChat() {
             localStorage.setItem('chat_username', username);
             usernameDisplayEl.textContent = username;
             if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({ type: 'rename', payload: { newUsername: username } }));
+                // 如果后端支持重命名消息，可以在这里发送
+                // socket.send(JSON.stringify({ type: 'rename', payload: { newUsername: username } }));
+                // 最简单的做法是重新连接，这样后端会收到新的用户名
+                logDebug(`用户名已更新为: ${username}，正在重新连接以应用更改`, LOG_LEVELS.INFO);
+                socket.close(); // 关闭当前连接，触发重连
             }
         }
     });
