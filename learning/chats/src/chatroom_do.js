@@ -205,7 +205,7 @@ export class HibernatingChatRoom extends DurableObject {
     // ============ 主要入口点 ============
     async fetch(request) {
         const url = new URL(request.url);
-        this.debugLog(`📥 服务端入站请求: ${request.method} ${url.pathname}`);
+        this.debugLog(`🚘 服务端入站请求: ${request.method} ${url.pathname}`);
 
         // 确保状态已加载
         await this.initialize();
@@ -461,7 +461,7 @@ export class HibernatingChatRoom extends DurableObject {
         const welcomeMessage = {
             type: MSG_TYPE_WELCOME,
             payload: {
-                message: `欢迎 ${username} 加入聊天室!`,
+                message: `👏 欢迎 ${username} 加入聊天室 💬!`,
                 sessionId: sessionId,
                 history: this.messages.slice(-50), // 只发送最近50条消息
                 userCount: this.sessions.size
@@ -540,7 +540,7 @@ export class HibernatingChatRoom extends DurableObject {
         const session = this.sessions.get(sessionId);
         
         if (session) {
-            this.debugLog(`🔌 断开其连接: ${session.username} (Session: ${sessionId}). Code: ${code}, 原因: ${reason}, 清理: ${wasClean}`);
+            this.debugLog(`💤 断开其连接: ${session.username} (Session: ${sessionId}). Code: ${code}, 原因: ${reason}, 清理: ${wasClean}`);
             
             // 从会话列表中移除
             this.sessions.delete(sessionId);
@@ -554,12 +554,12 @@ export class HibernatingChatRoom extends DurableObject {
                 } 
             });
             
-            this.debugLog(`📊 Remaining sessions: ${this.sessions.size}`);
+            this.debugLog(`👭 Remaining sessions: ${this.sessions.size}`);
             
             // 保存状态
             await this.saveState();
         } else {
-            this.debugLog(`🔌 断开未知连接： (SessionId: ${sessionId}). Code: ${code}`);
+            this.debugLog(`💤 断开未知连接： (SessionId: ${sessionId}). Code: ${code}`);
         }
     }
     
@@ -627,7 +627,7 @@ export class HibernatingChatRoom extends DurableObject {
             try {
                 session.ws.send(JSON.stringify({
                     type: MSG_TYPE_ERROR,
-                    payload: { message: "消息文本或标题过长，请控制在10000字符以内" }
+                    payload: { message: "❗ 消息文本或标题过长，请控制在10000字符以内" }
                 }));
             } catch (e) {
                 this.debugLog(`❌ Failed to send error message: ${e.message}`, 'ERROR');
@@ -714,7 +714,7 @@ export class HibernatingChatRoom extends DurableObject {
         if (session) {
             this.sessions.delete(sessionId);
             const { code = 'N/A', reason = 'N/A', wasClean = 'N/A' } = closeInfo;
-            this.debugLog(`🔌 断开用户连接: ${session.username} (Session: ${sessionId}). Code: ${code}, 原因: ${reason}, 清理: ${wasClean}`);
+            this.debugLog(`💤 断开用户连接: ${session.username} (Session: ${sessionId}). Code: ${code}, 原因: ${reason}, 清理: ${wasClean}`);
             
             // 广播用户离开消息
             this.broadcast({ 
@@ -725,7 +725,7 @@ export class HibernatingChatRoom extends DurableObject {
                 } 
             });
             
-            this.debugLog(`📊 当前有效会话数: ${this.sessions.size}`);
+            this.debugLog(`👭 当前有效会话数: ${this.sessions.size}`);
             
             // 使用 waitUntil 确保状态保存在实例休眠前完成
             this.ctx.waitUntil(this.saveState());
