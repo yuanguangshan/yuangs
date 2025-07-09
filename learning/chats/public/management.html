@@ -39,22 +39,33 @@
 
         let currentRoom = '';
 
-        async function fetchUsers() {
-            if (!currentRoom) {
-                alert('请输入房间名');
-                return;
-            }
-            try {
-                const response = await fetch(`/api/users/list?roomName=${currentRoom}`);
-                if (!response.ok) throw new Error('获取用户列表失败');
-                const users = await response.json();
-                renderUsers(users);
-            } catch (error) {
-                console.error('Error:', error);
-                alert(error.message);
-            }
+async function fetchUsers() {
+    if (!currentRoom) {
+        alert('请输入房间名');
+        return;
+    }
+    try {
+        const response = await fetch(`/api/users/list?roomName=${currentRoom}`);
+        if (!response.ok) {
+            // 尝试读取错误信息
+            const errorText = await response.text();
+            throw new Error(`获取用户列表失败: ${response.status} - ${errorText}`);
+        }
+        const data = await response.json();
+
+        // 【核心修改】: 从返回的对象中提取 users 数组
+        // 同时增加一个健壮性检查，确保它是一个数组
+        if (data && Array.isArray(data.users)) {
+            renderUsers(data.users);
+        } else {
+            throw new Error('从服务器返回的数据格式不正确。');
         }
 
+    } catch (error) {
+        console.error('Error:', error);
+        alert(error.message);
+    }
+}
         function renderUsers(users) {
             userList.innerHTML = '';
             users.forEach(user => {

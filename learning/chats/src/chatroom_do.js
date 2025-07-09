@@ -256,13 +256,14 @@ export class HibernatingChatRoom extends DurableObject {
     async handleApiRequest(request) {
         const url = new URL(request.url);
         
-        // 【新增】用户管理API
+            // 【新增】用户管理API
         if (url.pathname.endsWith('/users/list')) {
-            return new Response(JSON.stringify({
-                users: Array.from(this.allowedUsers),
-                total: this.allowedUsers.size
-            }), { headers: JSON_HEADERS });
-        }
+            // 【修改】返回一个包含 users 键的对象，而不是直接返回数组
+        return new Response(JSON.stringify({
+            users: Array.from(this.allowedUsers),
+            count: this.allowedUsers.size
+        }), { headers: JSON_HEADERS });
+            }
         
         if (url.pathname.endsWith('/users/add') && request.method === 'POST') {
             const secret = url.searchParams.get('secret');
