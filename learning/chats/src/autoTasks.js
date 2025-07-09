@@ -41,7 +41,7 @@ async function executeTextTask(env, ctx) {
     // 使用模板字符串 (backticks) 方便拼接
     const finalPrompt = `${basePrompt} 
     
-请务必生成**全新的**、**未曾出现过**的内容。不要重复任何句子、名言或其解析。此次请求的唯一标识符是：${uniqueId}。在你回复的尾部，务必带上此${uniqueId}`;
+请务必生成**全新的**、**未曾出现过**的内容。不要重复任何句子、名言或其解析。此次请求的唯一标识符是：${uniqueId}。在你回复的尾部，务必用方括号带上此${uniqueId}`;
 
     console.log(`[Cron Task] Executing daily text task for room: ${roomName}`);
     try {
