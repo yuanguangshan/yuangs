@@ -15,6 +15,7 @@ const MSG_TYPE_OFFER = 'offer';
 const MSG_TYPE_ANSWER = 'answer';
 const MSG_TYPE_CANDIDATE = 'candidate';
 const MSG_TYPE_CALL_END = 'call_end';
+const MSG_TYPE_USER_LIST_UPDATE = 'user_list_update'; // 【新增】用户列表更新消息类型
 
 export class HibernatingChatRoom extends DurableObject {
     constructor(ctx, env) {
@@ -259,13 +260,8 @@ export class HibernatingChatRoom extends DurableObject {
         
         // API: 获取会话状态
         if (url.pathname.endsWith('/debug/sessions')) {
-            const sessionInfo = Array.from(this.sessions.entries()).map(([id, session]) => ({
-                id,
-                username: session.username,
-                joinTime: session.joinTime,
-                lastSeen: session.lastSeen,
-                isConnected: session.ws.readyState === WebSocket.OPEN
-            }));
+            // 【修改】直接调用 getActiveUserList 以获取标准格式
+            const sessionInfo = this.getActiveUserList(true); // 传入 true 以获取更详细信息
             
             return new Response(JSON.stringify({
                 sessions: sessionInfo,
@@ -304,6 +300,8 @@ export class HibernatingChatRoom extends DurableObject {
                 this.sessions.clear();
                 this.debugLogs = [];
                 this.debugLog("🔄 Room reset successfully");
+                // 房间重置后，也应该广播空的用户列表
+                this.broadcastUserListUpdate();
                 return new Response("Room has been reset successfully.", { status: 200 });
             } else {
                 this.debugLog("🚫 Unauthorized reset attempt", 'WARN');
@@ -392,6 +390,45 @@ export class HibernatingChatRoom extends DurableObject {
 // ============ 辅助方法 ============
 
     /**
+     * 【新增】获取当前活跃用户列表
+     * @param {boolean} detailed - 是否返回详细信息 (id, username, joinTime, lastSeen, isConnected)
+     * @returns {Array<Object>} 活跃用户列表
+     */
+    getActiveUserList(detailed = false) {
+        if (detailed) {
+            return Array.from(this.sessions.values()).map(session => ({
+                id: session.id,
+                username: session.username,
+                joinTime: session.joinTime,
+                lastSeen: session.lastSeen,
+                isConnected: session.ws.readyState === WebSocket.OPEN
+            }));
+        } else {
+            // 默认返回精简版，只包含 id 和 username
+            return Array.from(this.sessions.values()).map(session => ({
+                id: session.id,
+                username: session.username
+            }));
+        }
+    }
+
+    /**
+     * 【新增】广播最新的在线用户列表给所有客户端
+     */
+    broadcastUserListUpdate() {
+        const users = this.getActiveUserList();
+        this.broadcast({
+            type: MSG_TYPE_USER_LIST_UPDATE,
+            payload: {
+                users: users,
+                userCount: users.length // 也可以包含总数
+            }
+        });
+        this.debugLog(`🔄 已广播最新在线用户列表，当前 ${users.length} 位在线用户。`);
+    }
+
+
+    /**
      * 【新增或确认存在】统一转发WebRTC信令的函数
      * @param {string} type - 消息类型 (offer, answer, candidate, call_end)
      * @param {object} fromSession - 发送方的会话对象
@@ -455,9 +492,9 @@ export class HibernatingChatRoom extends DurableObject {
         // 同时在 WebSocket 对象上保存会话信息，用于事件处理
         ws.sessionId = sessionId;
 
-        this.debugLog(`✅ 接受用户连接: 👦 ${username} (Session: ${sessionId}). Total sessions: ${this.sessions.size}`); // 修正1
+        this.debugLog(`✅ 接受用户连接: 👦 ${username} (Session: ${sessionId}). Total sessions: ${this.sessions.size}`);
 
-        // 发送欢迎消息，包含历史记录
+        // 1. 发送欢迎消息，包含历史记录
         const welcomeMessage = {
             type: MSG_TYPE_WELCOME,
             payload: {
@@ -471,24 +508,26 @@ export class HibernatingChatRoom extends DurableObject {
         try {
             ws.send(JSON.stringify(welcomeMessage));
         } catch (e) {
-            this.debugLog(`❌ Failed to send welcome message to 👦 ${username}: ${e.message}`, 'ERROR'); // 修正2
+            this.debugLog(`❌ Failed to send welcome message to 👦 ${username}: ${e.message}`, 'ERROR');
         }
 
-        // 广播用户加入消息
+        // 2. 广播用户加入消息（可选，如果前端只依赖用户列表更新，此消息可省略）
         this.broadcast({ 
             type: MSG_TYPE_USER_JOIN, 
             payload: { 
                 username,
                 userCount: this.sessions.size
             } 
-        }, sessionId);
+        }, sessionId); // 排除自己，避免重复通知
+
+        // 3. 【新增】广播最新的在线用户列表给所有连接的客户端
+        this.broadcastUserListUpdate();
         
         // 保存状态
         await this.saveState();
     }
 
     // ============ WebSocket 事件处理器 ============
-// ============ WebSocket 事件处理器 (修正版) ============
     async webSocketMessage(ws, message) {
         const sessionId = ws.sessionId;
         const session = this.sessions.get(sessionId);
@@ -500,7 +539,7 @@ export class HibernatingChatRoom extends DurableObject {
         }
 
         session.lastSeen = Date.now();
-        this.debugLog(`📨 收到用户： 👦 ${session.username} 的消息: ${message.substring(0, 150)}...`); // 修正3
+        this.debugLog(`📨 收到用户： 👦  ${session.username} 的消息: ${message.substring(0, 150)}...`);
 
         try {
             const data = JSON.parse(message);
@@ -514,7 +553,7 @@ export class HibernatingChatRoom extends DurableObject {
                     await this.handleDeleteMessage(session, data.payload);
                     break;
                 case MSG_TYPE_HEARTBEAT:
-                    this.debugLog(`💓 收到心跳包💓 👦 ${session.username}`, 'HEARTBEAT'); // 修正4
+                    this.debugLog(`💓 收到心跳包💓 👦  ${session.username}`, 'HEARTBEAT');
                     break;
 
                 // --- 【新增】恢复WebRTC信令转发逻辑 ---
@@ -527,10 +566,10 @@ export class HibernatingChatRoom extends DurableObject {
                     break;
 
                 default:
-                    this.debugLog(`⚠️ Unhandled message type: ${data.type} from 👦 ${session.username}`, 'WARN', data); // 修正5
+                    this.debugLog(`⚠️ Unhandled message type: ${data.type} from 👦 ${session.username}`, 'WARN', data);
             }
         } catch (e) { 
-            this.debugLog(`❌ Failed to parse WebSocket message from 👦 ${session.username}: ${e.message}`, 'ERROR'); // 修正6
+            this.debugLog(`❌ Failed to parse WebSocket message from 👦 ${session.username}: ${e.message}`, 'ERROR');
             // ... (错误处理逻辑保持不变)
         }
     }
@@ -553,7 +592,7 @@ export class HibernatingChatRoom extends DurableObject {
         const session = this.sessions.get(sessionId);
         const username = session ? session.username : 'unknown';
         
-        this.debugLog(`💥 WebSocket error for 👦 ${username}: ${error}`, 'ERROR'); // 修正7
+        this.debugLog(`💥 WebSocket error for 👦 ${username}: ${error}`, 'ERROR');
         
         // 触发关闭处理
         this.cleanupSession(sessionId, { code: 1011, reason: "An error occurred", wasClean: false });
@@ -584,7 +623,7 @@ export class HibernatingChatRoom extends DurableObject {
             }
         } else {
             // 未知或不支持的消息类型
-            this.debugLog(`⚠️ 不支持的消息类型或无效内容: ${messageType} from 👦 ${session.username}`, 'WARN', payload); // 修正8
+            this.debugLog(`⚠️ 不支持的消息类型或无效内容: ${messageType} from 👦 ${session.username}`, 'WARN', payload);
             try {
                 session.ws.send(JSON.stringify({
                     type: MSG_TYPE_ERROR,
@@ -595,7 +634,7 @@ export class HibernatingChatRoom extends DurableObject {
         }
 
         if (!messageContentValid) {
-            this.debugLog(`❌ 消息内容无效或为空 ${messageType} from 👦 ${session.username}`, 'WARN', payload); // 修正9
+            this.debugLog(`❌ 消息内容无效或为空 ${messageType} from 👦 ${session.username}`, 'WARN', payload);
             try {
                 session.ws.send(JSON.stringify({
                     type: MSG_TYPE_ERROR,
@@ -608,14 +647,14 @@ export class HibernatingChatRoom extends DurableObject {
         // 防止文本或标题过长 (仅对文本和图片标题进行长度限制)
         const textContentToCheckLength = payload.text || payload.caption || '';
         if (textContentToCheckLength.length > 10000) {
-            this.debugLog(`❌ 消息文本或标题过长，请控制在1万字符以内 👦 ${session.username}`, 'WARN'); // 修正10
+            this.debugLog(`❌ 消息文本或标题过长，请控制在1万字符以内 👦 ${session.username}`, 'WARN');
             try {
                 session.ws.send(JSON.stringify({
                     type: MSG_TYPE_ERROR,
                     payload: { message: "❗ 消息文本或标题过长，请控制在10000字符以内" }
                 }));
             } catch (e) {
-                this.debugLog(`❌ Failed to send error message to 👦 ${session.username}: ${e.message}`, 'ERROR'); // 修正11
+                this.debugLog(`❌ Failed to send error message to 👦 ${session.username}: ${e.message}`, 'ERROR');
             }
             return;
         }
@@ -659,7 +698,7 @@ export class HibernatingChatRoom extends DurableObject {
             this.messages = this.messages.filter(m => m.id !== messageId);
             
             if (this.messages.length < initialLength) {
-                this.debugLog(`🗑️ 此消息： ${messageId} 已被用户： 👦 ${session.username}删除.`); // 修正12
+                this.debugLog(`🗑️ 此消息： ${messageId} 已被用户： 👦 ${session.username}删除.`);
                 
                 await this.saveState();
                 
@@ -670,7 +709,7 @@ export class HibernatingChatRoom extends DurableObject {
             }
         } else {
             let reason = messageToDelete ? "permission denied" : "message not found";
-            this.debugLog(`🚫 Unauthorized delete attempt by 👦 ${session.username} for message ${messageId}. Reason: ${reason}`, 'WARN'); // 修正13
+            this.debugLog(`🚫 Unauthorized delete attempt by 👦 ${session.username} for message ${messageId}. Reason: ${reason}`, 'WARN');
             
             try {
                 session.ws.send(JSON.stringify({
@@ -678,7 +717,7 @@ export class HibernatingChatRoom extends DurableObject {
                     payload: { message: "你不能删除这条消息。" }
                 }));
             } catch (e) {
-                this.debugLog(`❌ 无法发送错误信息 to 👦 ${session.username}: ${e.message}`, 'ERROR'); // 修正14
+                this.debugLog(`❌ 无法发送错误信息 to 👦 ${session.username}: ${e.message}`, 'ERROR');
             }
         }
     }
@@ -702,18 +741,21 @@ export class HibernatingChatRoom extends DurableObject {
         if (session) {
             this.sessions.delete(sessionId);
             const { code = 'N/A', reason = 'N/A', wasClean = 'N/A' } = closeInfo;
-            // 【关键修正】打印会话所属的用户
+            // 打印会话所属的用户
             this.debugLog(`💤 断开用户连接: 👦 ${username} (Session: ${sessionId}). Code: ${code}, 原因: ${reason}, 清理: ${wasClean}`);
             
-            // 广播用户离开消息
+            // 广播用户离开消息（可选，如果前端只依赖用户列表更新，此消息可省略）
             this.broadcast({ 
                 type: MSG_TYPE_USER_LEAVE, 
                 payload: { 
-                    username: username, // 使用明确的 username 变量
+                    username: username,
                     userCount: this.sessions.size
                 } 
             });
             
+            // 【新增】用户离开后，广播最新的在线用户列表给所有剩余客户端
+            this.broadcastUserListUpdate();
+
             this.debugLog(`👭 当前有效会话数: ${this.sessions.size}`);
             
             // 使用 waitUntil 确保状态保存在实例休眠前完成
@@ -728,13 +770,12 @@ export class HibernatingChatRoom extends DurableObject {
         return since > 0 ? this.messages.filter(msg => msg.timestamp > since) : this.messages;
     }
 
-   // 【修改此函数】
     broadcast(message, excludeSessionId = null) {
         const stringifiedMessage = JSON.stringify(message);
         let activeSessions = 0;
         const disconnectedSessions = [];
-        const activeUsernames = []; // 新增：用于存储活跃用户的名称
-
+        const activeUsernames = []; 
+        
         this.sessions.forEach((session, sessionId) => {
             if (sessionId === excludeSessionId) {
                 return;
@@ -744,7 +785,10 @@ export class HibernatingChatRoom extends DurableObject {
                 if (session.ws.readyState === WebSocket.OPEN) {
                     session.ws.send(stringifiedMessage);
                     activeSessions++;
-                    activeUsernames.push(session.username); // 添加用户名到列表
+                    // 仅在广播普通消息时，才收集用户名用于日志
+                    if (message.type !== MSG_TYPE_DEBUG_LOG && message.type !== MSG_TYPE_USER_LIST_UPDATE) {
+                         activeUsernames.push(session.username); 
+                    }
                 } else {
                     disconnectedSessions.push(sessionId);
                 }
@@ -760,11 +804,21 @@ export class HibernatingChatRoom extends DurableObject {
         });
         
         // 避免调试日志的广播产生无限循环
-        if (message.type !== MSG_TYPE_DEBUG_LOG) {
-            // 在这里将 activeUsernames 作为 data 传递给 debugLog
-            this.debugLog(`📡 广播消息给 ${activeSessions} 位活跃会话 📳`+activeUsernames.join('📳'));
+        // 并且避免对 MSG_TYPE_USER_LIST_UPDATE 消息重复打印用户列表
+        if (message.type !== MSG_TYPE_DEBUG_LOG && message.type !== MSG_TYPE_USER_LIST_UPDATE) {
+            let logMessage = `📡 广播消息给 ${activeSessions} 位活跃会话 🟢`;
+            
+            if (activeSessions > 0) {
+                const userListString = activeUsernames.join(', ');
+                logMessage += `：${userListString}`; 
+            } else {
+                logMessage += ` (无活跃用户)`; 
+            }
+            
+            this.debugLog(logMessage, 'INFO');
         }
     }
+
     // ============ 清理方法 ============
     async cleanup() {
         if (this.heartbeatInterval) {
