@@ -146,8 +146,9 @@ export default {
                     });
                     
                     // 生成与存储路径完全匹配的公开URL
-                    const r2PublicDomain = "pub-8dfbdda6df204465aae771b4c080140b.r2.dev";
-                    const publicUrl = `https://${r2PublicDomain}/${object.key}`; // object.key 现在是 "chats/..."
+                    // const r2PublicDomain = "pub-8dfbdda6df204465aae771b4c080140b.r2.dev";
+                    const r2PublicDomain = "https://pic.want.biz";
+                    const publicUrl = `${r2PublicDomain}/${object.key}`; // object.key 现在是 "chats/..."
                     
                     return new Response(JSON.stringify({ url: publicUrl }), {
                         headers: { 'Content-Type': 'application/json', ...corsHeaders },
