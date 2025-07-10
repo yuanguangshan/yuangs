@@ -1892,39 +1892,45 @@ async function onSocketMessage(event) {
 }
 
 
-    // 【完整替换】onSocketClose 函数
-    function onSocketClose(event) {
-        statusEl.textContent = "连接已断开";
-        connectionDot.classList.add('disconnected');
-        let reason = `Code: ${event.code}, Reason: ${event.reason || '无'}, Was Clean: ${event.wasClean}`;
-        logDebug(`❗WebSocket连接已断开❌。${reason}`, LOG_LEVELS.WARNING);
+ function onSocketClose(event) {
+    statusEl.textContent = "连接已断开";
+    connectionDot.classList.add('disconnected');
+    
+    // 【关键修改】判断关闭代码
+    // 1008 (策略违规) 和 1011 (服务器内部错误) 通常表示永久性错误
+    // 4000-4999 是 WebSocket 协议中为应用程序保留的自定义错误代码范围
+    // 我们可以定义一些自己的代码，比如 4003 (禁止访问), 4004 (未找到)
+    // 但这里我们先处理标准的 1008
+    const permanentErrorCodes = [1008]; 
 
-        // 【关键修改点】检查是否是权限拒绝的关闭码 (1008) 和原因
-        if (event.code === 1008 && event.reason.startsWith("Access Denied")) {
-            // 权限拒绝，停止自动重连，并给出明确提示
-            // 提取具体原因并显示，例如 "Room not activated. Please contact an administrator."
-            const displayReason = event.reason.substring(event.reason.indexOf(':') + 2).trim();
-            showAppNotification(`🚫 访问被拒绝: ${displayReason}`, 8000, true); 
-            shouldReconnect = false; // 阻止所有后续的自动重连尝试
-            logDebug("🚫 权限不足，停止自动重连。请联系管理员开通。", LOG_LEVELS.ERROR);
-            // 确保清除可能存在的重连定时器
-            if (reconnectIntervalId) { 
-                clearTimeout(reconnectIntervalId); 
-                reconnectIntervalId = null;
-            }
-            return; // 不再执行后续的重连逻辑
-        }
-
-        // 如果不是权限拒绝，并且允许重连，则执行正常重连逻辑
-        if (shouldReconnect) {
-            showAppNotification(`连接已断开❌，尝试重连中... (${event.reason || '无'})`, 3000, true); 
-            logDebug(`将在${reconnectInterval/1000}秒后重连`, LOG_LEVELS.WARNING);
-            // 保存 setTimeout 的 ID，以便在必要时清除
-            reconnectIntervalId = setTimeout(connectWebSocket, reconnectInterval); 
-            reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval); 
-        }
+    if (permanentErrorCodes.includes(event.code)) {
+        // 这是服务器的明确拒绝，不应该重连
+        const reason = event.reason || '服务器拒绝了连接，请检查权限或房间名。';
+        logDebug(`🚫 服务器明确拒绝连接，停止重连。Code: ${event.code}, 原因: ${reason}`, LOG_LEVELS.ERROR);
+        
+        // 给用户一个持久的、明确的错误提示
+        showAppNotification(`连接失败: ${reason}`, 10000, true); // 显示10秒
+        
+        // 可以在这里禁用发送按钮等UI元素
+        sendButton.disabled = true;
+        
+        // 【最重要】直接返回，不再执行下面的重连逻辑
+        return; 
     }
 
+    // --- 原有的重连逻辑只在非永久性错误时执行 ---
+    let reason = `Code: ${event.code}, Reason: ${event.reason || '无'}, Was Clean: ${event.wasClean}`;
+    logDebug(`❗WebSocket连接已断开❌。${reason}`, LOG_LEVELS.WARNING);
+    showAppNotification(`连接已断开❌，尝试重连中... (${event.reason || '无'})`, 3000, true); 
+
+    logDebug(`将在${reconnectInterval/1000}秒后重连`, LOG_LEVELS.WARNING);
+    setTimeout(connectWebSocket, reconnectInterval);
+    
+    // 只有在非干净断开时，才增加退避时间
+    if (!event.wasClean) {
+        reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval); 
+    }
+}
 
     // 【完整替换】onSocketError 函数
     function onSocketError(error) {
