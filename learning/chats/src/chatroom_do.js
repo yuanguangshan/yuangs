@@ -252,30 +252,72 @@ export class HibernatingChatRoom extends DurableObject {
         return new Response("Not Found", { status: 404 });
     }
 
-    // ============ 【修改】WebSocket升级处理器 ============
-    async handleWebSocketUpgrade(request, url) {
-        const username = decodeURIComponent(url.searchParams.get("username") || "Anonymous");
-        
-        // 【✨ 最终版安全检查 ✨】
-        // 1. 检查白名单功能是否已激活 (即 this.allowedUsers 不是 undefined)
-        if (this.allowedUsers === undefined) {
-            this.debugLog(`🚫 拒绝连接: 房间未经授权 (白名单未激活). 用户: ${username}`, 'WARN');
-            return new Response("Room not found or access denied.", { status: 404 });
-        }
-        
-        // 2. 如果白名单已激活，再检查用户是否在名单上
-        if (!this.allowedUsers.has(username)) {
-            this.debugLog(`🚫 拒绝连接: 用户 ${username} 不在白名单中`, 'WARN');
-            return new Response("Access Denied: You are not on the allowed list for this room.", { status: 403 });
-        }
-        
-        // 如果检查通过，则继续执行WebSocket升级
-        this.debugLog(`✅ 授权用户连接: ${username}`);
-        const { 0: client, 1: server } = new WebSocketPair();
-        this.ctx.acceptWebSocket(server);
-        await this.handleWebSocketSession(server, url, username);
-        return new Response(null, { status: 101, webSocket: client });
+
+async handleWebSocketUpgrade(request, url) {
+    // 这部分保持不变，总是先升级连接
+    const { 0: client, 1: server } = new WebSocketPair();
+    this.ctx.acceptWebSocket(server);
+    this.handleSessionInitialization(server, url); // 将 server 和 url 传递给后台处理
+    return new Response(null, { status: 101, webSocket: client });
+}
+
+// --- 【修改】独立的会话初始化处理函数 (带延迟关闭) ---
+async handleSessionInitialization(ws, url) {
+    const username = decodeURIComponent(url.searchParams.get("username") || "Anonymous");
+
+    // 确保DO状态已初始化
+    await this.initialize();
+    
+    let reason = null;
+
+    // 权限检查
+    if (this.allowedUsers === undefined) {
+        reason = "房间不存在或未激活，请联系管理员开放此房间。";
+        this.debugLog(`🚫 授权失败: 房间未经授权。用户: ${username}`, 'WARN');
+    } else if (!this.allowedUsers.has(username)) {
+        reason = "您不在本房间的白名单中，无法加入。";
+        this.debugLog(`🚫 授权失败: 用户不在白名单中。用户: ${username}`, 'WARN');
     }
+
+    // 如果存在拒绝原因 (即权限检查失败)
+    if (reason) {
+        try {
+            // 1. 立即发送自定义的失败消息，让用户马上看到提示
+            ws.send(JSON.stringify({
+                type: 'auth_failed',
+                payload: {
+                    message: reason,
+                    contact: "yuangunangshan@gmail.com"
+                }
+            }));
+
+            // 2. 【核心修改】设置一个10秒的定时器来关闭连接
+            this.ctx.waitUntil(new Promise(resolve => {
+                setTimeout(() => {
+                    try {
+                        // 10秒后，如果连接还开着，就用 1008 关闭它
+                        if (ws.readyState === WebSocket.OPEN) {
+                            this.debugLog(`⏰ 定时器触发，关闭无权限用户的连接: ${username}`);
+                            ws.close(1008, reason);
+                        }
+                    } catch (e) {
+                        // ignore
+                    }
+                    resolve();
+                }, 10000); // 10秒延迟
+            }));
+
+        } catch(e) {
+            // 如果在发送消息时就出错了，直接关闭
+            ws.close(1011, "Internal server error during auth check.");
+        }
+        return; // 结束处理，不进入正常会话
+    }
+
+    // --- 如果所有检查都通过，则继续处理正常会话 ---
+    this.debugLog(`✅ 授权用户连接: ${username}`);
+    await this.handleWebSocketSession(ws, url, username);
+}
 
     // ============ API 请求处理 ============
     async handleApiRequest(request) {

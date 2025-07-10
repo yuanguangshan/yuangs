@@ -90,6 +90,7 @@
         
         .sidebar h2 {
             margin: 0;
+            color: white;
             font-size: 1.2em;
             font-weight: 600;
             display: flex;
@@ -100,6 +101,7 @@
         .online-indicator {
             width: 8px;
             height: 8px;
+            color: white;
             background: #2ecc71;
             border-radius: 50%;
             animation: pulse 2s infinite;
@@ -626,9 +628,11 @@
         </div>
         
         <aside class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <h2><span class="online-indicator"></span> 活跃用户</h2>
-            </div>
+                <div class="sidebar-header">
+                    <a href="https://chats.want.biz/management?secret=" class="header-link">
+                        <h2><span class="online-indicator"></span> 活跃用户</h2>
+                    </a>
+                </div>
             <div class="user-list-container">
                 <div class="user-list-title">用户 & 房间信息</div>
                 <div class="user-row">
@@ -777,6 +781,9 @@ let messageProcessTimeoutId = null; // 用于 appendChatMessage 的防抖定时�
 const MESSAGE_BATCH_DEBOUNCE_MS = 50; // 批量处理消息的防抖时间 (保持批处理，即便人数少，也能让UI更流畅)
 
 let historicalMessagesLoading = false; // 标志位，表示历史消息是否正在加载
+    
+let shouldReconnect = true; // 【新增】一个全局标志，控制是否允许重连
+let reconnectIntervalId = null; // 【新增】用于存储重连定时器ID
 
 let selectedFile = null;
 let mediaRecorder;
@@ -1757,8 +1764,19 @@ async function processHistoryMessages(history) {
 }
 
 
-// --- WebSocket 事件处理器 (保持不变) ---
+// 【简化】connectWebSocket 函数
 function connectWebSocket() {
+    // 检查是否已经有了一个健康的连接
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        logDebug('🔗 连接已存在，无需重复连接。');
+        return;
+    }
+    // 检查是否正在连接中
+    if (socket && socket.readyState === WebSocket.CONNECTING) {
+        logDebug('⏳ 正在连接中，请稍候... 新的连接请求被忽略。');
+        return;
+    }
+
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProtocol}//${window.location.host}/${roomName}?username=${encodeURIComponent(username)}`;
     logDebug(`🚀 开始连接WebSocket: ${wsUrl}`, LOG_LEVELS.INFO);
@@ -1769,24 +1787,40 @@ function connectWebSocket() {
     socket.onerror = onSocketError;
 }
 
+// 【简化】onSocketOpen 函数
 function onSocketOpen() {
+    logDebug('🟢 WebSocket 连接已打开 (onopen触发)。');
     statusEl.textContent = '已连接';
     connectionDot.classList.remove('disconnected');
-    reconnectInterval = 1000; 
+    
+    // 成功打开后，重置重连间隔
+    reconnectInterval = 1000;
+    
     checkSendButtonState();
-    logDebug('🟢 WebSocket连接已建立', LOG_LEVELS.SUCCESS);
-    // 移除这个定时器，因为用户列表现在由后端推送
-    // if (!window.userListInterval) {
-    //     window.userListInterval = setInterval(throttledUpdateActivityStats, 60000); 
-    // }
     // 连接成功后，立即触发一次队列处理，以防在断线期间有消息积压
     if (messageQueue.length > 0 && !rafScheduled) {
         rafScheduled = true;
         requestAnimationFrame(processMessageQueue);
     }
 }
-
 const messageHandlers = {
+
+    // 【新增】处理授权失败的消息
+    auth_failed: (payload) => {
+        logDebug(`🚫 授权失败: ${payload.message}`, LOG_LEVELS.ERROR);
+        const fullMessage = `${payload.message}\n\n如需访问，请联系管理员: ${payload.contact}`;
+        
+        alert(fullMessage);
+        
+        statusEl.textContent = "无权限访问";
+        sendButton.disabled = true;
+        messageInput.disabled = true; 
+        attachmentBtn.disabled = true;
+        imageInput.disabled = true; // 确保隐藏的 input 也被禁用
+        recordButton.disabled = true; 
+        // 确保 `shouldReconnect` 标志设置为 false，阻止所有重连尝试
+        shouldReconnect = false; 
+    },
     welcome: (payload) => {
         const history = payload?.history;
         if (Array.isArray(history)) {
@@ -1884,26 +1918,61 @@ async function onSocketMessage(event) {
     }
 }
 
-function onSocketClose(event) {
+
+ function onSocketClose(event) {
+    // 【关键修改】解锁：连接彻底关闭了，也要解锁，以便可以发起新的重连
+    isConnecting = false;
     statusEl.textContent = "连接已断开";
     connectionDot.classList.add('disconnected');
+    
+    // 【关键修改】判断关闭代码
+    // 1008 (策略违规) 和 1011 (服务器内部错误) 通常表示永久性错误
+    // 4000-4999 是 WebSocket 协议中为应用程序保留的自定义错误代码范围
+    // 我们可以定义一些自己的代码，比如 4003 (禁止访问), 4004 (未找到)
+    // 但这里我们先处理标准的 1008
+    const permanentErrorCodes = [1008]; 
+
+    if (permanentErrorCodes.includes(event.code)) {
+        // 这是服务器的明确拒绝，不应该重连
+        const reason = event.reason || '服务器拒绝了连接，请检查权限或房间名。';
+        logDebug(`🚫 服务器明确拒绝连接，停止重连。Code: ${event.code}, 原因: ${reason}`, LOG_LEVELS.ERROR);
+        
+        // 给用户一个持久的、明确的错误提示
+        showAppNotification(`连接失败: ${reason}`, 10000, true); // 显示10秒
+        
+        // 可以在这里禁用发送按钮等UI元素
+        sendButton.disabled = true;
+        
+        // 【最重要】直接返回，不再执行下面的重连逻辑
+        return; 
+    }
+
+    // --- 原有的重连逻辑只在非永久性错误时执行 ---
     let reason = `Code: ${event.code}, Reason: ${event.reason || '无'}, Was Clean: ${event.wasClean}`;
     logDebug(`❗WebSocket连接已断开❌。${reason}`, LOG_LEVELS.WARNING);
     showAppNotification(`连接已断开❌，尝试重连中... (${event.reason || '无'})`, 3000, true); 
+
     logDebug(`将在${reconnectInterval/1000}秒后重连`, LOG_LEVELS.WARNING);
     setTimeout(connectWebSocket, reconnectInterval);
-    reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval); 
+    
+    // 只有在非干净断开时，才增加退避时间
+    if (!event.wasClean) {
+        reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval); 
+    }
 }
 
-function onSocketError(error) {
-    let errorMessage = `WebSocket发生未知错误。Type: ${error.type}`;
-    logDebug(errorMessage, LOG_LEVELS.ERROR);
-    statusEl.textContent = "❗ 连接错误";
-    showAppNotification("❗ WebSocket连接错误，请检查网络。", 3000, true); 
-    socket.close(); 
-}
-
-
+    // 【完整替换】onSocketError 函数
+    function onSocketError(error) {
+        let errorMessage = `WebSocket发生未知错误。Type: ${error.type}`;
+        logDebug(errorMessage, LOG_LEVELS.ERROR, error); // 打印完整的错误对象以便调试
+        statusEl.textContent = "❗ 连接错误";
+        showAppNotification("❗ WebSocket连接错误，请检查网络。", 3000, true); 
+        // onSocketError 通常会紧跟着 onSocketClose，让 onSocketClose 来处理重连决策
+        // 确保 socket 被关闭，从而触发 onSocketClose
+        if (socket && socket.readyState !== WebSocket.CLOSED) {
+            socket.close(1011, "Client-side error, forcing close"); // 使用 1011 状态码表示异常
+        }
+    }
 // --- WebRTC 相关函数 (保持不变) ---
 async function initLocalMedia() {
     try {
@@ -2026,172 +2095,181 @@ let touchStartTime;
 let touchLongPressTimer; 
 let currentTouchMsgEl = null;
 
-function initializeChat() {
-    roomNameEl.textContent = roomName;
-    document.getElementById('sidebar-room-name').textContent = roomName;
-    usernameDisplayEl.textContent = username;
+    // 【完整替换】initializeChat 函数
+    function initializeChat() {
+        roomNameEl.textContent = roomName;
+        document.getElementById('sidebar-room-name').textContent = roomName;
+        usernameDisplayEl.textContent = username;
 
-    initDebugLog(); 
-   // 添加粘贴事件监听器，用于处理截图粘贴
-    document.addEventListener('paste', async (e) => {
-        const clipboardItems = e.clipboardData.items; // 获取剪贴板中的数据项
-        for (let i = 0; i < clipboardItems.length; i++) {
-            const item = clipboardItems[i];
-            // 检查数据项是否为文件类型且是图片
-            if (item.kind === 'file' && item.type.startsWith('image/')) {
-                e.preventDefault(); // 阻止默认的粘贴行为，因为我们将手动处理
-                const file = item.getAsFile(); // 获取 File 对象
+        initDebugLog(); 
+       // 添加粘贴事件监听器，用于处理截图粘贴
+        document.addEventListener('paste', async (e) => {
+            const clipboardItems = e.clipboardData.items; // 获取剪贴板中的数据项
+            for (let i = 0; i < clipboardItems.length; i++) {
+                const item = clipboardItems[i];
+                // 检查数据项是否为文件类型且是图片
+                if (item.kind === 'file' && item.type.startsWith('image/')) {
+                    e.preventDefault(); // 阻止默认的粘贴行为，因为我们将手动处理
+                    const file = item.getAsFile(); // 获取 File 对象
 
-                // 模拟一个文件输入事件对象，以便 handleImageSelection 可以直接处理
-                const mockChangeEvent = {
-                    target: {
-                        files: [file]
+                    // 模拟一个文件输入事件对象，以便 handleImageSelection 可以直接处理
+                    const mockChangeEvent = {
+                        target: {
+                            files: [file]
+                        }
+                    };
+                    
+                    logDebug(`检测到粘贴图片: ${file.name} (${formatFileSize(file.size)})`, LOG_LEVELS.INFO);
+                    showAppNotification('检测到粘贴图片，正在处理...');
+
+                    try {
+                        await handleImageSelection(mockChangeEvent);
+                    } catch (error) {
+                        logDebug(`处理粘贴图片失败: ${error.message}`, LOG_LEVELS.ERROR, error);
+                        showAppNotification('粘贴图片处理失败，请重试', 3000, true);
                     }
-                };
-                
-                logDebug(`检测到粘贴图片: ${file.name} (${formatFileSize(file.size)})`, LOG_LEVELS.INFO);
-                showAppNotification('检测到粘贴图片，正在处理...');
-
-                try {
-                    await handleImageSelection(mockChangeEvent);
-                } catch (error) {
-                    logDebug(`处理粘贴图片失败: ${error.message}`, LOG_LEVELS.ERROR, error);
-                    showAppNotification('粘贴图片处理失败，请重试', 3000, true);
+                    
+                    return; // 只处理第一个检测到的图片文件
                 }
-                
-                return; // 只处理第一个检测到的图片文件
             }
-        }
-    }); 
-    // 调用简化的聊天显示初始化
-    initChatDisplay(); 
-    
-    initLocalMedia().catch(err => {
-        logDebug('初始化媒体失败: ' + err, LOG_LEVELS.WARNING);
-    });
-    
-    connectWebSocket();
-    
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-            if (socket?.readyState !== WebSocket.OPEN) {
-                logDebug('🚀 页面重新可见，尝试重新连接WebSocket', LOG_LEVELS.INFO);
+        }); 
+        // 调用简化的聊天显示初始化
+        initChatDisplay(); 
+        
+        initLocalMedia().catch(err => {
+            logDebug('初始化媒体失败: ' + err, LOG_LEVELS.WARNING);
+        });
+        
+        connectWebSocket();
+        
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                // 【修改】只有当 shouldReconnect 为 true 且当前连接未打开时才尝试重连
+                if (shouldReconnect && socket?.readyState !== WebSocket.OPEN) {
+                    logDebug('🚀 页面重新可见，尝试重新连接WebSocket', LOG_LEVELS.INFO);
+                    connectWebSocket();
+                }
+            }
+        });
+        
+        // 【修改】定期检查重连的 setInterval
+        setInterval(() => {
+            // 只有当 shouldReconnect 为 true 且当前连接未打开时才尝试重连
+            if (shouldReconnect && socket?.readyState !== WebSocket.OPEN) {
+                logDebug('🚀 检测到WebSocket连接已断开，尝试重新连接', LOG_LEVELS.WARNING);
                 connectWebSocket();
             }
-        }
-    });
-    
-    setInterval(() => {
-        if (socket?.readyState !== WebSocket.OPEN) {
-            logDebug('🚀 检测到WebSocket连接已断开，尝试重新连接', LOG_LEVELS.WARNING);
-            connectWebSocket();
-        }
-    }, 30000); 
+        }, 30000); 
 
-    sidebarToggle.addEventListener('click', () => {
-        sidebar.classList.toggle('open');
-        overlay.classList.toggle('show');
-    });
-    overlay.addEventListener('click', () => {
-        sidebar.classList.remove('open');
-        overlay.classList.remove('show');
-    });
-    onlineDisplay.addEventListener('click', (e) => {
-        e.stopPropagation();
-        usersMenu.classList.toggle('show');
-    });
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('show');
+        });
+        overlay.addEventListener('click', () => {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('show');
+        });
+        onlineDisplay.addEventListener('click', (e) => {
+            e.stopPropagation();
+            usersMenu.classList.toggle('show');
+        });
 
-    usernameDisplayEl.addEventListener('click', () => {
-        const newUsername = prompt("请输入新的用户名:", username);
-        if (newUsername && newUsername.trim() && newUsername !== username) {
-            username = newUsername.trim();
-            localStorage.setItem('chat_username', username);
-            usernameDisplayEl.textContent = username;
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                // 如果后端支持重命名消息，可以在这里发送
-                // socket.send(JSON.stringify({ type: 'rename', payload: { newUsername: username } }));
-                // 最简单的做法是重新连接，这样后端会收到新的用户名
-                logDebug(`用户名已更新为: ${username}，正在重新连接以应用更改`, LOG_LEVELS.INFO);
-                socket.close(); // 关闭当前连接，触发重连
-            }
-        }
-    });
-
-    attachmentBtn.addEventListener('click', () => imageInput.click());
-    imageInput.addEventListener('change', handleImageSelection);
-    previewRemove.addEventListener('click', removeImagePreview);
-    modalClose.addEventListener('click', () => imageModal.classList.remove('show'));
-    imageModal.addEventListener('click', (e) => {
-        if (e.target === imageModal) imageModal.classList.remove('show');
-    });
-    recordButton.addEventListener('click', handleRecordButtonClick);
-
-    messageInput.addEventListener('input', function() {
-        this.style.height = 'auto';
-        this.style.height = `${Math.min(this.scrollHeight, 100)}px`;
-        checkSendButtonState();
-    });
-
-    messageInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            messageForm.dispatchEvent(new Event('submit'));
-        }
-    });
-
-    chatWindowEl.addEventListener('contextmenu', e => {
-        const msgEl = e.target.closest('.message'); 
-        if (msgEl) {
-            e.preventDefault(); 
-            showContextMenu(msgEl, e.pageX, e.pageY);
-        } else {
-            contextMenu.style.display = 'none';
-        }
-    });
-
-    chatWindowEl.addEventListener('touchstart', e => {
-        const msgEl = e.target.closest('.message');
-        if (msgEl) {
-            currentTouchMsgEl = msgEl; 
-            touchStartTime = Date.now(); 
-
-            touchLongPressTimer = setTimeout(() => {
-                if (currentTouchMsgEl === msgEl && (Date.now() - touchStartTime) >= 500) {
-                    e.preventDefault();
-                    showContextMenu(msgEl, e.touches[0].pageX, e.touches[0].pageY);
-                    if (navigator.vibrate) navigator.vibrate(50); 
+        usernameDisplayEl.addEventListener('click', () => {
+            const newUsername = prompt("请输入新的用户名:", username);
+            if (newUsername && newUsername.trim() && newUsername !== username) {
+                username = newUsername.trim();
+                localStorage.setItem('chat_username', username);
+                usernameDisplayEl.textContent = username;
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    // 【关键修改】修改用户名后，重置 shouldReconnect 标志，允许一次新的连接尝试
+                    logDebug(`用户名已更新为: ${username}，正在重新连接以应用更改`, LOG_LEVELS.INFO);
+                    shouldReconnect = true; 
+                    socket.close(); // 关闭当前连接，触发重连
+                } else if (!socket || socket.readyState === WebSocket.CLOSED) {
+                    // 如果当前没有连接，或者已经关闭，则直接连接
+                    logDebug(`用户名已更新为: ${username}，正在尝试建立新连接`, LOG_LEVELS.INFO);
+                    shouldReconnect = true; // 确保允许连接
+                    connectWebSocket();
                 }
-            }, 500); 
-        } else {
-            contextMenu.style.display = 'none';
-        }
-    }, { passive: true }); 
+            }
+        });
 
-    chatWindowEl.addEventListener('touchend', () => {
-        clearTimeout(touchLongPressTimer); 
-        currentTouchMsgEl = null; 
-    });
+        attachmentBtn.addEventListener('click', () => imageInput.click());
+        imageInput.addEventListener('change', handleImageSelection);
+        previewRemove.addEventListener('click', removeImagePreview);
+        modalClose.addEventListener('click', () => imageModal.classList.remove('show'));
+        imageModal.addEventListener('click', (e) => {
+            if (e.target === imageModal) imageModal.classList.remove('show');
+        });
+        recordButton.addEventListener('click', handleRecordButtonClick);
 
-    chatWindowEl.addEventListener('touchmove', () => {
-        clearTimeout(touchLongPressTimer); 
-        currentTouchMsgEl = null; 
-    }, { passive: true }); 
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = `${Math.min(this.scrollHeight, 100)}px`;
+            checkSendButtonState();
+        });
 
-    document.addEventListener('click', (e) => {
-        if (!usersMenu.contains(e.target) && !contextMenu.contains(e.target)) {
-            usersMenu.classList.remove('show');
-            contextMenu.style.display = 'none';
-        }
-    });
-    
-    window.showImageModal = function(imageUrl) {
-        if (!imageModal || !modalImage) return;
-        modalImage.src = imageUrl;
-        imageModal.classList.add('show');
-    };
-}
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                messageForm.dispatchEvent(new Event('submit'));
+            }
+        });
+
+        chatWindowEl.addEventListener('contextmenu', e => {
+            const msgEl = e.target.closest('.message'); 
+            if (msgEl) {
+                e.preventDefault(); 
+                showContextMenu(msgEl, e.pageX, e.pageY);
+            } else {
+                contextMenu.style.display = 'none';
+            }
+        });
+
+        chatWindowEl.addEventListener('touchstart', e => {
+            const msgEl = e.target.closest('.message');
+            if (msgEl) {
+                currentTouchMsgEl = msgEl; 
+                touchStartTime = Date.now(); 
+
+                touchLongPressTimer = setTimeout(() => {
+                    if (currentTouchMsgEl === msgEl && (Date.now() - touchStartTime) >= 500) {
+                        e.preventDefault();
+                        showContextMenu(msgEl, e.touches[0].pageX, e.touches[0].pageY);
+                        if (navigator.vibrate) navigator.vibrate(50); 
+                    }
+                }, 500); 
+            } else {
+                contextMenu.style.display = 'none';
+            }
+        }, { passive: true }); 
+
+        chatWindowEl.addEventListener('touchend', () => {
+            clearTimeout(touchLongPressTimer); 
+            currentTouchMsgEl = null; 
+        });
+
+        chatWindowEl.addEventListener('touchmove', () => {
+            clearTimeout(touchLongPressTimer); 
+            currentTouchMsgEl = null; 
+        }, { passive: true }); 
+
+        document.addEventListener('click', (e) => {
+            if (!usersMenu.contains(e.target) && !contextMenu.contains(e.target)) {
+                usersMenu.classList.remove('show');
+                contextMenu.style.display = 'none';
+            }
+        });
+        
+        window.showImageModal = function(imageUrl) {
+            if (!imageModal || !modalImage) return;
+            modalImage.src = imageUrl;
+            imageModal.classList.add('show');
+        };
+    }
 
 document.addEventListener('DOMContentLoaded', initializeChat);
+
 
 </script>
 </body>
