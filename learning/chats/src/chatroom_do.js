@@ -277,7 +277,7 @@ export class HibernatingChatRoom extends DurableObject {
         if (!this.allowedUsers.has(username)) {
             this.debugLog(`🚫 拒绝连接: 用户 ${username} 不在白名单中`, 'WARN');
             // 【关键修改】在关闭前增加一个短暂延迟，确保客户端能够接收到关闭帧
-            await new Promise(r => setTimeout(r, 50)); // 延迟 50ms
+            await new Promise(r => setTimeout(r, 500)); // 延迟 50ms
             server.close(1008, "拒绝连接，房间未经授权（白名单未激活），请联系管理员：yuangunangshan@gmail.com.");
             return new Response(null, { status: 101, webSocket: client });
         }
