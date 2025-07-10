@@ -743,7 +743,7 @@ async handleSessionInitialization(ws, url) {
                     await this.handleChatMessage(session, data.payload); 
                     break;
                 case MSG_TYPE_DELETE:
-                    await this.handleDeleteMessage(session, data.payload);
+                    await this.handleDeleteMessageRequest(session, data.payload);
                     break;
                 case MSG_TYPE_HEARTBEAT:
                     this.debugLog(`💓 收到心跳包💓 👦  ${session.username}`, 'HEARTBEAT');
@@ -860,41 +860,42 @@ async handleSessionInitialization(ws, url) {
         await this.addAndBroadcastMessage(message);
     }
 
-    async handleDeleteMessage(session, payload) { 
-        // 【修改】在处理删除消息前，确保历史已加载
-        await this.loadMessages();
+  // 将第二个函数重命名为 handleDeleteMessageRequest
+async handleDeleteMessageRequest(session, payload) { 
+    // 【修改】在处理删除消息前，确保历史已加载
+    await this.loadMessages();
+    
+    const messageId = payload.id;
+    if (!messageId) {
+        this.debugLog(`❌ 正在处理用户： 👦 ${session.username} 的消息删除请求，message ID.`, 'WARN');
+        return;
+    }
+
+    const initialLength = this.messages.length;
+    const messageToDelete = this.messages.find(m => m.id === messageId);
+
+    if (messageToDelete && messageToDelete.username === session.username) {
+        this.messages = this.messages.filter(m => m.id !== messageId);
         
-        const messageId = payload.id;
-        if (!messageId) {
-            this.debugLog(`❌ 正在处理用户： 👦 ${session.username} 的消息删除请求，message ID.`, 'WARN');
-            return;
+        if (this.messages.length < initialLength) {
+            this.debugLog(`🗑️ 此消息： ${messageId} 已被用户： 👦 ${session.username}删除.`);
+            await this.saveMessages();
+            this.broadcast({ type: MSG_TYPE_DELETE, payload: { messageId } });
         }
-
-        const initialLength = this.messages.length;
-        const messageToDelete = this.messages.find(m => m.id === messageId);
-
-        if (messageToDelete && messageToDelete.username === session.username) {
-            this.messages = this.messages.filter(m => m.id !== messageId);
-            
-            if (this.messages.length < initialLength) {
-                this.debugLog(`🗑️ 此消息： ${messageId} 已被用户： 👦 ${session.username}删除.`);
-                await this.saveMessages();
-                this.broadcast({ type: MSG_TYPE_DELETE, payload: { messageId } });
-            }
-        } else {
-            let reason = messageToDelete ? "permission denied" : "message not found";
-            this.debugLog(`🚫 Unauthorized delete attempt by 👦 ${session.username} for message ${messageId}. Reason: ${reason}`, 'WARN');
-            
-            try {
-                session.ws.send(JSON.stringify({
-                    type: MSG_TYPE_ERROR,
-                    payload: { message: "你不能删除这条消息。" }
-                }));
-            } catch (e) {
-                this.debugLog(`❌ 无法发送错误信息 to 👦 ${session.username}: ${e.message}`, 'ERROR');
-            }
+    } else {
+        let reason = messageToDelete ? "permission denied" : "message not found";
+        this.debugLog(`🚫 Unauthorized delete attempt by 👦 ${session.username} for message ${messageId}. Reason: ${reason}`, 'WARN');
+        
+        try {
+            session.ws.send(JSON.stringify({
+                type: MSG_TYPE_ERROR,
+                payload: { message: "你不能删除这条消息。" }
+            }));
+        } catch (e) {
+            this.debugLog(`❌ 无法发送错误信息 to 👦 ${session.username}: ${e.message}`, 'ERROR');
         }
     }
+}
 
     async addAndBroadcastMessage(message) {
         this.messages.push(message);
