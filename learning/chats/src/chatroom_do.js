@@ -253,20 +253,24 @@ export class HibernatingChatRoom extends DurableObject {
     }
 
     // ============ 【修改】WebSocket升级处理器 ============
-    async handleWebSocketUpgrade(request, url) {
+async handleWebSocketUpgrade(request, url) {
         const username = decodeURIComponent(url.searchParams.get("username") || "Anonymous");
         
         // 【✨ 最终版安全检查 ✨】
         // 1. 检查白名单功能是否已激活 (即 this.allowedUsers 不是 undefined)
         if (this.allowedUsers === undefined) {
             this.debugLog(`🚫 拒绝连接: 房间未经授权 (白名单未激活). 用户: ${username}`, 'WARN');
-            return new Response("Room not found or access denied.", { status: 404 });
+            // 【关键修改】使用 ctx.rejectWebSocket() 拒绝连接，并提供 1008 码和明确原因
+            this.ctx.rejectWebSocket(1008, "拒绝连接，房间未经授权（白名单未激活），请联系管理员：yuangunangshan@gmail.com.");
+            return; // 拒绝后立即返回，不再执行后续代码
         }
         
         // 2. 如果白名单已激活，再检查用户是否在名单上
         if (!this.allowedUsers.has(username)) {
             this.debugLog(`🚫 拒绝连接: 用户 ${username} 不在白名单中`, 'WARN');
-            return new Response("Access Denied: You are not on the allowed list for this room.", { status: 403 });
+            // 【关键修改】使用 ctx.rejectWebSocket() 拒绝连接，并提供 1008 码和明确原因
+            this.ctx.rejectWebSocket(1008, "拒绝连接，房间未经授权（白名单未激活），请联系管理员：yuangunangshan@gmail.com.");
+            return; // 拒绝后立即返回
         }
         
         // 如果检查通过，则继续执行WebSocket升级
