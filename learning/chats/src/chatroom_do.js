@@ -566,7 +566,7 @@ async handleSessionInitialization(ws, url) {
                 return new Response("Room has been reset successfully.", { status: 200 });
             } else {
                 this.debugLog("🚫 Unauthorized reset attempt", 'WARN');
-                return new Response("Forbidden.", { status: 403 });
+                return new Response("错了噢~,请输入正确的密码.", { status: 403 });
             }
         }
 
