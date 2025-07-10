@@ -269,7 +269,7 @@ export class HibernatingChatRoom extends DurableObject {
             this.debugLog(`🚫 拒绝连接: 房间未经授权 (白名单未激活). 用户: ${username}`, 'WARN');
             // 【关键修改】在关闭前增加一个短暂延迟，确保客户端能够接收到关闭帧
             await new Promise(r => setTimeout(r, 150)); // 延迟 150ms
-            server.close(1008, "Access Denied: Room not activated. Please contact an administrator.");
+            server.close(1008, "拒绝连接，房间未经授权（白名单未激活），请联系管理员：yuangunangshan@gmail.com.");
             return new Response(null, { status: 101, webSocket: client });
         }
         
@@ -278,7 +278,7 @@ export class HibernatingChatRoom extends DurableObject {
             this.debugLog(`🚫 拒绝连接: 用户 ${username} 不在白名单中`, 'WARN');
             // 【关键修改】在关闭前增加一个短暂延迟，确保客户端能够接收到关闭帧
             await new Promise(r => setTimeout(r, 50)); // 延迟 50ms
-            server.close(1008, "Access Denied: You are not on the allowed list for this room. Please contact an administrator to get access.");
+            server.close(1008, "拒绝连接，房间未经授权（白名单未激活），请联系管理员：yuangunangshan@gmail.com.");
             return new Response(null, { status: 101, webSocket: client });
         }
         
