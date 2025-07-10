@@ -256,7 +256,7 @@ export class HibernatingChatRoom extends DurableObject {
 async handleWebSocketUpgrade(request, url) {
     // 这部分保持不变，总是先升级连接
     const { 0: client, 1: server } = new WebSocketPair();
-    this.ctx.acceptWebSocket(server);
+    this.ctx.acceptWebSocket(server, { webSocketHibernatable: true });
     this.handleSessionInitialization(server, url); // 将 server 和 url 传递给后台处理
     return new Response(null, { status: 101, webSocket: client });
 }
