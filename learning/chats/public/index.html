@@ -1764,55 +1764,57 @@ async function processHistoryMessages(history) {
 }
 
 
+// 【简化】connectWebSocket 函数
 function connectWebSocket() {
-    // 【关键修改】检查连接状态
-    // 1. 如果已经有一个打开的连接，直接返回，什么都不做
+    // 检查是否已经有了一个健康的连接
     if (socket && socket.readyState === WebSocket.OPEN) {
         logDebug('🔗 连接已存在，无需重复连接。');
         return;
     }
-    // 2. 如果正在尝试连接，也直接返回，防止并发请求
-    if (isConnecting) {
+    // 检查是否正在连接中
+    if (socket && socket.readyState === WebSocket.CONNECTING) {
         logDebug('⏳ 正在连接中，请稍候... 新的连接请求被忽略。');
         return;
     }
 
-    // 【关键修改】加锁：标记我们即将开始连接
-    isConnecting = true;
-
-    const wsProtocol = window.location.protocol === 'https:...' ? 'wss:' : 'ws:';
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProtocol}//${window.location.host}/${roomName}?username=${encodeURIComponent(username)}`;
     logDebug(`🚀 开始连接WebSocket: ${wsUrl}`, LOG_LEVELS.INFO);
-    
     socket = new WebSocket(wsUrl);
-    
     socket.onopen = onSocketOpen;
     socket.onmessage = onSocketMessage;
     socket.onclose = onSocketClose;
     socket.onerror = onSocketError;
 }
 
-
+// 【简化】onSocketOpen 函数
 function onSocketOpen() {
-    // 【关键修改】解锁：连接成功了，可以允许下一次（如果需要的话）连接
-    isConnecting = false;
+    logDebug('🟢 WebSocket 连接已打开 (onopen触发)。');
     statusEl.textContent = '已连接';
     connectionDot.classList.remove('disconnected');
-    reconnectInterval = 1000; 
+    
+    // 成功打开后，重置重连间隔
+    reconnectInterval = 1000;
+    
     checkSendButtonState();
-    logDebug('🟢 WebSocket连接已建立', LOG_LEVELS.SUCCESS);
-    // 移除这个定时器，因为用户列表现在由后端推送
-    // if (!window.userListInterval) {
-    //     window.userListInterval = setInterval(throttledUpdateActivityStats, 60000); 
-    // }
     // 连接成功后，立即触发一次队列处理，以防在断线期间有消息积压
     if (messageQueue.length > 0 && !rafScheduled) {
         rafScheduled = true;
         requestAnimationFrame(processMessageQueue);
     }
 }
-
 const messageHandlers = {
+
+    // 【新增】处理授权失败的消息
+    auth_failed: (payload) => {
+        logDebug(`🚫 授权失败: ${payload.message}`, LOG_LEVELS.ERROR);
+        const fullMessage = `${payload.message}\n\n如需访问，请联系管理员: ${payload.contact}`;
+        
+        alert(fullMessage);
+        
+        statusEl.textContent = "无权限访问";
+        sendButton.disabled = true;
+    },
     welcome: (payload) => {
         const history = payload?.history;
         if (Array.isArray(history)) {
