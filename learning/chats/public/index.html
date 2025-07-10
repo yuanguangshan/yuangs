@@ -781,6 +781,9 @@ let messageProcessTimeoutId = null; // 用于 appendChatMessage 的防抖定时�
 const MESSAGE_BATCH_DEBOUNCE_MS = 50; // 批量处理消息的防抖时间 (保持批处理，即便人数少，也能让UI更流畅)
 
 let historicalMessagesLoading = false; // 标志位，表示历史消息是否正在加载
+    
+let shouldReconnect = true; // 【新增】一个全局标志，控制是否允许重连
+let reconnectIntervalId = null; // 【新增】用于存储重连定时器ID
 
 let selectedFile = null;
 let mediaRecorder;
@@ -1888,26 +1891,53 @@ async function onSocketMessage(event) {
     }
 }
 
-function onSocketClose(event) {
-    statusEl.textContent = "连接已断开";
-    connectionDot.classList.add('disconnected');
-    let reason = `Code: ${event.code}, Reason: ${event.reason || '无'}, Was Clean: ${event.wasClean}`;
-    logDebug(`❗WebSocket连接已断开❌。${reason}`, LOG_LEVELS.WARNING);
-    showAppNotification(`连接已断开❌，尝试重连中... (${event.reason || '无'})`, 3000, true); 
-    logDebug(`将在${reconnectInterval/1000}秒后重连`, LOG_LEVELS.WARNING);
-    setTimeout(connectWebSocket, reconnectInterval);
-    reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval); 
-}
 
-function onSocketError(error) {
-    let errorMessage = `WebSocket发生未知错误。Type: ${error.type}`;
-    logDebug(errorMessage, LOG_LEVELS.ERROR);
-    statusEl.textContent = "❗ 连接错误";
-    showAppNotification("❗ WebSocket连接错误，请检查网络。", 3000, true); 
-    socket.close(); 
-}
+    // 【完整替换】onSocketClose 函数
+    function onSocketClose(event) {
+        statusEl.textContent = "连接已断开";
+        connectionDot.classList.add('disconnected');
+        let reason = `Code: ${event.code}, Reason: ${event.reason || '无'}, Was Clean: ${event.wasClean}`;
+        logDebug(`❗WebSocket连接已断开❌。${reason}`, LOG_LEVELS.WARNING);
+
+        // 【关键修改点】检查是否是权限拒绝的关闭码 (1008) 和原因
+        if (event.code === 1008 && event.reason.startsWith("Access Denied")) {
+            // 权限拒绝，停止自动重连，并给出明确提示
+            // 提取具体原因并显示，例如 "Room not activated. Please contact an administrator."
+            const displayReason = event.reason.substring(event.reason.indexOf(':') + 2).trim();
+            showAppNotification(`🚫 访问被拒绝: ${displayReason}`, 8000, true); 
+            shouldReconnect = false; // 阻止所有后续的自动重连尝试
+            logDebug("🚫 权限不足，停止自动重连。请联系管理员开通。", LOG_LEVELS.ERROR);
+            // 确保清除可能存在的重连定时器
+            if (reconnectIntervalId) { 
+                clearTimeout(reconnectIntervalId); 
+                reconnectIntervalId = null;
+            }
+            return; // 不再执行后续的重连逻辑
+        }
+
+        // 如果不是权限拒绝，并且允许重连，则执行正常重连逻辑
+        if (shouldReconnect) {
+            showAppNotification(`连接已断开❌，尝试重连中... (${event.reason || '无'})`, 3000, true); 
+            logDebug(`将在${reconnectInterval/1000}秒后重连`, LOG_LEVELS.WARNING);
+            // 保存 setTimeout 的 ID，以便在必要时清除
+            reconnectIntervalId = setTimeout(connectWebSocket, reconnectInterval); 
+            reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval); 
+        }
+    }
 
 
+    // 【完整替换】onSocketError 函数
+    function onSocketError(error) {
+        let errorMessage = `WebSocket发生未知错误。Type: ${error.type}`;
+        logDebug(errorMessage, LOG_LEVELS.ERROR, error); // 打印完整的错误对象以便调试
+        statusEl.textContent = "❗ 连接错误";
+        showAppNotification("❗ WebSocket连接错误，请检查网络。", 3000, true); 
+        // onSocketError 通常会紧跟着 onSocketClose，让 onSocketClose 来处理重连决策
+        // 确保 socket 被关闭，从而触发 onSocketClose
+        if (socket && socket.readyState !== WebSocket.CLOSED) {
+            socket.close(1011, "Client-side error, forcing close"); // 使用 1011 状态码表示异常
+        }
+    }
 // --- WebRTC 相关函数 (保持不变) ---
 async function initLocalMedia() {
     try {
@@ -2030,172 +2060,181 @@ let touchStartTime;
 let touchLongPressTimer; 
 let currentTouchMsgEl = null;
 
-function initializeChat() {
-    roomNameEl.textContent = roomName;
-    document.getElementById('sidebar-room-name').textContent = roomName;
-    usernameDisplayEl.textContent = username;
+    // 【完整替换】initializeChat 函数
+    function initializeChat() {
+        roomNameEl.textContent = roomName;
+        document.getElementById('sidebar-room-name').textContent = roomName;
+        usernameDisplayEl.textContent = username;
 
-    initDebugLog(); 
-   // 添加粘贴事件监听器，用于处理截图粘贴
-    document.addEventListener('paste', async (e) => {
-        const clipboardItems = e.clipboardData.items; // 获取剪贴板中的数据项
-        for (let i = 0; i < clipboardItems.length; i++) {
-            const item = clipboardItems[i];
-            // 检查数据项是否为文件类型且是图片
-            if (item.kind === 'file' && item.type.startsWith('image/')) {
-                e.preventDefault(); // 阻止默认的粘贴行为，因为我们将手动处理
-                const file = item.getAsFile(); // 获取 File 对象
+        initDebugLog(); 
+       // 添加粘贴事件监听器，用于处理截图粘贴
+        document.addEventListener('paste', async (e) => {
+            const clipboardItems = e.clipboardData.items; // 获取剪贴板中的数据项
+            for (let i = 0; i < clipboardItems.length; i++) {
+                const item = clipboardItems[i];
+                // 检查数据项是否为文件类型且是图片
+                if (item.kind === 'file' && item.type.startsWith('image/')) {
+                    e.preventDefault(); // 阻止默认的粘贴行为，因为我们将手动处理
+                    const file = item.getAsFile(); // 获取 File 对象
 
-                // 模拟一个文件输入事件对象，以便 handleImageSelection 可以直接处理
-                const mockChangeEvent = {
-                    target: {
-                        files: [file]
+                    // 模拟一个文件输入事件对象，以便 handleImageSelection 可以直接处理
+                    const mockChangeEvent = {
+                        target: {
+                            files: [file]
+                        }
+                    };
+                    
+                    logDebug(`检测到粘贴图片: ${file.name} (${formatFileSize(file.size)})`, LOG_LEVELS.INFO);
+                    showAppNotification('检测到粘贴图片，正在处理...');
+
+                    try {
+                        await handleImageSelection(mockChangeEvent);
+                    } catch (error) {
+                        logDebug(`处理粘贴图片失败: ${error.message}`, LOG_LEVELS.ERROR, error);
+                        showAppNotification('粘贴图片处理失败，请重试', 3000, true);
                     }
-                };
-                
-                logDebug(`检测到粘贴图片: ${file.name} (${formatFileSize(file.size)})`, LOG_LEVELS.INFO);
-                showAppNotification('检测到粘贴图片，正在处理...');
-
-                try {
-                    await handleImageSelection(mockChangeEvent);
-                } catch (error) {
-                    logDebug(`处理粘贴图片失败: ${error.message}`, LOG_LEVELS.ERROR, error);
-                    showAppNotification('粘贴图片处理失败，请重试', 3000, true);
+                    
+                    return; // 只处理第一个检测到的图片文件
                 }
-                
-                return; // 只处理第一个检测到的图片文件
             }
-        }
-    }); 
-    // 调用简化的聊天显示初始化
-    initChatDisplay(); 
-    
-    initLocalMedia().catch(err => {
-        logDebug('初始化媒体失败: ' + err, LOG_LEVELS.WARNING);
-    });
-    
-    connectWebSocket();
-    
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-            if (socket?.readyState !== WebSocket.OPEN) {
-                logDebug('🚀 页面重新可见，尝试重新连接WebSocket', LOG_LEVELS.INFO);
+        }); 
+        // 调用简化的聊天显示初始化
+        initChatDisplay(); 
+        
+        initLocalMedia().catch(err => {
+            logDebug('初始化媒体失败: ' + err, LOG_LEVELS.WARNING);
+        });
+        
+        connectWebSocket();
+        
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                // 【修改】只有当 shouldReconnect 为 true 且当前连接未打开时才尝试重连
+                if (shouldReconnect && socket?.readyState !== WebSocket.OPEN) {
+                    logDebug('🚀 页面重新可见，尝试重新连接WebSocket', LOG_LEVELS.INFO);
+                    connectWebSocket();
+                }
+            }
+        });
+        
+        // 【修改】定期检查重连的 setInterval
+        setInterval(() => {
+            // 只有当 shouldReconnect 为 true 且当前连接未打开时才尝试重连
+            if (shouldReconnect && socket?.readyState !== WebSocket.OPEN) {
+                logDebug('🚀 检测到WebSocket连接已断开，尝试重新连接', LOG_LEVELS.WARNING);
                 connectWebSocket();
             }
-        }
-    });
-    
-    setInterval(() => {
-        if (socket?.readyState !== WebSocket.OPEN) {
-            logDebug('🚀 检测到WebSocket连接已断开，尝试重新连接', LOG_LEVELS.WARNING);
-            connectWebSocket();
-        }
-    }, 30000); 
+        }, 30000); 
 
-    sidebarToggle.addEventListener('click', () => {
-        sidebar.classList.toggle('open');
-        overlay.classList.toggle('show');
-    });
-    overlay.addEventListener('click', () => {
-        sidebar.classList.remove('open');
-        overlay.classList.remove('show');
-    });
-    onlineDisplay.addEventListener('click', (e) => {
-        e.stopPropagation();
-        usersMenu.classList.toggle('show');
-    });
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('show');
+        });
+        overlay.addEventListener('click', () => {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('show');
+        });
+        onlineDisplay.addEventListener('click', (e) => {
+            e.stopPropagation();
+            usersMenu.classList.toggle('show');
+        });
 
-    usernameDisplayEl.addEventListener('click', () => {
-        const newUsername = prompt("请输入新的用户名:", username);
-        if (newUsername && newUsername.trim() && newUsername !== username) {
-            username = newUsername.trim();
-            localStorage.setItem('chat_username', username);
-            usernameDisplayEl.textContent = username;
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                // 如果后端支持重命名消息，可以在这里发送
-                // socket.send(JSON.stringify({ type: 'rename', payload: { newUsername: username } }));
-                // 最简单的做法是重新连接，这样后端会收到新的用户名
-                logDebug(`用户名已更新为: ${username}，正在重新连接以应用更改`, LOG_LEVELS.INFO);
-                socket.close(); // 关闭当前连接，触发重连
-            }
-        }
-    });
-
-    attachmentBtn.addEventListener('click', () => imageInput.click());
-    imageInput.addEventListener('change', handleImageSelection);
-    previewRemove.addEventListener('click', removeImagePreview);
-    modalClose.addEventListener('click', () => imageModal.classList.remove('show'));
-    imageModal.addEventListener('click', (e) => {
-        if (e.target === imageModal) imageModal.classList.remove('show');
-    });
-    recordButton.addEventListener('click', handleRecordButtonClick);
-
-    messageInput.addEventListener('input', function() {
-        this.style.height = 'auto';
-        this.style.height = `${Math.min(this.scrollHeight, 100)}px`;
-        checkSendButtonState();
-    });
-
-    messageInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            messageForm.dispatchEvent(new Event('submit'));
-        }
-    });
-
-    chatWindowEl.addEventListener('contextmenu', e => {
-        const msgEl = e.target.closest('.message'); 
-        if (msgEl) {
-            e.preventDefault(); 
-            showContextMenu(msgEl, e.pageX, e.pageY);
-        } else {
-            contextMenu.style.display = 'none';
-        }
-    });
-
-    chatWindowEl.addEventListener('touchstart', e => {
-        const msgEl = e.target.closest('.message');
-        if (msgEl) {
-            currentTouchMsgEl = msgEl; 
-            touchStartTime = Date.now(); 
-
-            touchLongPressTimer = setTimeout(() => {
-                if (currentTouchMsgEl === msgEl && (Date.now() - touchStartTime) >= 500) {
-                    e.preventDefault();
-                    showContextMenu(msgEl, e.touches[0].pageX, e.touches[0].pageY);
-                    if (navigator.vibrate) navigator.vibrate(50); 
+        usernameDisplayEl.addEventListener('click', () => {
+            const newUsername = prompt("请输入新的用户名:", username);
+            if (newUsername && newUsername.trim() && newUsername !== username) {
+                username = newUsername.trim();
+                localStorage.setItem('chat_username', username);
+                usernameDisplayEl.textContent = username;
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    // 【关键修改】修改用户名后，重置 shouldReconnect 标志，允许一次新的连接尝试
+                    logDebug(`用户名已更新为: ${username}，正在重新连接以应用更改`, LOG_LEVELS.INFO);
+                    shouldReconnect = true; 
+                    socket.close(); // 关闭当前连接，触发重连
+                } else if (!socket || socket.readyState === WebSocket.CLOSED) {
+                    // 如果当前没有连接，或者已经关闭，则直接连接
+                    logDebug(`用户名已更新为: ${username}，正在尝试建立新连接`, LOG_LEVELS.INFO);
+                    shouldReconnect = true; // 确保允许连接
+                    connectWebSocket();
                 }
-            }, 500); 
-        } else {
-            contextMenu.style.display = 'none';
-        }
-    }, { passive: true }); 
+            }
+        });
 
-    chatWindowEl.addEventListener('touchend', () => {
-        clearTimeout(touchLongPressTimer); 
-        currentTouchMsgEl = null; 
-    });
+        attachmentBtn.addEventListener('click', () => imageInput.click());
+        imageInput.addEventListener('change', handleImageSelection);
+        previewRemove.addEventListener('click', removeImagePreview);
+        modalClose.addEventListener('click', () => imageModal.classList.remove('show'));
+        imageModal.addEventListener('click', (e) => {
+            if (e.target === imageModal) imageModal.classList.remove('show');
+        });
+        recordButton.addEventListener('click', handleRecordButtonClick);
 
-    chatWindowEl.addEventListener('touchmove', () => {
-        clearTimeout(touchLongPressTimer); 
-        currentTouchMsgEl = null; 
-    }, { passive: true }); 
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = `${Math.min(this.scrollHeight, 100)}px`;
+            checkSendButtonState();
+        });
 
-    document.addEventListener('click', (e) => {
-        if (!usersMenu.contains(e.target) && !contextMenu.contains(e.target)) {
-            usersMenu.classList.remove('show');
-            contextMenu.style.display = 'none';
-        }
-    });
-    
-    window.showImageModal = function(imageUrl) {
-        if (!imageModal || !modalImage) return;
-        modalImage.src = imageUrl;
-        imageModal.classList.add('show');
-    };
-}
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                messageForm.dispatchEvent(new Event('submit'));
+            }
+        });
+
+        chatWindowEl.addEventListener('contextmenu', e => {
+            const msgEl = e.target.closest('.message'); 
+            if (msgEl) {
+                e.preventDefault(); 
+                showContextMenu(msgEl, e.pageX, e.pageY);
+            } else {
+                contextMenu.style.display = 'none';
+            }
+        });
+
+        chatWindowEl.addEventListener('touchstart', e => {
+            const msgEl = e.target.closest('.message');
+            if (msgEl) {
+                currentTouchMsgEl = msgEl; 
+                touchStartTime = Date.now(); 
+
+                touchLongPressTimer = setTimeout(() => {
+                    if (currentTouchMsgEl === msgEl && (Date.now() - touchStartTime) >= 500) {
+                        e.preventDefault();
+                        showContextMenu(msgEl, e.touches[0].pageX, e.touches[0].pageY);
+                        if (navigator.vibrate) navigator.vibrate(50); 
+                    }
+                }, 500); 
+            } else {
+                contextMenu.style.display = 'none';
+            }
+        }, { passive: true }); 
+
+        chatWindowEl.addEventListener('touchend', () => {
+            clearTimeout(touchLongPressTimer); 
+            currentTouchMsgEl = null; 
+        });
+
+        chatWindowEl.addEventListener('touchmove', () => {
+            clearTimeout(touchLongPressTimer); 
+            currentTouchMsgEl = null; 
+        }, { passive: true }); 
+
+        document.addEventListener('click', (e) => {
+            if (!usersMenu.contains(e.target) && !contextMenu.contains(e.target)) {
+                usersMenu.classList.remove('show');
+                contextMenu.style.display = 'none';
+            }
+        });
+        
+        window.showImageModal = function(imageUrl) {
+            if (!imageModal || !modalImage) return;
+            modalImage.src = imageUrl;
+            imageModal.classList.add('show');
+        };
+    }
 
 document.addEventListener('DOMContentLoaded', initializeChat);
+
 
 </script>
 </body>
