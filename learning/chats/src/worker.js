@@ -101,7 +101,18 @@ export default {
                 
             // --- ✨ 新增：管理页面路由 ---
             if (pathname === '/management') {
-                return new Response(managementHtml, { headers: { 'Content-Type': 'text/html;charset=UTF-8' } });
+                // 从环境变量中获取房间列表，如果未设置则提供默认值
+                const roomsListString = env.MANAGEMENT_ROOMS_LIST || 'general,test,future,admin,kerry';
+                const roomsArray = roomsListString.split(',').map(room => room.trim()); // 分割并去除空格
+
+                // 将房间列表注入到 HTML 字符串中
+                // 我们在 HTML 中放置一个特殊的注释占位符，然后替换它
+                const modifiedHtml = managementHtml.replace(
+                    '/* MANAGEMENT_ROOMS_LIST_PLACEHOLDER */',
+                    `const potentialRoomsToCheck = ${JSON.stringify(roomsArray)};`
+                );
+
+                return new Response(modifiedHtml, { headers: { 'Content-Type': 'text/html;charset=UTF-8' } });
             }
 
             // --- ✨ 新增：用户管理API路由转发 ---
