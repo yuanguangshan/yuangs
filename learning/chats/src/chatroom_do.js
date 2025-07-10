@@ -252,39 +252,39 @@ export class HibernatingChatRoom extends DurableObject {
         return new Response("Not Found", { status: 404 });
     }
 
-   // ============ 【修正版】WebSocket升级处理器 ============
+
+    // ============ 【最终修正版】WebSocket升级处理器 ============
     async handleWebSocketUpgrade(request, url) {
         const username = decodeURIComponent(url.searchParams.get("username") || "Anonymous");
         
         // 1. 创建 WebSocketPair
         const { 0: client, 1: server } = new WebSocketPair();
         
-        // 2. 接受 WebSocket 连接 (这是发送关闭码的前提)
+        // 2. 接受 WebSocket 连接
         this.ctx.acceptWebSocket(server);
 
         // 3. 执行权限检查
         // 如果白名单功能未激活
         if (this.allowedUsers === undefined) {
             this.debugLog(`🚫 拒绝连接: 房间未经授权 (白名单未激活). 用户: ${username}`, 'WARN');
-            // 立即关闭 WebSocket 连接，并发送明确的 1008 策略违反码和原因
-            server.close(1008, "拒绝连接，房间未经授权（白名单未激活），请联系管理员：yuangunangshan@gmail.com.");
-            // 返回 101 状态码，因为 WebSocket 升级本身是成功的，但连接会立即被关闭
+            // 【关键修改】在关闭前增加一个短暂延迟，确保客户端能够接收到关闭帧
+            await new Promise(r => setTimeout(r, 150)); // 延迟 150ms
+            server.close(1008, "Access Denied: Room not activated. Please contact an administrator.");
             return new Response(null, { status: 101, webSocket: client });
         }
         
         // 如果白名单已激活但用户不在名单上
         if (!this.allowedUsers.has(username)) {
             this.debugLog(`🚫 拒绝连接: 用户 ${username} 不在白名单中`, 'WARN');
-            // 立即关闭 WebSocket 连接，并发送明确的 1008 策略违反码和原因
-            server.close(1008, "拒绝连接，房间未经授权（白名单未激活），请联系管理员：yuangunangshan@gmail.com.");
-            // 返回 101 状态码，因为 WebSocket 升级本身是成功的，但连接会立即被关闭
+            // 【关键修改】在关闭前增加一个短暂延迟，确保客户端能够接收到关闭帧
+            await new Promise(r => setTimeout(r, 50)); // 延迟 50ms
+            server.close(1008, "Access Denied: You are not on the allowed list for this room. Please contact an administrator to get access.");
             return new Response(null, { status: 101, webSocket: client });
         }
         
         // 4. 如果所有检查通过，则继续处理会话
         this.debugLog(`✅ 授权用户连接: ${username}`);
         await this.handleWebSocketSession(server, url, username);
-        // 返回 101 状态码，表示 WebSocket 升级成功
         return new Response(null, { status: 101, webSocket: client });
     }
 
