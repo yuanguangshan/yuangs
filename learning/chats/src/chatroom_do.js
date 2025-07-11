@@ -249,7 +249,7 @@ export class HibernatingChatRoom extends DurableObject {
         }
 
         this.debugLog(`❓ 未处理连接🔗: ${request.method} ${url.pathname}`, 'WARN');
-        return new Response("Not Found", { status: 404 });
+        return new Response("API endpoint not found", { status: 404 });
     }
 
 
@@ -304,7 +304,7 @@ async handleSessionInitialization(ws, url) {
                         // ignore
                     }
                     resolve();
-                }, 5000); // 10秒延迟
+                }, 2000); // 10秒延迟
             }));
 
         } catch(e) {
@@ -323,255 +323,289 @@ async handleSessionInitialization(ws, url) {
     async handleApiRequest(request) {
         const url = new URL(request.url);
         
-        // 【修改】用户管理API
-        if (url.pathname.endsWith('/users/list')) {
-            if (this.allowedUsers === undefined) {
-                return new Response(JSON.stringify({
-                    users: [],
-                    count: 0,
-                    active: false
-                }), { headers: JSON_HEADERS });
+        // 定义API路由映射
+        const apiRoutes = new Map([
+            ['/users/list', this.handleListUsers.bind(this)],
+            ['/users/add', this.handleAddUser.bind(this)],
+            ['/users/remove', this.handleRemoveUser.bind(this)],
+            ['/users/clear', this.handleClearUsers.bind(this)],
+            ['/messages/history', this.handleMessageHistory.bind(this)],
+            ['/messages/delete', this.handleDeleteMessage.bind(this)],
+            ['/room/status', this.handleRoomStatus.bind(this)],
+            ['/debug/logs', this.handleDebugLogs.bind(this)],
+            ['/debug/sessions', this.handleDebugSessions.bind(this)],
+            ['/debug/clear', this.handleClearDebugLogs.bind(this)],
+            ['/reset-room', this.handleResetRoom.bind(this)]
+        ]);
+        
+        // 查找匹配的路由处理器
+        for (const [path, handler] of apiRoutes) {
+            if (url.pathname.endsWith(path)) {
+                return await handler(request, url);
             }
-            
+        }
+        
+        return new Response("Not Found", { status: 404 });
+    }
+    
+    // 用户列表API处理器
+    async handleListUsers(request) {
+        if (this.allowedUsers === undefined) {
             return new Response(JSON.stringify({
-                users: Array.from(this.allowedUsers),
-                count: this.allowedUsers.size,
-                active: true
+                users: [],
+                count: 0,
+                active: false
             }), { headers: JSON_HEADERS });
         }
         
-        if (url.pathname.endsWith('/users/add') && request.method === 'POST') {
-            const secret = url.searchParams.get('secret');
-            if (this.env.ADMIN_SECRET && secret !== this.env.ADMIN_SECRET) {
-                this.debugLog("🚫 Unauthorized user add attempt", 'WARN');
-                return new Response("Forbidden.", { status: 403 });
+        return new Response(JSON.stringify({
+            users: Array.from(this.allowedUsers),
+            count: this.allowedUsers.size,
+            active: true
+        }), { headers: JSON_HEADERS });
+    }
+        
+    // 添加用户API处理器
+    async handleAddUser(request, url) {
+        if (request.method !== 'POST') {
+            return new Response('Method Not Allowed', { status: 405 });
+        }
+        
+        const secret = url.searchParams.get('secret');
+        if (this.env.ADMIN_SECRET && secret !== this.env.ADMIN_SECRET) {
+            this.debugLog("🚫 Unauthorized user add attempt", 'WARN');
+            return new Response("Forbidden.", { status: 403 });
+        }
+        
+        try {
+            const { username } = await request.json();
+            if (username && username.trim()) {
+                const cleanUsername = username.trim();
+                
+                // 首次添加用户时激活白名单
+                if (this.allowedUsers === undefined) {
+                    this.allowedUsers = new Set();
+                    this.debugLog(`✨ 房间白名单已激活！`, 'INFO');
+                }
+                
+                this.allowedUsers.add(cleanUsername);
+                await this.saveState();
+                this.debugLog(`✅ 用户 ${cleanUsername} 已添加到白名单`);
+                return new Response(JSON.stringify({ 
+                    success: true, 
+                    user: cleanUsername, 
+                    action: 'added',
+                    totalUsers: this.allowedUsers.size,
+                    active: true
+                }), { headers: JSON_HEADERS });
             }
-            
-            try {
-                const { username } = await request.json();
-                if (username && username.trim()) {
-                    const cleanUsername = username.trim();
-                    
-                    // 【✨ 核心变更】首次添加用户时激活白名单
-                    if (this.allowedUsers === undefined) {
-                        this.allowedUsers = new Set();
-                        this.debugLog(`✨ 房间白名单已激活！`, 'INFO');
-                    }
-                    
-                    this.allowedUsers.add(cleanUsername);
+            return new Response('Missing or empty username', { status: 400 });
+        } catch (e) {
+            return new Response('Invalid JSON', { status: 400 });
+        }
+    }
+        
+    // 移除用户API处理器
+    async handleRemoveUser(request, url) {
+        if (request.method !== 'POST') {
+            return new Response('Method Not Allowed', { status: 405 });
+        }
+        
+        const secret = url.searchParams.get('secret');
+        if (this.env.ADMIN_SECRET && secret !== this.env.ADMIN_SECRET) {
+            this.debugLog("🚫 Unauthorized user remove attempt", 'WARN');
+            return new Response("Forbidden.", { status: 403 });
+        }
+        
+        try {
+            const { username } = await request.json();
+            if (username && username.trim()) {
+                if (this.allowedUsers === undefined) {
+                    return new Response('Whitelist not active for this room', { status: 404 });
+                }
+                
+                const cleanUsername = username.trim();
+                const deleted = this.allowedUsers.delete(cleanUsername);
+                if (deleted) {
                     await this.saveState();
-                    this.debugLog(`✅ 用户 ${cleanUsername} 已添加到白名单`);
+                    this.debugLog(`🗑️ 用户 ${cleanUsername} 已从白名单移除`);
+                    
+                    // 断开该用户的现有连接
+                    this.sessions.forEach((session, sessionId) => {
+                        if (session.username === cleanUsername) {
+                            this.debugLog(`⚡ 断开已移除用户的连接: ${cleanUsername}`);
+                            session.ws.close(1008, "User removed from allowed list");
+                        }
+                    });
+                    
                     return new Response(JSON.stringify({ 
                         success: true, 
                         user: cleanUsername, 
-                        action: 'added',
-                        totalUsers: this.allowedUsers.size,
-                        active: true
-                    }), { headers: JSON_HEADERS });
-                }
-                return new Response('Missing or empty username', { status: 400 });
-            } catch (e) {
-                return new Response('Invalid JSON', { status: 400 });
-            }
-        }
-        
-        if (url.pathname.endsWith('/users/remove') && request.method === 'POST') {
-            const secret = url.searchParams.get('secret');
-            if (this.env.ADMIN_SECRET && secret !== this.env.ADMIN_SECRET) {
-                this.debugLog("🚫 Unauthorized user remove attempt", 'WARN');
-                return new Response("Forbidden.", { status: 403 });
-            }
-            
-            try {
-                const { username } = await request.json();
-                if (username && username.trim()) {
-                    // 【修改】检查白名单是否已激活
-                    if (this.allowedUsers === undefined) {
-                        return new Response('Whitelist not active for this room', { status: 404 });
-                    }
-                    
-                    const cleanUsername = username.trim();
-                    const deleted = this.allowedUsers.delete(cleanUsername);
-                    if (deleted) {
-                        await this.saveState();
-                        this.debugLog(`🗑️ 用户 ${cleanUsername} 已从白名单移除`);
-                        
-                        // 断开该用户的现有连接
-                        this.sessions.forEach((session, sessionId) => {
-                            if (session.username === cleanUsername) {
-                                this.debugLog(`⚡ 断开已移除用户的连接: ${cleanUsername}`);
-                                session.ws.close(1008, "User removed from allowed list");
-                            }
-                        });
-                        
-                        return new Response(JSON.stringify({ 
-                            success: true, 
-                            user: cleanUsername, 
-                            action: 'removed',
-                            totalUsers: this.allowedUsers.size
-                        }), { headers: JSON_HEADERS });
-                    } else {
-                        return new Response('User not found in allowed list', { status: 404 });
-                    }
-                }
-                return new Response('Missing or empty username', { status: 400 });
-            } catch (e) {
-                return new Response('Invalid JSON', { status: 400 });
-            }
-        }
-        
-        // 【修改】清空白名单API
-        if (url.pathname.endsWith('/users/clear') && request.method === 'POST') {
-            const secret = url.searchParams.get('secret');
-            if (this.env.ADMIN_SECRET && secret !== this.env.ADMIN_SECRET) {
-                this.debugLog("🚫 Unauthorized user clear attempt", 'WARN');
-                return new Response("Forbidden.", { status: 403 });
-            }
-            
-            // 【修改】检查白名单是否已激活
-            if (this.allowedUsers === undefined) {
-                return new Response('Whitelist not active for this room', { status: 404 });
-            }
-            
-            const previousCount = this.allowedUsers.size;
-            this.allowedUsers.clear();
-            await this.saveState();
-            this.debugLog(`🧹 白名单已清空，移除了 ${previousCount} 个用户`);
-            
-            return new Response(JSON.stringify({ 
-                success: true, 
-                cleared: previousCount,
-                totalUsers: 0
-            }), { headers: JSON_HEADERS });
-        }
-        
-        // 【修改】消息历史API
-        if (url.pathname.endsWith('/messages/history')) {
-            // 【修改】检查白名单是否已激活
-            if (this.allowedUsers === undefined) {
-                return new Response('Room not found or not activated', { status: 404 });
-            }
-            
-            await this.loadMessages(); // 延迟加载消息
-            const since = parseInt(url.searchParams.get('since') || '0', 10);
-            const history = this.fetchHistory(since);
-            this.debugLog(`📜 请求历史消息. Since: ${since}, 返回: ${history.length} 条消息`);
-            return new Response(JSON.stringify(history), { headers: JSON_HEADERS });
-        }
-
-        // 【修改】消息删除API
-        if (url.pathname.endsWith('/messages/delete')) {
-            const messageId = url.searchParams.get('id');
-            const secret = url.searchParams.get('secret');
-            
-            // 【修改】检查白名单是否已激活
-            if (this.allowedUsers === undefined) {
-                return new Response('Room not found or not activated', { status: 404 });
-            }
-            
-            if (this.env.ADMIN_SECRET && secret === this.env.ADMIN_SECRET) {
-                await this.loadMessages(); // 延迟加载消息
-                
-                const originalCount = this.messages.length;
-                this.messages = this.messages.filter(msg => msg.id !== messageId);
-                const deleted = originalCount - this.messages.length;
-                
-                if (deleted > 0) {
-                    await this.saveMessages();
-                    this.debugLog(`🗑️ Message deleted: ${messageId}`);
-                    this.broadcast({ type: MSG_TYPE_DELETE, payload: { messageId } });
-                    return new Response(JSON.stringify({
-                        message: "消息删除成功",
-                        deleted: deleted
+                        action: 'removed',
+                        totalUsers: this.allowedUsers.size
                     }), { headers: JSON_HEADERS });
                 } else {
-                    return new Response(JSON.stringify({
-                        message: "Message not found"
-                    }), { status: 404, headers: JSON_HEADERS });
-                }
-            } else {
-                this.debugLog("🚫 Unauthorized delete attempt", 'WARN');
-                return new Response("Forbidden.", { status: 403 });
-            }
-        }
-
-        // 【修改】房间状态API
-        if (url.pathname.endsWith('/room/status')) {
-            let status = {
-                allowedUsers: this.allowedUsers === undefined ? 0 : this.allowedUsers.size,
-                activeSessions: this.sessions.size,
-                isInitialized: this.isInitialized,
-                active: this.allowedUsers !== undefined,
-                timestamp: new Date().toISOString()
-            };
-            
-            // 只有在白名单已激活的情况下才加载消息
-            if (this.allowedUsers !== undefined) {
-                if (this.messages === null) {
-                    const messageCount = (await this.ctx.storage.get("messages_count")) || 0;
-                    status.totalMessages = messageCount;
-                } else {
-                    status.totalMessages = this.messages.length;
-                    status.lastActivity = this.messages.length > 0 ? 
-                        Math.max(...this.messages.map(m => m.timestamp)) : null;
+                    return new Response('User not found in allowed list', { status: 404 });
                 }
             }
-            
-            return new Response(JSON.stringify(status), { headers: JSON_HEADERS });
+            return new Response('Missing or empty username', { status: 400 });
+        } catch (e) {
+            return new Response('Invalid JSON', { status: 400 });
         }
-
-        // 调试日志API
-        if (url.pathname.endsWith('/debug/logs')) {
-            this.debugLog(`🔍 请求debug信息. Total logs: ${this.debugLogs.length}`);
-            return new Response(JSON.stringify({
-                logs: this.debugLogs,
-                totalLogs: this.debugLogs.length,
-                activeSessions: this.sessions.size,
-                allowedUsers: this.allowedUsers === undefined ? 0 : this.allowedUsers.size,
-                active: this.allowedUsers !== undefined,
-                timestamp: new Date().toISOString()
-            }), { headers: JSON_HEADERS });
-        }
-        
-        if (url.pathname.endsWith('/debug/sessions')) {
-            const sessionInfo = this.getActiveUserList(true);
-            return new Response(JSON.stringify({
-                sessions: sessionInfo,
-                totalSessions: this.sessions.size,
-                timestamp: new Date().toISOString()
-            }), { headers: JSON_HEADERS });
-        }
-        
-        if (url.pathname.endsWith('/debug/clear')) {
-            const clearedCount = this.debugLogs.length;
-            this.debugLogs = [];
-            this.debugLog(`🧹 Debug logs cleared. Cleared ${clearedCount} logs`);
-            return new Response(JSON.stringify({
-                message: `Cleared ${clearedCount} debug logs`,
-                timestamp: new Date().toISOString()
-            }), { headers: JSON_HEADERS });
-        }
-        
-        // 【修改】房间重置API
-        if (url.pathname.endsWith('/reset-room')) {
-            const secret = url.searchParams.get('secret');
-            if (this.env.ADMIN_SECRET && secret === this.env.ADMIN_SECRET) {
-                await this.ctx.storage.deleteAll();
-                this.messages = [];
-                this.sessions.clear();
-                this.debugLogs = [];
-                this.allowedUsers = undefined; // 【修改】将白名单重置为未激活状态
-                this.debugLog("🔄 Room reset successfully");
-                this.broadcastUserListUpdate();
-                return new Response("Room has been reset successfully.", { status: 200 });
-            } else {
-                this.debugLog("🚫 Unauthorized reset attempt", 'WARN');
-                return new Response("错了噢~,请输入正确的密码.", { status: 403 });
-            }
-        }
-
-        return new Response("API endpoint not found", { status: 404 });
     }
+        
+    // 清空白名单API处理器
+    async handleClearUsers(request, url) {
+        if (request.method !== 'POST') {
+            return new Response('Method Not Allowed', { status: 405 });
+        }
+        
+        const secret = url.searchParams.get('secret');
+        if (this.env.ADMIN_SECRET && secret !== this.env.ADMIN_SECRET) {
+            this.debugLog("🚫 Unauthorized user clear attempt", 'WARN');
+            return new Response("Forbidden.", { status: 403 });
+        }
+        
+        if (this.allowedUsers === undefined) {
+            return new Response('Whitelist not active for this room', { status: 404 });
+        }
+        
+        const previousCount = this.allowedUsers.size;
+        this.allowedUsers.clear();
+        await this.saveState();
+        this.debugLog(`🧹 白名单已清空，移除了 ${previousCount} 个用户`);
+        
+        return new Response(JSON.stringify({ 
+            success: true, 
+            cleared: previousCount,
+            totalUsers: 0
+        }), { headers: JSON_HEADERS });
+    };
+        
+    // 消息历史API处理器
+    async handleMessageHistory(request, url) {
+        if (this.allowedUsers === undefined) {
+            return new Response('Room not found or not activated', { status: 404 });
+        }
+        
+        await this.loadMessages();
+        const since = parseInt(url.searchParams.get('since') || '0', 10);
+        const history = this.fetchHistory(since);
+        this.debugLog(`📜 请求历史消息. Since: ${since}, 返回: ${history.length} 条消息`);
+        return new Response(JSON.stringify(history), { headers: JSON_HEADERS });
+    }
+
+    // 消息删除API处理器
+    async handleDeleteMessage(request, url) {
+        const messageId = url.searchParams.get('id');
+        const secret = url.searchParams.get('secret');
+        
+        if (this.allowedUsers === undefined) {
+            return new Response('Room not found or not activated', { status: 404 });
+        }
+        
+        if (this.env.ADMIN_SECRET && secret === this.env.ADMIN_SECRET) {
+            await this.loadMessages();
+            
+            const originalCount = this.messages.length;
+            this.messages = this.messages.filter(msg => msg.id !== messageId);
+            const deleted = originalCount - this.messages.length;
+            
+            if (deleted > 0) {
+                await this.saveMessages();
+                this.debugLog(`🗑️ Message deleted: ${messageId}`);
+                this.broadcast({ type: MSG_TYPE_DELETE, payload: { messageId } });
+                return new Response(JSON.stringify({
+                    message: "消息删除成功",
+                    deleted: deleted
+                }), { headers: JSON_HEADERS });
+            } else {
+                return new Response(JSON.stringify({
+                    message: "Message not found"
+                }), { status: 404, headers: JSON_HEADERS });
+            }
+        } else {
+            this.debugLog("🚫 Unauthorized delete attempt", 'WARN');
+            return new Response("Forbidden.", { status: 403 });
+        }
+    }
+
+    // 房间状态API处理器
+    async handleRoomStatus(request) {
+        let status = {
+            allowedUsers: this.allowedUsers === undefined ? 0 : this.allowedUsers.size,
+            activeSessions: this.sessions.size,
+            isInitialized: this.isInitialized,
+            active: this.allowedUsers !== undefined,
+            timestamp: new Date().toISOString()
+        };
+        
+        if (this.allowedUsers !== undefined) {
+            if (this.messages === null) {
+                const messageCount = (await this.ctx.storage.get("messages_count")) || 0;
+                status.totalMessages = messageCount;
+            } else {
+                status.totalMessages = this.messages.length;
+                status.lastActivity = this.messages.length > 0 ? 
+                    Math.max(...this.messages.map(m => m.timestamp)) : null;
+            }
+        }
+        
+        return new Response(JSON.stringify(status), { headers: JSON_HEADERS });
+    }
+
+    // 调试日志API处理器
+    async handleDebugLogs(request) {
+        this.debugLog(`🔍 请求debug信息. Total logs: ${this.debugLogs.length}`);
+        return new Response(JSON.stringify({
+            logs: this.debugLogs,
+            totalLogs: this.debugLogs.length,
+            activeSessions: this.sessions.size,
+            allowedUsers: this.allowedUsers === undefined ? 0 : this.allowedUsers.size,
+            active: this.allowedUsers !== undefined,
+            timestamp: new Date().toISOString()
+        }), { headers: JSON_HEADERS });
+    }
+        
+    // 调试会话API处理器
+    async handleDebugSessions(request) {
+        const sessionInfo = this.getActiveUserList(true);
+        return new Response(JSON.stringify({
+            sessions: sessionInfo,
+            totalSessions: this.sessions.size,
+            timestamp: new Date().toISOString()
+        }), { headers: JSON_HEADERS });
+    }
+        
+    // 清除调试日志API处理器
+    async handleClearDebugLogs(request) {
+        const clearedCount = this.debugLogs.length;
+        this.debugLogs = [];
+        this.debugLog(`🧹 Debug logs cleared. Cleared ${clearedCount} logs`);
+        return new Response(JSON.stringify({
+            message: `Cleared ${clearedCount} debug logs`,
+            timestamp: new Date().toISOString()
+        }), { headers: JSON_HEADERS });
+    }
+        
+    // 房间重置API处理器
+    async handleResetRoom(request, url) {
+        const secret = url.searchParams.get('secret');
+        if (this.env.ADMIN_SECRET && secret === this.env.ADMIN_SECRET) {
+            await this.ctx.storage.deleteAll();
+            this.messages = [];
+            this.sessions.clear();
+            this.debugLogs = [];
+            this.allowedUsers = undefined;
+            this.debugLog("🔄 Room reset successfully");
+            this.broadcastUserListUpdate();
+            return new Response("Room has been reset successfully.", { status: 200 });
+        } else {
+            this.debugLog("🚫 Unauthorized reset attempt", 'WARN');
+            return new Response("错了噢~,请输入正确的密码.", { status: 403 });
+        }
+    }
+
 
     // ============ 辅助方法 ============
     getActiveUserList(detailed = false) {
@@ -709,7 +743,7 @@ async handleSessionInitialization(ws, url) {
                     await this.handleChatMessage(session, data.payload); 
                     break;
                 case MSG_TYPE_DELETE:
-                    await this.handleDeleteMessage(session, data.payload);
+                    await this.handleDeleteMessageRequest(session, data.payload);
                     break;
                 case MSG_TYPE_HEARTBEAT:
                     this.debugLog(`💓 收到心跳包💓 👦  ${session.username}`, 'HEARTBEAT');
@@ -826,41 +860,42 @@ async handleSessionInitialization(ws, url) {
         await this.addAndBroadcastMessage(message);
     }
 
-    async handleDeleteMessage(session, payload) { 
-        // 【修改】在处理删除消息前，确保历史已加载
-        await this.loadMessages();
+  // 将第二个函数重命名为 handleDeleteMessageRequest
+async handleDeleteMessageRequest(session, payload) { 
+    // 【修改】在处理删除消息前，确保历史已加载
+    await this.loadMessages();
+    
+    const messageId = payload.id;
+    if (!messageId) {
+        this.debugLog(`❌ 正在处理用户： 👦 ${session.username} 的消息删除请求，message ID.`, 'WARN');
+        return;
+    }
+
+    const initialLength = this.messages.length;
+    const messageToDelete = this.messages.find(m => m.id === messageId);
+
+    if (messageToDelete && messageToDelete.username === session.username) {
+        this.messages = this.messages.filter(m => m.id !== messageId);
         
-        const messageId = payload.id;
-        if (!messageId) {
-            this.debugLog(`❌ 正在处理用户： 👦 ${session.username} 的消息删除请求，message ID.`, 'WARN');
-            return;
+        if (this.messages.length < initialLength) {
+            this.debugLog(`🗑️ 此消息： ${messageId} 已被用户： 👦 ${session.username}删除.`);
+            await this.saveMessages();
+            this.broadcast({ type: MSG_TYPE_DELETE, payload: { messageId } });
         }
-
-        const initialLength = this.messages.length;
-        const messageToDelete = this.messages.find(m => m.id === messageId);
-
-        if (messageToDelete && messageToDelete.username === session.username) {
-            this.messages = this.messages.filter(m => m.id !== messageId);
-            
-            if (this.messages.length < initialLength) {
-                this.debugLog(`🗑️ 此消息： ${messageId} 已被用户： 👦 ${session.username}删除.`);
-                await this.saveMessages();
-                this.broadcast({ type: MSG_TYPE_DELETE, payload: { messageId } });
-            }
-        } else {
-            let reason = messageToDelete ? "permission denied" : "message not found";
-            this.debugLog(`🚫 Unauthorized delete attempt by 👦 ${session.username} for message ${messageId}. Reason: ${reason}`, 'WARN');
-            
-            try {
-                session.ws.send(JSON.stringify({
-                    type: MSG_TYPE_ERROR,
-                    payload: { message: "你不能删除这条消息。" }
-                }));
-            } catch (e) {
-                this.debugLog(`❌ 无法发送错误信息 to 👦 ${session.username}: ${e.message}`, 'ERROR');
-            }
+    } else {
+        let reason = messageToDelete ? "permission denied" : "message not found";
+        this.debugLog(`🚫 Unauthorized delete attempt by 👦 ${session.username} for message ${messageId}. Reason: ${reason}`, 'WARN');
+        
+        try {
+            session.ws.send(JSON.stringify({
+                type: MSG_TYPE_ERROR,
+                payload: { message: "你不能删除这条消息。" }
+            }));
+        } catch (e) {
+            this.debugLog(`❌ 无法发送错误信息 to 👦 ${session.username}: ${e.message}`, 'ERROR');
         }
     }
+}
 
     async addAndBroadcastMessage(message) {
         this.messages.push(message);
