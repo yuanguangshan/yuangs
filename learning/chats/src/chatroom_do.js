@@ -304,7 +304,7 @@ async handleSessionInitialization(ws, url) {
                         // ignore
                     }
                     resolve();
-                }, 5000); // 10秒延迟
+                }, 2000); // 10秒延迟
             }));
 
         } catch(e) {
