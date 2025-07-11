@@ -429,13 +429,13 @@ export async function generateAndPostCharts(env, roomName) {
         console.log(`[ChartGenerator] Data fetched and filtered. ${filteredData.length} items remaining.`);
 
         const chartsToGenerate = [
-            { title: '期货品种走势对比', optionFunc: getChart1Option, width: 1200, height: 600 },
-            { title: '投机度与涨跌幅对比', optionFunc: getChart2Option, width: 1200, height: 600 },
-            { title: '增仓率与涨跌幅对比', optionFunc: getChart3Option, width: 1200, height: 600 },
-            { title: '各周期涨跌幅对比', optionFunc: getChart4Option, width: 1200, height: 600 },
-            { title: '自定义指标对比', optionFunc: getChart5Option, width: 1200, height: 600, metric1: 'cdzj', metric2: 'tjd' }, // 使用默认指标
+            { title: '期货品种走势对比', optionFunc: getChart1Option, width: 1500, height: 600 },
+            // { title: '投机度与涨跌幅对比', optionFunc: getChart2Option, width: 1200, height: 600 },
+            // { title: '增仓率与涨跌幅对比', optionFunc: getChart3Option, width: 1200, height: 600 },
+            // { title: '各周期涨跌幅对比', optionFunc: getChart4Option, width: 1200, height: 600 },
+            // { title: '自定义指标对比', optionFunc: getChart5Option, width: 1200, height: 600, metric1: 'cdzj', metric2: 'tjd' }, // 使用默认指标
             { title: '品种涨跌图', optionFunc: getChart6Option, width: 800, height: 600 },
-            { title: '涨跌幅与增仓比关系图', optionFunc: getChart7Option, width: 1000, height: 800 },
+            // { title: '涨跌幅与增仓比关系图', optionFunc: getChart7Option, width: 1000, height: 800 },
             { title: '品种涨跌幅区间统计', optionFunc: getChart8Option, width: 800, height: 600 }
         ];
 
