@@ -12,7 +12,7 @@ const CRON_TRIGGERS = {
     // 假设每天早上8点发送文本消息 (注意：这里的时间可以自定义)
     DAILY_TEXT_MESSAGE: "0 9 * * *",  
     // 盘中和夜盘时段，每小时整点生成图表
-    HOURLY_CHART_GENERATION:   "*/10 1-6 * * 1-5" // 周一到周五的指定小时
+    HOURLY_CHART_GENERATION:   "*/10 0-7 * * 1-6" // 周一到周五的指定小时
 };
 
 /**
