@@ -143,3 +143,35 @@ export async function getGeminiImageDescription(imageUrl, env) {
     if (!description) throw new Error('Unexpected AI response format from Gemini Vision.');
     return description;
 }
+
+/**
+ * 调用 Google Gemini API 获取聊天回复。
+ */
+export async function getGeminiChatAnswer(question, env) {
+    const apiKey = env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error('Server config error: GEMINI_API_KEY is not set.');
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`;
+    const prompt = `请详细解释这段话的含义,通俗易懂,尽可能用生活中的例子举例说明,如果用户提问的是编程相关的问题,默认用户懂python和javascript,尽可能用这两种语言的相关知识作答\n\n${question}`;
+
+    const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }]
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error(`Gemini API error: ${await response.text()}`);
+    }
+
+    const data = await response.json();
+    const answer = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!answer) {
+        throw new Error('Unexpected AI response format from Gemini.');
+    }
+
+    return answer;
+}
