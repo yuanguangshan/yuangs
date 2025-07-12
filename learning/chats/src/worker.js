@@ -16,7 +16,7 @@
 globalThis.global = globalThis;
 
 
-import { HibernatingChatRoom } from './chatroom_do.js';
+import { HibernatingChating } from './chatroom_do.js';
 import html from '../public/index.html';
 import managementHtml from '../public/management.html';
 import { generateAndPostCharts } from './chart_generator.js';
@@ -24,7 +24,7 @@ import { taskMap } from './autoTasks.js';
 import { getDeepSeekExplanation, getGeminiExplanation, getGeminiImageDescription } from './ai.js';
 
 // 导出Durable Object类，以便Cloudflare平台能够识别和实例化它。
-export { HibernatingChatRoom };
+export { HibernatingChating };
 
 // --- CORS (Cross-Origin Resource Sharing) Headers ---
 // 这是一个可重用的对象，用于为API响应添加正确的CORS头部，允许跨域访问。

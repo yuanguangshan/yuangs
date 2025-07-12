@@ -27,7 +27,7 @@ const JSON_HEADERS = {
     'Access-Control-Allow-Origin': '*'
 };
 
-export class HibernatingChatRoom extends DurableObject {
+export class HibernatingChating extends DurableObject {
     constructor(ctx, env) {
         super(ctx, env);
         this.ctx = ctx;
