@@ -521,6 +521,10 @@
       font-size: 12px;
     }
 
+    th.sortable {
+      cursor: pointer;
+    }
+
     tr:nth-child(even) {
       background-color: var(--bg-color);
     }
@@ -671,6 +675,53 @@
       text-align: center;
     }
 
+    /* 维度切换按钮组样式 */
+    .dimension-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 12px 12px;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .dimension-title {
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .dimension-buttons {
+      display: flex;
+      background-color: var(--bg-secondary);
+      border-radius: var(--radius-md);
+      padding: 3px;
+      border: 1px solid var(--border-color);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .dimension-btn {
+      padding: 5px 10px;
+      font-size: 12px;
+      border: none;
+      background: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      color: var(--text-secondary);
+    }
+
+    .dimension-btn:hover:not(.active) {
+      background-color: rgba(90, 141, 238, 0.1);
+      color: var(--text-color);
+    }
+
+    .dimension-btn.active {
+      background-color: var(--primary);
+      color: white;
+      box-shadow: var(--shadow-sm);
+    }
+
     /* 响应式调整 */
     @media (max-width: 400px) {
       body {
@@ -692,6 +743,15 @@
       .controls {
         margin: 8px;
         gap: 4px;
+      }
+
+      .dimension-controls {
+        margin: 0 8px 12px;
+      }
+
+      .dimension-btn {
+        padding: 4px 8px;
+        font-size: 11px;
       }
     }
   </style>
@@ -730,6 +790,16 @@
           <span class="slider"></span>
         </label>
         <span style="margin-left: 5px; font-size: 12px;">Σ</span>
+      </div>
+    </div>
+    
+    <!-- 维度切换按钮组 -->
+    <div class="dimension-controls">
+      <div class="dimension-title">维度:</div>
+      <div class="dimension-buttons">
+        <button class="dimension-btn active" data-dimension="quantity">数量</button>
+        <button class="dimension-btn" data-dimension="trading">持仓额</button>
+        <button class="dimension-btn" data-dimension="capital">保证金</button>
       </div>
     </div>
 
@@ -784,11 +854,11 @@
             <tr>
               <th class="col-no">排名</th>
               <th class="col-name">多头</th>
-              <th class="col-pos">持仓</th>
-              <th class="col-change">变化</th>
+              <th class="col-pos sortable" data-type="pos" data-side="long">持仓</th>
+              <th class="col-change sortable" data-type="change" data-side="long">变化</th>
               <th class="col-name">空头</th>
-              <th class="col-pos">持仓</th>
-              <th class="col-change">变化</th>
+              <th class="col-pos sortable" data-type="pos" data-side="short">持仓</th>
+              <th class="col-change sortable" data-type="change" data-side="short">变化</th>
             </tr>
           </thead>
           <tbody id="data-body">
@@ -869,6 +939,15 @@
     let isDarkMode = false; // 是否为暗色模式
     let userThemePreference = null; // 用户主题首选项，null表示跟随系统
     
+    // 数据维度相关变量
+    let currentDimension = 'quantity'; // 当前数据维度: quantity=数量, trading=交易, capital=资金
+    let contractRatios = {}; // 存储合约的交易和资金系数
+    let isLoadingRatios = false; // 是否正在加载系数数据
+    
+    // 排序相关变量
+    let currentSortColumn = null; // 当前排序的列
+    let currentSortType = 'none'; // 排序类型：none, desc, abs-desc, asc
+    
     // 缓存相关变量
     let cachedData = {}; // 用于存储缓存的数据
     const CACHE_EXPIRY_DAYS = 0.05; // 缓存过期时间（天）
@@ -933,6 +1012,126 @@
       }
       
       return params;
+    }
+    
+    // 获取合约的交易和资金系数
+    async function fetchContractRatios() {
+      if (!selectedContract || isLoadingRatios) return;
+      
+      // 如果已经有该合约的系数数据，直接返回
+      if (contractRatios[selectedContract.dm]) {
+        console.log(`使用缓存的系数数据: ${selectedContract.dm}`);
+        return;
+      }
+      
+      isLoadingRatios = true;
+      
+      try {
+        // 获取系数数据
+        const response = await fetch('https://q.want.biz/');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        // 处理每个合约的系数
+        result.list.forEach(contract => {
+          // 计算交易系数 (cje/vol)
+          const tradingRatio = contract.vol !== 0 ? contract.cje / contract.vol : 1;
+          
+          // 计算资金系数 (cdzj/ccl)
+          const capitalRatio = contract.ccl !== 0 ? contract.cdzj / contract.ccl : 1;
+          
+          // 存储系数数据
+          contractRatios[contract.dm] = {
+            turnoverRatio: tradingRatio,
+            capitalRatio: capitalRatio
+          };
+        });
+        
+        console.log('系数数据获取成功');
+      } catch (error) {
+        console.error('获取系数数据失败:', error);
+        // 设置默认系数为1
+        contractRatios[selectedContract.dm] = {
+          turnoverRatio: 1,
+          capitalRatio: 1
+        };
+      } finally {
+        isLoadingRatios = false;
+      }
+    }
+    
+    // 获取当前维度的系数
+    function getCurrentDimensionRatio() {
+      if (!selectedContract) return 1;
+      
+      // 如果没有该合约的系数数据，返回默认值1
+      if (!contractRatios[selectedContract.dm]) {
+        return 1;
+      }
+      
+      // 根据当前维度返回相应的系数
+      switch (currentDimension) {
+        case 'trading':
+          return contractRatios[selectedContract.dm].turnoverRatio || 1;
+        case 'capital':
+          return contractRatios[selectedContract.dm].capitalRatio || 1;
+        case 'quantity':
+        default:
+          return 1; // 数量维度不需要应用系数
+      }
+    }
+    
+    // 切换数据维度
+    function switchDimension(dimension) {
+      if (dimension === currentDimension) return;
+      
+      // 更新当前维度
+      currentDimension = dimension;
+      
+      // 更新维度按钮样式
+      document.querySelectorAll('.dimension-btn').forEach(btn => {
+        if (btn.dataset.dimension === dimension) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+      
+      // 更新维度标题
+      let dimensionTitle = '';
+      switch (dimension) {
+        case 'quantity':
+          dimensionTitle = '数量';
+          break;
+        case 'trading':
+          dimensionTitle = '交易';
+          break;
+        case 'capital':
+          dimensionTitle = '资金';
+          break;
+      }
+      
+      // 更新图表标题
+      const chartTitle = document.getElementById('chart-title');
+      if (chartTitle) {
+        let baseTitle = '';
+        if (currentChartView === 1) {
+          baseTitle = '按净仓排序 (同时上榜优先)';
+        } else if (currentChartView === 2) {
+          baseTitle = '按总持仓排序 (前五名)';
+        } else if (currentChartView === 3) {
+          baseTitle = '单边上榜(按持仓排序)';
+        }
+        chartTitle.textContent = `${baseTitle} - ${dimensionTitle}`;
+      }
+      
+      // 重新渲染数据
+      if (data) {
+        renderData();
+      }
     }
 
     // 根据品种代码获取市场ID
@@ -1022,6 +1221,23 @@
         tab.addEventListener('click', function() {
           const viewId = parseInt(this.dataset.view);
           switchChartView(viewId);
+        });
+      });
+      
+      // 绑定维度切换按钮事件
+      document.querySelectorAll('.dimension-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const dimension = this.dataset.dimension;
+          switchDimension(dimension);
+        });
+      });
+      
+      // 绑定表格排序事件
+      document.querySelectorAll('th.sortable').forEach(th => {
+        th.addEventListener('click', function() {
+          const type = this.dataset.type;
+          const side = this.dataset.side;
+          toggleSort(type, side);
         });
       });
       
@@ -1176,19 +1392,18 @@
         }
         
         // 3. 如果还没找到，尝试根据品种代码匹配
-// 精确匹配品种代码（去掉合约月份）
-if (!contractFound && varietyParam) {
-  const matchedContract = contracts.find(c => {
-    const code = c.dm.replace(/\d+$/, '').toUpperCase(); // 去掉数字
-    return code === varietyParam.toUpperCase();
-  });
+        if (!contractFound && varietyParam) {
+          const matchedContract = contracts.find(c => {
+            const code = c.dm.replace(/\d+$/, '').toUpperCase(); // 去掉数字
+            return code === varietyParam.toUpperCase();
+          });
 
-  if (matchedContract) {
-    selectedContract = matchedContract;
-    selectElement.value = selectedContract.dm;
-    contractFound = true;
-  }
-}
+          if (matchedContract) {
+            selectedContract = matchedContract;
+            selectElement.value = selectedContract.dm;
+            contractFound = true;
+          }
+        }
         
         // 4. 如果都没找到，使用第一个合约
         if (!contractFound && contracts.length > 0) {
@@ -1270,6 +1485,12 @@ if (!contractFound && varietyParam) {
         showData(true);
         showCacheWarning(true, `使用缓存数据 (${new Date(cachedData[cacheKey].timestamp).toLocaleString()})`);
         
+        // 重置排序状态
+        resetSortState();
+        
+        // 获取合约系数
+        await fetchContractRatios();
+        
         // 延迟渲染图表以确保容器已完全呈现
         setTimeout(() => {
           // 初始化图表（如果还没初始化）
@@ -1313,6 +1534,12 @@ if (!contractFound && varietyParam) {
         };
         saveCacheToStorage();
         
+        // 重置排序状态
+        resetSortState();
+        
+        // 获取合约系数
+        await fetchContractRatios();
+        
         // 先显示数据区域
         showLoading(false);
         showData(true);
@@ -1343,6 +1570,12 @@ if (!contractFound && varietyParam) {
           showData(true);
           showCacheWarning(true, `获取数据失败，使用缓存数据 (${new Date(cachedData[cacheKey].timestamp).toLocaleString()})`);
           
+          // 重置排序状态
+          resetSortState();
+          
+          // 获取合约系数
+          await fetchContractRatios();
+          
           // 延迟渲染图表以确保容器已完全呈现
           setTimeout(() => {
             // 初始化图表（如果还没初始化）
@@ -1361,6 +1594,12 @@ if (!contractFound && varietyParam) {
         showLoading(false);
         showError(true, '获取数据失败: ' + error.message);
       }
+    }
+
+    // 重置排序状态
+    function resetSortState() {
+      currentSortColumn = null;
+      currentSortType = 'none';
     }
 
     // 初始化图表
@@ -1416,6 +1655,31 @@ if (!contractFound && varietyParam) {
       fetchData();
     }
 
+    // 切换排序方式
+    function toggleSort(type, side) {
+      const columnId = `${type}-${side}`;
+      
+      if (currentSortColumn === columnId) {
+        // 当前列已经在排序，切换排序方式
+        if (currentSortType === 'none') {
+          currentSortType = 'desc';
+        } else if (currentSortType === 'desc') {
+          currentSortType = 'abs-desc';
+        } else if (currentSortType === 'abs-desc') {
+          currentSortType = 'asc';
+        } else { // asc
+          currentSortType = 'none';
+        }
+      } else {
+        // 新的列排序，重置为降序
+        currentSortColumn = columnId;
+        currentSortType = 'desc';
+      }
+      
+      // 重新渲染数据
+      renderTable();
+    }
+
     // 切换图表视图
     function switchChartView(viewId) {
       if (viewId === currentChartView) return;
@@ -1467,17 +1731,30 @@ if (!contractFound && varietyParam) {
       const numberValue = typeof num === 'string' ? parseInt(num) : num;
       if (isNaN(numberValue)) return '';
       
-      if (numberValue >= 10000) {
-        return (numberValue / 10000).toFixed(1) + '万';
+      // 根据当前维度选择不同的格式化逻辑
+      if (currentDimension === 'trading' || currentDimension === 'capital') {
+        // 交易和资金维度使用亿和万的格式
+        if (Math.abs(numberValue) >= 100000000) { // 亿
+          return (numberValue / 100000000).toFixed(2) + 'y';
+        } else if (Math.abs(numberValue) >= 10000) { // 万
+          return (numberValue / 10000).toFixed(0) + 'w';
+        } else {
+          return numberValue.toString(); // 小于1万直接显示
+        }
+      } else {
+        // 数量维度保持原来的格式
+        if (numberValue >= 10000) {
+          return (numberValue / 10000).toFixed(1) + '万';
+        }
+        return numberValue.toString();
       }
-      return numberValue.toString();
     }
 
     // 获取变化类样式
-function getChangeClass(change) {
-  if (change === null || change === undefined || change === 0 || change === '0') return null;
-  return change > 0 ? 'positive' : change < 0 ? 'negative' : null;
-}
+    function getChangeClass(change) {
+      if (change === null || change === undefined || change === 0 || change === '0') return null;
+      return change > 0 ? 'positive' : change < 0 ? 'negative' : null;
+    }
 
     // 渲染数据
     function renderData() {
@@ -1523,20 +1800,25 @@ function getChangeClass(change) {
       const longList = data.longInfoList || [];
       const shortList = data.shortInfoList || [];
       
+      // 获取当前维度的系数
+      const ratio = getCurrentDimensionRatio();
+      
       // 计算多头总持仓和变化
       let totalLongPosition = 0;
       let totalLongChange = 0;
       for (let i = 0; i < Math.min(longList.length, count); i++) {
-        totalLongPosition += parseInt(longList[i].longNum) || 0;
-        totalLongChange += parseInt(longList[i].longChange) || 0;
+        // 根据当前维度应用系数
+        totalLongPosition += (parseInt(longList[i].longNum) || 0) * ratio;
+        totalLongChange += (parseInt(longList[i].longChange) || 0) * ratio;
       }
       
       // 计算空头总持仓和变化
       let totalShortPosition = 0;
       let totalShortChange = 0;
       for (let i = 0; i < Math.min(shortList.length, count); i++) {
-        totalShortPosition += parseInt(shortList[i].shortNum) || 0;
-        totalShortChange += parseInt(shortList[i].shortChange) || 0;
+        // 根据当前维度应用系数
+        totalShortPosition += (parseInt(shortList[i].shortNum) || 0) * ratio;
+        totalShortChange += (parseInt(shortList[i].shortChange) || 0) * ratio;
       }
       
       // 计算持仓比
@@ -1584,14 +1866,52 @@ function getChangeClass(change) {
       }
     }
 
+    // 应用排序
+    function applySortToList(list, type, sortType, valueField, changeField) {
+      if (sortType === 'none') return [...list];
+      
+      const field = type === 'pos' ? valueField : changeField;
+      
+      return [...list].sort((a, b) => {
+        const valueA = parseInt(a[field]) || 0;
+        const valueB = parseInt(b[field]) || 0;
+        
+        if (sortType === 'desc') {
+          return valueB - valueA;
+        } else if (sortType === 'asc') {
+          return valueA - valueB;
+        } else if (sortType === 'abs-desc') {
+          return Math.abs(valueB) - Math.abs(valueA);
+        }
+        
+        return 0;
+      });
+    }
+
     // 渲染表格
     function renderTable() {
       const tableBody = document.getElementById('data-body');
       tableBody.innerHTML = '';
       
+      // 获取原始数据
+      let longList = [...(data.longInfoList || [])];
+      let shortList = [...(data.shortInfoList || [])];
+      
+      // 获取当前维度的系数
+      const ratio = getCurrentDimensionRatio();
+      
+      // 应用排序（如果有）
+      if (currentSortColumn && currentSortType !== 'none') {
+        const [type, side] = currentSortColumn.split('-');
+        
+        if (side === 'long') {
+          longList = applySortToList(longList, type, currentSortType, 'longNum', 'longChange');
+        } else if (side === 'short') {
+          shortList = applySortToList(shortList, type, currentSortType, 'shortNum', 'shortChange');
+        }
+      }
+      
       // 组合多空列表
-      const longList = data.longInfoList || [];
-      const shortList = data.shortInfoList || [];
       const maxLength = Math.max(longList.length, shortList.length);
       const displayCount = Math.min(maxLength, 20); // 显示前20条
       
@@ -1632,9 +1952,11 @@ function getChangeClass(change) {
         const longPosCell = document.createElement('td');
         longPosCell.className = 'col-pos';
         if (long) {
+          // 根据当前维度应用系数
+          const longValue = (parseInt(long.longNum) || 0) * ratio;
           longPosCell.textContent = isRelative
-            ? formatPercentage(calculatePercentage(long.longNum, data.totalLongPosition))
-            : formatNumber(long.longNum);
+            ? formatPercentage(calculatePercentage(longValue, data.totalLongPosition * ratio))
+            : formatNumber(longValue);
         }
         row.appendChild(longPosCell);
         
@@ -1642,8 +1964,10 @@ function getChangeClass(change) {
         const longChangeCell = document.createElement('td');
         longChangeCell.className = 'col-change';
         if (long) {
-          longChangeCell.textContent = long.longChange > 0 ? '+' + long.longChange : long.longChange;
-          longChangeCell.classList.add(getChangeClass(long.longChange));
+          // 根据当前维度应用系数
+          const longChangeValue = (parseInt(long.longChange) || 0) * ratio;
+          longChangeCell.textContent = longChangeValue > 0 ? '+' + formatNumber(longChangeValue) : formatNumber(longChangeValue);
+          longChangeCell.classList.add(getChangeClass(longChangeValue));
         }
         row.appendChild(longChangeCell);
         
@@ -1672,9 +1996,11 @@ function getChangeClass(change) {
         const shortPosCell = document.createElement('td');
         shortPosCell.className = 'col-pos';
         if (short) {
+          // 根据当前维度应用系数
+          const shortValue = (parseInt(short.shortNum) || 0) * ratio;
           shortPosCell.textContent = isRelative
-            ? formatPercentage(calculatePercentage(short.shortNum, data.totalShortPosition))
-            : formatNumber(short.shortNum);
+            ? formatPercentage(calculatePercentage(shortValue, data.totalShortPosition * ratio))
+            : formatNumber(shortValue);
         }
         row.appendChild(shortPosCell);
         
@@ -1682,8 +2008,10 @@ function getChangeClass(change) {
         const shortChangeCell = document.createElement('td');
         shortChangeCell.className = 'col-change';
         if (short) {
-          shortChangeCell.textContent = short.shortChange > 0 ? '+' + short.shortChange : short.shortChange;
-          const changeClass = getChangeClass(short.shortChange);
+          // 根据当前维度应用系数
+          const shortChangeValue = (parseInt(short.shortChange) || 0) * ratio;
+          shortChangeCell.textContent = shortChangeValue > 0 ? '+' + formatNumber(shortChangeValue) : formatNumber(shortChangeValue);
+          const changeClass = getChangeClass(shortChangeValue);
           if (changeClass) {
             shortChangeCell.classList.add(changeClass);
           }
@@ -1701,14 +2029,17 @@ function getChangeClass(change) {
       // 创建机构映射，合并多空持仓信息
       const companyMap = new Map();
       
+      // 获取当前维度的系数
+      const ratio = getCurrentDimensionRatio();
+      
       // 添加多头持仓信息到映射
       data.longInfoList.forEach(item => {
         const companyName = item.futureCompanyName.replace('(代客)', '');
         companyMap.set(companyName, {
           name: companyName,
-          longNum: parseInt(item.longNum) || 0,
+          longNum: (parseInt(item.longNum) || 0) * ratio,
           shortNum: 0,
-          longChange: parseInt(item.longChange) || 0,
+          longChange: (parseInt(item.longChange) || 0) * ratio,
           shortChange: 0,
           hasBoth: false
         });
@@ -1720,17 +2051,17 @@ function getChangeClass(change) {
         if (companyMap.has(companyName)) {
           // 已存在该机构的多头持仓，更新空头信息
           const company = companyMap.get(companyName);
-          company.shortNum = parseInt(item.shortNum) || 0;
-          company.shortChange = parseInt(item.shortChange) || 0;
+          company.shortNum = (parseInt(item.shortNum) || 0) * ratio;
+          company.shortChange = (parseInt(item.shortChange) || 0) * ratio;
           company.hasBoth = true;
         } else {
           // 新增只有空头持仓的机构
           companyMap.set(companyName, {
             name: companyName,
             longNum: 0,
-            shortNum: parseInt(item.shortNum) || 0,
+            shortNum: (parseInt(item.shortNum) || 0) * ratio,
             longChange: 0,
-            shortChange: parseInt(item.shortChange) || 0,
+            shortChange: (parseInt(item.shortChange) || 0) * ratio,
             hasBoth: false
           });
         }
