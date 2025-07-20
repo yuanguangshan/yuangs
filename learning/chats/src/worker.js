@@ -107,10 +107,16 @@ export default {
 
                 // 将房间列表注入到 HTML 字符串中
                 // 我们在 HTML 中放置一个特殊的注释占位符，然后替换它
-                const modifiedHtml = managementHtml.replace(
+                let modifiedHtml = managementHtml.replace(
                     '/* MANAGEMENT_ROOMS_LIST_PLACEHOLDER */',
                     `const potentialRoomsToCheck = ${JSON.stringify(roomsArray)};`
                 );
+                if (env.API_DOMAIN) {
+                    modifiedHtml = modifiedHtml.replace(
+                        '/* API_DOMAIN_PLACEHOLDER */',
+                        `const apiDomain = "${env.API_DOMAIN}";`
+                    );
+                }
 
                 return new Response(modifiedHtml, { headers: { 'Content-Type': 'text/html;charset=UTF-8' } });
             }
@@ -149,7 +155,7 @@ export default {
                     const contentType = request.headers.get('Content-Type') || 'application/octet-stream';
                     
                     // 正确生成包含目录的、唯一的R2对象Key
-                    const r2ObjectKey = `chats/${Date.now()}-${crypto.randomUUID().substring(0, 8)}-${filename}`;
+                    const r2ObjectKey = `chating/${Date.now()}-${crypto.randomUUID().substring(0, 8)}-${filename}`;
                     
                     // 使用正确的key上传到R2
                     const object = await env.R2_BUCKET.put(r2ObjectKey, request.body, {
@@ -159,7 +165,7 @@ export default {
                     // 生成与存储路径完全匹配的公开URL
                     // const r2PublicDomain = "pub-8dfbdda6df204465aae771b4c080140b.r2.dev";
                     const r2PublicDomain = "https://pic.want.biz";
-                    const publicUrl = `${r2PublicDomain}/${object.key}`; // object.key 现在是 "chats/..."
+                    const publicUrl = `${r2PublicDomain}/${object.key}`; // object.key 现在是 "chating/..."
                     
                     return new Response(JSON.stringify({ url: publicUrl }), {
                         headers: { 'Content-Type': 'application/json', ...corsHeaders },
