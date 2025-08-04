@@ -3,6 +3,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>无限地图抽卡游戏</title>
     <style>
+        /* 音效控制按钮样式 */
+        #soundToggle {
+            position: absolute;
+            top: 20px;
+            left: 200px;
+            width: 50px;
+            height: 50px;
+            background-color: rgba(100, 200, 100, 0.7);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 10;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+        #soundToggle:hover {
+            transform: scale(1.1);
+        }
+        #soundToggle.muted {
+            background-color: rgba(200, 100, 100, 0.7);
+        }
         body {
             margin: 0;
             padding: 0;
@@ -369,6 +394,132 @@
             width: 30%;
             min-width: 200px;
         }
+        /* 血条样式 */
+        .health-bar {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 20px;
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            overflow: hidden;
+            z-index: 15;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .health-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff4444, #ff6666);
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+        
+        .health-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        }
+        
+        /* Boss血条样式 */
+        .boss-health-bar {
+            position: absolute;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            height: 25px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 12px;
+            overflow: hidden;
+            z-index: 15;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            display: none;
+        }
+        
+        .boss-health-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #8B0000, #DC143C);
+            border-radius: 12px;
+            transition: width 0.3s ease;
+        }
+        
+        .boss-health-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        }
+        
+        .boss-health-label {
+            position: absolute;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ff4444;
+            font-size: 16px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            display: none;
+            z-index: 15;
+        }
+        
+        /* Buff图标样式 */
+        .buff-icons {
+            position: absolute;
+            top: 100px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 15;
+        }
+        
+        .buff-icon {
+            width: 50px;
+            height: 50px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        
+        .buff-icon::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        
+        .buff-icon:hover::after {
+            opacity: 1;
+        }
+        
         /* 为iPad添加的额外样式 */
         @media (min-width: 768px) and (max-width: 1024px) {
             .ui-button {
@@ -458,6 +609,9 @@
             <div class="circle" id="innerCircle"></div>
         </div>
     </div>
+    
+    <!-- 音效控制按钮 -->
+    <div id="soundToggle">🔊</div>
     
     <div class="modal" id="shopModal">
         <div class="modal-content">
@@ -593,6 +747,256 @@
     </div>
 
     <script>
+        // 音效管理器
+        const SoundManager = {
+            context: null,
+            sounds: {},
+            muted: false,
+            volume: 0.5,
+            
+            init() {
+                try {
+                    this.context = new (window.AudioContext || window.webkitAudioContext)();
+                    this.createSounds();
+                } catch (e) {
+                    console.warn('Web Audio API not supported');
+                }
+            },
+            
+            createSounds() {
+                // 创建各种音效
+                this.sounds.background = this.createTone(440, 0.1, 0.3, 'sine');
+                this.sounds.shoot = this.createTone(800, 0.05, 0.2, 'square');
+                this.sounds.hit = this.createTone(600, 0.1, 0.3, 'sawtooth');
+                this.sounds.enemyDeath = this.createTone(300, 0.2, 0.4, 'sawtooth');
+                this.sounds.coin = this.createTone(1000, 0.1, 0.2, 'sine');
+                this.sounds.levelUp = this.createTone(1200, 0.3, 0.5, 'sine');
+                this.sounds.damage = this.createTone(200, 0.1, 0.3, 'square');
+                this.sounds.shield = this.createTone(500, 0.2, 0.3, 'sine');
+            },
+            
+            createTone(frequency, attack, decay, waveType) {
+                return () => {
+                    if (this.muted || !this.context) return;
+                    
+                    const oscillator = this.context.createOscillator();
+                    const gainNode = this.context.createGain();
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(this.context.destination);
+                    
+                    oscillator.type = waveType;
+                    oscillator.frequency.setValueAtTime(frequency, this.context.currentTime);
+                    
+                    gainNode.gain.setValueAtTime(0, this.context.currentTime);
+                    gainNode.gain.linearRampToValueAtTime(this.volume, this.context.currentTime + attack);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, this.context.currentTime + decay);
+                    
+                    oscillator.start(this.context.currentTime);
+                    oscillator.stop(this.context.currentTime + decay);
+                };
+            },
+            
+            play(soundName) {
+                if (this.sounds[soundName]) {
+                    this.sounds[soundName]();
+                }
+            },
+            
+            toggleMute() {
+                this.muted = !this.muted;
+                const soundToggle = document.getElementById('soundToggle');
+                if (this.muted) {
+                    soundToggle.textContent = '🔇';
+                    soundToggle.classList.add('muted');
+                } else {
+                    soundToggle.textContent = '🔊';
+                    soundToggle.classList.remove('muted');
+                }
+            }
+        };
+        
+        // 添加音效控制事件
+        document.addEventListener('DOMContentLoaded', () => {
+            const soundToggle = document.getElementById('soundToggle');
+            soundToggle.addEventListener('click', () => {
+                SoundManager.toggleMute();
+            });
+        });
+    
+        // 游戏主要对象
+        // 视觉特效管理器
+        const EffectsManager = {
+            particles: [],
+            damageNumbers: [],
+            screenEffects: [],
+            
+            // 创建粒子效果
+            createParticle(x, y, color, size, velocityX, velocityY, lifetime = 1000) {
+                this.particles.push({
+                    x, y, color, size,
+                    velocityX, velocityY,
+                    lifetime, maxLifetime: lifetime,
+                    alpha: 1
+                });
+            },
+            
+            // 创建命中反馈
+            createHitEffect(x, y, color = 'yellow') {
+                // 创建闪烁效果
+                for (let i = 0; i < 8; i++) {
+                    const angle = (i / 8) * Math.PI * 2;
+                    const speed = 2 + Math.random() * 2;
+                    this.createParticle(
+                        x, y,
+                        color,
+                        3 + Math.random() * 3,
+                        Math.cos(angle) * speed,
+                        Math.sin(angle) * speed,
+                        500
+                    );
+                }
+            },
+            
+            // 创建死亡特效
+            createDeathEffect(x, y, color = 'red') {
+                // 创建爆炸效果
+                for (let i = 0; i < 12; i++) {
+                    const angle = (i / 12) * Math.PI * 2;
+                    const speed = 3 + Math.random() * 4;
+                    this.createParticle(
+                        x, y,
+                        color,
+                        4 + Math.random() * 4,
+                        Math.cos(angle) * speed,
+                        Math.sin(angle) * speed,
+                        800
+                    );
+                }
+                // 添加一些金色粒子表示奖励
+                for (let i = 0; i < 6; i++) {
+                    const angle = (i / 6) * Math.PI * 2;
+                    const speed = 2 + Math.random() * 2;
+                    this.createParticle(
+                        x, y,
+                        'gold',
+                        3 + Math.random() * 2,
+                        Math.cos(angle) * speed,
+                        Math.sin(angle) * speed,
+                        1000
+                    );
+                }
+            },
+            
+            // 创建拾取动画
+            createPickupEffect(x, y, text, color = 'gold') {
+                this.damageNumbers.push({
+                    x, y,
+                    text: '+' + text,
+                    color,
+                    velocityY: -2,
+                    alpha: 1,
+                    lifetime: 1500,
+                    size: 16
+                });
+            },
+            
+            // 创建伤害数字
+            createDamageNumber(x, y, damage, color = 'white') {
+                this.damageNumbers.push({
+                    x, y,
+                    text: '-' + damage,
+                    color,
+                    velocityY: -1,
+                    alpha: 1,
+                    lifetime: 1000,
+                    size: 14
+                });
+            },
+            
+            // 创建屏幕闪烁效果
+            createScreenFlash(color = 'red', duration = 200) {
+                this.screenEffects.push({
+                    color,
+                    alpha: 0.3,
+                    duration,
+                    maxDuration: duration
+                });
+            },
+            
+            // 更新所有特效
+            update(deltaTime) {
+                // 更新粒子
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const particle = this.particles[i];
+                    particle.x += particle.velocityX;
+                    particle.y += particle.velocityY;
+                    particle.lifetime -= deltaTime;
+                    particle.alpha = particle.lifetime / particle.maxLifetime;
+                    
+                    if (particle.lifetime <= 0) {
+                        this.particles.splice(i, 1);
+                    }
+                }
+                
+                // 更新伤害数字
+                for (let i = this.damageNumbers.length - 1; i >= 0; i--) {
+                    const number = this.damageNumbers[i];
+                    number.y += number.velocityY;
+                    number.lifetime -= deltaTime;
+                    number.alpha = number.lifetime / 1000;
+                    
+                    if (number.lifetime <= 0) {
+                        this.damageNumbers.splice(i, 1);
+                    }
+                }
+                
+                // 更新屏幕效果
+                for (let i = this.screenEffects.length - 1; i >= 0; i--) {
+                    const effect = this.screenEffects[i];
+                    effect.duration -= deltaTime;
+                    effect.alpha = (effect.duration / effect.maxDuration) * 0.3;
+                    
+                    if (effect.duration <= 0) {
+                        this.screenEffects.splice(i, 1);
+                    }
+                }
+            },
+            
+            // 绘制所有特效
+            draw(ctx) {
+                // 绘制屏幕效果
+                for (const effect of this.screenEffects) {
+                    ctx.fillStyle = effect.color;
+                    ctx.globalAlpha = effect.alpha;
+                    ctx.fillRect(0, 0, game.width, game.height);
+                    ctx.globalAlpha = 1;
+                }
+                
+                // 绘制粒子
+                for (const particle of this.particles) {
+                    ctx.save();
+                    ctx.globalAlpha = particle.alpha;
+                    ctx.fillStyle = particle.color;
+                    ctx.beginPath();
+                    ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+                
+                // 绘制伤害数字
+                for (const number of this.damageNumbers) {
+                    ctx.save();
+                    ctx.globalAlpha = number.alpha;
+                    ctx.fillStyle = number.color;
+                    ctx.font = `bold ${number.size}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.fillText(number.text, number.x, number.y);
+                    ctx.restore();
+                }
+            }
+        };
+
         // 游戏主要对象
         const game = {
             canvas: null,
@@ -743,6 +1147,9 @@
             
             // 启动游戏循环
             requestAnimationFrame(gameLoop);
+            
+            // 初始化音效系统
+            SoundManager.init();
         }
         
         // 设置帮助按钮
@@ -1798,6 +2205,9 @@
                     frozen: frozen,
                     poison: gunInfo.poison
                 });
+                
+                // 播放射击音效
+                SoundManager.play('shoot');
             }
         }
         
@@ -1911,6 +2321,9 @@
                     game.player.shield.active = false;
                 }
             }
+            
+            // 更新视觉特效
+            EffectsManager.update(deltaTime);
         }
         
         // 处理按键输入
@@ -1963,6 +2376,11 @@
                         // 造成伤害
                         enemy.health -= bullet.damage;
                         
+                        // 播放击中音效和视觉特效
+                        SoundManager.play('hit');
+                        EffectsManager.createHitEffect(enemy.x, enemy.y, 'yellow');
+                        EffectsManager.createDamageNumber(enemy.x, enemy.y, bullet.damage, 'white');
+                        
                         // 冰冻效果
                         if (bullet.frozen) {
                             enemy.frozen.active = true;
@@ -1979,6 +2397,12 @@
                             // 奖励
                             game.player.coins += 10;
                             document.getElementById('coinsDisplay').textContent = `铜板: ${game.player.coins}`;
+                            
+                            // 播放敌人死亡音效和视觉特效
+                            SoundManager.play('enemyDeath');
+                            SoundManager.play('coin');
+                            EffectsManager.createDeathEffect(enemy.x, enemy.y, 'red');
+                            EffectsManager.createPickupEffect(enemy.x, enemy.y, '10', 'gold');
                             
                             // 移除敌人
                             game.enemies.splice(j, 1);
@@ -2001,6 +2425,11 @@
                             // 造成伤害
                             boss.health -= bullet.damage;
                             
+                            // 播放击中音效和视觉特效
+                            SoundManager.play('hit');
+                            EffectsManager.createHitEffect(boss.x, boss.y, 'orange');
+                            EffectsManager.createDamageNumber(boss.x, boss.y, bullet.damage, 'white');
+                            
                             // 冰冻效果
                             if (bullet.frozen) {
                                 boss.frozen.active = true;
@@ -2018,6 +2447,11 @@
                             
                             // 如果Boss死亡
                             if (boss.health <= 0) {
+                                // 播放Boss死亡音效和视觉特效
+                                SoundManager.play('enemyDeath');
+                                EffectsManager.createDeathEffect(boss.x, boss.y, 'darkred');
+                                EffectsManager.createPickupEffect(boss.x, boss.y, '50', 'gold');
+                                
                                 // 移除Boss
                                 game.bosses.splice(j, 1);
                                 game.bossRespawnTime = Date.now() + 3000; // 设置3秒后重生
@@ -2547,11 +2981,22 @@
                     // 宝箱格子：获得100铜板
                     game.player.coins += 100;
                     document.getElementById('coinsDisplay').textContent = `铜板: ${game.player.coins}`;
+                    
+                    // 播放获得铜板音效和视觉特效
+                    SoundManager.play('coin');
+                    EffectsManager.createPickupEffect(game.player.x, game.player.y - 30, '100', 'gold');
+                    EffectsManager.createHitEffect(game.player.x, game.player.y, 'gold');
+                    
                     cell.type = 'normal';
                 } else if (cell.type === 'box') {
                     // 箱子格子：获得保护罩
                     game.player.shield.active = true;
                     game.player.shield.duration = 5000; // 5秒
+                    
+                    // 播放获得护盾音效和视觉特效
+                    SoundManager.play('shield');
+                    EffectsManager.createHitEffect(game.player.x, game.player.y, 'cyan');
+                    
                     cell.type = 'normal';
                 }
             }
@@ -2579,6 +3024,9 @@
             
             // 绘制子弹
             drawBullets();
+            
+            // 绘制视觉特效
+            EffectsManager.draw(game.ctx);
         }
         
         // 绘制网格
