@@ -1838,7 +1838,7 @@
                     y: spawnY,
                     radius: game.player.radius * 2,
                     color: 'darkred',
-                    health: 30,
+                    health: Math.min(game.difficultySettings.bossHealth * 2, 100), // 血量翻倍，最高100
                     speed: game.difficultySettings.bossSpeed,
                     frozen: {
                         active: false,
@@ -1847,6 +1847,30 @@
                 });
                 
                 game.lastBossSpawn = now;
+            } else if (game.bosses.length === 0 && game.bossRespawnTime === 0) {
+                // 如果没有Boss且Boss重生时间未设置，则设置重生时间
+                game.bossRespawnTime = now + 3000; // 3秒后重生
+            }
+
+            // 检查Boss是否需要重生
+            if (game.bossRespawnTime !== 0 && now >= game.bossRespawnTime) {
+                // 在随机位置生成Boss
+                const spawnX = Math.random() * game.width;
+                const spawnY = Math.random() * game.height;
+
+                game.bosses.push({
+                    x: spawnX,
+                    y: spawnY,
+                    radius: game.player.radius * 2,
+                    color: 'darkred',
+                    health: 30,
+                    speed: game.difficultySettings.bossSpeed,
+                    frozen: {
+                        active: false,
+                        duration: 0
+                    }
+                });
+                game.bossRespawnTime = 0; // 重生后重置时间
             }
         }
         
@@ -1899,9 +1923,11 @@
             // 调整攻击角度
             if (game.keys.e) {
                 game.player.direction = (game.player.direction - 15 + 360) % 360;
+                game.keys.e = false; // 每次按下只调整一次
             }
             if (game.keys.r) {
                 game.player.direction = (game.player.direction + 15) % 360;
+                game.keys.r = false; // 每次按下只调整一次
             }
             
             // 连发
@@ -1994,6 +2020,10 @@
                             if (boss.health <= 0) {
                                 // 移除Boss
                                 game.bosses.splice(j, 1);
+                                game.bossRespawnTime = Date.now() + 3000; // 设置3秒后重生
+                                // 玩家血量增加，翻倍和50取最小值
+                                game.player.health += Math.min(game.player.health, 50);
+                                document.getElementById('healthDisplay').textContent = `血量: ${game.player.health}`;
                             }
                             
                             hitEnemy = true;
