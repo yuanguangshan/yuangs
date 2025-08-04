@@ -167,6 +167,15 @@
 <body>
 
 <div class="game-wrapper">
+    <div id="player-stats" style="position: absolute; top: 10px; left: 10px; color: white;">
+        <div id="health-bar-container" style="width: 20px; height: 100px; background-color: #555; border: 1px solid #fff;">
+            <div id="health-bar" style="width: 100%; height: 100%; background-color: red;"></div>
+        </div>
+        <div id="money-container" style="margin-top: 5px;">
+            铜板: <span id="money">0</span>
+        </div>
+    </div>
+    <div id="boss-health-bars" style="position: absolute; top: 10px; right: 10px; color: white; width: 20px;"></div>
     <div class="header">
         <h1>三消射击</h1>
         <div id="score-board">得分: 0</div>
@@ -201,6 +210,9 @@
 
     // --- 游戏状态 ---
     let score = 0;
+    let playerHealth = 100;
+    let money = 0;
+    let bosses = [];
     let matchGrid = [];
     let enemyGrid = [];
     let selectedCell = null;
@@ -232,6 +244,8 @@
         }
 
         populateGrid();
+        addBoss(100);
+        document.getElementById('money').textContent = money;
         startGameTimers();
     }
     
@@ -400,18 +414,13 @@
         });
         const checkCollisionInterval = setInterval(() => {
             const bulletRect = bullet.getBoundingClientRect();
-            for (let c = 0; c < ENEMY_GRID_WIDTH; c++) {
-                const enemyCell = enemyGrid[row][c];
-                if (enemyCell.hasEnemy) {
-                    const enemyRect = enemyCell.el.getBoundingClientRect();
-                    if (bulletRect.right > enemyRect.left && bulletRect.left < enemyRect.right) {
-                        enemyCell.hasEnemy = false;
-                        enemyCell.el.innerHTML = '';
-                        updateScore(2);
-                        bullet.remove();
-                        clearInterval(checkCollisionInterval);
-                        return;
-                    }
+            for (let i = 0; i < bosses.length; i++) {
+                const bossRect = bosses[i].healthBar.getBoundingClientRect();
+                if (bulletRect.right > bossRect.left && bulletRect.left < bossRect.right && bulletRect.top > bossRect.top && bulletRect.bottom < bossRect.bottom) {
+                    updateBossHealth(i, 10); // Assuming each bullet does 10 damage
+                    bullet.remove();
+                    clearInterval(checkCollisionInterval);
+                    return;
                 }
             }
         }, 16);
@@ -445,7 +454,9 @@
                 if (enemyGrid[r][c].hasEnemy) {
                     if (c === 0) {
                         // 敌人到达终点，游戏结束
-                        endGame();
+                        updatePlayerHealth(10); // Assuming each enemy does 10 damage
+                        enemyGrid[r][c].hasEnemy = false;
+                        enemyGrid[r][c].el.innerHTML = '';
                         return; // 立刻退出函数，防止后续操作
                     }
                     // 检查左边一格是否为空
@@ -462,12 +473,58 @@
     }
 
     // --- 游戏状态管理 ---
-    function updateScore(points) {
+    """    function updateScore(points) {
         score += points;
         scoreBoardEl.textContent = `得分: ${score}`;
     }
+
+    function updatePlayerHealth(damage) {
+        playerHealth -= damage;
+        if (playerHealth < 0) playerHealth = 0;
+        document.getElementById('health-bar').style.height = `${playerHealth}%`;
+        if (playerHealth === 0) {
+            endGame();
+        }
+    }
+
+    function addBoss(health) {
+        const boss = {
+            health: health,
+            maxHealth: health,
+            healthBar: document.createElement('div')
+        };
+        boss.healthBar.style.height = '100px';
+        boss.healthBar.style.backgroundColor = '#555';
+        boss.healthBar.style.border = '1px solid #fff';
+        boss.healthBar.style.marginBottom = '5px';
+        const innerBar = document.createElement('div');
+        innerBar.style.width = '100%';
+        innerBar.style.height = '100%';
+        innerBar.style.backgroundColor = 'green';
+        boss.healthBar.appendChild(innerBar);
+        bosses.push(boss);
+        document.getElementById('boss-health-bars').appendChild(boss.healthBar);
+    }
+
+    function updateBossHealth(bossIndex, damage) {
+        const boss = bosses[bossIndex];
+        boss.health -= damage;
+        if (boss.health < 0) boss.health = 0;
+        const innerBar = boss.healthBar.querySelector('div');
+        innerBar.style.height = `${(boss.health / boss.maxHealth) * 100}%`;
+        if (boss.health === 0) {
+            boss.healthBar.remove();
+            bosses.splice(bossIndex, 1);
+            increaseBossHealth();
+        }
+    }
+
+    function increaseBossHealth() {
+        const healthIncrease = Math.floor(Math.random() * 71) + 30;
+        addBoss(100 + healthIncrease);
+    }
     
-    function startGameTimers() {
+    function startGameTimers() {""
         enemySpawnTimer = setInterval(spawnEnemy, ENEMY_SPAWN_INTERVAL);
         enemyMoveTimer = setInterval(moveEnemies, ENEMY_MOVE_INTERVAL);
     }
