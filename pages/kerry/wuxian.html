@@ -94,7 +94,7 @@
             position: absolute;
             width: 200px;
             height: 200px;
-            bottom: 33vh; /* 从底部三分之一处开始 */
+            bottom: 50px; /* 靠近底部 */
             left: 50%;
             transform: translateX(-50%); /* 水平居中 */
             z-index: 10;
@@ -1655,84 +1655,131 @@
             touchAreaBottom.addEventListener('touchend', resetTouchStatus);
         }
         
+        // 开始摇杆拖动
+        function startJoystickDrag(e, layer) {
+            if (e.button !== 0 && e.type === 'mousedown') return; // 只响应左键
+            game.joystick.dragging = true;
+            game.joystick.layer = layer;
+            game.joystick.startX = e.clientX;
+            game.joystick.startY = e.clientY;
+        }
+
+        // 更新摇杆位置和玩家方向/移动
+        function updateJoystickPosition(e) {
+            if (!game.joystick.dragging) return;
+
+            const joystickContainer = document.getElementById('joystickContainer');
+            const containerRect = joystickContainer.getBoundingClientRect();
+            const centerX = containerRect.left + containerRect.width / 2;
+            const centerY = containerRect.top + containerRect.height / 2;
+
+            const dx = e.clientX - centerX;
+            const dy = e.clientY - centerY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx); // Radians
+            const angleDegrees = angle * 180 / Math.PI;
+
+            if (game.joystick.layer === 'middle') {
+                // 中层 - 调整攻击方向（完整360度）
+                game.player.direction = angleDegrees;
+
+                const maxDistance = (containerRect.width - document.getElementById('middleCircle').offsetWidth) / 2;
+                const limitedDistance = Math.min(distance, maxDistance);
+                const moveX = Math.cos(angle) * limitedDistance;
+                const moveY = Math.sin(angle) * limitedDistance;
+
+                const middleCircle = document.getElementById('middleCircle');
+                middleCircle.style.transform = `translate(${moveX}px, ${moveY}px)`;
+
+                // 距离超过一半就连续开火
+                if (distance > maxDistance / 2) {
+                    if (game.activeEffects.rapidFire) {
+                        if (!game.joystick.attackInterval) {
+                            fireBullet(); // 立即开火一次
+                            game.joystick.attackInterval = setInterval(fireBullet, 200);
+                        }
+                    } else if (!game.joystick.fired) {
+                        fireBullet();
+                        game.joystick.fired = true;
+                    }
+                }
+            } else if (game.joystick.layer === 'outer') {
+                // 外层 - 移动
+                const normalizedAngle = (angleDegrees + 450) % 360;
+                let direction = null;
+
+                if (distance < 30) { // deadzone
+                    game.joystick.lastDirection = null;
+                    return;
+                }
+
+                if (normalizedAngle >= 45 && normalizedAngle < 135) {
+                    direction = 'right';
+                } else if (normalizedAngle >= 135 && normalizedAngle < 225) {
+                    direction = 'down';
+                } else if (normalizedAngle >= 225 && normalizedAngle < 315) {
+                    direction = 'left';
+                } else {
+                    direction = 'up';
+                }
+
+                if (direction !== game.joystick.lastDirection) {
+                    moveGrid(direction);
+                    game.joystick.lastDirection = direction;
+                }
+            }
+        }
+
         // 设置三层方向盘控件
         function setupJoystickControls() {
-         // 在setupJoystickControls函数中修改中间层拖动逻辑 
-         function setupJoystickControls() { 
-             // 保留原有代码... 
-             
-             // 修改中间层拖动逻辑以支持360度 
-             middleCircle.addEventListener('mousedown', (e) =>  { 
-                 e.preventDefault(); 
-                 startJoystickDrag(e, 'middle' ); 
-             }); 
-             
-             middleCircle.addEventListener('touchstart', (e) =>  { 
-                 e.preventDefault(); 
-                 startJoystickDrag(e.touches[0], 'middle' ); 
-             }); 
-             
-             window.addEventListener('mousemove', (e) =>  { 
-                 if (game.joystick.dragging && game.joystick.layer === 'middle' ) { 
-                     updateJoystickPosition(e); 
-                 } 
-             }); 
-             
-             window.addEventListener('touchmove', (e) =>  { 
-                 if (game.joystick.dragging && game.joystick.layer === 'middle' && e.touches.length > 0 ) { 
-                     e.preventDefault(); // 防止页面滚动 
-                     updateJoystickPosition(e.touches[0 ]); 
-                 } 
-             }, { passive: false  }); 
-             
-             // 其余代码保持不变... 
-         }
-        
-         // 更新updateJoystickPosition函数以支持完整的360度 
-         function updateJoystickPosition(e) { 
-             if (!game.joystick.dragging) return ; 
-             
-             // 获取摇杆容器位置 
-             const joystickContainer = document.getElementById('joystickContainer' ); 
-             const  containerRect = joystickContainer.getBoundingClientRect(); 
-             const centerX = containerRect.left + containerRect.width / 2 ; 
-             const centerY = containerRect.top + containerRect.height / 2 ; 
-             
-             // 计算拖动距离和角度 
-             const  dx = e.clientX - centerX; 
-             const  dy = e.clientY - centerY; 
-             const distance = Math .sqrt(dx * dx + dy * dy); 
-             const angle = Math.atan2(dy, dx) * 180 / Math.PI; // 转换为度数 
-             
-             // 更新游戏状态 
-             if (game.joystick.layer === 'middle' ) { 
-                 // 中层 - 调整攻击方向（完整360度） 
-                 game.player.direction = angle; 
-                 
-                 // 限制中间层的移动范围 
-                 const maxDistance = containerRect.width / 4; // 最大移动距离 
-                 const limitedDistance = Math .min(distance, maxDistance); 
-                 const moveX = Math.cos(angle * Math.PI / 180 ) * limitedDistance; 
-                 const moveY = Math.sin(angle * Math.PI / 180 ) * limitedDistance; 
-                 
-                 // 更新中间层位置 
-                 const middleCircle = document.getElementById('middleCircle' ); 
-                 middleCircle.style.transform = `translate(${moveX}px, ${moveY}px)` ; 
-                 
-                 // 如果距离足够大，触发射击 
-                 if (distance > maxDistance / 2  && !game.joystick.fired) { 
-                     fireBullet(); 
-                     game.joystick.fired = true ; 
-                     
-                     // 连发效果 
-                     if  (game.activeEffects.rapidFire && !game.joystick.attackInterval) { 
-                         game.joystick.attackInterval = setInterval(fireBullet, 200 ); 
-                     } 
-                 } 
-             } else if (game.joystick.layer === 'outer' ) { 
-                 // 外层逻辑保持不变... 
-             } 
-         }
+            const joystickContainer = document.getElementById('joystickContainer');
+            const outerCircle = document.getElementById('outerCircle');
+            const middleCircle = document.getElementById('middleCircle');
+            const innerCircle = document.getElementById('innerCircle');
+
+            // 中层 (攻击)
+            middleCircle.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                startJoystickDrag(e, 'middle');
+            });
+            middleCircle.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                startJoystickDrag(e.touches[0], 'middle');
+            });
+
+            // 外层 (移动)
+            outerCircle.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                startJoystickDrag(e, 'outer');
+                updateJoystickPosition(e);
+            });
+            outerCircle.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                startJoystickDrag(e.touches[0], 'outer');
+                updateJoystickPosition(e.touches[0]);
+            });
+
+            // 内层 (确认/强力攻击)
+            innerCircle.addEventListener('click', () => {
+                fireBullet(); // 暂时没有强力攻击
+            });
+
+            // 拖动处理
+            window.addEventListener('mousemove', (e) => {
+                if (game.joystick.dragging) {
+                    updateJoystickPosition(e);
+                }
+            });
+            window.addEventListener('touchmove', (e) => {
+                if (game.joystick.dragging && e.touches.length > 0) {
+                    e.preventDefault();
+                    updateJoystickPosition(e.touches[0]);
+                }
+            }, { passive: false });
+
+            // 结束拖动
+            window.addEventListener('mouseup', endJoystickDrag);
+            window.addEventListener('touchend', endJoystickDrag);
         }
         
         // 结束摇杆拖动
