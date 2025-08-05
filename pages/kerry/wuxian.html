@@ -1943,31 +1943,48 @@
         let isDraggingJoystick = false;
         let joystickOffsetX, joystickOffsetY;
 
-        joystickContainer.addEventListener('mousedown', (e) => {
-            isDraggingJoystick = true;
-            joystickOffsetX = e.clientX - joystickContainer.getBoundingClientRect().left;
-            joystickOffsetY = e.clientY - joystickContainer.getBoundingClientRect().top;
-            joystickContainer.style.cursor = 'grabbing';
-        });
+        joystickContainer.addEventListener('mousedown', handleDragStart);
+        joystickContainer.addEventListener('touchstart', handleDragStart);
 
-        document.addEventListener('mousemove', (e) => {
+        function handleDragStart(e) {
+            isDraggingJoystick = true;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            joystickOffsetX = clientX - joystickContainer.getBoundingClientRect().left;
+            joystickOffsetY = clientY - joystickContainer.getBoundingClientRect().top;
+            joystickContainer.style.cursor = 'grabbing';
+        }
+
+        document.addEventListener('mousemove', handleDragMove);
+        document.addEventListener('touchmove', handleDragMove);
+
+        function handleDragMove(e) {
             if (!isDraggingJoystick) return;
 
-            let newLeft = e.clientX - joystickOffsetX;
-            let newTop = e.clientY - joystickOffsetY;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            let newLeft = clientX - joystickOffsetX;
+            let newTop = clientY - joystickOffsetY;
 
             // 限制拖拽范围在可视区域内
             newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - joystickContainer.offsetWidth));
             newTop = Math.max(0, Math.min(newTop, window.innerHeight - joystickContainer.offsetHeight));
 
+            // 阻止页面滚动
+            e.preventDefault();
+
             joystickContainer.style.left = `${newLeft}px`;
             joystickContainer.style.top = `${newTop}px`;
         });
 
-        document.addEventListener('mouseup', () => {
+        document.addEventListener('mouseup', handleDragEnd);
+        document.addEventListener('touchend', handleDragEnd);
+
+        function handleDragEnd() {
             isDraggingJoystick = false;
             joystickContainer.style.cursor = 'grab';
-        });
+        }
 
         // 初始设置摇杆为可拖拽状态
         joystickContainer.style.cursor = 'grab';
