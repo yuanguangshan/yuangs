@@ -335,6 +335,23 @@
             justify-content: center;
             align-items: center;
         }
+
+        #cardRevealModal {
+            background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
+            overflow: hidden;
+        }
+
+        .star {
+            position: absolute;
+            background-color: white;
+            border-radius: 50%;
+            animation: twinkle 2s infinite ease-in-out;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.2; transform: scale(0.8); }
+        }
         .modal-content {
             background-color: white;
             width: 90%;
@@ -715,6 +732,90 @@
                 right: 220px;
             }
         }
+
+        #cardRevealModal .modal-content {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            overflow: hidden; /* 隐藏滚动条 */
+            width: 80%;
+            max-width: 1200px;
+            max-height: 90vh;
+        }
+
+        #revealedCardContainer {
+            display: flex;
+            width: 100%;
+            align-items: center;
+        }
+
+        .revealed-card-image {
+            flex: 1;
+            text-align: center;
+            animation: slide-in-left 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+
+        .revealed-card-details {
+            flex: 1;
+            padding: 20px;
+            color: white;
+            animation: slide-in-right 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.3s forwards;
+            opacity: 0;
+        }
+
+        .revealed-card-details h2 {
+            font-size: 3em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .revealed-card-details p {
+            font-size: 1.5em;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        @keyframes slide-in-left {
+            from { transform: translateX(-100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes slide-in-right {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* 卡牌揭示效果 */
+        .reveal-content {
+            animation: reveal-scale 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        @keyframes reveal-scale {
+            from { transform: scale(0.5); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #f00;
+            opacity: 0;
+            animation: confetti-burst 1.5s ease-out forwards;
+        }
+
+        @keyframes confetti-burst {
+            0% {
+                transform: translate(0, 0) rotateZ(0);
+                opacity: 1;
+            }
+            100% {
+                transform: translate(var(--end-x), var(--end-y)) rotateZ(var(--end-rot));
+                opacity: 0;
+            }
+        }
     </style>
 </head>
 <body>
@@ -877,6 +978,13 @@
                     <li>善用护盾效果抵挡伤害</li>
                 </ul>
             </div>
+        </div>
+    </div>
+
+    <!-- 卡牌揭示模态框 -->
+    <div class="modal" id="cardRevealModal">
+        <div class="modal-content">
+            <div id="revealedCardContainer"></div>
         </div>
     </div>
 
@@ -1578,52 +1686,51 @@
             const closeShop = document.getElementById('closeShop');
             const closeCardSlot = document.getElementById('closeCardSlot');
             const buyCardButton = document.getElementById('buyCardButton');
-            
+            const shopCardPrice = document.querySelector('.shop-card-price');
+            let currentCardPrice = 50;
+
             // 打开商店
             shopButton.addEventListener('click', () => {
+                currentCardPrice = Math.floor(Math.random() * (200 - 50 + 1)) + 50;
+                shopCardPrice.textContent = `价格: ${currentCardPrice} 铜板`;
                 document.getElementById('shopCoinsDisplay').textContent = `当前铜板: ${game.player.coins}`;
                 game.paused = true;
                 shopModal.style.display = 'flex';
             });
-            
+
             // 关闭商店
             closeShop.addEventListener('click', () => {
                 game.paused = false;
                 shopModal.style.display = 'none';
             });
-            
+
             // 打开卡槽
             cardSlotButton.addEventListener('click', () => {
                 game.paused = true;
                 updateCardSlotDisplay();
                 cardSlotModal.style.display = 'flex';
             });
-            
+
             // 关闭卡槽
             closeCardSlot.addEventListener('click', () => {
                 game.paused = false;
                 cardSlotModal.style.display = 'none';
             });
-            
+
             // 购买卡牌
             buyCardButton.addEventListener('click', () => {
-                if (game.player.coins >= 50) {
-                    game.player.coins -= 50;
+                if (game.player.coins >= currentCardPrice) {
+                    game.player.coins -= currentCardPrice;
                     document.getElementById('shopCoinsDisplay').textContent = `当前铜板: ${game.player.coins}`;
                     
-                    // 随机获取卡牌
                     const randomCard = getRandomCard();
                     
                     if (randomCard) {
-                        // 添加卡牌到卡槽
                         addCardToSlot(randomCard);
-                        
-                        // 更新UI
                         document.getElementById('coinsDisplay').textContent = `铜板: ${game.player.coins}`;
-                        alert(`获得了 ${randomCard.name}！`);
+                        showCardRevealEffect(randomCard);
                     } else {
-                        // 如果没有可用卡牌，返还铜板
-                        game.player.coins += 50;
+                        game.player.coins += currentCardPrice;
                         document.getElementById('shopCoinsDisplay').textContent = `当前铜板: ${game.player.coins}`;
                         alert('所有卡牌都已获得，无法购买更多卡牌。');
                     }
@@ -1674,6 +1781,67 @@
             });
         }
         
+        // 显示卡牌揭示效果
+        function showCardRevealEffect(cardInfo) {
+            const revealModal = document.getElementById('cardRevealModal');
+            const cardContainer = document.getElementById('revealedCardContainer');
+
+            // 清理旧内容和特效
+            cardContainer.innerHTML = '';
+            const oldStars = revealModal.querySelectorAll('.star');
+            oldStars.forEach(star => star.remove());
+            const oldConfetti = revealModal.querySelectorAll('.confetti');
+            oldConfetti.forEach(c => c.remove());
+
+            cardContainer.innerHTML = `
+                <div class="revealed-card-image">
+                    <img src="./tools/${cardInfo.id}.png" alt="${cardInfo.name}" style="width: 80%; max-width: 300px; height: auto; object-fit: contain;">
+                </div>
+                <div class="revealed-card-details">
+                    <h2>${cardInfo.name}</h2>
+                    <p>${cardInfo.description}</p>
+                </div>
+            `;
+
+            // 创建星星背景
+            for (let i = 0; i < 100; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.style.width = `${Math.random() * 2}px`;
+                star.style.height = star.style.width;
+                star.style.top = `${Math.random() * 100}%`;
+                star.style.left = `${Math.random() * 100}%`;
+                star.style.animationDelay = `${Math.random() * 2}s`;
+                revealModal.appendChild(star);
+            }
+
+            revealModal.style.display = 'flex';
+
+            // 创建礼花效果
+            const modalContent = revealModal.querySelector('.modal-content');
+            for (let i = 0; i < 50; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                const x = Math.random() * 100 - 50;
+                const y = Math.random() * 100 - 50;
+                const rot = Math.random() * 360;
+                confetti.style.setProperty('--end-x', `${x}vw`);
+                confetti.style.setProperty('--end-y', `${y}vh`);
+                confetti.style.setProperty('--end-rot', `${rot}deg`);
+                confetti.style.backgroundColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
+                modalContent.appendChild(confetti);
+            }
+
+            setTimeout(() => {
+                revealModal.style.display = 'none';
+                // 清理星星和礼花
+                const stars = revealModal.querySelectorAll('.star');
+                stars.forEach(star => star.remove());
+                const confettiElements = modalContent.querySelectorAll('.confetti');
+                confettiElements.forEach(c => c.remove());
+            }, 3000);
+        }
+
         // 更新卡槽显示
         function updateCardSlotDisplay() {
             // 更新枪械卡槽
