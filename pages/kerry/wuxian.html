@@ -1276,28 +1276,50 @@
             // 键盘事件
             window.addEventListener('keydown', (e) => {
                 switch (e.key.toLowerCase()) {
-                    case 'w': game.keys.w = true; break;
-                    case 'a': game.keys.a = true; break;
-                    case 's': game.keys.s = true; break;
-                    case 'd': game.keys.d = true; break;
-                    case ' ': game.keys.space = true; fireBullet(); break;
+                    case 'w': 
+                        game.keys.w = true; 
+                        game.player.direction = 270; // Up
+                        break;
+                    case 'a': 
+                        game.keys.a = true; 
+                        game.player.direction = 180; // Left
+                        break;
+                    case 's': 
+                        game.keys.s = true; 
+                        game.player.direction = 90; // Down
+                        break;
+                    case 'd': 
+                        game.keys.d = true; 
+                        game.player.direction = 0; // Right
+                        break;
+                    case ' ': 
+                        game.keys.space = true; 
+                        fireBullet(); 
+                        if (game.activeEffects.rapidFire) {
+                            game.attackInterval = setInterval(fireBullet, 200);
+                        }
+                        break;
                     case 'e': game.keys.e = true; break;
                     case 'r': game.keys.r = true; break;
                     case 'arrowup': 
                         e.preventDefault();
                         game.keys.ArrowUp = true; 
+                        game.player.direction = 270; // Up
                         break;
                     case 'arrowdown': 
                         e.preventDefault();
                         game.keys.ArrowDown = true; 
+                        game.player.direction = 90; // Down
                         break;
                     case 'arrowleft': 
                         e.preventDefault();
                         game.keys.ArrowLeft = true; 
+                        game.player.direction = 180; // Left
                         break;
                     case 'arrowright': 
                         e.preventDefault();
                         game.keys.ArrowRight = true; 
+                        game.player.direction = 0; // Right
                         break;
                 }
             });
@@ -1308,7 +1330,13 @@
                     case 'a': game.keys.a = false; break;
                     case 's': game.keys.s = false; break;
                     case 'd': game.keys.d = false; break;
-                    case ' ': game.keys.space = false; break;
+                    case ' ': 
+                        game.keys.space = false; 
+                        if (game.attackInterval) {
+                            clearInterval(game.attackInterval);
+                            game.attackInterval = null;
+                        }
+                        break;
                     case 'arrowup': game.keys.ArrowUp = false; break;
                     case 'arrowdown': game.keys.ArrowDown = false; break;
                     case 'arrowleft': game.keys.ArrowLeft = false; break;
@@ -1320,7 +1348,7 @@
             
             // 方向按钮事件 - 增强触摸支持
             const directionButtons = ['upButton', 'leftButton', 'downButton', 'rightButton'];
-            const directions = ['down', 'right', 'up', 'left']; // 反转方向以实现玩家视角
+            const directions = ['up', 'left', 'down', 'right']; // 修正方向，实现玩家视角
             
             directionButtons.forEach((buttonId, index) => {
                 const button = document.getElementById(buttonId);
@@ -1807,16 +1835,16 @@
         // 激活道具
         function activateItem(itemId) {
             switch (itemId) {
-                case 'rapid':
+                case 'lianshe':
                     game.activeEffects.rapidFire = true;
                     break;
-                case 'damage':
+                case 'gongjili':
                     game.activeEffects.damageBoost = true;
                     break;
                 case 'heal':
                     game.activeEffects.healing = true;
                     break;
-                case 'freeze':
+                case 'bingdong':
                     game.activeEffects.freezeBoost = true;
                     break;
             }
@@ -2188,7 +2216,13 @@
                     angleOffset = (i - Math.floor(bulletCount / 2)) * 10;
                 }
                 
-                const angle = (game.player.direction + angleOffset) * Math.PI / 180;
+                let angle = (game.player.direction + angleOffset) * Math.PI / 180;
+                // 如果玩家没有移动，但摇杆有方向，则使用摇杆方向
+                if (!game.keys.w && !game.keys.a && !game.keys.s && !game.keys.d &&
+                    !game.keys.ArrowUp && !game.keys.ArrowDown && !game.keys.ArrowLeft && !game.keys.ArrowRight &&
+                    game.joystick.active) {
+                    angle = (game.joystick.angle + angleOffset) * Math.PI / 180;
+                }
                 
                 // 计算子弹初始位置
                 const bulletX = game.player.x + Math.cos(angle) * (game.player.radius + 10);
