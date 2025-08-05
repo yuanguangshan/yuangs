@@ -1241,6 +1241,7 @@
 
         // 游戏主要对象
         const game = {
+            images: {},
             canvas: null,
             ctx: null,
             width: 0,
@@ -1358,6 +1359,28 @@
 
         // 初始化游戏
         function initGame() {
+            // 预加载图片
+            const imageSources = {
+                baoxiang: './tools/baoxiang.png',
+                muxiang: './tools/muxiang.png'
+            };
+            let imagesLoaded = 0;
+            const totalImages = Object.keys(imageSources).length;
+
+            for (const key in imageSources) {
+                game.images[key] = new Image();
+                game.images[key].src = imageSources[key];
+                game.images[key].onload = () => {
+                    imagesLoaded++;
+                    if (imagesLoaded === totalImages) {
+                        // 所有图片加载完成后再启动游戏
+                        startGame();
+                    }
+                };
+            }
+        }
+
+        function startGame() {
             game.canvas = document.getElementById('gameCanvas');
             game.ctx = game.canvas.getContext('2d');
             
@@ -1394,6 +1417,8 @@
             // 初始化音效系统
             SoundManager.init();
         }
+
+        document.addEventListener('DOMContentLoaded', initGame);
         
         // 设置帮助按钮
         function setupHelpButton() {
@@ -1451,9 +1476,9 @@
                     // 随机生成格子类型
                     let cellType = 'normal';
                     const rand = Math.random();
-                    if (rand < 0.03) {
+                    if (rand < 0.003) { // 0.3% 的概率是宝箱
                         cellType = 'treasure';
-                    } else if (rand < 0.07) {
+                    } else if (rand < 0.004) { // 0.1% 的概率是木箱
                         cellType = 'box';
                     }
                     
@@ -3325,27 +3350,15 @@
             for (let y = 0; y < game.grid.length; y++) {
                 for (let x = 0; x < game.grid[y].length; x++) {
                     const cell = game.grid[y][x];
-                    
-                    // 设置格子颜色
-                    let cellColor;
-                    switch (cell.type) {
-                        case 'treasure':
-                            cellColor = 'gold';
-                            break;
-                        case 'box':
-                            cellColor = 'brown';
-                            break;
-                        default:
-                            cellColor = '#ccc';
-                            break;
+                    if (cell.type === 'treasure') {
+                        game.ctx.drawImage(game.images.baoxiang, cell.x, cell.y, game.gridSize, game.gridSize);
+                    } else if (cell.type === 'box') {
+                        game.ctx.drawImage(game.images.muxiang, cell.x, cell.y, game.gridSize, game.gridSize);
+                    } else {
+                        game.ctx.fillStyle = '#d0d0d0';
+                        game.ctx.fillRect(cell.x, cell.y, game.gridSize, game.gridSize);
                     }
-                    
-                    // 绘制格子
-                    game.ctx.fillStyle = cellColor;
-                    game.ctx.fillRect(cell.x, cell.y, game.gridSize, game.gridSize);
-                    
-                    // 绘制格子边框
-                    game.ctx.strokeStyle = '#aaa';
+                    game.ctx.strokeStyle = '#c0c0c0';
                     game.ctx.strokeRect(cell.x, cell.y, game.gridSize, game.gridSize);
                 }
             }
