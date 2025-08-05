@@ -1,0 +1,3521 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com https://d3js.org https://threejs.org https://cdn.plot.ly https://stackpath.bootstrapcdn.com https://maps.googleapis.com https://cdn.tailwindcss.com https://ajax.googleapis.com https://kit.fontawesome.com https://cdn.datatables.net https://maxcdn.bootstrapcdn.com https://code.highcharts.com https://tako-static-assets-production.s3.amazonaws.com https://www.youtube.com https://fonts.googleapis.com https://fonts.gstatic.com https://pfst.cf2.poecdn.net https://puc.poecdn.net https://i.imgur.com https://wikimedia.org https://*.icons8.com https://*.giphy.com https://picsum.photos https://images.unsplash.com; frame-src 'self' https://www.youtube.com https://trytako.com; child-src 'self'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests; block-all-mixed-content;">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>无限地图抽卡游戏</title>
+    <style>
+        /* 音效控制按钮样式 - 居中排列 */
+        #soundToggle {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-left: 120px; /* 最右侧偏移 */
+            width: 40px;
+            height: 40px;
+            background-color: rgba(100, 200, 100, 0.5); /* 更透明 */
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 20px;
+            font-weight: bold;
+            z-index: 10;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+        #soundToggle:hover {
+            transform: translateX(-50%) scale(1.1);
+        }
+        #soundToggle.muted {
+            background-color: rgba(200, 100, 100, 0.5); /* 更透明 */
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            touch-action: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background-color: #f0f0f0;
+            overflow: hidden;
+        }
+        #gameCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            background-color: #e0e0e0;
+        }
+        
+        /* 简化触摸区域 */
+        .touch-area {
+            position: absolute;
+            z-index: 5;
+            background-color: rgba(0,0,0,0.01);
+        }
+        #touchAreaLeft {
+            top: 0;
+            left: 0;
+            width: 25%;
+            height: 100%;
+        }
+        #touchAreaRight {
+            top: 0;
+            right: 0;
+            width: 25%;
+            height: 100%;
+        }
+        #touchAreaTop {
+            top: 0;
+            left: 25%;
+            width: 50%;
+            height: 50%;
+        }
+        #touchAreaBottom {
+            bottom: 0;
+            left: 25%;
+            width: 50%;
+            height: 50%;
+        }
+        
+        /* 三层方向盘控件 */
+        #joystickContainer {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            bottom: 50px; /* 靠近底部 */
+            left: 50%;
+            transform: translateX(-50%); /* 水平居中 */
+            z-index: 10;
+        }
+        .circle {
+            position: absolute;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.5); /* 更透明 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: bold;
+            color: rgba(0, 0, 0, 0.7);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        #outerCircle {
+            width: 180px;
+            height: 180px;
+            left: 10px;
+            top: 10px;
+            border: 2px solid rgba(100, 100, 100, 0.5);
+            position: relative;
+        }
+        #middleCircle {
+            width: 120px;
+            height: 120px;
+            left: 40px;
+            top: 40px;
+            background-color: rgba(100, 100, 255, 0.5); /* 更透明 */
+            z-index: 2;
+            cursor: move; /* 使用移动光标表明可拖动 */
+            transition: transform 0.1s ease; /* 平滑过渡 */
+        }
+        #innerCircle {
+            width: 60px;
+            height: 60px;
+            left: 70px;
+            top: 70px;
+            background-color: rgba(200, 200, 255, 0.5); /* 更透明 */
+            z-index: 3;
+        }
+        .direction-indicator {
+            position: absolute;
+            font-size: 24px;
+            font-weight: bold;
+            color: rgba(0, 0, 0, 0.6);
+            cursor: pointer;
+            z-index: 1;
+        }
+        #directionUp {
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #directionDown {
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #directionLeft {
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        #directionRight {
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .circle:hover {
+            background-color: rgba(255, 255, 255, 0.7);
+            transform: scale(1.05);
+        }
+        .direction-indicator:hover {
+            color: rgba(0, 0, 0, 0.9);
+            transform: scale(1.2);
+        }
+        /* 将顶部按钮居中排列 */
+        #shopButton {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-left: 60px; /* 右侧偏移 */
+            width: 40px;
+            height: 40px;
+            background-color: rgba(255, 200, 100, 0.5); /* 更透明 */
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 20px;
+            font-weight: bold;
+            z-index: 10;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        #cardSlotButton {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-left: 0px; /* 居中 */
+            width: 40px;
+            height: 40px;
+            background-color: rgba(100, 200, 255, 0.5); /* 更透明 */
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 20px;
+            font-weight: bold;
+            z-index: 10;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        /* 问号按钮居中排列 */
+        #helpButton {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-left: -60px; /* 左侧偏移 */
+            width: 40px;
+            height: 40px;
+            background-color: rgba(120, 220, 120, 0.5); /* 更透明 */
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 20px;
+            font-weight: bold;
+            z-index: 10;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        #statsContainer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background-color: transparent;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: white;
+            width: 90%;
+            max-width: 800px;
+            border-radius: 15px;
+            padding: 30px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .modal-header h2 {
+            font-size: 32px;
+            margin: 0;
+        }
+        .close-button {
+            font-size: 36px;
+            cursor: pointer;
+            padding: 10px;
+        }
+        .card {
+            width: 160px;
+            height: 240px;
+            background-color: #f0f0f0;
+            border-radius: 15px;
+            border: 3px solid #aaa;
+            margin: 15px;
+            display: inline-flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            box-sizing: border-box;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        .card-title {
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+        }
+        .card-image {
+            width: 100px;
+            height: 100px;
+            background-color: #ddd;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 20px;
+        }
+        .card-description {
+            font-size: 16px;
+            text-align: center;
+        }
+        .card-slot-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+        .card-slot {
+            width: 120px;
+            height: 180px;
+            background-color: #e0e0e0;
+            border-radius: 12px;
+            border: 3px dashed #aaa;
+            margin: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 18px;
+            color: #999;
+        }
+        .card-slot.filled {
+            border: 3px solid #5a5;
+            background-color: #efe;
+        }
+        .card-preview {
+            width: 110px;
+            height: 170px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            box-sizing: border-box;
+            background-color: white;
+        }
+        .card-preview-title {
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+        }
+        .card-preview-image {
+            width: 60px;
+            height: 60px;
+            background-color: #ddd;
+            border-radius: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 14px;
+        }
+        .shop-section {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .shop-section #shopCoinsDisplay {
+            font-size: 28px;
+            margin-bottom: 20px;
+        }
+        .buy-button {
+            background-color: #5a5;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 15px 30px;
+            font-size: 24px;
+            cursor: pointer;
+            margin-top: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .buy-button:hover {
+            background-color: #494;
+        }
+        .shop-card-price {
+            margin-top: 15px;
+            font-weight: bold;
+            font-size: 24px;
+        }
+        .slot-section-title {
+            text-align: center;
+            font-weight: bold;
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #eee;
+            border-radius: 10px;
+            font-size: 24px;
+        }
+        /* 游戏说明样式 */
+        .help-section {
+            margin-bottom: 20px;
+        }
+        .help-section h3 {
+            margin-top: 25px;
+            margin-bottom: 10px;
+            color: #333;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 5px;
+        }
+        .help-section p {
+            margin: 10px 0;
+            line-height: 1.5;
+            font-size: 18px;
+        }
+        .help-section ul {
+            margin: 10px 0;
+            padding-left: 25px;
+        }
+        .help-section li {
+            margin: 8px 0;
+            line-height: 1.4;
+            font-size: 16px;
+        }
+        .help-section .card-types {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            margin: 15px 0;
+        }
+        .help-section .card-type {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 5px;
+            width: 30%;
+            min-width: 200px;
+        }
+        /* 移动设备上的优化 */
+        @media (max-width: 767px ) {
+            #joystickContainer  {
+                width: 180px ;
+                height: 180px ;
+                bottom: 33vh ;
+            }
+            
+            #outerCircle  {
+                width: 170px ;
+                height: 170px ;
+                left: 5px ;
+                top: 5px ;
+            }
+            
+            #middleCircle  {
+                width: 110px ;
+                height: 110px ;
+                left: 35px ;
+                top: 35px ;
+            }
+            
+            #innerCircle  {
+                width: 60px ;
+                height: 60px ;
+                left: 60px ;
+                top: 60px ;
+            }
+        }
+        
+        /* iPad优化 */
+        @media (min-width: 768px) and (max-width: 1024px ) {
+            #joystickContainer  {
+                width: 250px ;
+                height: 250px ;
+                bottom: 33vh ;
+            }
+        }
+        /* 血条样式 - 改为垂直方向，更透明 */
+        .health-bar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 20px; /* 垂直血条宽度 */
+            height: 150px; /* 垂直血条高度 */
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            overflow: hidden;
+            z-index: 15;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .health-fill {
+            width: 100%; /* 宽度填满容器 */
+            background: linear-gradient(0deg, #ff4444, #ff6666); /* 垂直渐变 */
+            border-radius: 10px;
+            transition: height 0.3s ease; /* 平滑高度变化 */
+            position: absolute;
+            bottom: 0; /* 从底部填充 */
+        }
+        
+        .health-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        }
+        
+        /* 铜板条样式 - 改为垂直方向，放在血条旁边 */
+        .coin-bar {
+            position: absolute;
+            top: 20px;
+            left: 50px; /* 位于血条右侧 */
+            width: 20px; /* 垂直宽度 */
+            height: 150px; /* 垂直高度 */
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            overflow: hidden;
+            z-index: 15;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .coin-fill {
+            width: 100%; /* 宽度填满容器 */
+            background: linear-gradient(0deg, #FFD700, #FFA500); /* 垂直金色渐变 */
+            border-radius: 10px;
+            transition: height 0.3s ease; /* 平滑高度变化 */
+            position: absolute;
+            bottom: 0; /* 从底部填充 */
+        }
+        
+        .coin-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        }
+        
+        /* Boss血条样式 - 改为右上角垂直方向 */
+        .boss-health-bar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 20px; /* 垂直血条宽度 */
+            height: 150px; /* 垂直血条高度 */
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            overflow: hidden;
+            z-index: 15;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            display: none;
+        }
+        
+        .boss-health-fill {
+            width: 100%;
+            background: linear-gradient(0deg, #8B0000, #DC143C); /* 垂直渐变 */
+            border-radius: 10px;
+            transition: height 0.3s ease; /* 改为高度变化 */
+            position: absolute;
+            bottom: 0; /* 从底部填充 */
+        }
+        
+        .boss-health-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        }
+        
+        .boss-health-label {
+            position: absolute;
+            top: 180px; /* 位于血条下方 */
+            right: 20px;
+            color: #ff4444;
+            font-size: 14px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            display: none;
+            z-index: 15;
+        }
+        
+        /* Buff图标样式 */
+        .buff-icons {
+            position: absolute;
+            top: 100px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 15;
+        }
+        
+        .buff-icon {
+            width: 50px;
+            height: 50px;
+            background-color: rgba(0, 0, 0, 0.5); /* 更透明 */
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        
+        .buff-icon::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        
+        .buff-icon:hover::after {
+            opacity: 1;
+        }
+        
+        /* 为iPad添加的额外样式 */
+        @media (min-width: 768px) and (max-width: 1024px) {
+            #joystickContainer {
+                width: 250px;
+                height: 250px;
+                bottom: 100px;
+            }
+            #outerCircle {
+                width: 230px;
+                height: 230px;
+            }
+            #middleCircle {
+                width: 160px;
+                height: 160px;
+                left: 45px;
+                top: 45px;
+            }
+            #innerCircle {
+                width: 80px;
+                height: 80px;
+                left: 85px;
+                top: 85px;
+            }
+            #statsContainer {
+                font-size: 32px;
+                padding: 20px;
+            }
+            #helpButton {
+                width: 60px;
+                height: 60px;
+                font-size: 30px;
+                left: 50%;
+                transform: translateX(-50%);
+                margin-left: -90px;
+            }
+            #cardSlotButton {
+                width: 60px;
+                height: 60px;
+                font-size: 30px;
+                left: 50%;
+                transform: translateX(-50%);
+                margin-left: 0px;
+            }
+            #shopButton {
+                width: 60px;
+                height: 60px;
+                font-size: 30px;
+                left: 50%;
+                transform: translateX(-50%);
+                margin-left: 90px;
+            }
+            #soundToggle {
+                width: 60px;
+                height: 60px;
+                font-size: 30px;
+                left: 50%;
+                transform: translateX(-50%);
+                margin-left: 180px;
+            }
+            /* 调整iPad上的血条和铜板条大小 */
+            .health-bar, .coin-bar, .boss-health-bar {
+                width: 30px;
+                height: 200px;
+            }
+            .coin-bar {
+                left: 70px;
+            }
+            .boss-health-bar {
+                right: 30px;
+                width: 30px;
+                height: 200px;
+            }
+            .boss-health-label {
+                top: 230px;
+                right: 30px;
+                font-size: 18px;
+            }
+        }
+        
+        /* 移动设备上的额外优化 */
+        @media (max-width: 767px) {
+            #joystickContainer {
+                width: 380px;
+                height: 380px;
+                bottom: 120px;
+                left: 50%;
+                transform: translateX(-50%);
+            }
+            #outerCircle {
+                width: 220px;
+                height: 220px;
+                left: 80px;
+                top: 80px;
+            }
+            #middleCircle {
+                width: 150px;
+                height: 150px;
+                left: 115px;
+                top: 115px;
+            }
+            #innerCircle {
+                width: 80px;
+                height: 80px;
+                left: 150px;
+                top: 150px;
+            }
+            
+            .direction-indicator {
+                font-size: 24px;
+            }
+            
+            .health-bar, .coin-bar {
+                width: 16px;
+                height: 120px;
+            }
+            
+            .coin-bar {
+                left: 46px;
+            }
+            
+            .boss-health-bar {
+                width: 16px;
+                height: 120px;
+            }
+            
+            .boss-health-label {
+                top: 150px;
+                font-size: 12px;
+            }
+            
+            #helpButton, #cardSlotButton, #shopButton, #soundToggle {
+                width: 32px;
+                height: 32px;
+                font-size: 16px;
+            }
+            
+            .health-text, .coin-text, .boss-health-text {
+                font-size: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        
+        <!-- 简化的触摸区域 -->
+        <div class="touch-area" id="touchAreaLeft"></div>
+        <div class="touch-area" id="touchAreaRight"></div>
+        <div class="touch-area" id="touchAreaTop"></div>
+        <div class="touch-area" id="touchAreaBottom"></div>
+        
+        <!-- 移除传统的状态显示，用血条和铜板条代替 -->
+        <div class="health-bar">
+            <div class="health-fill" id="healthFill"></div>
+            <div class="health-text" id="healthText">100</div>
+        </div>
+        
+        <div class="coin-bar">
+            <div class="coin-fill" id="coinFill"></div>
+            <div class="coin-text" id="coinText">0</div>
+        </div>
+        
+        <!-- 将按钮组重新排列，使它们靠在一起 -->
+        <div id="shopButton">商店</div>
+        <div id="cardSlotButton">卡槽</div>
+        <div id="helpButton">?</div>
+        <div id="soundToggle">🔊</div>
+        
+        <!-- 三层方向盘控件 -->
+        <div id="joystickContainer">
+            <div class="circle" id="outerCircle">
+                <div class="direction-indicator" id="directionUp">↑</div>
+                <div class="direction-indicator" id="directionDown">↓</div>
+                <div class="direction-indicator" id="directionLeft">←</div>
+                <div class="direction-indicator" id="directionRight">→</div>
+            </div>
+            <div class="circle" id="middleCircle">攻击</div>
+            <div class="circle" id="innerCircle">✓</div>
+        </div>
+        
+        <!-- Boss血条 -->
+        <div class="boss-health-bar" id="bossHealthBar">
+            <div class="boss-health-fill" id="bossHealthFill"></div>
+            <div class="boss-health-text" id="bossHealthText">100</div>
+        </div>
+        <div class="boss-health-label" id="bossHealthLabel">BOSS</div>
+    </div>
+    
+    <div class="modal" id="shopModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>商店</h2>
+                <span class="close-button" id="closeShop">×</span>
+            </div>
+            <div class="shop-section">
+                <div id="shopCoinsDisplay">当前铜板: 0</div>
+                <div class="card">
+                    <div class="card-title">卡包</div>
+                    <div class="card-image">卡包</div>
+                    <div class="card-description">随机获得一张卡牌</div>
+                </div>
+                <div class="shop-card-price">价格: 50 铜板</div>
+                <button class="buy-button" id="buyCardButton">购买</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="modal" id="cardSlotModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>卡槽</h2>
+                <span class="close-button" id="closeCardSlot">×</span>
+            </div>
+            
+            <div class="slot-section-title">枪械卡槽</div>
+            <div class="card-slot-container" id="gunCardSlots">
+                <div class="card-slot" data-slot="0" data-type="gun">空槽</div>
+                <div class="card-slot" data-slot="1" data-type="gun">空槽</div>
+                <div class="card-slot" data-slot="2" data-type="gun">空槽</div>
+            </div>
+            
+            <div class="slot-section-title">技能卡槽</div>
+            <div class="card-slot-container" id="skillCardSlots">
+                <div class="card-slot" data-slot="0" data-type="skill">空槽</div>
+                <div class="card-slot" data-slot="1" data-type="skill">空槽</div>
+                <div class="card-slot" data-slot="2" data-type="skill">空槽</div>
+                <div class="card-slot" data-slot="3" data-type="skill">空槽</div>
+                <div class="card-slot" data-slot="4" data-type="skill">空槽</div>
+                <div class="card-slot" data-slot="5" data-type="skill">空槽</div>
+                <div class="card-slot" data-slot="6" data-type="skill">空槽</div>
+                <div class="card-slot" data-slot="7" data-type="skill">空槽</div>
+            </div>
+            
+            <div class="slot-section-title">道具卡槽</div>
+            <div class="card-slot-container" id="itemCardSlots">
+                <div class="card-slot" data-slot="0" data-type="item">空槽</div>
+                <div class="card-slot" data-slot="1" data-type="item">空槽</div>
+                <div class="card-slot" data-slot="2" data-type="item">空槽</div>
+                <div class="card-slot" data-slot="3" data-type="item">空槽</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="modal" id="helpModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>游戏说明</h2>
+                <span class="close-button" id="closeHelp">×</span>
+            </div>
+            <div class="help-section">
+                <h3>游戏目标</h3>
+                <p>在这个无限地图中探索，收集铜板，击败敌人和Boss，获取各种强力卡牌来增强你的角色。</p>
+                
+                <h3>基本操作</h3>
+                <ul>
+                    <li><strong>移动：</strong>点击屏幕左/右/上/下区域移动，或使用外层摇杆</li>
+                    <li><strong>攻击：</strong>点击中层摇杆发射子弹，可拖动调整方向</li>
+                    <li><strong>确认攻击：</strong>点击内层摇杆发射强力子弹</li>
+                    <li><strong>商店：</strong>点击右上角"商店"按钮购买卡包</li>
+                    <li><strong>卡槽：</strong>点击中上角"卡槽"按钮管理和激活你的卡牌</li>
+                </ul>
+                
+                <h3>地图元素</h3>
+                <ul>
+                    <li><strong>普通格子：</strong>灰色格子，没有特殊效果</li>
+                    <li><strong>宝箱格子：</strong>金色格子，踩上去可获得100铜板</li>
+                    <li><strong>箱子格子：</strong>棕色格子，踩上去可获得5秒护盾保护</li>
+                    <li><strong>敌人：</strong>红色小圆圈，碰到会减少血量</li>
+                    <li><strong>Boss：</strong>深红色大圆圈，血量更高，碰到会减少更多血量</li>
+                </ul>
+                
+                <h3>卡牌系统</h3>
+                <p>游戏有三种类型的卡牌：</p>
+                
+                <div class="card-types">
+                    <div class="card-type">
+                        <h4>枪械卡牌</h4>
+                        <p>更换你的武器，提供不同的攻击方式和效果。</p>
+                        <ul>
+                            <li>火焰枪：伤害为2</li>
+                            <li>寒冰枪：可冻结敌人10秒</li>
+                            <li>毒药枪：伤害为3</li>
+                            <li>各种双倍枪：发射两颗子弹</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="card-type">
+                        <h4>技能卡牌</h4>
+                        <p>自动施放的特殊技能，帮助你攻击敌人。</p>
+                        <ul>
+                            <li>乾坤圈：生成六个围绕你转动的圈</li>
+                            <li>混天凌：在屏幕中飞来飞去</li>
+                            <li>火尖枪：定期从你身后发射</li>
+                            <li>更多强力技能等你发现...</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="card-type">
+                        <h4>道具卡牌</h4>
+                        <p>提供各种被动增益效果。</p>
+                        <ul>
+                            <li>连发：长按攻击按钮可连续发射</li>
+                            <li>攻击力提升：增加子弹伤害</li>
+                            <li>增加血量：每3秒恢复1点血量</li>
+                            <li>冰冻提升：给子弹增加冰冻效果</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <h3>游戏提示</h3>
+                <ul>
+                    <li>尽可能收集铜板购买卡包</li>
+                    <li>优先使用能提高生存能力的道具和技能</li>
+                    <li>面对Boss时保持距离，利用冰冻效果减缓其移动</li>
+                    <li>地图是无限的，可以不断探索新区域</li>
+                    <li>善用护盾效果抵挡伤害</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 音效管理器
+        const SoundManager = {
+            context: null,
+            sounds: {},
+            muted: false,
+            volume: 0.5,
+            
+            init() {
+                try {
+                    this.context = new (window.AudioContext || window.webkitAudioContext)();
+                    this.createSounds();
+                } catch (e) {
+                    console.warn('Web Audio API not supported');
+                }
+            },
+            
+            createSounds() {
+                // 创建各种音效
+                this.sounds.background = this.createTone(440, 0.1, 0.3, 'sine');
+                this.sounds.shoot = this.createTone(800, 0.05, 0.2, 'square');
+                this.sounds.hit = this.createTone(600, 0.1, 0.3, 'sawtooth');
+                this.sounds.enemyDeath = this.createTone(300, 0.2, 0.4, 'sawtooth');
+                this.sounds.coin = this.createTone(1000, 0.1, 0.2, 'sine');
+                this.sounds.levelUp = this.createTone(1200, 0.3, 0.5, 'sine');
+                this.sounds.damage = this.createTone(200, 0.1, 0.3, 'square');
+                this.sounds.shield = this.createTone(500, 0.2, 0.3, 'sine');
+            },
+            
+            createTone(frequency, attack, decay, waveType) {
+                return () => {
+                    if (this.muted || !this.context) return;
+                    
+                    const oscillator = this.context.createOscillator();
+                    const gainNode = this.context.createGain();
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(this.context.destination);
+                    
+                    oscillator.type = waveType;
+                    oscillator.frequency.setValueAtTime(frequency, this.context.currentTime);
+                    
+                    gainNode.gain.setValueAtTime(0, this.context.currentTime);
+                    gainNode.gain.linearRampToValueAtTime(this.volume, this.context.currentTime + attack);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, this.context.currentTime + decay);
+                    
+                    oscillator.start(this.context.currentTime);
+                    oscillator.stop(this.context.currentTime + decay);
+                };
+            },
+            
+            play(soundName) {
+                if (this.sounds[soundName]) {
+                    this.sounds[soundName]();
+                }
+            },
+            
+            toggleMute() {
+                this.muted = !this.muted;
+                const soundToggle = document.getElementById('soundToggle');
+                if (this.muted) {
+                    soundToggle.textContent = '🔇';
+                    soundToggle.classList.add('muted');
+                } else {
+                    soundToggle.textContent = '🔊';
+                    soundToggle.classList.remove('muted');
+                }
+            }
+        };
+        
+        // 添加音效控制事件
+        document.addEventListener('DOMContentLoaded', () => {
+            const soundToggle = document.getElementById('soundToggle');
+            soundToggle.addEventListener('click', () => {
+                SoundManager.toggleMute();
+            });
+        });
+    
+        // 游戏主要对象
+        // 视觉特效管理器
+        const EffectsManager = {
+            particles: [],
+            damageNumbers: [],
+            screenEffects: [],
+            
+            // 创建粒子效果
+            createParticle(x, y, color, size, velocityX, velocityY, lifetime = 1000) {
+                this.particles.push({
+                    x, y, color, size,
+                    velocityX, velocityY,
+                    lifetime, maxLifetime: lifetime,
+                    alpha: 1
+                });
+            },
+            
+            // 创建命中反馈
+            createHitEffect(x, y, color = 'yellow') {
+                // 创建闪烁效果
+                for (let i = 0; i < 8; i++) {
+                    const angle = (i / 8) * Math.PI * 2;
+                    const speed = 2 + Math.random() * 2;
+                    this.createParticle(
+                        x, y,
+                        color,
+                        3 + Math.random() * 3,
+                        Math.cos(angle) * speed,
+                        Math.sin(angle) * speed,
+                        500
+                    );
+                }
+            },
+            
+            // 创建死亡特效
+            createDeathEffect(x, y, color = 'red') {
+                // 创建爆炸效果
+                for (let i = 0; i < 12; i++) {
+                    const angle = (i / 12) * Math.PI * 2;
+                    const speed = 3 + Math.random() * 4;
+                    this.createParticle(
+                        x, y,
+                        color,
+                        4 + Math.random() * 4,
+                        Math.cos(angle) * speed,
+                        Math.sin(angle) * speed,
+                        800
+                    );
+                }
+                // 添加一些金色粒子表示奖励
+                for (let i = 0; i < 6; i++) {
+                    const angle = (i / 6) * Math.PI * 2;
+                    const speed = 2 + Math.random() * 2;
+                    this.createParticle(
+                        x, y,
+                        'gold',
+                        3 + Math.random() * 2,
+                        Math.cos(angle) * speed,
+                        Math.sin(angle) * speed,
+                        1000
+                    );
+                }
+            },
+            
+            // 创建拾取动画
+            createPickupEffect(x, y, text, color = 'gold') {
+                this.damageNumbers.push({
+                    x, y,
+                    text: '+' + text,
+                    color,
+                    velocityY: -2,
+                    alpha: 1,
+                    lifetime: 1500,
+                    size: 16
+                });
+            },
+            
+            // 创建伤害数字
+            createDamageNumber(x, y, damage, color = 'white') {
+                this.damageNumbers.push({
+                    x, y,
+                    text: '-' + damage,
+                    color,
+                    velocityY: -1,
+                    alpha: 1,
+                    lifetime: 1000,
+                    size: 14
+                });
+            },
+            
+            // 创建屏幕闪烁效果
+            createScreenFlash(color = 'red', duration = 200) {
+                this.screenEffects.push({
+                    color,
+                    alpha: 0.3,
+                    duration,
+                    maxDuration: duration
+                });
+            },
+            
+            // 更新所有特效
+            update(deltaTime) {
+                // 更新粒子
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const particle = this.particles[i];
+                    particle.x += particle.velocityX;
+                    particle.y += particle.velocityY;
+                    particle.lifetime -= deltaTime;
+                    particle.alpha = particle.lifetime / particle.maxLifetime;
+                    
+                    if (particle.lifetime <= 0) {
+                        this.particles.splice(i, 1);
+                    }
+                }
+                
+                // 更新伤害数字
+                for (let i = this.damageNumbers.length - 1; i >= 0; i--) {
+                    const number = this.damageNumbers[i];
+                    number.y += number.velocityY;
+                    number.lifetime -= deltaTime;
+                    number.alpha = number.lifetime / 1000;
+                    
+                    if (number.lifetime <= 0) {
+                        this.damageNumbers.splice(i, 1);
+                    }
+                }
+                
+                // 更新屏幕效果
+                for (let i = this.screenEffects.length - 1; i >= 0; i--) {
+                    const effect = this.screenEffects[i];
+                    effect.duration -= deltaTime;
+                    effect.alpha = (effect.duration / effect.maxDuration) * 0.3;
+                    
+                    if (effect.duration <= 0) {
+                        this.screenEffects.splice(i, 1);
+                    }
+                }
+            },
+            
+            // 绘制所有特效
+            draw(ctx) {
+                // 绘制屏幕效果
+                for (const effect of this.screenEffects) {
+                    ctx.fillStyle = effect.color;
+                    ctx.globalAlpha = effect.alpha;
+                    ctx.fillRect(0, 0, game.width, game.height);
+                    ctx.globalAlpha = 1;
+                }
+                
+                // 绘制粒子
+                for (const particle of this.particles) {
+                    ctx.save();
+                    ctx.globalAlpha = particle.alpha;
+                    ctx.fillStyle = particle.color;
+                    ctx.beginPath();
+                    ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+                
+                // 绘制伤害数字
+                for (const number of this.damageNumbers) {
+                    ctx.save();
+                    ctx.globalAlpha = number.alpha;
+                    ctx.fillStyle = number.color;
+                    ctx.font = `bold ${number.size}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.fillText(number.text, number.x, number.y);
+                    ctx.restore();
+                }
+            }
+        };
+
+        // 游戏主要对象
+        const game = {
+            canvas: null,
+            ctx: null,
+            width: 0,
+            height: 0,
+            gridSize: 40,
+            gridCols: 30,
+            gridRows: 15,
+            grid: [],
+            removedCols: { left: [], right: [] },
+            removedRows: { top: [], bottom: [] },
+            // 用于跟踪移出屏幕的敌人和Boss
+            offscreenEnemies: [],
+            offscreenBosses: [],
+            player: {
+                x: 0,
+                y: 0,
+                radius: 20,
+                color: 'blue',
+                health: 100, // 增加默认血量到30
+                maxHealth: 1000, // 增加最大血量到30
+                direction: 90, // 方向（度数）
+                shield: {
+                    active: false,
+                    duration: 0
+                },
+                coins: 0,
+                gun: {
+                    type: 'normal',
+                    color: 'grey',
+                    damage: 1,
+                    bulletCount: 1,
+                    bulletSpeed: 7,
+                    frozen: false,
+                    poison: false
+                }
+            },
+            enemies: [],
+            bosses: [],
+            bullets: [],
+            skills: [],
+            lastEnemySpawn: 0,
+            lastBossSpawn: 0,
+            enemySpawnRate: 500, // 毫秒
+            bossSpawnRate: 500000, // 毫秒
+            keys: {
+                w: false,
+                a: false,
+                s: false,
+                d: false,
+                space: false,
+                ArrowUp: false,
+                ArrowDown: false,
+                ArrowLeft: false,
+                ArrowRight: false
+            },
+            joystick: {
+                active: false,
+                angle: 0,
+                dragging: false,
+                startX: 0,
+                startY: 0
+            },
+            paused: false,
+            gameTime: 0,
+            cards: {
+                guns: [
+                    { id: 'fire', name: '火焰枪', description: '发射火焰子弹，伤害为2', color: 'red', damage: 2, bulletCount: 1, frozen: false, poison: false, shape: 'flame' },
+                    { id: 'bingdong', name: '寒冰枪', description: '发射寒冰子弹，可冻结敌人10秒', color: 'blue', damage: 1, bulletCount: 1, frozen: true, poison: false, shape: 'snowflake' },
+                    { id: 'doubleFire', name: '双倍火焰枪', description: '发射两个火焰子弹，每个伤害为2', color: 'red', damage: 2, bulletCount: 2, frozen: false, poison: false, shape: 'doubleFlame' },
+                    { id: 'doubleIce', name: '双倍寒冰枪', description: '发射两个寒冰子弹，可冻结敌人10秒', color: 'blue', damage: 1, bulletCount: 2, frozen: true, poison: false, shape: 'doubleSnowflake' },
+                    { id: 'poison', name: '毒药枪', description: '发射毒药子弹，伤害为3', color: 'purple', damage: 3, bulletCount: 1, frozen: false, poison: true, shape: 'skull' }
+                ],
+                skills: [
+                    { id: 'qiankun', name: '乾坤圈', description: '生成六个乾坤圈在玩家四周转动', shape: 'ring' },
+                    { id: 'huntian', name: '混天凌', description: '在屏幕中飞来飞去，伤害为3', shape: 'ribbon' },
+                    { id: 'huojianqiang', name: '火尖枪', description: '在玩家背后，每隔0.5秒发射，伤害为3', shape: 'spear' },
+                    { id: 'fenghuolun', name: '风火轮', description: '在地面上留下火焰痕迹，伤害为3', shape: 'wheel' },
+                    { id: 'jiulong', name: '九龙盖火罩', description: '每隔50秒出现一次，伤害为40', shape: 'dragon' },
+                    { id: 'bagua', name: '八卦阵宝剑', description: '向四面八方发射八卦阵，伤害为5', shape: 'sword' },
+                    { id: 'huangjin', name: '金砖', description: '随机方向发射金砖，伤害为5', shape: 'brick' },
+                    { id: 'jianyu', name: '箭雨', description: '朝随机方向发射50支箭，伤害为2', shape: 'arrow' }
+                ],
+                items: [
+                    { id: 'lianshe', name: '连发', description: '长按攻击按键可以连续发射子弹', color: 'orange', shape: 'lightning' },
+                    { id: 'gongjili', name: '攻击力提升', description: '每一次发射子弹的攻击力增加2', color: 'red', shape: 'sword' },
+                    { id: 'heal', name: '增加血量', description: '每3秒+1血', color: 'green', shape: 'heart' },
+                    { id: 'bingdong', name: '冰冻提升', description: '给子弹增加冰冻特效，可冰冻10秒', color: 'cyan', shape: 'snowflake' }
+                ]
+            },
+            cardSlots: {
+                guns: [null, null, null],
+                skills: [null, null, null, null, null, null, null, null],
+                items: [null, null, null, null]
+            },
+            activeEffects: {
+                rapidFire: false,
+                damageBoost: false,
+                healing: false,
+                freezeBoost: false
+            },
+            lastActiveSkillTimes: {},
+            // 用于跟踪地图移动的方向和距离
+            mapMovement: {
+                dx: 0,
+                dy: 0
+            },
+            // 是否是iPad
+            isIPad: false,
+            // 游戏难度调整
+            difficultySettings: {
+                enemyDamage: 1,
+                bossDamage: 2,
+                bossHealth: 100, // 添加bossHealth属性
+                enemySpeed: 2,
+                bossSpeed: 1
+            },
+            // 添加触摸控制相关属性
+            touchControls: {
+                lastDirection: null,
+                touchActive: false
+            },
+            // 添加Boss重生时间
+            bossRespawnTime: 0
+        };
+
+        // 初始化游戏
+        function initGame() {
+            game.canvas = document.getElementById('gameCanvas');
+            game.ctx = game.canvas.getContext('2d');
+            
+            // 检测是否为iPad
+            checkDeviceType();
+            
+            // 设置画布尺寸
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            // 设置玩家初始位置
+            game.player.x = game.width / 2;
+            game.player.y = game.height / 2;
+            
+            // 初始化网格
+            initGrid();
+            
+            // 添加事件监听器
+            setupEventListeners();
+            
+            // 设置商店和卡槽
+            setupShopAndCardSlots();
+            
+            // 设置帮助按钮
+            setupHelpButton();
+            
+            // 给玩家一些初始铜板，方便测试
+            game.player.coins = 150;
+            updateStatusBars(); // 更新状态条
+            
+            // 启动游戏循环
+            requestAnimationFrame(gameLoop);
+            
+            // 初始化音效系统
+            SoundManager.init();
+        }
+        
+        // 设置帮助按钮
+        function setupHelpButton() {
+            const helpButton = document.getElementById('helpButton');
+            const helpModal = document.getElementById('helpModal');
+            const closeHelp = document.getElementById('closeHelp');
+            
+            // 打开帮助
+            helpButton.addEventListener('click', () => {
+                game.paused = true;
+                helpModal.style.display = 'flex';
+            });
+            
+            // 关闭帮助
+            closeHelp.addEventListener('click', () => {
+                game.paused = false;
+                helpModal.style.display = 'none';
+            });
+        }
+        
+        // 检测设备类型
+        function checkDeviceType() {
+            // 检测是否为iPad
+            const userAgent = navigator.userAgent.toLowerCase();
+            const isIPad = /ipad/.test(userAgent) || 
+                          (/macintosh/.test(userAgent) && 'ontouchend' in document);
+            
+            game.isIPad = isIPad;
+            
+            // 如果是iPad，调整UI大小
+            if (isIPad) {
+                document.documentElement.classList.add('ipad');
+            }
+            
+            // 检测是否为移动设备
+            const isMobile = /iphone|ipad|ipod|android|blackberry|windows phone/i.test(userAgent);
+            if (isMobile) {
+                document.documentElement.classList.add('mobile');
+            }
+        }
+        
+        // 调整画布大小
+        function resizeCanvas() {
+            game.width = window.innerWidth;
+            game.height = window.innerHeight;
+            game.canvas.width = game.width;
+            game.canvas.height = game.height;
+            
+            // 调整网格大小以适应屏幕
+            game.gridCols = Math.ceil(game.width / game.gridSize) + 4; // 增加额外的列以确保覆盖
+            game.gridRows = Math.ceil(game.height / game.gridSize) + 4; // 增加额外的行以确保覆盖
+            
+            // 更新摇杆位置
+            const joystickContainer = document.getElementById('joystickContainer');
+            joystickContainer.style.right = '40px';
+            
+            // 如果是iPad，进一步调整UI尺寸
+            if (game.isIPad) {
+                adjustUIForIPad();
+            }
+            
+            // 更新状态条
+            updateStatusBars();
+        }
+        
+        // 为iPad调整UI
+        function adjustUIForIPad() {
+            // 调整摇杆大小
+            const joystickContainer = document.getElementById('joystickContainer');
+            joystickContainer.style.width = '300px';
+            joystickContainer.style.height = '300px';
+            joystickContainer.style.bottom = '120px';
+            
+            document.getElementById('outerCircle').style.width = '280px';
+            document.getElementById('outerCircle').style.height = '280px';
+            document.getElementById('middleCircle').style.width = '200px';
+            document.getElementById('middleCircle').style.height = '200px';
+            document.getElementById('middleCircle').style.left = '50px';
+            document.getElementById('middleCircle').style.top = '50px';
+            document.getElementById('innerCircle').style.width = '100px';
+            document.getElementById('innerCircle').style.height = '100px';
+            document.getElementById('innerCircle').style.left = '100px';
+            document.getElementById('innerCircle').style.top = '100px';
+        }
+        
+        // 更新状态条 - 新函数用于更新血条和铜板条
+        function updateStatusBars() {
+            // 更新血条
+            const healthFill = document.getElementById('healthFill');
+            const healthText = document.getElementById('healthText');
+            const healthPercent = (game.player.health / game.player.maxHealth) * 100;
+            
+            healthFill.style.height = `${healthPercent}%`;
+            healthText.textContent = game.player.health;
+            
+            // 更新铜板条 - 最大值为1000
+            const coinFill = document.getElementById('coinFill');
+            const coinText = document.getElementById('coinText');
+            const coinPercent = Math.min((game.player.coins / 1000) * 100, 100);
+            
+            coinFill.style.height = `${coinPercent}%`;
+            coinText.textContent = game.player.coins;
+            
+            // 更新Boss血条（如果有Boss）
+            if (game.bosses.length > 0) {
+                const bossHealthBar = document.getElementById('bossHealthBar');
+                const bossHealthFill = document.getElementById('bossHealthFill');
+                const bossHealthText = document.getElementById('bossHealthText');
+                const bossHealthLabel = document.getElementById('bossHealthLabel');
+                
+                // 显示Boss血条
+                bossHealthBar.style.display = 'block';
+                bossHealthLabel.style.display = 'block';
+                
+                const boss = game.bosses[0];
+                const bossHealthPercent = (boss.health / game.difficultySettings.bossHealth) * 100;
+                
+                bossHealthFill.style.height = `${bossHealthPercent}%`;
+                bossHealthText.textContent = boss.health;
+            } else {
+                // 隐藏Boss血条
+                document.getElementById('bossHealthBar').style.display = 'none';
+                document.getElementById('bossHealthLabel').style.display = 'none';
+            }
+        }
+        
+        // 初始化网格
+        function initGrid() {
+            game.grid = [];
+            
+            for (let y = 0; y < game.gridRows; y++) {
+                const row = [];
+                for (let x = 0; x < game.gridCols; x++) {
+                    // 随机生成格子类型
+                    let cellType = 'normal';
+                    const rand = Math.random();
+                    if (rand < 0.03) {
+                        cellType = 'treasure';
+                    } else if (rand < 0.07) {
+                        cellType = 'box';
+                    }
+                    
+                    row.push({
+                        type: cellType,
+                        x: x * game.gridSize,
+                        y: y * game.gridSize
+                    });
+                }
+                game.grid.push(row);
+            }
+        }
+        
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 键盘事件（保持原有功能）
+            window.addEventListener('keydown', (e) => {
+                switch (e.key.toLowerCase()) {
+                    case 'w': game.keys.w = true; break;
+                    case 'a': game.keys.a = true; break;
+                    case 's': game.keys.s = true; break;
+                    case 'd': game.keys.d = true; break;
+                    case ' ': game.keys.space = true; fireBullet(); break;
+                    case 'e': game.keys.e = true; break;
+                    case 'r': game.keys.r = true; break;
+                    case 'arrowup': 
+                        e.preventDefault();
+                        game.keys.ArrowUp = true; 
+                        break;
+                    case 'arrowdown': 
+                        e.preventDefault();
+                        game.keys.ArrowDown = true; 
+                        break;
+                    case 'arrowleft': 
+                        e.preventDefault();
+                        game.keys.ArrowLeft = true; 
+                        break;
+                    case 'arrowright': 
+                        e.preventDefault();
+                        game.keys.ArrowRight = true; 
+                        break;
+                }
+            });
+            
+            window.addEventListener('keyup', (e) => {
+                switch (e.key.toLowerCase()) {
+                    case 'w': game.keys.w = false; break;
+                    case 'a': game.keys.a = false; break;
+                    case 's': game.keys.s = false; break;
+                    case 'd': game.keys.d = false; break;
+                    case ' ': game.keys.space = false; break;
+                    case 'arrowup': game.keys.ArrowUp = false; break;
+                    case 'arrowdown': game.keys.ArrowDown = false; break;
+                    case 'arrowleft': game.keys.ArrowLeft = false; break;
+                    case 'arrowright': game.keys.ArrowRight = false; break;
+                    case 'e': game.keys.e = false; break;
+                    case 'r': game.keys.r = false; break;
+                }
+            });
+            
+            // 三层方向盘控件事件处理
+            setupJoystickControls();
+            
+            // 设置简化的触摸区域控制
+            setupTouchAreaControls();
+            
+            // 阻止iOS上的双击缩放
+            document.addEventListener('touchend', (e) => {
+                const now = Date.now();
+                const lastTouch = game.lastTouch || now;
+                const delta = now - lastTouch;
+                if (delta < 500 && delta > 0) {
+                    e.preventDefault();
+                }
+                game.lastTouch = now;
+            }, false);
+            
+            // 防止在iOS Safari上拖动导致整个页面移动
+            document.addEventListener('touchmove', (e) => {
+                if (e.touches.length > 1) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
+        }
+        
+        // 设置简化的触摸区域控制
+        function setupTouchAreaControls() {
+            const touchAreaLeft = document.getElementById('touchAreaLeft');
+            const touchAreaRight = document.getElementById('touchAreaRight');
+            const touchAreaTop = document.getElementById('touchAreaTop');
+            const touchAreaBottom = document.getElementById('touchAreaBottom');
+            
+            // 左边区域 - 向左移动
+            touchAreaLeft.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                game.touchControls.touchActive = true;
+                game.touchControls.lastDirection = 'left';
+                moveGrid('left');
+            });
+            
+            // 右边区域 - 向右移动
+            touchAreaRight.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                game.touchControls.touchActive = true;
+                game.touchControls.lastDirection = 'right';
+                moveGrid('right');
+            });
+            
+            // 上边区域 - 向上移动
+            touchAreaTop.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                game.touchControls.touchActive = true;
+                game.touchControls.lastDirection = 'up';
+                moveGrid('up');
+            });
+            
+            // 下边区域 - 向下移动
+            touchAreaBottom.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                game.touchControls.touchActive = true;
+                game.touchControls.lastDirection = 'down';
+                moveGrid('down');
+            });
+            
+            // 触摸结束时重置状态
+            const resetTouchStatus = (e) => {
+                game.touchControls.touchActive = false;
+            };
+            
+            touchAreaLeft.addEventListener('touchend', resetTouchStatus);
+            touchAreaRight.addEventListener('touchend', resetTouchStatus);
+            touchAreaTop.addEventListener('touchend', resetTouchStatus);
+            touchAreaBottom.addEventListener('touchend', resetTouchStatus);
+        }
+        
+        // 开始摇杆拖动
+        function startJoystickDrag(e, layer) {
+            if (e.button !== 0 && e.type === 'mousedown') return; // 只响应左键
+            game.joystick.dragging = true;
+            game.joystick.layer = layer;
+            game.joystick.startX = e.clientX;
+            game.joystick.startY = e.clientY;
+        }
+
+        // 更新摇杆位置和玩家方向/移动
+        function updateJoystickPosition(e) {
+            if (!game.joystick.dragging) return;
+
+            const joystickContainer = document.getElementById('joystickContainer');
+            const containerRect = joystickContainer.getBoundingClientRect();
+            const centerX = containerRect.left + containerRect.width / 2;
+            const centerY = containerRect.top + containerRect.height / 2;
+
+            const dx = e.clientX - centerX;
+            const dy = e.clientY - centerY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx); // Radians
+            const angleDegrees = angle * 180 / Math.PI;
+
+            if (game.joystick.layer === 'middle') {
+                // 中层 - 调整攻击方向（完整360度）
+                game.player.direction = angleDegrees;
+
+                const maxDistance = (containerRect.width - document.getElementById('middleCircle').offsetWidth) / 2;
+                const limitedDistance = Math.min(distance, maxDistance);
+                const moveX = Math.cos(angle) * limitedDistance;
+                const moveY = Math.sin(angle) * limitedDistance;
+
+                const middleCircle = document.getElementById('middleCircle');
+                middleCircle.style.transform = `translate(${moveX}px, ${moveY}px)`;
+
+                // 距离超过一半就连续开火
+                if (distance > maxDistance / 2) {
+                    if (game.activeEffects.rapidFire) {
+                        if (!game.joystick.attackInterval) {
+                            fireBullet(); // 立即开火一次
+                            game.joystick.attackInterval = setInterval(fireBullet, 200);
+                        }
+                    } else if (!game.joystick.fired) {
+                        fireBullet();
+                        game.joystick.fired = true;
+                    }
+                }
+            } else if (game.joystick.layer === 'outer') {
+                // 外层 - 移动
+                const normalizedAngle = (angleDegrees + 450) % 360;
+                let direction = null;
+
+                if (distance < 30) { // deadzone
+                    game.joystick.lastDirection = null;
+                    return;
+                }
+
+                if (normalizedAngle >= 45 && normalizedAngle < 135) {
+                    direction = 'right';
+                } else if (normalizedAngle >= 135 && normalizedAngle < 225) {
+                    direction = 'down';
+                } else if (normalizedAngle >= 225 && normalizedAngle < 315) {
+                    direction = 'left';
+                } else {
+                    direction = 'up';
+                }
+
+                if (direction !== game.joystick.lastDirection) {
+                    moveGrid(direction);
+                    game.joystick.lastDirection = direction;
+                }
+            }
+        }
+
+        // 设置三层方向盘控件
+        function setupJoystickControls() {
+            const joystickContainer = document.getElementById('joystickContainer');
+            const outerCircle = document.getElementById('outerCircle');
+            const middleCircle = document.getElementById('middleCircle');
+            const innerCircle = document.getElementById('innerCircle');
+
+            // 中层 (攻击)
+            middleCircle.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                startJoystickDrag(e, 'middle');
+            });
+            middleCircle.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                startJoystickDrag(e.touches[0], 'middle');
+            });
+
+            // 外层 (移动)
+            outerCircle.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                startJoystickDrag(e, 'outer');
+                updateJoystickPosition(e);
+            });
+            outerCircle.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                startJoystickDrag(e.touches[0], 'outer');
+                updateJoystickPosition(e.touches[0]);
+            });
+
+            // 内层 (确认/强力攻击)
+            innerCircle.addEventListener('click', () => {
+                fireBullet(); // 暂时没有强力攻击
+            });
+
+            // 拖动处理
+            window.addEventListener('mousemove', (e) => {
+                if (game.joystick.dragging) {
+                    updateJoystickPosition(e);
+                }
+            });
+            window.addEventListener('touchmove', (e) => {
+                if (game.joystick.dragging && e.touches.length > 0) {
+                    e.preventDefault();
+                    updateJoystickPosition(e.touches[0]);
+                }
+            }, { passive: false });
+
+            // 结束拖动
+            window.addEventListener('mouseup', endJoystickDrag);
+            window.addEventListener('touchend', endJoystickDrag);
+        }
+        
+        // 结束摇杆拖动
+        function endJoystickDrag() {
+            if (!game.joystick.dragging) return;
+            
+            // 重置中间层位置
+            if (game.joystick.layer === 'middle') {
+                const middleCircle = document.getElementById('middleCircle');
+                middleCircle.style.transform = 'translate(0px, 0px)';
+                
+                // 清除连发间隔
+                if (game.joystick.attackInterval) {
+                    clearInterval(game.joystick.attackInterval);
+                    game.joystick.attackInterval = null;
+                }
+            }
+            
+            // 重置状态
+            game.joystick.dragging = false;
+            game.joystick.fired = false;
+            game.joystick.lastDirection = null;
+        }
+        
+        // 设置商店和卡槽
+        function setupShopAndCardSlots() {
+            const shopButton = document.getElementById('shopButton');
+            const cardSlotButton = document.getElementById('cardSlotButton');
+            const shopModal = document.getElementById('shopModal');
+            const cardSlotModal = document.getElementById('cardSlotModal');
+            const closeShop = document.getElementById('closeShop');
+            const closeCardSlot = document.getElementById('closeCardSlot');
+            const buyCardButton = document.getElementById('buyCardButton');
+            
+            // 打开商店
+            shopButton.addEventListener('click', () => {
+                document.getElementById('shopCoinsDisplay').textContent = `当前铜板: ${game.player.coins}`;
+                game.paused = true;
+                shopModal.style.display = 'flex';
+            });
+            
+            // 关闭商店
+            closeShop.addEventListener('click', () => {
+                game.paused = false;
+                shopModal.style.display = 'none';
+            });
+            
+            // 打开卡槽
+            cardSlotButton.addEventListener('click', () => {
+                game.paused = true;
+                updateCardSlotDisplay();
+                cardSlotModal.style.display = 'flex';
+            });
+            
+            // 关闭卡槽
+            closeCardSlot.addEventListener('click', () => {
+                game.paused = false;
+                cardSlotModal.style.display = 'none';
+            });
+            
+            // 购买卡牌
+            buyCardButton.addEventListener('click', () => {
+                if (game.player.coins >= 50) {
+                    game.player.coins -= 50;
+                    document.getElementById('shopCoinsDisplay').textContent = `当前铜板: ${game.player.coins}`;
+                    
+                    // 随机获取卡牌
+                    const randomCard = getRandomCard();
+                    
+                    if (randomCard) {
+                        // 添加卡牌到卡槽
+                        addCardToSlot(randomCard);
+                        
+                        // 更新UI
+                        updateStatusBars(); // 更新状态条
+                        alert(`获得了 ${randomCard.name}！`);
+                    } else {
+                        // 如果没有可用卡牌，返还铜板
+                        game.player.coins += 50;
+                        document.getElementById('shopCoinsDisplay').textContent = `当前铜板: ${game.player.coins}`;
+                        alert('所有卡牌都已获得，无法购买更多卡牌。');
+                    }
+                } else {
+                    alert('铜板不足！');
+                }
+            });
+            
+            // 添加卡槽点击事件
+            const gunCardSlots = document.querySelectorAll('#gunCardSlots .card-slot');
+            gunCardSlots.forEach(slot => {
+                slot.addEventListener('click', () => {
+                    const slotIndex = parseInt(slot.getAttribute('data-slot'));
+                    const cardInfo = game.cardSlots.guns[slotIndex];
+                    
+                    if (cardInfo) {
+                        // 更换当前枪支
+                        const currentGun = game.player.gun;
+                        
+                        // 如果当前枪不是普通枪，保存它
+                        if (currentGun.type !== 'normal') {
+                            // 寻找空的枪槽
+                            const emptySlotIndex = game.cardSlots.guns.findIndex(slot => slot === null);
+                            if (emptySlotIndex !== -1) {
+                                const gunInfo = game.cards.guns.find(g => g.id === currentGun.type);
+                                game.cardSlots.guns[emptySlotIndex] = gunInfo;
+                            }
+                        }
+                        
+                        // 设置新枪
+                        game.player.gun = {
+                            type: cardInfo.id,
+                            color: cardInfo.color,
+                            damage: cardInfo.damage,
+                            bulletCount: cardInfo.bulletCount,
+                            bulletSpeed: 7,
+                            frozen: cardInfo.frozen,
+                            poison: cardInfo.poison
+                        };
+                        
+                        // 移除选中的卡牌
+                        game.cardSlots.guns[slotIndex] = null;
+                        
+                        // 更新UI
+                        updateCardSlotDisplay();
+                    }
+                });
+            });
+        }
+        
+        // 更新卡槽显示
+        function updateCardSlotDisplay() {
+            // 更新枪械卡槽
+            const gunCardSlots = document.querySelectorAll('#gunCardSlots .card-slot');
+            gunCardSlots.forEach((slot, index) => {
+                const cardInfo = game.cardSlots.guns[index];
+                updateCardSlotUI(slot, cardInfo);
+            });
+            
+            // 更新技能卡槽
+            const skillCardSlots = document.querySelectorAll('#skillCardSlots .card-slot');
+            skillCardSlots.forEach((slot, index) => {
+                const cardInfo = game.cardSlots.skills[index];
+                updateCardSlotUI(slot, cardInfo);
+            });
+            
+            // 更新道具卡槽
+            const itemCardSlots = document.querySelectorAll('#itemCardSlots .card-slot');
+            itemCardSlots.forEach((slot, index) => {
+                const cardInfo = game.cardSlots.items[index];
+                updateCardSlotUI(slot, cardInfo);
+            });
+        }
+        
+        // 绘制卡牌图标
+        function drawCardIcon(ctx, shape, x, y, size, color) {
+            ctx.save();
+            ctx.translate(x, y);
+            
+            switch(shape) {
+                case 'flame':
+                    // 火焰
+                    ctx.fillStyle = color || 'red';
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size/2);
+                    ctx.quadraticCurveTo(-size/3, -size/3, -size/4, 0);
+                    ctx.quadraticCurveTo(-size/3, size/3, 0, size/2);
+                    ctx.quadraticCurveTo(size/3, size/3, size/4, 0);
+                    ctx.quadraticCurveTo(size/3, -size/3, 0, -size/2);
+                    ctx.fill();
+                    break;
+                    
+                case 'snowflake':
+                    // 雪花
+                    ctx.strokeStyle = color || 'cyan';
+                    ctx.lineWidth = 2;
+                    for (let i = 0; i < 6; i++) {
+                        ctx.rotate(Math.PI / 3);
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.lineTo(0, -size/2);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(0, -size/3);
+                        ctx.lineTo(-size/6, -size/4);
+                        ctx.moveTo(0, -size/3);
+                        ctx.lineTo(size/6, -size/4);
+                        ctx.stroke();
+                    }
+                    break;
+                    
+                case 'skull':
+                    // 骷髅
+                    ctx.fillStyle = color || 'purple';
+                    ctx.beginPath();
+                    ctx.arc(0, -size/4, size/3, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillRect(-size/4, 0, size/2, size/3);
+                    ctx.fillStyle = 'black';
+                    ctx.beginPath();
+                    ctx.arc(-size/6, -size/4, size/10, 0, Math.PI * 2);
+                    ctx.arc(size/6, -size/4, size/10, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+                    
+                case 'ring':
+                    // 圆环
+                    ctx.strokeStyle = color || 'gold';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size/2, 0, Math.PI * 2);
+                    ctx.stroke();
+                    break;
+                    
+                case 'lightning':
+                    // 闪电
+                    ctx.fillStyle = color || 'yellow';
+                    ctx.beginPath();
+                    ctx.moveTo(-size/4, -size/2);
+                    ctx.lineTo(size/8, -size/6);
+                    ctx.lineTo(-size/8, size/6);
+                    ctx.lineTo(size/4, size/2);
+                    ctx.lineTo(0, 0);
+                    ctx.lineTo(size/8, -size/3);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                    
+                case 'heart':
+                    // 心形
+                    ctx.fillStyle = color || 'red';
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size/4);
+                    ctx.bezierCurveTo(-size/2, -size/2, -size/2, 0, 0, size/2);
+                    ctx.bezierCurveTo(size/2, 0, size/2, -size/2, 0, -size/4);
+                    ctx.fill();
+                    break;
+                    
+                case 'sword':
+                    // 剑
+                    ctx.fillStyle = color || 'silver';
+                    ctx.fillRect(-size/16, -size/2, size/8, size);
+                    ctx.fillRect(-size/4, -size/6, size/2, size/8);
+                    ctx.fillStyle = color || 'brown';
+                    ctx.fillRect(-size/8, size/4, size/4, size/4);
+                    break;
+                    
+                case 'arrow':
+                    // 箭
+                    ctx.strokeStyle = color || 'brown';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size/2);
+                    ctx.lineTo(0, size/2);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size/2);
+                    ctx.lineTo(-size/4, -size/4);
+                    ctx.moveTo(0, -size/2);
+                    ctx.lineTo(size/4, -size/4);
+                    ctx.stroke();
+                    break;
+                    
+                default:
+                    // 默认形状
+                    ctx.fillStyle = color || '#ddd';
+                    ctx.fillRect(-size/2, -size/2, size, size);
+                    break;
+            }
+            
+            ctx.restore();
+        }
+        
+        // 更新单个卡槽UI
+        function updateCardSlotUI(slotElement, cardInfo) {
+            if (cardInfo) {
+                slotElement.classList.add('filled');
+                
+                // 创建canvas来绘制图标
+                const iconCanvas = document.createElement('canvas');
+                iconCanvas.width = 60;
+                iconCanvas.height = 60;
+
+                
+                slotElement.innerHTML = `
+                    <div class="card-preview">
+                        <div class="card-preview-title">${cardInfo.name}</div>
+                        <div class="card-preview-image" style="background-color: transparent; padding: 0;">
+                            <img src="./tools/${cardInfo.id}.png" alt="${cardInfo.name}" style="width: 100%; height: 100%; object-fit: contain;">
+                        </div>
+                        <div class="card-preview-description" style="font-size: 12px">${cardInfo.description}</div>
+                    </div>
+                `;
+
+            } else {
+                slotElement.classList.remove('filled');
+                slotElement.textContent = '空槽';
+            }
+        }
+        
+        // 获取随机卡牌
+        function getRandomCard() {
+            // 组合所有可能的卡牌
+            const availableCards = [];
+            
+            // 检查枪械卡槽
+            game.cards.guns.forEach(gun => {
+                // 检查这个枪是否已经在卡槽中
+                if (!game.cardSlots.guns.some(g => g && g.id === gun.id) && 
+                    game.player.gun.type !== gun.id) {
+                    availableCards.push({...gun, type: 'gun'});
+                }
+            });
+            
+            // 检查技能卡槽
+            game.cards.skills.forEach(skill => {
+                // 检查这个技能是否已经在卡槽中
+                if (!game.cardSlots.skills.some(s => s && s.id === skill.id)) {
+                    availableCards.push({...skill, type: 'skill'});
+                }
+            });
+            
+            // 检查道具卡槽
+            game.cards.items.forEach(item => {
+                // 检查这个道具是否已经在卡槽中
+                if (!game.cardSlots.items.some(i => i && i.id === item.id)) {
+                    availableCards.push({...item, type: 'item'});
+                }
+            });
+            
+            // 如果有可用卡牌，随机选择一个
+            if (availableCards.length > 0) {
+                return availableCards[Math.floor(Math.random() * availableCards.length)];
+            }
+            
+            return null;
+        }
+        
+        // 添加卡牌到卡槽
+        function addCardToSlot(card) {
+            switch (card.type) {
+                case 'gun':
+                    // 找到空的枪械卡槽
+                    const emptyGunSlot = game.cardSlots.guns.findIndex(slot => slot === null);
+                    if (emptyGunSlot !== -1) {
+                        game.cardSlots.guns[emptyGunSlot] = card;
+                    }
+                    break;
+                    
+                case 'skill':
+                    // 找到空的技能卡槽
+                    const emptySkillSlot = game.cardSlots.skills.findIndex(slot => slot === null);
+                    if (emptySkillSlot !== -1) {
+                        game.cardSlots.skills[emptySkillSlot] = card;
+                        // 技能自动生效
+                        activateSkill(card.id);
+                    }
+                    break;
+                    
+                case 'item':
+                    // 找到空的道具卡槽
+                    const emptyItemSlot = game.cardSlots.items.findIndex(slot => slot === null);
+                    if (emptyItemSlot !== -1) {
+                        game.cardSlots.items[emptyItemSlot] = card;
+                        // 道具自动生效
+                        activateItem(card.id);
+                    }
+                    break;
+            }
+        }
+        
+        // 激活技能
+        function activateSkill(skillId) {
+            game.lastActiveSkillTimes[skillId] = 0;
+        }
+        
+        // 激活道具
+        function activateItem(itemId) {
+            switch (itemId) {
+                case 'lianshe':
+                    game.activeEffects.rapidFire = true;
+                    break;
+                case 'gongjili':
+                    game.activeEffects.damageBoost = true;
+                    break;
+                case 'heal':
+                    game.activeEffects.healing = true;
+                    break;
+                case 'bingdong':
+                    game.activeEffects.freezeBoost = true;
+                    break;
+            }
+        }
+        
+        // 移动网格（以玩家视角）
+        function moveGrid(direction) {
+            // 重置地图移动记录
+            game.mapMovement = { dx: 0, dy: 0 };
+            
+            switch (direction) {
+                case 'up':
+                    moveGridDown(); // 地图向下移动，让玩家看起来向上移动
+                    game.mapMovement.dy = -game.gridSize;
+                    break;
+                case 'down':
+                    moveGridUp(); // 地图向上移动，让玩家看起来向下移动
+                    game.mapMovement.dy = game.gridSize;
+                    break;
+                case 'left':
+                    moveGridRight(); // 地图向右移动，让玩家看起来向左移动
+                    game.mapMovement.dx = game.gridSize;
+                    break;
+                case 'right':
+                    moveGridLeft(); // 地图向左移动，让玩家看起来向右移动
+                    game.mapMovement.dx = -game.gridSize;
+                    break;
+            }
+            
+            // 移动场景中的所有敌人和Boss
+            moveEnemiesWithGrid(game.mapMovement.dx, game.mapMovement.dy);
+            
+            // 处理离屏敌人和Boss
+            handleOffscreenEntities();
+        }
+        
+        // 移动敌人和Boss跟随网格移动
+        function moveEnemiesWithGrid(dx, dy) {
+            // 移动所有敌人
+            for (let i = 0; i < game.enemies.length; i++) {
+                game.enemies[i].x += dx;
+                game.enemies[i].y += dy;
+            }
+            
+            // 移动所有Boss
+            for (let i = 0; i < game.bosses.length; i++) {
+                game.bosses[i].x += dx;
+                game.bosses[i].y += dy;
+            }
+            
+            // 移动所有技能
+            for (let i = 0; i < game.skills.length; i++) {
+                if (!game.skills[i].isPlayerBound) { // 不跟随玩家的技能需要移动
+                    game.skills[i].x += dx;
+                    game.skills[i].y += dy;
+                }
+            }
+        }
+        
+        // 处理离屏敌人和Boss
+        function handleOffscreenEntities() {
+            // 检查并处理离屏敌人
+            for (let i = game.enemies.length - 1; i >= 0; i--) {
+                const enemy = game.enemies[i];
+                if (isOffscreen(enemy)) {
+                    // 将敌人移到离屏列表
+                    game.offscreenEnemies.push(enemy);
+                    game.enemies.splice(i, 1);
+                }
+            }
+            
+            // 检查并处理离屏Boss
+            for (let i = game.bosses.length - 1; i >= 0; i--) {
+                const boss = game.bosses[i];
+                if (isOffscreen(boss)) {
+                    // 将Boss移到离屏列表
+                    game.offscreenBosses.push(boss);
+                    game.bosses.splice(i, 1);
+                }
+            }
+            
+            // 如果有离屏敌人，随机选择一些重新进入屏幕
+            if (game.offscreenEnemies.length > 0 && Math.random() < 0.3) {
+                // 最多返回3个敌人
+                const count = Math.min(3, game.offscreenEnemies.length);
+                for (let i = 0; i < count; i++) {
+                    if (game.offscreenEnemies.length > 0) {
+                        const index = Math.floor(Math.random() * game.offscreenEnemies.length);
+                        const enemy = game.offscreenEnemies[index];
+                        
+                        // 重新定位敌人到屏幕边缘
+                        repositionEntityToScreenEdge(enemy);
+                        
+                        // 将敌人添加回游戏
+                        game.enemies.push(enemy);
+                        game.offscreenEnemies.splice(index, 1);
+                    }
+                }
+            }
+            
+            // 如果有离屏Boss，让它们更容易回到屏幕
+            if (game.offscreenBosses.length > 0 && Math.random() < 0.5) {
+                const boss = game.offscreenBosses[0];
+                
+                // 重新定位Boss到屏幕边缘
+                repositionEntityToScreenEdge(boss);
+                
+                // 将Boss添加回游戏
+                game.bosses.push(boss);
+                game.offscreenBosses.splice(0, 1);
+            }
+        }
+        
+        // 检查实体是否在屏幕外
+        function isOffscreen(entity) {
+            const margin = entity.radius * 2;
+            return (entity.x < -margin || 
+                    entity.x > game.width + margin || 
+                    entity.y < -margin || 
+                    entity.y > game.height + margin);
+        }
+        
+        // 将实体重新定位到屏幕边缘
+        function repositionEntityToScreenEdge(entity) {
+            // 随机选择边缘
+            const edge = Math.floor(Math.random() * 4);
+            switch (edge) {
+                case 0: // 上边缘
+                    entity.x = Math.random() * game.width;
+                    entity.y = -entity.radius;
+                    break;
+                case 1: // 右边缘
+                    entity.x = game.width + entity.radius;
+                    entity.y = Math.random() * game.height;
+                    break;
+                case 2: // 下边缘
+                    entity.x = Math.random() * game.width;
+                    entity.y = game.height + entity.radius;
+                    break;
+                case 3: // 左边缘
+                    entity.x = -entity.radius;
+                    entity.y = Math.random() * game.height;
+                    break;
+            }
+        }
+        
+        // 向上移动网格
+        function moveGridUp() {
+            const removedRow = game.grid.shift();
+            game.removedRows.top.push(removedRow);
+            
+            // 从底部添加新行
+            let newRow;
+            if (game.removedRows.bottom.length > 0) {
+                newRow = game.removedRows.bottom.pop();
+            } else {
+                newRow = [];
+                for (let x = 0; x < game.gridCols; x++) {
+                    let cellType = 'normal';
+                    const rand = Math.random();
+                    if (rand < 0.03) {
+                        cellType = 'treasure';
+                    } else if (rand < 0.07) {
+                        cellType = 'box';
+                    }
+                    
+                    newRow.push({
+                        type: cellType,
+                        x: x * game.gridSize,
+                        y: (game.gridRows - 1) * game.gridSize
+                    });
+                }
+            }
+            
+            game.grid.push(newRow);
+            
+            // 更新所有格子的Y坐标
+            for (let y = 0; y < game.grid.length; y++) {
+                for (let x = 0; x < game.grid[y].length; x++) {
+                    game.grid[y][x].y = y * game.gridSize;
+                }
+            }
+        }
+        
+        // 向下移动网格
+        function moveGridDown() {
+            const removedRow = game.grid.pop();
+            game.removedRows.bottom.push(removedRow);
+            
+            // 从顶部添加新行
+            let newRow;
+            if (game.removedRows.top.length > 0) {
+                newRow = game.removedRows.top.pop();
+            } else {
+                newRow = [];
+                for (let x = 0; x < game.gridCols; x++) {
+                    let cellType = 'normal';
+                    const rand = Math.random();
+                    if (rand < 0.03) {
+                        cellType = 'treasure';
+                    } else if (rand < 0.07) {
+                        cellType = 'box';
+                    }
+                    
+                    newRow.push({
+                        type: cellType,
+                        x: x * game.gridSize,
+                        y: 0
+                    });
+                }
+            }
+            
+            game.grid.unshift(newRow);
+            
+            // 更新所有格子的Y坐标
+            for (let y = 0; y < game.grid.length; y++) {
+                for (let x = 0; x < game.grid[y].length; x++) {
+                    game.grid[y][x].y = y * game.gridSize;
+                }
+            }
+        }
+        
+        // 向左移动网格
+        function moveGridLeft() {
+            // 从每一行移除最左边的格子
+            const removedCol = [];
+            for (let y = 0; y < game.grid.length; y++) {
+                const cell = game.grid[y].shift();
+                removedCol.push(cell);
+            }
+            game.removedCols.left.push(removedCol);
+            
+            // 在每一行的右边添加新格子
+            let newCol;
+            if (game.removedCols.right.length > 0) {
+                newCol = game.removedCols.right.pop();
+                for (let y = 0; y < game.grid.length; y++) {
+                    game.grid[y].push(newCol[y]);
+                }
+            } else {
+                for (let y = 0; y < game.grid.length; y++) {
+                    let cellType = 'normal';
+                    const rand = Math.random();
+                    if (rand < 0.03) {
+                        cellType = 'treasure';
+                    } else if (rand < 0.07) {
+                        cellType = 'box';
+                    }
+                    
+                    game.grid[y].push({
+                        type: cellType,
+                        x: (game.gridCols - 1) * game.gridSize,
+                        y: y * game.gridSize
+                    });
+                }
+            }
+            
+            // 更新所有格子的X坐标
+            for (let y = 0; y < game.grid.length; y++) {
+                for (let x = 0; x < game.grid[y].length; x++) {
+                    game.grid[y][x].x = x * game.gridSize;
+                }
+            }
+        }
+        
+        // 向右移动网格
+        function moveGridRight() {
+            // 从每一行移除最右边的格子
+            const removedCol = [];
+            for (let y = 0; y < game.grid.length; y++) {
+                const cell = game.grid[y].pop();
+                removedCol.push(cell);
+            }
+            game.removedCols.right.push(removedCol);
+            
+            // 在每一行的左边添加新格子
+            let newCol;
+            if (game.removedCols.left.length > 0) {
+                newCol = game.removedCols.left.pop();
+                for (let y = 0; y < game.grid.length; y++) {
+                    game.grid[y].unshift(newCol[y]);
+                }
+            } else {
+                for (let y = 0; y < game.grid.length; y++) {
+                    let cellType = 'normal';
+                    const rand = Math.random();
+                    if (rand < 0.1) {
+                        cellType = 'treasure';
+                    } else if (rand < 0.2) {
+                        cellType = 'box';
+                    }
+                    
+                    game.grid[y].unshift({
+                        type: cellType,
+                        x: 0,
+                        y: y * game.gridSize
+                    });
+                }
+            }
+            
+            // 更新所有格子的X坐标
+            for (let y = 0; y < game.grid.length; y++) {
+                for (let x = 0; x < game.grid[y].length; x++) {
+                    game.grid[y][x].x = x * game.gridSize;
+                }
+            }
+        }
+        
+        // 发射子弹
+        function fireBullet() {
+            if (game.paused) return;
+            
+            const gunInfo = game.player.gun;
+            const bulletCount = gunInfo.bulletCount;
+            const bulletSpeed = gunInfo.bulletSpeed;
+            let damage = gunInfo.damage;
+            
+            // 应用攻击力提升效果
+            if (game.activeEffects.damageBoost) {
+                damage += 2;
+            }
+            
+            // 应用冰冻提升效果
+            let frozen = gunInfo.frozen;
+            if (game.activeEffects.freezeBoost) {
+                frozen = true;
+            }
+            
+            for (let i = 0; i < bulletCount; i++) {
+                // 计算每个子弹的角度偏移
+                let angleOffset = 0;
+                if (bulletCount > 1) {
+                    angleOffset = (i - Math.floor(bulletCount / 2)) * 10;
+                }
+                
+                const angle = (game.player.direction + angleOffset) * Math.PI / 180;
+                
+                // 计算子弹初始位置
+                const bulletX = game.player.x + Math.cos(angle) * (game.player.radius + 10);
+                const bulletY = game.player.y + Math.sin(angle) * (game.player.radius + 10);
+                
+                // 添加子弹
+                game.bullets.push({
+                    x: bulletX,
+                    y: bulletY,
+                    radius: 5,
+                    color: gunInfo.color,
+                    velocityX: Math.cos(angle) * bulletSpeed,
+                    velocityY: Math.sin(angle) * bulletSpeed,
+                    damage: damage,
+                    frozen: frozen,
+                    poison: gunInfo.poison
+                });
+                
+                // 播放射击音效
+                SoundManager.play('shoot');
+            }
+        }
+        
+        // 生成敌人
+        function spawnEnemy() {
+            const now = Date.now();
+            
+            // 生成小怪
+            if (now - game.lastEnemySpawn > game.enemySpawnRate) {
+                // 在随机位置生成敌人
+                const spawnX = Math.random() * game.width;
+                const spawnY = Math.random() * game.height;
+                
+                game.enemies.push({
+                    x: spawnX,
+                    y: spawnY,
+                    radius: game.player.radius / 2,
+                    color: 'red',
+                    health: 3,
+                    speed: game.difficultySettings.enemySpeed,
+                    frozen: {
+                        active: false,
+                        duration: 0
+                    }
+                });
+                
+                game.lastEnemySpawn = now;
+            }
+            
+            // 生成Boss
+            if (now - game.lastBossSpawn > game.bossSpawnRate) {
+                // 在随机位置生成Boss
+                const spawnX = Math.random() * game.width;
+                const spawnY = Math.random() * game.height;
+                
+                game.bosses.push({
+                    x: spawnX,
+                    y: spawnY,
+                    radius: game.player.radius * 2,
+                    color: 'darkred',
+                    health: Math.min(game.difficultySettings.bossHealth * 2, 100), // 血量翻倍，最高100
+                    speed: game.difficultySettings.bossSpeed,
+                    frozen: {
+                        active: false,
+                        duration: 0
+                    }
+                });
+                
+                game.lastBossSpawn = now;
+            } else if (game.bosses.length === 0 && game.bossRespawnTime !== 0) {
+                // 如果没有Boss且Boss重生时间已设置，检查是否达到重生时间
+                if (now >= game.bossRespawnTime) {
+                    // 在随机位置生成Boss
+                    const spawnX = Math.random() * game.width;
+                    const spawnY = Math.random() * game.height;
+                    
+                    game.bosses.push({
+                        x: spawnX,
+                        y: spawnY,
+                        radius: game.player.radius * 2,
+                        color: 'darkred',
+                        health: game.difficultySettings.bossHealth,
+                        speed: game.difficultySettings.bossSpeed,
+                        frozen: {
+                            active: false,
+                            duration: 0
+                        }
+                    });
+                    
+                    game.bossRespawnTime = 0; // 重置重生时间
+                }
+            }
+        }
+        
+        // 更新游戏状态
+        function update(deltaTime) {
+            if (game.paused) return;
+            
+            game.gameTime += deltaTime;
+            
+            // 处理按键输入
+            handleKeyInput();
+            
+            // 生成敌人
+            spawnEnemy();
+            
+            // 更新子弹
+            updateBullets(deltaTime);
+            
+            // 更新敌人
+            updateEnemies(deltaTime);
+            
+            // 更新Boss
+            updateBosses(deltaTime);
+            
+            // 更新技能
+            updateSkills(deltaTime);
+            
+            // 更新特殊效果
+            updateEffects(deltaTime);
+            
+            // 检查玩家是否站在特殊格子上
+            checkPlayerOnSpecialCell();
+            
+            // 更新护盾
+            if (game.player.shield.active) {
+                game.player.shield.duration -= deltaTime;
+                if (game.player.shield.duration <= 0) {
+                    game.player.shield.active = false;
+                }
+            }
+            
+            // 更新状态条
+            updateStatusBars();
+            
+            // 更新视觉特效
+            EffectsManager.update(deltaTime);
+        }
+        
+        // 处理按键输入
+        function handleKeyInput() {
+            if (game.keys.w || game.keys.ArrowUp) moveGrid('up');
+            if (game.keys.a || game.keys.ArrowLeft) moveGrid('left');
+            if (game.keys.s || game.keys.ArrowDown) moveGrid('down');
+            if (game.keys.d || game.keys.ArrowRight) moveGrid('right');
+
+            // 调整攻击角度
+            if (game.keys.e) {
+                game.player.direction = (game.player.direction - 15 + 360) % 360;
+                game.keys.e = false; // 每次按下只调整一次
+            }
+            if (game.keys.r) {
+                game.player.direction = (game.player.direction + 15) % 360;
+                game.keys.r = false; // 每次按下只调整一次
+            }
+            
+            // 连发
+            if (game.keys.space && game.activeEffects.rapidFire) {
+                fireBullet();
+            }
+        }
+        
+        // 更新子弹
+        function updateBullets(deltaTime) {
+            for (let i = game.bullets.length - 1; i >= 0; i--) {
+                const bullet = game.bullets[i];
+                
+                // 移动子弹
+                bullet.x += bullet.velocityX;
+                bullet.y += bullet.velocityY;
+                
+                // 检查子弹是否超出屏幕
+                if (bullet.x < 0 || bullet.x > game.width || bullet.y < 0 || bullet.y > game.height) {
+                    game.bullets.splice(i, 1);
+                    continue;
+                }
+                
+                // 检查子弹是否击中敌人
+                let hitEnemy = false;
+                for (let j = game.enemies.length - 1; j >= 0; j--) {
+                    const enemy = game.enemies[j];
+                    const dx = bullet.x - enemy.x;
+                    const dy = bullet.y - enemy.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < bullet.radius + enemy.radius) {
+                        // 造成伤害
+                        enemy.health -= bullet.damage;
+                        
+                        // 播放击中音效和视觉特效
+                        SoundManager.play('hit');
+                        EffectsManager.createHitEffect(enemy.x, enemy.y, 'yellow');
+                        EffectsManager.createDamageNumber(enemy.x, enemy.y, bullet.damage, 'white');
+                        
+                        // 冰冻效果
+                        if (bullet.frozen) {
+                            enemy.frozen.active = true;
+                            enemy.frozen.duration = 10000; // 10秒
+                        }
+                        
+                        // 毒药效果
+                        if (bullet.poison) {
+                            enemy.health -= 3;
+                        }
+                        
+                        // 如果敌人死亡
+                        if (enemy.health <= 0) {
+                            // 奖励
+                            game.player.coins += 10;
+                            
+                            // 播放敌人死亡音效和视觉特效
+                            SoundManager.play('enemyDeath');
+                            SoundManager.play('coin');
+                            EffectsManager.createDeathEffect(enemy.x, enemy.y, 'red');
+                            EffectsManager.createPickupEffect(enemy.x, enemy.y, '10', 'gold');
+                            
+                            // 移除敌人
+                            game.enemies.splice(j, 1);
+                        }
+                        
+                        hitEnemy = true;
+                        break;
+                    }
+                }
+                
+                // 检查子弹是否击中Boss
+                if (!hitEnemy) {
+                    for (let j = game.bosses.length - 1; j >= 0; j--) {
+                        const boss = game.bosses[j];
+                        const dx = bullet.x - boss.x;
+                        const dy = bullet.y - boss.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (distance < bullet.radius + boss.radius) {
+                            // 造成伤害
+                            boss.health -= bullet.damage;
+                            
+                            // 播放击中音效和视觉特效
+                            SoundManager.play('hit');
+                            EffectsManager.createHitEffect(boss.x, boss.y, 'orange');
+                            EffectsManager.createDamageNumber(boss.x, boss.y, bullet.damage, 'white');
+                            
+                            // 冰冻效果
+                            if (bullet.frozen) {
+                                boss.frozen.active = true;
+                                boss.frozen.duration = 10000; // 10秒
+                            }
+                            
+                            // 毒药效果
+                            if (bullet.poison) {
+                                boss.health -= 3;
+                            }
+                            
+                            // 奖励每减少1血给10铜板
+                            game.player.coins += bullet.damage;
+                            
+                            // 如果Boss死亡
+                            if (boss.health <= 0) {
+                                // 播放Boss死亡音效和视觉特效
+                                SoundManager.play('enemyDeath');
+                                EffectsManager.createDeathEffect(boss.x, boss.y, 'darkred');
+                                EffectsManager.createPickupEffect(boss.x, boss.y, '50', 'gold');
+                                
+                                // 移除Boss
+                                game.bosses.splice(j, 1);
+                                game.bossRespawnTime = Date.now() + 3000; // 设置3秒后重生
+                                // 玩家血量增加，翻倍和50取最小值
+                                game.player.health += Math.min(game.player.health, 50);
+                            }
+                            
+                            hitEnemy = true;
+                            break;
+                        }
+                    }
+                }
+                
+                // 如果子弹击中目标，移除子弹
+                if (hitEnemy) {
+                    game.bullets.splice(i, 1);
+                }
+            }
+        }
+        
+        // 更新敌人
+        function updateEnemies(deltaTime) {
+            for (let i = game.enemies.length - 1; i >= 0; i--) {
+                const enemy = game.enemies[i];
+                
+                // 如果敌人被冻结，跳过移动
+                if (enemy.frozen.active) {
+                    enemy.frozen.duration -= deltaTime;
+                    if (enemy.frozen.duration <= 0) {
+                        enemy.frozen.active = false;
+                    }
+                    continue;
+                }
+                
+                // 计算敌人到玩家的方向
+                const dx = game.player.x - enemy.x;
+                const dy = game.player.y - enemy.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // 移动敌人
+                if (distance > 0) {
+                    enemy.x += (dx / distance) * enemy.speed;
+                    enemy.y += (dy / distance) * enemy.speed;
+                }
+                
+                // 检查敌人是否碰到玩家
+                if (distance < enemy.radius + game.player.radius) {
+                    // 如果玩家有护盾，不受伤害
+                    if (!game.player.shield.active) {
+                        game.player.health -= game.difficultySettings.enemyDamage;
+                        
+                        // 检查玩家是否死亡
+                        if (game.player.health <= 0) {
+                            alert('游戏结束！');
+                            location.reload(); // 重新加载页面以重启游戏
+                        }
+                    }
+                    
+                    // 移除敌人
+                    game.enemies.splice(i, 1);
+                }
+            }
+        }
+        
+        // 更新Boss
+        function updateBosses(deltaTime) {
+            for (let i = game.bosses.length - 1; i >= 0; i--) {
+                const boss = game.bosses[i];
+                
+                // 如果Boss被冻结，跳过移动
+                if (boss.frozen.active) {
+                    boss.frozen.duration -= deltaTime;
+                    if (boss.frozen.duration <= 0) {
+                        boss.frozen.active = false;
+                    }
+                    continue;
+                }
+                
+                // 计算Boss到玩家的方向
+                const dx = game.player.x - boss.x;
+                const dy = game.player.y - boss.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // 移动Boss
+                if (distance > 0) {
+                    boss.x += (dx / distance) * boss.speed;
+                    boss.y += (dy / distance) * boss.speed;
+                }
+                
+                // 检查Boss是否碰到玩家
+                if (distance < boss.radius + game.player.radius) {
+                    // 如果玩家有护盾，不受伤害
+                    if (!game.player.shield.active) {
+                        game.player.health -= game.difficultySettings.bossDamage;
+                        
+                        // 检查玩家是否死亡
+                        if (game.player.health <= 0) {
+                            alert('游戏结束！');
+                            location.reload(); // 重新加载页面以重启游戏
+                        }
+                    }
+                    
+                    // Boss不会消失，只会被击退
+                    const pushDistance = 50; // 击退距离
+                    if (distance > 0) {
+                        boss.x -= (dx / distance) * pushDistance;
+                        boss.y -= (dy / distance) * pushDistance;
+                    }
+                }
+            }
+        } 
+        // 更新技能
+        function updateSkills(deltaTime) {
+            // 检查技能卡槽中的技能
+            for (const skillCard of game.cardSlots.skills) {
+                if (!skillCard) continue;
+                
+                const skillId = skillCard.id;
+                const now = game.gameTime;
+                
+                // 确保lastActiveSkillTimes存在
+                if (!game.lastActiveSkillTimes[skillId]) {
+                    game.lastActiveSkillTimes[skillId] = 0;
+                }
+                
+                switch (skillId) {
+                    case 'qiankun': // 乾坤圈
+                        if (now - game.lastActiveSkillTimes[skillId] > 5000) { // 每5秒
+                            createQiankunCircles();
+                            game.lastActiveSkillTimes[skillId] = now;
+                        }
+                        break;
+                        
+                    case 'huntian': // 混天凌
+                        if (now - game.lastActiveSkillTimes[skillId] > 10000) { // 每10秒
+                            createHuntianLing();
+                            game.lastActiveSkillTimes[skillId] = now;
+                        }
+                        break;
+                        
+                    case 'huojian': // 火尖枪
+                        if (now - game.lastActiveSkillTimes[skillId] > 500) { // 每0.5秒
+                            createHuojianSpear();
+                            game.lastActiveSkillTimes[skillId] = now;
+                        }
+                        break;
+                        
+                    case 'fenghuolun': // 风火轮
+                        if (now - game.lastActiveSkillTimes[skillId] > 1000) { // 每1秒
+                            createFenghuoWheel();
+                            game.lastActiveSkillTimes[skillId] = now;
+                        }
+                        break;
+                        
+                    case 'jiulong': // 九龙盖火罩
+                        if (now - game.lastActiveSkillTimes[skillId] > 50000) { // 每50秒
+                            createJiulongCover();
+                            game.lastActiveSkillTimes[skillId] = now;
+                        }
+                        break;
+                        
+                    case 'bagua': // 八卦阵宝剑
+                        if (now - game.lastActiveSkillTimes[skillId] > 3000) { // 每3秒
+                            createBaguaSwords();
+                            game.lastActiveSkillTimes[skillId] = now;
+                        }
+                        break;
+                        
+                    case 'jinzhuan': // 金砖
+                        if (now - game.lastActiveSkillTimes[skillId] > 1000) { // 每1秒
+                            createJinzhuanBricks();
+                            game.lastActiveSkillTimes[skillId] = now;
+                        }
+                        break;
+                        
+                    case 'jianyu': // 箭雨
+                        if (now - game.lastActiveSkillTimes[skillId] > 3000) { // 每3秒
+                            createJianyuArrows();
+                            game.lastActiveSkillTimes[skillId] = now;
+                        }
+                        break;
+                }
+            }
+            
+            // 更新现有技能效果
+            for (let i = game.skills.length - 1; i >= 0; i--) {
+                const skill = game.skills[i];
+                
+                // 更新技能位置
+                if (skill.update) {
+                    skill.update(deltaTime);
+                }
+                
+                // 检查技能是否过期
+                if (skill.duration !== undefined) {
+                    skill.duration -= deltaTime;
+                    if (skill.duration <= 0) {
+                        game.skills.splice(i, 1);
+                        continue;
+                    }
+                }
+                
+                // 检查技能是否超出屏幕
+                if (skill.x < -100 || skill.x > game.width + 100 || 
+                    skill.y < -100 || skill.y > game.height + 100) {
+                    if (!skill.isGlobal) {
+                        game.skills.splice(i, 1);
+                        continue;
+                    }
+                }
+                
+                // 检查技能是否击中敌人
+                for (let j = game.enemies.length - 1; j >= 0; j--) {
+                    const enemy = game.enemies[j];
+                    if (checkSkillHitEnemy(skill, enemy)) {
+                        // 应用技能效果
+                        enemy.health -= skill.damage || 3;
+                        
+                        // 如果敌人死亡
+                        if (enemy.health <= 0) {
+                            // 奖励
+                            game.player.coins += 10;
+                            
+                            // 移除敌人
+                            game.enemies.splice(j, 1);
+                        }
+                        
+                        // 如果技能是一次性的，移除它
+                        if (skill.oneTime) {
+                            game.skills.splice(i, 1);
+                            break;
+                        }
+                    }
+                }
+                
+                // 检查技能是否击中Boss
+                for (let j = game.bosses.length - 1; j >= 0; j--) {
+                    const boss = game.bosses[j];
+                    if (checkSkillHitEnemy(skill, boss)) {
+                        // 应用技能效果
+                        boss.health -= skill.damage || 3;
+                        
+                        // 奖励每减少1血给10铜板
+                        game.player.coins += skill.damage || 3;
+                        
+                        // 如果Boss死亡
+                        if (boss.health <= 0) {
+                            // 移除Boss
+                            game.bosses.splice(j, 1);
+                        }
+                        
+                        // 如果技能是一次性的，移除它
+                        if (skill.oneTime) {
+                            game.skills.splice(i, 1);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 检查技能是否击中敌人
+        function checkSkillHitEnemy(skill, enemy) {
+            if (skill.type === 'circle') {
+                const dx = skill.x - enemy.x;
+                const dy = skill.y - enemy.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                return distance < skill.radius + enemy.radius;
+            } else if (skill.type === 'rectangle') {
+                // 简单的矩形碰撞检测
+                return (
+                    skill.x < enemy.x + enemy.radius &&
+                    skill.x + skill.width > enemy.x - enemy.radius &&
+                    skill.y < enemy.y + enemy.radius &&
+                    skill.y + skill.height > enemy.y - enemy.radius
+                );
+            }
+            return false;
+        }
+        
+        // 创建乾坤圈
+        function createQiankunCircles() {
+            const circleCount = 6;
+            for (let i = 0; i < circleCount; i++) {
+                const angle = (i / circleCount) * Math.PI * 2;
+                const distance = 80;
+                
+                game.skills.push({
+                    type: 'circle',
+                    x: game.player.x + Math.cos(angle) * distance,
+                    y: game.player.y + Math.sin(angle) * distance,
+                    radius: 15,
+                    color: 'gold',
+                    damage: 3,
+                    duration: 5000,
+                    angle: angle,
+                    isPlayerBound: true, // 跟随玩家
+                    update: function(deltaTime) {
+                        // 旋转乾坤圈
+                        this.angle += 0.005 * deltaTime;
+                        this.x = game.player.x + Math.cos(this.angle) * distance;
+                        this.y = game.player.y + Math.sin(this.angle) * distance;
+                    }
+                });
+            }
+        }
+        
+        // 创建混天凌
+        function createHuntianLing() {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 5;
+            
+            game.skills.push({
+                type: 'circle',
+                x: game.player.x,
+                y: game.player.y,
+                radius: 20,
+                color: 'purple',
+                damage: 3,
+                velocityX: Math.cos(angle) * speed,
+                velocityY: Math.sin(angle) * speed,
+                duration: 10000,
+                update: function(deltaTime) {
+                    // 移动混天凌
+                    this.x += this.velocityX;
+                    this.y += this.velocityY;
+                    
+                    // 如果碰到边界，反弹
+                    if (this.x < this.radius || this.x > game.width - this.radius) {
+                        this.velocityX = -this.velocityX;
+                    }
+                    if (this.y < this.radius || this.y > game.height - this.radius) {
+                        this.velocityY = -this.velocityY;
+                    }
+                }
+            });
+        }
+        
+        // 创建火尖枪
+        function createHuojianSpear() {
+            // 获取玩家的反方向
+            const angle = (game.player.direction + 180) * Math.PI / 180;
+            const distance = game.player.radius + 20;
+            
+            const spearX = game.player.x + Math.cos(angle) * distance;
+            const spearY = game.player.y + Math.sin(angle) * distance;
+            
+            const spearLength = 30;
+            const spearWidth = 8;
+            
+            game.skills.push({
+                type: 'rectangle',
+                x: spearX - (spearWidth / 2),
+                y: spearY - (spearLength / 2),
+                width: spearWidth,
+                height: spearLength,
+                angle: angle,
+                color: 'orangered',
+                damage: 3,
+                duration: 500,
+                isPlayerBound: true, // 跟随玩家
+                update: function(deltaTime) {
+                    // 火尖枪跟随玩家
+                    this.angle = (game.player.direction + 180) * Math.PI / 180;
+                    const spearX = game.player.x + Math.cos(this.angle) * distance;
+                    const spearY = game.player.y + Math.sin(this.angle) * distance;
+                    this.x = spearX - (spearWidth / 2);
+                    this.y = spearY - (spearLength / 2);
+                }
+            });
+        }
+        
+        // 创建风火轮
+        function createFenghuoWheel() {
+            // 在玩家当前位置创建火焰痕迹
+            game.skills.push({
+                type: 'circle',
+                x: game.player.x,
+                y: game.player.y,
+                radius: 15,
+                color: 'orange',
+                damage: 3,
+                duration: 5000,
+                isGlobal: true
+            });
+        }
+        
+        // 创建九龙盖火罩（范围增大5倍）
+        function createJiulongCover() {
+            // 如果有Boss，优先盖住Boss
+            let targetX = game.player.x;
+            let targetY = game.player.y;
+            
+            if (game.bosses.length > 0) {
+                targetX = game.bosses[0].x;
+                targetY = game.bosses[0].y;
+            }
+            
+            game.skills.push({
+                type: 'circle',
+                x: targetX,
+                y: targetY,
+                radius: 500, // 范围增大到5倍
+                color: 'rgba(255, 100, 0, 0.3)',
+                damage: 40,
+                duration: 3000,
+                oneTime: true
+            });
+        }
+        
+        // 创建八卦阵宝剑
+        function createBaguaSwords() {
+            const swordCount = 8;
+            for (let i = 0; i < swordCount; i++) {
+                const angle = (i / swordCount) * Math.PI * 2;
+                const distance = 50;
+                const speed = 5;
+                
+                game.skills.push({
+                    type: 'rectangle',
+                    x: game.player.x + Math.cos(angle) * distance,
+                    y: game.player.y + Math.sin(angle) * distance,
+                    width: 10,
+                    height: 30,
+                    angle: angle,
+                    color: 'cyan',
+                    damage: 5,
+                    velocityX: Math.cos(angle) * speed,
+                    velocityY: Math.sin(angle) * speed,
+                    duration: 3000,
+                    update: function(deltaTime) {
+                        this.x += this.velocityX;
+                        this.y += this.velocityY;
+                    }
+                });
+            }
+        }
+
+
+        // 创建金砖
+        function createJinzhuanBricks() {
+            const brickCount = 10;
+            for (let i = 0; i < brickCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 3 + Math.random() * 2;
+                
+                game.skills.push({
+                    type: 'rectangle',
+                    x: game.player.x,
+                    y: game.player.y,
+                    width: 20,
+                    height: 10,
+                    angle: angle,
+                    color: 'gold',
+                    damage: 5,
+                    velocityX: Math.cos(angle) * speed,
+                    velocityY: Math.sin(angle) * speed,
+                    duration: 5000,
+                    update: function(deltaTime) {
+                        this.x += this.velocityX;
+                        this.y += this.velocityY;
+                    }
+                });
+            }
+        }
+        
+        // 创建箭雨
+        function createJianyuArrows() {
+            const arrowCount = 50;
+            const baseAngle = Math.random() * Math.PI * 2;
+            const angleSpread = Math.PI / 3; // 60度扇形
+            
+            for (let i = 0; i < arrowCount; i++) {
+                const angle = baseAngle + (i / arrowCount - 0.5) * angleSpread;
+                const speed = 5 + Math.random() * 2;
+                
+                game.skills.push({
+                    type: 'rectangle',
+                    x: game.player.x,
+                    y: game.player.y,
+                    width: 5,
+                    height: 20,
+                    angle: angle,
+                    color: 'brown',
+                    damage: 2,
+                    velocityX: Math.cos(angle) * speed,
+                    velocityY: Math.sin(angle) * speed,
+                    duration: 5000,
+                    update: function(deltaTime) {
+                        this.x += this.velocityX;
+                        this.y += this.velocityY;
+                    }
+                });
+            }
+        }
+        
+        // 更新特殊效果
+        function updateEffects(deltaTime) {
+            // 治疗效果
+            if (game.activeEffects.healing) {
+                if (game.gameTime % 3000 < deltaTime) {
+                    if (game.player.health < game.player.maxHealth) {
+                        game.player.health += 1;
+                        updateHealthBar();
+                    }
+                }
+            }
+        }
+        
+        // 检查玩家是否站在特殊格子上
+        function checkPlayerOnSpecialCell() {
+            const playerGridX = Math.floor(game.player.x / game.gridSize);
+            const playerGridY = Math.floor(game.player.y / game.gridSize);
+            
+            // 确保格子索引在有效范围内
+            if (playerGridY >= 0 && playerGridY < game.grid.length && 
+                playerGridX >= 0 && playerGridX < game.grid[playerGridY].length) {
+                
+                const cell = game.grid[playerGridY][playerGridX];
+                
+                if (cell.type === 'treasure') {
+                    // 宝箱格子：获得100铜板
+                    game.player.coins += 100;
+                    updateCoinBar();
+                    
+                    // 播放获得铜板音效和视觉特效
+                    SoundManager.play('coin');
+                    EffectsManager.createPickupEffect(game.player.x, game.player.y - 30, '100', 'gold');
+                    EffectsManager.createHitEffect(game.player.x, game.player.y, 'gold');
+                    
+                    cell.type = 'normal';
+                } else if (cell.type === 'box') {
+                    // 箱子格子：获得保护罩
+                    game.player.shield.active = true;
+                    game.player.shield.duration = 5000; // 5秒
+                    
+                    // 播放获得护盾音效和视觉特效
+                    SoundManager.play('shield');
+                    EffectsManager.createHitEffect(game.player.x, game.player.y, 'cyan');
+                    
+                    cell.type = 'normal';
+                }
+            }
+        }
+        
+        // 绘制游戏
+        function draw() {
+            // 清空画布
+            game.ctx.clearRect(0, 0, game.width, game.height);
+            
+            // 绘制网格
+            drawGrid();
+            
+            // 绘制技能
+            drawSkills();
+            
+            // 绘制敌人
+            drawEnemies();
+            
+            // 绘制Boss
+            drawBosses();
+            
+            // 绘制玩家
+            drawPlayer();
+            
+            // 绘制子弹
+            drawBullets();
+            
+            // 绘制视觉特效
+            EffectsManager.draw(game.ctx);
+        }
+        
+        // 绘制网格
+        function drawGrid() {
+            for (let y = 0; y < game.grid.length; y++) {
+                for (let x = 0; x < game.grid[y].length; x++) {
+                    const cell = game.grid[y][x];
+                    
+                    // 设置格子颜色
+                    let cellColor;
+                    switch (cell.type) {
+                        case 'treasure':
+                            cellColor = 'gold';
+                            break;
+                        case 'box':
+                            cellColor = 'brown';
+                            break;
+                        default:
+                            cellColor = '#ccc';
+                            break;
+                    }
+                    
+                    // 绘制格子
+                    game.ctx.fillStyle = cellColor;
+                    game.ctx.fillRect(cell.x, cell.y, game.gridSize, game.gridSize);
+                    
+                    // 绘制格子边框
+                    game.ctx.strokeStyle = '#aaa';
+                    game.ctx.strokeRect(cell.x, cell.y, game.gridSize, game.gridSize);
+                }
+            }
+        }
+        
+        // 绘制玩家
+        function drawPlayer() {
+            // 创建玩家图片元素（如果不存在）
+            if (!game.playerImage) {
+                game.playerImage = new Image();
+                game.playerImage.src = 'tools/player.png';
+            }
+            
+            // 绘制玩家图片
+            if (game.playerImage.complete) {
+                game.ctx.save();
+                game.ctx.translate(game.player.x, game.player.y);
+                game.ctx.rotate((game.player.direction - 90) * Math.PI / 180);
+                game.ctx.drawImage(
+                    game.playerImage, 
+                    -game.player.radius, 
+                    -game.player.radius, 
+                    game.player.radius * 2, 
+                    game.player.radius * 2
+                );
+                game.ctx.restore();
+            }
+            
+            // 如果玩家有护盾，绘制护盾
+            if (game.player.shield.active) {
+                game.ctx.beginPath();
+                game.ctx.arc(game.player.x, game.player.y, game.player.radius + 5, 0, Math.PI * 2);
+                game.ctx.strokeStyle = 'rgba(100, 200, 255, 0.7)';
+                game.ctx.lineWidth = 3;
+                game.ctx.stroke();
+                game.ctx.closePath();
+            }
+        }
+        
+        // 绘制敌人
+        function drawEnemies() {
+            // 创建敌人图片元素（如果不存在）
+            if (!game.enemyImage) {
+                game.enemyImage = new Image();
+                game.enemyImage.src = 'tools/xiaoguai.png';
+            }
+            
+            for (const enemy of game.enemies) {
+                if (game.enemyImage.complete) {
+                    game.ctx.drawImage(
+                        game.enemyImage, 
+                        enemy.x - enemy.radius, 
+                        enemy.y - enemy.radius, 
+                        enemy.radius * 2, 
+                        enemy.radius * 2
+                    );
+                }
+                
+                // 绘制血量
+                game.ctx.fillStyle = 'white';
+                game.ctx.font = '10px Arial';
+                game.ctx.textAlign = 'center';
+                game.ctx.fillText(enemy.health, enemy.x, enemy.y);
+            }
+        }
+        
+        // 绘制Boss
+        function drawBosses() {
+            // 创建Boss图片元素（如果不存在）
+            if (!game.bossImage) {
+                game.bossImage = new Image();
+                game.bossImage.src = 'tools/monster.png';
+            }
+            
+            for (const boss of game.bosses) {
+                if (game.bossImage.complete) {
+                    game.ctx.drawImage(
+                        game.bossImage, 
+                        boss.x - boss.radius, 
+                        boss.y - boss.radius, 
+                        boss.radius * 2, 
+                        boss.radius * 2
+                    );
+                }
+                
+                // 绘制血量
+                game.ctx.fillStyle = 'white';
+                game.ctx.font = '16px Arial';
+                game.ctx.textAlign = 'center';
+                game.ctx.fillText(boss.health, boss.x, boss.y);
+            }
+        }
+        
+        // 绘制子弹
+        function drawBullets() {
+            for (const bullet of game.bullets) {
+                game.ctx.beginPath();
+                game.ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+                game.ctx.fillStyle = bullet.color;
+                game.ctx.fill();
+                game.ctx.closePath();
+            }
+        }
+        
+        // 绘制技能
+        function drawSkills() {
+            for (const skill of game.skills) {
+                if (skill.type === 'circle') {
+                    game.ctx.beginPath();
+                    game.ctx.arc(skill.x, skill.y, skill.radius, 0, Math.PI * 2);
+                    game.ctx.fillStyle = skill.color;
+                    game.ctx.fill();
+                    game.ctx.closePath();
+                } else if (skill.type === 'rectangle') {
+                    // 保存当前状态
+                    game.ctx.save();
+                    
+                    // 平移到矩形中心
+                    game.ctx.translate(skill.x + skill.width / 2, skill.y + skill.height / 2);
+                    
+                    // 旋转
+                    if (skill.angle !== undefined) {
+                        game.ctx.rotate(skill.angle);
+                    }
+                    
+                    // 绘制矩形
+                    game.ctx.fillStyle = skill.color;
+                    game.ctx.fillRect(-skill.width / 2, -skill.height / 2, skill.width, skill.height);
+                    
+                    // 恢复状态
+                    game.ctx.restore();
+                }
+            }
+        }
+        
+        // 游戏循环
+        let lastTime = 0;
+        function gameLoop(timestamp) {
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+            
+            update(deltaTime);
+            draw();
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // 启动游戏
+        window.onload = initGame;
+    </script>
+
+
+
+</body></html>
