@@ -318,6 +318,12 @@
                 bottom: 135px;
                 left: 105px;
             }
+            #moveStepDisplay {
+                bottom: 135px;
+                left: 60px;
+                font-size: 24px;
+                background-color: #f0ad4e;
+            }
             #attackButton {
                 bottom: 110px;
                 right: 25px; /* 移动到右边 */
@@ -1290,6 +1296,7 @@
         <div class="ui-button" id="leftButton">←</div>
         <div class="ui-button" id="downButton">↓</div>
         <div class="ui-button" id="rightButton">→</div>
+        <div class="ui-button" id="moveStepDisplay">3</div>
 
         
         <div id="joystickContainer">
@@ -1826,7 +1833,9 @@
                 bossHealth: 100, // 添加bossHealth属性
                 enemySpeed: 2,
                 bossSpeed: 1
-            }
+            },
+            // 移动步数
+            moveStep: 3
         };
 
         // 初始化游戏
@@ -1977,6 +1986,12 @@
         
         // 设置事件监听器
         function setupEventListeners() {
+            // 移动步数显示按钮
+            const moveStepDisplay = document.getElementById('moveStepDisplay');
+            moveStepDisplay.addEventListener('click', () => {
+                game.moveStep = (game.moveStep % 5) + 1;
+                moveStepDisplay.textContent = game.moveStep;
+            });
             // 键盘事件
             window.addEventListener('keydown', (e) => {
                 switch (e.key.toLowerCase()) {
@@ -2666,35 +2681,81 @@
             middleCircle.style.transform = 'translate(0px, 0px)';
         }
         
+        // 地图向下移动
+        function moveGridDown(step = 1) {
+            const moveAmount = game.gridSize * step;
+            game.player.y += moveAmount;
+            game.enemies.forEach(enemy => enemy.y += moveAmount);
+            game.bosses.forEach(boss => boss.y += moveAmount);
+            game.bullets.forEach(bullet => bullet.y += moveAmount);
+            game.skills.forEach(skill => skill.y += moveAmount);
+            game.pickups.forEach(pickup => pickup.y += moveAmount);
+        }
+
+        // 地图向上移动
+        function moveGridUp(step = 1) {
+            const moveAmount = game.gridSize * step;
+            game.player.y -= moveAmount;
+            game.enemies.forEach(enemy => enemy.y -= moveAmount);
+            game.bosses.forEach(boss => boss.y -= moveAmount);
+            game.bullets.forEach(bullet => bullet.y -= moveAmount);
+            game.skills.forEach(skill => skill.y -= moveAmount);
+            game.pickups.forEach(pickup => pickup.y -= moveAmount);
+        }
+
+        // 地图向右移动
+        function moveGridRight(step = 1) {
+            const moveAmount = game.gridSize * step;
+            game.player.x += moveAmount;
+            game.enemies.forEach(enemy => enemy.x += moveAmount);
+            game.bosses.forEach(boss => boss.x += moveAmount);
+            game.bullets.forEach(bullet => bullet.x += moveAmount);
+            game.skills.forEach(skill => skill.x += moveAmount);
+            game.pickups.forEach(pickup => pickup.x += moveAmount);
+        }
+
+        // 地图向左移动
+        function moveGridLeft(step = 1) {
+            const moveAmount = game.gridSize * step;
+            game.player.x -= moveAmount;
+            game.enemies.forEach(enemy => enemy.x -= moveAmount);
+            game.bosses.forEach(boss => boss.x -= moveAmount);
+            game.bullets.forEach(bullet => bullet.x -= moveAmount);
+            game.skills.forEach(skill => skill.x -= moveAmount);
+            game.pickups.forEach(pickup => pickup.x -= moveAmount);
+        }
+
         // 移动网格（以玩家视角）
         function moveGrid(direction) {
-            // 重置地图移动记录
-            game.mapMovement = { dx: 0, dy: 0 };
-            
-            switch (direction) {
-                case 'up':
-                    moveGridDown(); // 地图向下移动，让玩家看起来向上移动
-                    game.mapMovement.dy = -game.gridSize;
-                    break;
-                case 'down':
-                    moveGridUp(); // 地图向上移动，让玩家看起来向下移动
-                    game.mapMovement.dy = game.gridSize;
-                    break;
-                case 'left':
-                    moveGridRight(); // 地图向右移动，让玩家看起来向左移动
-                    game.mapMovement.dx = game.gridSize;
-                    break;
-                case 'right':
-                    moveGridLeft(); // 地图向左移动，让玩家看起来向右移动
-                    game.mapMovement.dx = -game.gridSize;
-                    break;
+            for (let i = 0; i < game.moveStep; i++) {
+                // 重置地图移动记录
+                game.mapMovement = { dx: 0, dy: 0 };
+                
+                switch (direction) {
+                    case 'up':
+                        moveGridDown(); // 地图向下移动，让玩家看起来向上移动
+                        game.mapMovement.dy = -game.gridSize;
+                        break;
+                    case 'down':
+                        moveGridUp(); // 地图向上移动，让玩家看起来向下移动
+                        game.mapMovement.dy = game.gridSize;
+                        break;
+                    case 'left':
+                        moveGridRight(); // 地图向右移动，让玩家看起来向左移动
+                        game.mapMovement.dx = game.gridSize;
+                        break;
+                    case 'right':
+                        moveGridLeft(); // 地图向左移动，让玩家看起来向右移动
+                        game.mapMovement.dx = -game.gridSize;
+                        break;
+                }
+                
+                // 移动场景中的所有敌人和Boss
+                moveEnemiesWithGrid(game.mapMovement.dx, game.mapMovement.dy);
+                
+                // 处理离屏敌人和Boss
+                handleOffscreenEntities();
             }
-            
-            // 移动场景中的所有敌人和Boss
-            moveEnemiesWithGrid(game.mapMovement.dx, game.mapMovement.dy);
-            
-            // 处理离屏敌人和Boss
-            handleOffscreenEntities();
         }
         
         // 移动敌人和Boss跟随网格移动
