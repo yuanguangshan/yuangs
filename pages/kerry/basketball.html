@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>方块篮球对决</title>
+    <style>
+        /* 基础样式重置 */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #333;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        /* 游戏主容器 */
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 1000px;
+            height: 600px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            background-color: #f0f8ff; /* 淡蓝色天空背景 */
+        }
+
+        /* Canvas画布 */
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 顶部UI栏 */
+        #ui-top {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 30px;
+            box-sizing: border-box;
+            pointer-events: none; /* 允许点击穿透 */
+        }
+
+        .score-board {
+            font-size: 48px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.6);
+        }
+        #player-score { color: #4a90e2; } /* 玩家蓝色 */
+        #ai-score { color: #d0021b; } /* AI红色 */
+
+        #timer {
+            font-size: 48px;
+            font-weight: bold;
+            color: #fff;
+            background-color: rgba(0,0,0,0.4);
+            padding: 5px 20px;
+            border-radius: 10px;
+        }
+
+        /* 技能按钮 */
+        #skill-container {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+
+        #skill-button {
+            position: relative;
+            width: 150px;
+            height: 50px;
+            border: none;
+            border-radius: 25px;
+            font-size: 18px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        #skill-button.skill-ready {
+            background: linear-gradient(45deg, #FFD700, #FFA500);
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+        }
+        #skill-button.skill-ready:hover { transform: scale(1.05); }
+
+        #skill-button.skill-cooldown {
+            background: #555;
+            color: #aaa;
+            cursor: not-allowed;
+        }
+
+        #skill-cooldown-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 0%; /* 初始为0 */
+            background-color: rgba(40, 40, 40, 0.7);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 20px;
+            transition: height 0.2s linear;
+            pointer-events: none;
+        }
+
+        /* 控制按钮区域 */
+        #controls-container {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: grid;
+            grid-template-areas:
+                "jump jump"
+                "left right";
+            gap: 15px;
+            z-index: 10;
+        }
+        
+        .control-button {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 3px solid rgba(255,255,255,0.5);
+            background-color: rgba(0,0,0,0.4);
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            user-select: none; /* 防止文本被选中 */
+            transition: background-color 0.2s;
+        }
+        .control-button:active {
+            background-color: rgba(0,0,0,0.6);
+        }
+
+        #left-button { grid-area: left; }
+        #right-button { grid-area: right; }
+        #jump-button { grid-area: jump; width: 100px; height: 100px; margin: 0 auto; }
+
+        /* 投篮按钮 */
+        #shoot-container {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 10;
+        }
+
+        #shoot-button {
+            position: relative;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 3px solid rgba(255,255,255,0.5);
+            background-color: rgba(217, 83, 79, 0.7); /* 红色系 */
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            overflow: hidden;
+        }
+        #shoot-button:active {
+            background-color: rgba(217, 83, 79, 0.9);
+        }
+
+        #charge-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 100%;
+            width: 0%; /* 初始为0 */
+            background-color: rgba(255, 235, 59, 0.6); /* 黄色蓄力条 */
+            transition: width 0.1s linear;
+        }
+
+        /* 游戏结束弹窗 */
+        #game-over-modal {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+            display: none; /* 默认隐藏 */
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 100;
+        }
+        #game-over-text {
+            font-size: 72px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        #final-score {
+            font-size: 48px;
+            margin-bottom: 40px;
+        }
+        #restart-button {
+            padding: 15px 40px;
+            font-size: 24px;
+            cursor: pointer;
+            border: 2px solid white;
+            background-color: #4a90e2;
+            color: white;
+            border-radius: 10px;
+            transition: background-color 0.3s;
+        }
+        #restart-button:hover {
+            background-color: #357abd;
+        }
+
+        /* 响应式设计调整 */
+        @media (max-width: 768px) {
+            .score-board, #timer {
+                font-size: 32px;
+            }
+            
+            .control-button {
+                width: 60px;
+                height: 60px;
+            }
+            
+            #jump-button {
+                width: 80px;
+                height: 80px;
+            }
+            
+            #shoot-button {
+                width: 100px;
+                height: 100px;
+                font-size: 20px;
+            }
+            
+            #skill-button {
+                width: 120px;
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="ui-top">
+            <div id="player-score" class="score-board">0</div>
+            <div id="timer">1:30</div>
+            <div id="ai-score" class="score-board">0</div>
+        </div>
+
+        <div id="skill-container">
+            <button id="skill-button" class="skill-ready">
+                斗转星移
+                <span id="skill-cooldown-overlay"></span>
+            </button>
+        </div>
+
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="controls-container">
+            <div id="jump-button" class="control-button">跳跃</div>
+            <div id="left-button" class="control-button">←</div>
+            <div id="right-button" class="control-button">→</div>
+        </div>
+
+        <div id="shoot-container">
+            <button id="shoot-button">
+                投篮
+                <div id="charge-bar"></div>
+            </button>
+        </div>
+
+        <div id="game-over-modal">
+            <div id="game-over-text">游戏结束</div>
+            <div id="final-score"></div>
+            <button id="restart-button">再来一局</button>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM元素获取 ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gameContainer = document.getElementById('game-container');
+        
+        const playerScoreEl = document.getElementById('player-score');
+        const aiScoreEl = document.getElementById('ai-score');
+        const timerEl = document.getElementById('timer');
+        
+        const skillButton = document.getElementById('skill-button');
+        const skillCooldownOverlay = document.getElementById('skill-cooldown-overlay');
+        
+        const leftButton = document.getElementById('left-button');
+        const rightButton = document.getElementById('right-button');
+        const jumpButton = document.getElementById('jump-button');
+        const shootButton = document.getElementById('shoot-button');
+        const chargeBar = document.getElementById('charge-bar');
+
+        const gameOverModal = document.getElementById('game-over-modal');
+        const gameOverTextEl = document.getElementById('game-over-text');
+        const finalScoreEl = document.getElementById('final-score');
+        const restartButton = document.getElementById('restart-button');
+
+        // --- 游戏尺寸与常量 ---
+        canvas.width = 1000;
+        canvas.height = 600;
+        const GROUND_Y = canvas.height - 50;
+        const GRAVITY = 0.6;
+        const PLAYER_SPEED = 6;
+        const JUMP_FORCE = -15;
+        const SKILL_COOLDOWN_TIME = 50; // 50秒冷却
+        const GAME_DURATION = 90; // 90秒游戏时间
+        const MAX_CHARGE_POWER = 100;
+        const AI_DECISION_RATE = 0.02; // AI决策频率
+        const AI_SHOOT_ACCURACY = 0.7; // AI投篮准确度
+
+        // --- 游戏状态 ---
+        let game = {};
+
+        function resetGame() {
+            game = {
+                player: {
+                    x: canvas.width * 0.25, y: GROUND_Y - 50,
+                    width: 50, height: 50,
+                    vx: 0, vy: 0,
+                    color: '#4a90e2',
+                    onGround: false
+                },
+                ai: {
+                    x: canvas.width * 0.75, y: GROUND_Y - 50,
+                    width: 50, height: 50,
+                    vx: 0, vy: 0,
+                    color: '#d0021b',
+                    onGround: false
+                },
+                ball: {
+                    x: canvas.width / 2, y: canvas.height / 2,
+                    radius: 15,
+                    vx: 0, vy: 0,
+                    color: '#f5a623',
+                    owner: null
+                },
+                hoops: [
+                    { x: 0, y: canvas.height * 0.45, width: 150, height: 100, side: 'ai' }, // AI篮筐
+                    { x: canvas.width - 150, y: canvas.height * 0.45, width: 150, height: 100, side: 'player' } // 玩家篮筐
+                ],
+                score: { player: 0, ai: 0 },
+                gameTime: GAME_DURATION,
+                isGameOver: false,
+                keys: { left: false, right: false, jump: false },
+                shooting: { isCharging: false, chargePower: 0, startTime: 0 },
+                skill: { isReady: true, cooldownTimer: 0 },
+                lastTime: 0,
+                gameTimerInterval: null
+            };
+            updateUI();
+            gameOverModal.style.display = 'none';
+        }
+
+        // --- 物理与更新逻辑 ---
+        function updateEntity(entity) {
+            // 应用重力
+            if (!entity.onGround) {
+                entity.vy += GRAVITY;
+            }
+            // 更新位置
+            entity.x += entity.vx;
+            entity.y += entity.vy;
+            // 速度衰减
+            entity.vx *= 0.9;
+
+            // 地面碰撞
+            const bottomY = entity.y + (entity.height || entity.radius * 2);
+            if (bottomY >= GROUND_Y) {
+                entity.y = GROUND_Y - (entity.height || entity.radius * 2);
+                entity.vy = 0;
+                entity.onGround = true;
+            } else {
+                entity.onGround = false;
+            }
+
+            // 墙壁碰撞
+            const leftEdge = entity.radius || 0;
+            const rightEdge = entity.width || entity.radius * 2;
+            
+            if (entity.x - leftEdge < 0) entity.x = leftEdge;
+            if (entity.x + rightEdge > canvas.width) entity.x = canvas.width - rightEdge;
+        }
+
+        function updateBall() {
+            if (game.ball.owner) {
+                // 球被持有，跟随持有者
+                game.ball.x = game.ball.owner.x + game.ball.owner.width / 2;
+                game.ball.y = game.ball.owner.y - game.ball.radius;
+                game.ball.vx = game.ball.owner.vx;
+                game.ball.vy = 0;
+            } else {
+                // 篮球物理
+                game.ball.vy += GRAVITY * 0.8;
+                game.ball.x += game.ball.vx;
+                game.ball.y += game.ball.vy;
+                game.ball.vx *= 0.99;
+
+                // 篮球地面反弹
+                if (game.ball.y + game.ball.radius >= GROUND_Y) {
+                    game.ball.y = GROUND_Y - game.ball.radius;
+                    game.ball.vy *= -0.6; // 能量损失
+                }
+                // 篮球墙壁反弹
+                if (game.ball.x - game.ball.radius < 0) {
+                    game.ball.x = game.ball.radius;
+                    game.ball.vx *= -0.8;
+                } else if (game.ball.x + game.ball.radius > canvas.width) {
+                    game.ball.x = canvas.width - game.ball.radius;
+                    game.ball.vx *= -0.8;
+                }
+            }
+        }
+
+        function updateAI() {
+            const { ai, ball, player, hoops } = game;
+            const targetHoop = hoops[1]; // AI要投的篮筐
+            const aiHoop = hoops[0]; // AI自己的篮筐
+
+            if (ball.owner === ai) { // AI持球，进攻
+                // 移动到篮下
+                if (ai.x > targetHoop.x - 50) {
+                    ai.vx = -PLAYER_SPEED * 0.6;
+                } else if (ai.x < targetHoop.x - 200) {
+                    ai.vx = PLAYER_SPEED * 0.6;
+                } else {
+                    // 在篮下，准备投篮
+                    if (ai.onGround && Math.random() < AI_DECISION_RATE) { // 随机跳跃投篮
+                        ai.vy = JUMP_FORCE * 0.8;
+                        setTimeout(() => {
+                            if (ball.owner === ai) {
+                                // AI投篮
+                                ball.owner = null;
+                                const accuracy = Math.random() < AI_SHOOT_ACCURACY ? 1 : 0.8;
+                                const targetX = targetHoop.x + targetHoop.width / 2;
+                                const targetY = targetHoop.y + targetHoop.height / 3;
+                                const dx = targetX - ball.x;
+                                const dy = targetY - ball.y;
+                                const distance = Math.sqrt(dx * dx + dy * dy);
+                                const power = distance * 0.05 * accuracy;
+                                const angle = Math.atan2(dy, dx);
+                                
+                                ball.vx = Math.cos(angle) * power;
+                                ball.vy = Math.sin(angle) * power;
+                            }
+                        }, 300);
+                    }
+                }
+            } else if (ball.owner === player) { // 玩家持球，AI防守
+                // 向玩家移动
+                if (ai.x < player.x - 10) {
+                    ai.vx = PLAYER_SPEED * 0.5;
+                } else if (ai.x > player.x + 10) {
+                    ai.vx = -PLAYER_SPEED * 0.5;
+                }
+                
+                // 随机跳跃拦截
+                if (ai.onGround && Math.abs(ai.x - player.x) < 80 && Math.random() < AI_DECISION_RATE) {
+                    ai.vy = JUMP_FORCE * 0.9;
+                }
+            } else { // 无人持球，AI抢球
+                const dx = ball.x - (ai.x + ai.width / 2);
+                const dy = ball.y - ai.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > 20) {
+                    // 向球移动
+                    if (dx > 0) {
+                        ai.vx = PLAYER_SPEED * 0.7;
+                    } else {
+                        ai.vx = -PLAYER_SPEED * 0.7;
+                    }
+                    
+                    // 靠近时跳跃抓球
+                    if (ai.onGround && Math.abs(dx) < 50 && dy < -30 && Math.random() < AI_DECISION_RATE * 2) {
+                        ai.vy = JUMP_FORCE * 0.9;
+                    }
+                }
+                
+                // 在自己篮筐防守
+                if (ball.x < canvas.width / 2 && ai.x > canvas.width / 2) {
+                    ai.vx = -PLAYER_SPEED * 0.8;
+                }
+            }
+        }
+
+        // --- 碰撞检测 ---
+        function checkCollisions() {
+            const { player, ai, ball, hoops } = game;
+            
+            // 球员碰撞
+            if (checkRectCollision(player, ai)) {
+                const pushForce = 2;
+                if (player.x < ai.x) {
+                    player.vx -= pushForce;
+                    ai.vx += pushForce;
+                } else {
+                    player.vx += pushForce;
+                    ai.vx -= pushForce;
+                }
+            }
+            
+            // 球和玩家/AI碰撞
+            if (!ball.owner) {
+                if (checkBallPlayerCollision(ball, player)) {
+                    ball.owner = player;
+                }
+                if (checkBallPlayerCollision(ball, ai)) {
+                    ball.owner = ai;
+                }
+            }
+            
+            // 球和篮筐碰撞
+            hoops.forEach(hoop => {
+                if (checkBallHoopCollision(ball, hoop)) {
+                    // 得分
+                    if (hoop.side === 'player') {
+                        game.score.ai++;
+                    } else {
+                        game.score.player++;
+                    }
+                    updateUI();
+                    
+                    // 重置球
+                    resetBall();
+                }
+            });
+        }
+        
+        function checkRectCollision(rect1, rect2) {
+            return (
+                rect1.x < rect2.x + rect2.width &&
+                rect1.x + rect1.width > rect2.x &&
+                rect1.y < rect2.y + rect2.height &&
+                rect1.y + rect1.height > rect2.y
+            );
+        }
+        
+        function checkBallPlayerCollision(ball, player) {
+            // 简化的圆形与矩形碰撞
+            const halfWidth = player.width / 2;
+            const halfHeight = player.height / 2;
+            
+            const dx = Math.abs(ball.x - (player.x + halfWidth));
+            const dy = Math.abs(ball.y - (player.y + halfHeight));
+            
+            if (dx > halfWidth + ball.radius || dy > halfHeight + ball.radius) {
+                return false;
+            }
+            
+            if (dx <= halfWidth || dy <= halfHeight) {
+                return true;
+            }
+            
+            const cornerDistSq = Math.pow(dx - halfWidth, 2) + Math.pow(dy - halfHeight, 2);
+            return cornerDistSq <= Math.pow(ball.radius, 2);
+        }
+        
+        function checkBallHoopCollision(ball, hoop) {
+            // 检查球是否进入篮筐
+            const hoopCenterX = hoop.x + hoop.width / 2;
+            const hoopCenterY = hoop.y + hoop.height / 3;
+            const hoopRadius = 25; // 篮筐半径
+            
+            const dx = ball.x - hoopCenterX;
+            const dy = ball.y - hoopCenterY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // 球必须从上方进入篮筐，且必须有向下的速度
+            return distance < hoopRadius && ball.vy > 0 && ball.y < hoopCenterY;
+        }
+
+        // --- 玩家控制 ---
+        function handlePlayerInput() {
+            const { player, keys, ball } = game;
+            
+            // 移动
+            if (keys.left) {
+                player.vx = -PLAYER_SPEED;
+            } else if (keys.right) {
+                player.vx = PLAYER_SPEED;
+            }
+            
+            // 跳跃
+            if (keys.jump && player.onGround) {
+                player.vy = JUMP_FORCE;
+                player.onGround = false;
+            }
+        }
+        
+        function shoot() {
+            const { player, ball, shooting } = game;
+            
+            if (ball.owner === player && shooting.isCharging) {
+                ball.owner = null;
+                
+                const power = Math.min(shooting.chargePower, MAX_CHARGE_POWER) / 30;
+                const targetHoop = game.hoops[0];
+                const targetX = targetHoop.x + targetHoop.width / 2;
+                const targetY = targetHoop.y + targetHoop.height / 3;
+                
+                const dx = targetX - ball.x;
+                const dy = targetY - ball.y;
+                const angle = Math.atan2(dy, dx);
+                
+                ball.vx = Math.cos(angle) * power;
+                ball.vy = Math.sin(angle) * power;
+                
+                // 重置蓄力
+                shooting.isCharging = false;
+                shooting.chargePower = 0;
+                chargeBar.style.width = '0%';
+            }
+        }
+        
+        function useSkill() {
+            if (!game.skill.isReady || game.isGameOver) return;
+            
+            // 实现斗转星移技能: 交换玩家和AI的位置
+            const tempX = game.player.x;
+            const tempY = game.player.y;
+            
+            game.player.x = game.ai.x;
+            game.player.y = game.ai.y;
+            
+            game.ai.x = tempX;
+            game.ai.y = tempY;
+            
+            // 设置技能冷却
+            game.skill.isReady = false;
+            game.skill.cooldownTimer = SKILL_COOLDOWN_TIME;
+            
+            // 更新UI
+            skillButton.classList.remove('skill-ready');
+            skillButton.classList.add('skill-cooldown');
+            
+            updateSkillCooldown();
+        }
+
+        // --- 游戏渲染 ---
+        function render() {
+            // 清空画布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制背景
+            drawBackground();
+            
+            // 绘制篮筐
+            game.hoops.forEach(drawHoop);
+            
+            // 绘制地面
+            drawGround();
+            
+            // 绘制角色
+            drawCharacter(game.player);
+            drawCharacter(game.ai);
+            
+            // 绘制球
+            drawBall();
+        }
+        
+        function drawBackground() {
+            // 天空
+            const skyGradient = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+            skyGradient.addColorStop(0, '#87CEEB');
+            skyGradient.addColorStop(1, '#E0F7FA');
+            ctx.fillStyle = skyGradient;
+            ctx.fillRect(0, 0, canvas.width, GROUND_Y);
+            
+            // 云朵
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            for (let i = 0; i < 5; i++) {
+                const x = (canvas.width / 5) * i + 50;
+                const y = 80 + (i % 2) * 50;
+                const size = 40 + (i % 3) * 20;
+                
+                drawCloud(x, y, size);
+            }
+        }
+        
+        function drawCloud(x, y, size) {
+            ctx.beginPath();
+            ctx.arc(x, y, size * 0.8, 0, Math.PI * 2);
+            ctx.arc(x + size * 0.6, y - size * 0.2, size * 0.6, 0, Math.PI * 2);
+            ctx.arc(x + size, y, size * 0.7, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.fill();
+        }
+        
+        function drawGround() {
+            // 草地
+            ctx.fillStyle = '#4CAF50';
+            ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
+            
+            // 场地线
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, GROUND_Y);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.stroke();
+            
+            // 中心圆
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, GROUND_Y + 30, 30, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        
+        function drawHoop(hoop) {
+            // 篮球架
+            ctx.fillStyle = '#795548';
+            
+            if (hoop.side === 'ai') {
+                // AI左侧篮架
+                ctx.fillRect(hoop.x + hoop.width - 15, hoop.y, 15, hoop.height);
+            } else {
+                // 玩家右侧篮架
+                ctx.fillRect(hoop.x, hoop.y, 15, hoop.height);
+            }
+            
+            // 篮板
+            ctx.fillStyle = '#ECEFF1';
+            
+            if (hoop.side === 'ai') {
+                ctx.fillRect(hoop.x + hoop.width - 50, hoop.y, 40, 80);
+            } else {
+                ctx.fillRect(hoop.x + 10, hoop.y, 40, 80);
+            }
+            
+            // 篮筐
+            ctx.strokeStyle = '#FF5722';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            
+            const hoopCenterX = hoop.x + hoop.width / 2;
+            const hoopCenterY = hoop.y + hoop.height / 3;
+            const hoopRadius = 25;
+            
+            ctx.arc(hoopCenterX, hoopCenterY, hoopRadius, 0, Math.PI);
+            ctx.stroke();
+        }
+        
+        function drawCharacter(character) {
+            // 身体
+            ctx.fillStyle = character.color;
+            ctx.fillRect(character.x, character.y, character.width, character.height);
+            
+            // 眼睛
+            ctx.fillStyle = 'white';
+            const eyeSize = 10;
+            const eyeY = character.y + character.height * 0.25;
+            
+            // 确定眼睛方向
+            let eyeDirection = 0;
+            if (character === game.player) {
+                // 玩家眼睛朝向移动方向
+                eyeDirection = game.keys.left ? -1 : (game.keys.right ? 1 : 0);
+            } else {
+                // AI眼睛朝向玩家或球
+                const target = game.ball.owner === game.player ? game.player : game.ball;
+                eyeDirection = target.x > character.x ? 1 : -1;
+            }
+            
+            ctx.fillRect(character.x + character.width * 0.25 - eyeSize/2, eyeY, eyeSize, eyeSize);
+            ctx.fillRect(character.x + character.width * 0.75 - eyeSize/2, eyeY, eyeSize, eyeSize);
+            
+            // 瞳孔
+            ctx.fillStyle = 'black';
+            const pupilSize = 4;
+            const pupilOffset = eyeDirection * 3;
+            
+            ctx.fillRect(character.x + character.width * 0.25 - pupilSize/2 + pupilOffset, eyeY + 3, pupilSize, pupilSize);
+            ctx.fillRect(character.x + character.width * 0.75 - pupilSize/2 + pupilOffset, eyeY + 3, pupilSize, pupilSize);
+        }
+        
+        function drawBall() {
+            const { ball } = game;
+            
+            // 球体
+            ctx.fillStyle = ball.color;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 球的条纹
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.moveTo(ball.x - ball.radius, ball.y);
+            ctx.lineTo(ball.x + ball.radius, ball.y);
+            ctx.moveTo(ball.x, ball.y - ball.radius);
+            ctx.lineTo(ball.x, ball.y + ball.radius);
+            ctx.stroke();
+        }
+
+        // --- 游戏UI更新 ---
+        function updateUI() {
+            playerScoreEl.textContent = game.score.player;
+            aiScoreEl.textContent = game.score.ai;
+            
+            const minutes = Math.floor(game.gameTime / 60);
+            const seconds = game.gameTime % 60;
+            timerEl.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+        }
+        
+        function updateSkillCooldown() {
+            if (!game.skill.isReady) {
+                const percent = (game.skill.cooldownTimer / SKILL_COOLDOWN_TIME) * 100;
+                skillCooldownOverlay.style.height = `${100 - percent}%`;
+                
+                if (game.skill.cooldownTimer <= 0) {
+                    game.skill.isReady = true;
+                    skillButton.classList.remove('skill-cooldown');
+                    skillButton.classList.add('skill-ready');
+                    skillCooldownOverlay.style.height = '0%';
+                }
+            }
+        }
+        
+        function resetBall() {
+            game.ball.x = canvas.width / 2;
+            game.ball.y = canvas.height / 3;
+            game.ball.vx = 0;
+            game.ball.vy = 0;
+            game.ball.owner = null;
+        }
+
+        // --- 游戏流程控制 ---
+        function gameLoop(timestamp) {
+            if (!game.lastTime) game.lastTime = timestamp;
+            const deltaTime = timestamp - game.lastTime;
+            game.lastTime = timestamp;
+            
+            if (!game.isGameOver) {
+                // 更新玩家输入
+                handlePlayerInput();
+                
+                // 更新实体
+                updateEntity(game.player);
+                updateEntity(game.ai);
+                updateBall();
+                updateAI();
+                
+                // 检测碰撞
+                checkCollisions();
+                
+                // 蓄力投篮
+                if (game.shooting.isCharging) {
+                    const elapsedTime = Date.now() - game.shooting.startTime;
+                    game.shooting.chargePower = Math.min(elapsedTime / 10, MAX_CHARGE_POWER);
+                    chargeBar.style.width = `${game.shooting.chargePower}%`;
+                }
+                
+                // 技能冷却
+                if (!game.skill.isReady) {
+                    game.skill.cooldownTimer -= deltaTime / 1000;
+                    updateSkillCooldown();
+                }
+                
+                // 渲染游戏
+                render();
+                
+                requestAnimationFrame(gameLoop);
+            }
+        }
+        
+        function startGame() {
+            resetGame();
+            game.gameTimerInterval = setInterval(() => {
+                if (game.gameTime > 0) {
+                    game.gameTime--;
+                    updateUI();
+                } else {
+                    endGame();
+                }
+            }, 1000);
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function endGame() {
+            game.isGameOver = true;
+            clearInterval(game.gameTimerInterval);
+            
+            // 显示结束弹窗
+            const playerWon = game.score.player > game.score.ai;
+            const isDraw = game.score.player === game.score.ai;
+            
+            gameOverTextEl.textContent = isDraw ? '平局！' : (playerWon ? '你赢了！' : '你输了！');
+            finalScoreEl.textContent = `${game.score.player} - ${game.score.ai}`;
+            gameOverModal.style.display = 'flex';
+        }
+
+        // --- 事件监听 ---
+        // 键盘控制
+        window.addEventListener('keydown', (e) => {
+            if (game.isGameOver) return;
+            
+            switch (e.key) {
+                case 'a':
+                case 'ArrowLeft':
+                    game.keys.left = true;
+                    game.keys.right = false;
+                    break;
+                case 'd':
+                case 'ArrowRight':
+                    game.keys.right = true;
+                    game.keys.left = false;
+                    break;
+                case 'w':
+                case 'ArrowUp':
+                case ' ':
+                    game.keys.jump = true;
+                    break;
+                case 's':
+                case 'ArrowDown':
+                    if (game.ball.owner === game.player && !game.shooting.isCharging) {
+                        game.shooting.isCharging = true;
+                        game.shooting.startTime = Date.now();
+                    }
+                    break;
+                case 'q':
+                    useSkill();
+                    break;
+            }
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            switch (e.key) {
+                case 'a':
+                case 'ArrowLeft':
+                    game.keys.left = false;
+                    break;
+                case 'd':
+                case 'ArrowRight':
+                    game.keys.right = false;
+                    break;
+                case 'w':
+                case 'ArrowUp':
+                case ' ':
+                    game.keys.jump = false;
+                    break;
+                case 's':
+                case 'ArrowDown':
+                    shoot();
+                    break;
+            }
+        });
+        
+        // 移动控制按钮
+        leftButton.addEventListener('touchstart', () => {
+            game.keys.left = true;
+            game.keys.right = false;
+        });
+        
+        leftButton.addEventListener('touchend', () => {
+            game.keys.left = false;
+        });
+        
+        rightButton.addEventListener('touchstart', () => {
+            game.keys.right = true;
+            game.keys.left = false;
+        });
+        
+        rightButton.addEventListener('touchend', () => {
+            game.keys.right = false;
+        });
+        
+        jumpButton.addEventListener('touchstart', () => {
+            game.keys.jump = true;
+        });
+        
+        jumpButton.addEventListener('touchend', () => {
+            game.keys.jump = false;
+        });
+        
+        // 投篮按钮
+        shootButton.addEventListener('touchstart', () => {
+            if (game.ball.owner === game.player && !game.shooting.isCharging) {
+                game.shooting.isCharging = true;
+                game.shooting.startTime = Date.now();
+            }
+        });
+        
+        shootButton.addEventListener('touchend', () => {
+            shoot();
+        });
+        
+        // 技能按钮
+        skillButton.addEventListener('click', useSkill);
+        
+        // 鼠标控制（桌面支持）
+        document.addEventListener('mousedown', (e) => {
+            if (e.button === 0) { // 左键
+                if (game.ball.owner === game.player && !game.shooting.isCharging) {
+                    game.shooting.isCharging = true;
+                    game.shooting.startTime = Date.now();
+                }
+            }
+        });
+        
+        document.addEventListener('mouseup', (e) => {
+            if (e.button === 0) { // 左键
+                shoot();
+            }
+        });
+        
+        // 重新开始游戏按钮
+        restartButton.addEventListener('click', startGame);
+        
+        // 窗口调整大小处理
+        window.addEventListener('resize', () => {
+            // 保持画布与容器大小一致
+            canvas.width = gameContainer.clientWidth;
+            canvas.height = gameContainer.clientHeight;
+        });
+
+        // --- 初始化游戏 ---
+        startGame();
+    </script>
+</body>
+</html>
