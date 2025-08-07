@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>无限地图飞刀游戏</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #222;
+            font-family: Arial, sans-serif;
+            touch-action: none;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: grid;
+            grid-template-areas:
+                ". up ."
+                "left . right"
+                ". down .";
+            grid-gap: 10px;
+            z-index: 10;
+        }
+        
+        .control-btn {
+            width: 60px;
+            height: 60px;
+            background-color: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            color: white;
+            user-select: none;
+            cursor: pointer;
+        }
+        
+        .control-btn:active {
+            background-color: rgba(255, 255, 255, 0.5);
+        }
+        
+        #up-btn { grid-area: up; }
+        #down-btn { grid-area: down; }
+        #left-btn { grid-area: left; }
+        #right-btn { grid-area: right; }
+        
+        #game-stats {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 18px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            z-index: 10;
+        }
+        
+        #health-bar {
+            width: 100%;
+            height: 10px;
+            background-color: #F44336;
+            border-radius: 5px;
+            margin-top: 5px;
+            position: relative;
+        }
+        
+        #health-fill {
+            height: 100%;
+            background-color: #4CAF50;
+            border-radius: 5px;
+            width: 100%;
+            transition: width 0.3s;
+        }
+        
+        #game-over {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 32px;
+            z-index: 20;
+        }
+        
+        #restart-btn {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+        
+        #restart-btn:hover {
+            background-color: #45a049;
+        }
+        
+        /* 响应式样式 */
+        @media (max-width: 768px) {
+            .control-btn {
+                width: 50px;
+                height: 50px;
+                font-size: 20px;
+            }
+            
+            #game-stats {
+                font-size: 14px;
+                padding: 8px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .control-btn {
+                width: 45px;
+                height: 45px;
+                font-size: 18px;
+            }
+            
+            #controls {
+                bottom: 10px;
+                left: 10px;
+                grid-gap: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+        
+        <div id="game-stats">
+            <div>生命值: <span id="health">100</span>/100</div>
+            <div id="health-bar"><div id="health-fill"></div></div>
+            <div>飞刀数量: <span id="knives">3</span></div>
+            <div>击杀数: <span id="kills">0</span></div>
+            <div>BOSS击杀: <span id="boss-kills">0</span></div>
+        </div>
+        
+        <div id="controls">
+            <div id="up-btn" class="control-btn">↑</div>
+            <div id="down-btn" class="control-btn">↓</div>
+            <div id="left-btn" class="control-btn">←</div>
+            <div id="right-btn" class="control-btn">→</div>
+        </div>
+        
+        <div id="game-over">
+            <div>游戏结束</div>
+            <div id="final-score">击杀数: 0</div>
+            <button id="restart-btn">重新开始</button>
+        </div>
+    </div>
+
+    <script>
+        // 游戏常量
+        let GRID_WIDTH = 30;
+        let GRID_HEIGHT = 15;
+        let TILE_SIZE; // 将在初始化时计算
+        const PLAYER_SIZE_RATIO = 0.7; // 玩家大小相对于格子大小的比例
+        const KNIFE_SIZE_RATIO = 0.4; // 飞刀大小相对于格子大小的比例
+        const ENEMY_SIZE_RATIO = 0.6; // 敌人大小相对于格子大小的比例
+        const BOSS_SIZE_RATIO = 1.2; // BOSS大小相对于格子大小的比例
+        const KNIFE_DISTANCE_RATIO = 1.5; // 飞刀距离相对于格子大小的比例
+        const KNIFE_SPEED = 0.05;
+        const ENEMY_SPEED = 1.5;
+        const BOSS_SPEED = 1.0;
+        const BOSS_KNIFE_SPEED = 5;
+        const KNIFE_DAMAGE = 1;
+        const ENEMY_DAMAGE = 10; // 敌人伤害
+        const BOSS_DAMAGE = 20; // BOSS伤害
+        const BOSS_KNIFE_DAMAGE = 15; // BOSS飞刀伤害
+        const KNOCKBACK_DISTANCE = 10; // 被打退的格子数
+        
+        // 游戏状态
+        let canvas, ctx;
+        let gameLoop;
+        let gameOver = false;
+        let score = 0;
+        let bossKills = 0;
+        let moveInProgress = false; // 防止重叠移动
+        let lastMoveTime = 0; // 上次移动时间
+        const MOVE_COOLDOWN = 100; // 移动冷却时间(毫秒)
+        
+        // 按键状态
+        let keyStates = {
+            w: false,
+            a: false,
+            s: false,
+            d: false
+        };
+        
+        // 移动间隔器
+        let moveIntervals = {
+            w: null,
+            a: null,
+            s: null,
+            d: null
+        };
+        
+        // 玩家属性
+        let player = {
+            gridX: Math.floor(GRID_WIDTH / 2),
+            gridY: Math.floor(GRID_HEIGHT / 2),
+            x: 0, // 屏幕坐标，会在更新时计算
+            y: 0, // 屏幕坐标，会在更新时计算
+            health: 100, // 生命值增加到100
+            maxHealth: 100,
+            knives: 3,
+            knifeAngles: [],
+            isKnockedBack: false, // 是否正在被击退
+            knockbackTime: 0, // 击退计时器
+            knockbackDirection: { x: 0, y: 0 } // 击退方向
+        };
+        
+        // 地图属性
+        let grid = [];
+        let removedGridCells = {
+            left: [],
+            right: [],
+            top: [],
+            bottom: []
+        };
+        
+        // 敌人和BOSS
+        let enemies = [];
+        let bosses = [];
+        let bossKnives = [];
+        
+        // 初始化游戏
+        function initGame() {
+            canvas = document.getElementById('game-canvas');
+            ctx = canvas.getContext('2d');
+            
+            // 设置Canvas大小
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            // 初始化地图
+            initializeGrid();
+            
+            // 初始化玩家飞刀角度
+            resetKnifeAngles();
+            
+            // 设置按键和触摸控制
+            setupControls();
+            
+            // 开始游戏循环
+            gameLoop = setInterval(update, 1000 / 60);
+            
+            // 开始生成敌人
+            setInterval(spawnEnemy, 2000);
+            
+            // 开始生成BOSS
+            setTimeout(() => {
+                spawnBoss();
+            }, 10000);
+            
+            // 开始持续移动检查
+            setInterval(checkContinuousMovement, MOVE_COOLDOWN);
+        }
+        
+        // 检查持续移动
+        function checkContinuousMovement() {
+            if (gameOver || player.isKnockedBack) return;
+            
+            if (keyStates.w) movePlayer(0, -1);
+            if (keyStates.a) movePlayer(-1, 0);
+            if (keyStates.s) movePlayer(0, 1);
+            if (keyStates.d) movePlayer(1, 0);
+        }
+        
+        // 调整Canvas大小和计算格子大小
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            // 根据屏幕大小计算格子大小
+            TILE_SIZE = Math.min(
+                canvas.width / GRID_WIDTH,
+                canvas.height / GRID_HEIGHT
+            );
+            
+            // 更新玩家和实体位置
+            updatePlayerPosition();
+            updateEntitiesPositions();
+        }
+        
+        // 更新玩家位置
+        function updatePlayerPosition() {
+            // 计算地图偏移以居中显示
+            const offsetX = (canvas.width - GRID_WIDTH * TILE_SIZE) / 2;
+            const offsetY = (canvas.height - GRID_HEIGHT * TILE_SIZE) / 2;
+            
+            // 计算玩家在屏幕上的实际坐标
+            player.x = offsetX + (player.gridX + 0.5) * TILE_SIZE;
+            player.y = offsetY + (player.gridY + 0.5) * TILE_SIZE;
+        }
+        
+        // 更新所有实体位置
+        function updateEntitiesPositions() {
+            // 计算地图偏移以居中显示
+            const offsetX = (canvas.width - GRID_WIDTH * TILE_SIZE) / 2;
+            const offsetY = (canvas.height - GRID_HEIGHT * TILE_SIZE) / 2;
+            
+            // 更新敌人位置
+            enemies.forEach(enemy => {
+                enemy.screenX = offsetX + enemy.gridX * TILE_SIZE + TILE_SIZE / 2;
+                enemy.screenY = offsetY + enemy.gridY * TILE_SIZE + TILE_SIZE / 2;
+            });
+            
+            // 更新BOSS位置
+            bosses.forEach(boss => {
+                boss.screenX = offsetX + boss.gridX * TILE_SIZE + TILE_SIZE / 2;
+                boss.screenY = offsetY + boss.gridY * TILE_SIZE + TILE_SIZE / 2;
+            });
+            
+            // 更新BOSS飞刀位置
+            bossKnives.forEach(knife => {
+                knife.screenX = offsetX + knife.gridX * TILE_SIZE + TILE_SIZE / 2;
+                knife.screenY = offsetY + knife.gridY * TILE_SIZE + TILE_SIZE / 2;
+            });
+        }
+        
+        // 重置玩家飞刀角度
+        function resetKnifeAngles() {
+            player.knifeAngles = [];
+            for (let i = 0; i < player.knives; i++) {
+                player.knifeAngles.push(i * ((2 * Math.PI) / player.knives));
+            }
+        }
+        
+        // 初始化地图格子
+        function initializeGrid() {
+            grid = [];
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                let row = [];
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    row.push(generateTile());
+                }
+                grid.push(row);
+            }
+        }
+        
+        // 生成单个地图格子
+        function generateTile() {
+            // 95%几率生成草地，5%几率生成灵珠
+            return Math.random() < 0.95 ? 1 : 2;
+        }
+        
+        // 设置控制按钮和键盘控制
+        function setupControls() {
+            // 按钮触摸控制 - 长按支持
+            setupButtonControl('up-btn', 0, -1);
+            setupButtonControl('down-btn', 0, 1);
+            setupButtonControl('left-btn', -1, 0);
+            setupButtonControl('right-btn', 1, 0);
+            
+            // 键盘控制 - 长按支持
+            document.addEventListener('keydown', (e) => {
+                if (gameOver) return;
+                
+                const key = e.key.toLowerCase();
+                if (key === 'w' || key === 'a' || key === 's' || key === 'd') {
+                    keyStates[key] = true;
+                }
+            });
+            
+            document.addEventListener('keyup', (e) => {
+                const key = e.key.toLowerCase();
+                if (key === 'w' || key === 'a' || key === 's' || key === 'd') {
+                    keyStates[key] = false;
+                }
+            });
+            
+            // 重新开始按钮
+            document.getElementById('restart-btn').addEventListener('click', restartGame);
+        }
+        
+        // 设置按钮控制
+        function setupButtonControl(btnId, dx, dy) {
+            const btn = document.getElementById(btnId);
+            
+            // 触摸开始
+            btn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (btnId === 'up-btn') keyStates.w = true;
+                else if (btnId === 'down-btn') keyStates.s = true;
+                else if (btnId === 'left-btn') keyStates.a = true;
+                else if (btnId === 'right-btn') keyStates.d = true;
+            });
+            
+            // 触摸结束
+            btn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                if (btnId === 'up-btn') keyStates.w = false;
+                else if (btnId === 'down-btn') keyStates.s = false;
+                else if (btnId === 'left-btn') keyStates.a = false;
+                else if (btnId === 'right-btn') keyStates.d = false;
+            });
+            
+            // 鼠标控制
+            btn.addEventListener('mousedown', () => {
+                if (btnId === 'up-btn') keyStates.w = true;
+                else if (btnId === 'down-btn') keyStates.s = true;
+                else if (btnId === 'left-btn') keyStates.a = true;
+                else if (btnId === 'right-btn') keyStates.d = true;
+            });
+            
+            btn.addEventListener('mouseup', () => {
+                if (btnId === 'up-btn') keyStates.w = false;
+                else if (btnId === 'down-btn') keyStates.s = false;
+                else if (btnId === 'left-btn') keyStates.a = false;
+                else if (btnId === 'right-btn') keyStates.d = false;
+            });
+            
+            // 鼠标离开
+            btn.addEventListener('mouseleave', () => {
+                if (btnId === 'up-btn') keyStates.w = false;
+                else if (btnId === 'down-btn') keyStates.s = false;
+                else if (btnId === 'left-btn') keyStates.a = false;
+                else if (btnId === 'right-btn') keyStates.d = false;
+            });
+        }
+        
+        // 移动玩家和更新地图
+        function movePlayer(dx, dy) {
+            if (gameOver || player.isKnockedBack) return;
+            
+            // 检查移动冷却
+            const now = Date.now();
+            if (now - lastMoveTime < MOVE_COOLDOWN) return;
+            lastMoveTime = now;
+            
+            // 修正：玩家视角的移动 - 地图相对移动方向应该相反
+            updateGrid(-dx, -dy);
+            
+            // 检测碰撞
+            checkCollisions();
+        }
+        
+        // 处理玩家被击退
+        function knockbackPlayer(sourceX, sourceY, damage) {
+            if (player.isKnockedBack) return;
+            
+            // 减少生命值
+            player.health -= damage;
+            updateHealthUI();
+            
+            // 计算击退方向
+            const dx = player.x - sourceX;
+            const dy = player.y - sourceY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance > 0) {
+                player.knockbackDirection.x = dx / distance;
+                player.knockbackDirection.y = dy / distance;
+                player.isKnockedBack = true;
+                player.knockbackTime = Date.now();
+                
+                // 立即执行第一步击退
+                performKnockback();
+            }
+            
+            // 检查游戏结束
+            if (player.health <= 0) {
+                endGame();
+            }
+        }
+        
+        // 执行击退动作
+        function performKnockback() {
+            if (!player.isKnockedBack) return;
+            
+            // 计算击退总步数和当前步数
+            const now = Date.now();
+            const elapsedTime = now - player.knockbackTime;
+            const knockbackDuration = MOVE_COOLDOWN * KNOCKBACK_DISTANCE; // 总击退持续时间
+            const progress = elapsedTime / knockbackDuration;
+            
+            if (progress >= 1) {
+                // 击退结束
+                player.isKnockedBack = false;
+                return;
+            }
+            
+            // 执行一步击退移动
+            updateGrid(
+                -Math.round(player.knockbackDirection.x), 
+                -Math.round(player.knockbackDirection.y)
+            );
+            
+            // 安排下一步击退
+            setTimeout(performKnockback, MOVE_COOLDOWN);
+        }
+        
+        // 更新生命值UI
+        function updateHealthUI() {
+            document.getElementById('health').textContent = player.health;
+            document.getElementById('health-fill').style.width = (player.health / player.maxHealth * 100) + '%';
+        }
+        
+        // 更新地图，创建无限地图效果
+        function updateGrid(dx, dy) {
+            // 向左移动，右侧添加新列
+            if (dx < 0) {
+                for (let y = 0; y < GRID_HEIGHT; y++) {
+                    const removedCell = grid[y].shift();
+                    removedGridCells.left.push(removedCell);
+                    
+                    // 优先使用之前移出的单元格
+                    let newCell;
+                    if (removedGridCells.right.length > 0) {
+                        newCell = removedGridCells.right.pop();
+                    } else {
+                        newCell = generateTile();
+                    }
+                    
+                    grid[y].push(newCell);
+                }
+                
+                // 更新敌人和BOSS的相对位置
+                enemies.forEach(enemy => enemy.gridX += 1);
+                bosses.forEach(boss => boss.gridX += 1);
+                bossKnives.forEach(knife => knife.gridX += 1);
+            }
+            
+            // 向右移动，左侧添加新列
+            if (dx > 0) {
+                for (let y = 0; y < GRID_HEIGHT; y++) {
+                    const removedCell = grid[y].pop();
+                    removedGridCells.right.push(removedCell);
+                    
+                    // 优先使用之前移出的单元格
+                    let newCell;
+                    if (removedGridCells.left.length > 0) {
+                        newCell = removedGridCells.left.pop();
+                    } else {
+                        newCell = generateTile();
+                    }
+                    
+                    grid[y].unshift(newCell);
+                }
+                
+                // 更新敌人和BOSS的相对位置
+                enemies.forEach(enemy => enemy.gridX -= 1);
+                bosses.forEach(boss => boss.gridX -= 1);
+                bossKnives.forEach(knife => knife.gridX -= 1);
+            }
+            
+            // 向上移动，底部添加新行
+            if (dy < 0) {
+                const removedRow = grid.shift();
+                removedGridCells.top = removedGridCells.top.concat(removedRow);
+                
+                let newRow = [];
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    // 优先使用之前移出的单元格
+                    let newCell;
+                    if (removedGridCells.bottom.length > 0) {
+                        newCell = removedGridCells.bottom.pop();
+                    } else {
+                        newCell = generateTile();
+                    }
+                    newRow.push(newCell);
+                }
+                
+                grid.push(newRow);
+                
+                // 更新敌人和BOSS的相对位置
+                enemies.forEach(enemy => enemy.gridY += 1);
+                bosses.forEach(boss => boss.gridY += 1);
+                bossKnives.forEach(knife => knife.gridY += 1);
+            }
+            
+            // 向下移动，顶部添加新行
+            if (dy > 0) {
+                const removedRow = grid.pop();
+                removedGridCells.bottom = removedGridCells.bottom.concat(removedRow);
+                
+                let newRow = [];
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    // 优先使用之前移出的单元格
+                    let newCell;
+                    if (removedGridCells.top.length > 0) {
+                        newCell = removedGridCells.top.pop();
+                    } else {
+                        newCell = generateTile();
+                    }
+                    newRow.push(newCell);
+                }
+                
+                grid.unshift(newRow);
+                
+                // 更新敌人和BOSS的相对位置
+                enemies.forEach(enemy => enemy.gridY -= 1);
+                bosses.forEach(boss => boss.gridY -= 1);
+                bossKnives.forEach(knife => knife.gridY -= 1);
+            }
+            
+            // 更新实体位置
+            updateEntitiesPositions();
+        }
+        
+        // 生成敌人
+        function spawnEnemy() {
+            if (gameOver) return;
+            
+            // 随机决定敌人出现的边缘
+            const side = Math.floor(Math.random() * 4); // 0: 上, 1: 右, 2: 下, 3: 左
+            let gridX, gridY;
+            
+            switch (side) {
+                case 0: // 上边缘
+                    gridX = Math.floor(Math.random() * GRID_WIDTH);
+                    gridY = -1;
+                    break;
+                case 1: // 右边缘
+                    gridX = GRID_WIDTH;
+                    gridY = Math.floor(Math.random() * GRID_HEIGHT);
+                    break;
+                case 2: // 下边缘
+                    gridX = Math.floor(Math.random() * GRID_WIDTH);
+                    gridY = GRID_HEIGHT;
+                    break;
+                case 3: // 左边缘
+                    gridX = -1;
+                    gridY = Math.floor(Math.random() * GRID_HEIGHT);
+                    break;
+            }
+            
+            // 计算屏幕坐标
+            const offsetX = (canvas.width - GRID_WIDTH * TILE_SIZE) / 2;
+            const offsetY = (canvas.height - GRID_HEIGHT * TILE_SIZE) / 2;
+            const screenX = offsetX + gridX * TILE_SIZE + TILE_SIZE / 2;
+            const screenY = offsetY + gridY * TILE_SIZE + TILE_SIZE / 2;
+            
+            enemies.push({
+                gridX: gridX,
+                gridY: gridY,
+                screenX: screenX,
+                screenY: screenY,
+                health: 1
+            });
+        }
+        
+        // 生成BOSS
+        function spawnBoss() {
+            if (gameOver) return;
+            
+            // 随机决定BOSS出现的边缘
+            const side = Math.floor(Math.random() * 4);
+            let gridX, gridY;
+            
+            switch (side) {
+                case 0: // 上边缘
+                    gridX = Math.floor(Math.random() * GRID_WIDTH);
+                    gridY = -2;
+                    break;
+                case 1: // 右边缘
+                    gridX = GRID_WIDTH + 1;
+                    gridY = Math.floor(Math.random() * GRID_HEIGHT);
+                    break;
+                case 2: // 下边缘
+                    gridX = Math.floor(Math.random() * GRID_WIDTH);
+                    gridY = GRID_HEIGHT + 1;
+                    break;
+                case 3: // 左边缘
+                    gridX = -2;
+                    gridY = Math.floor(Math.random() * GRID_HEIGHT);
+                    break;
+            }
+            
+            // 计算屏幕坐标
+            const offsetX = (canvas.width - GRID_WIDTH * TILE_SIZE) / 2;
+            const offsetY = (canvas.height - GRID_HEIGHT * TILE_SIZE) / 2;
+            const screenX = offsetX + gridX * TILE_SIZE + TILE_SIZE / 2;
+            const screenY = offsetY + gridY * TILE_SIZE + TILE_SIZE / 2;
+            
+            bosses.push({
+                gridX: gridX,
+                gridY: gridY,
+                screenX: screenX,
+                screenY: screenY,
+                health: 5,
+                lastShot: 0
+            });
+        }
+        
+        // 检测碰撞
+        function checkCollisions() {
+            // 检查当前格子类型
+            if (player.gridX >= 0 && player.gridX < GRID_WIDTH && player.gridY >= 0 && player.gridY < GRID_HEIGHT) {
+                // 检查是否碰到灵珠
+                if (grid[player.gridY][player.gridX] === 2) {
+                    // 碰到灵珠，加一个飞刀
+                    player.knives++;
+                    resetKnifeAngles();
+                    
+                    // 将灵珠变成草地
+                    grid[player.gridY][player.gridX] = 1;
+                    
+                    // 更新UI
+                    document.getElementById('knives').textContent = player.knives;
+                }
+            }
+        }
+        
+        // 更新游戏状态
+        function update() {
+            if (gameOver) return;
+            
+            // 清空画布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制地图
+            drawGrid();
+            
+            // 更新并绘制敌人
+            updateEnemies();
+            
+            // 更新并绘制BOSS
+            updateBosses();
+            
+            // 更新并绘制BOSS飞刀
+            updateBossKnives();
+            
+            // 绘制玩家和飞刀
+            drawPlayer();
+            
+            // 检查飞刀碰撞
+            checkKnifeCollisions();
+            
+            // 检查玩家被敌人或BOSS碰撞
+            checkPlayerCollisions();
+            
+            // 检查玩家被BOSS飞刀击中
+            checkBossKnifeCollisions();
+            
+            // 移除屏幕外很远的实体
+            removeOffscreenEntities();
+        }
+        
+        // 绘制地图格子
+        function drawGrid() {
+            const offsetX = (canvas.width - GRID_WIDTH * TILE_SIZE) / 2;
+            const offsetY = (canvas.height - GRID_HEIGHT * TILE_SIZE) / 2;
+            
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    const tileType = grid[y][x];
+                    const tileX = offsetX + x * TILE_SIZE;
+                    const tileY = offsetY + y * TILE_SIZE;
+                    
+                    // 草地为绿色
+                    if (tileType === 1) {
+                        ctx.fillStyle = '#4CAF50';
+                        ctx.fillRect(tileX, tileY, TILE_SIZE, TILE_SIZE);
+                        
+                        // 草地纹理
+                        ctx.fillStyle = '#81C784';
+                        ctx.beginPath();
+                        ctx.moveTo(tileX + TILE_SIZE * 0.1, tileY + TILE_SIZE * 0.9);
+                        ctx.lineTo(tileX + TILE_SIZE * 0.2, tileY + TILE_SIZE * 0.7);
+                        ctx.lineTo(tileX + TILE_SIZE * 0.3, tileY + TILE_SIZE * 0.9);
+                        ctx.fill();
+                        
+                        // 第二簇草
+                        ctx.beginPath();
+                        ctx.moveTo(tileX + TILE_SIZE * 0.6, tileY + TILE_SIZE * 0.85);
+                        ctx.lineTo(tileX + TILE_SIZE * 0.7, tileY + TILE_SIZE * 0.7);
+                        ctx.lineTo(tileX + TILE_SIZE * 0.8, tileY + TILE_SIZE * 0.9);
+                        ctx.fill();
+                    }
+                    // 灵珠为蓝色
+                    else if (tileType === 2) {
+                        ctx.fillStyle = '#4CAF50';
+                        ctx.fillRect(tileX, tileY, TILE_SIZE, TILE_SIZE);
+                        
+                        // 灵珠
+                        ctx.fillStyle = '#2196F3';
+                        ctx.beginPath();
+                        ctx.arc(tileX + TILE_SIZE/2, tileY + TILE_SIZE/2, TILE_SIZE/4, 0, 2 * Math.PI);
+                        ctx.fill();
+                        
+                        // 光晕效果
+                        const gradient = ctx.createRadialGradient(
+                            tileX + TILE_SIZE/2, tileY + TILE_SIZE/2, TILE_SIZE/8,
+                            tileX + TILE_SIZE/2, tileY + TILE_SIZE/2, TILE_SIZE/3
+                        );
+                        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
+                        gradient.addColorStop(1, 'rgba(33, 150, 243, 0)');
+                        
+                        ctx.fillStyle = gradient;
+                        ctx.beginPath();
+                        ctx.arc(tileX + TILE_SIZE/2, tileY + TILE_SIZE/2, TILE_SIZE/3, 0, 2 * Math.PI);
+                        ctx.fill();
+                    }
+                    
+                    // 绘制网格线
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+                    ctx.strokeRect(tileX, tileY, TILE_SIZE, TILE_SIZE);
+                }
+            }
+        }
+        
+        // 绘制玩家和飞刀
+        function drawPlayer() {
+            const playerSize = TILE_SIZE * PLAYER_SIZE_RATIO;
+            const knifeSize = TILE_SIZE * KNIFE_SIZE_RATIO;
+            const knifeDistance = TILE_SIZE * KNIFE_DISTANCE_RATIO;
+            
+            // 绘制玩家
+            ctx.fillStyle = '#E91E63';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, playerSize / 2, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // 玩家脸部细节
+            ctx.fillStyle = 'white';
+            // 眼睛
+            ctx.beginPath();
+            ctx.arc(player.x - playerSize * 0.15, player.y - playerSize * 0.1, playerSize * 0.08, 0, 2 * Math.PI);
+            ctx.arc(player.x + playerSize * 0.15, player.y - playerSize * 0.1, playerSize * 0.08, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // 嘴巴 - 根据健康状态改变表情
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = playerSize * 0.05;
+            ctx.beginPath();
+            
+            if (player.health > player.maxHealth * 0.7) {
+                // 微笑
+                ctx.arc(player.x, player.y + playerSize * 0.05, playerSize * 0.2, 0.1 * Math.PI, 0.9 * Math.PI);
+            } else if (player.health > player.maxHealth * 0.3) {
+                // 平嘴
+                ctx.moveTo(player.x - playerSize * 0.2, player.y + playerSize * 0.1);
+                ctx.lineTo(player.x + playerSize * 0.2, player.y + playerSize * 0.1);
+            } else {
+                // 不高兴
+                ctx.arc(player.x, player.y + playerSize * 0.25, playerSize * 0.2, 1.1 * Math.PI, 1.9 * Math.PI);
+            }
+            
+            ctx.stroke();
+            
+            // 绘制飞刀
+            for (let i = 0; i < player.knifeAngles.length; i++) {
+                const angle = player.knifeAngles[i];
+                
+                // 更新飞刀角度
+                player.knifeAngles[i] += KNIFE_SPEED;
+                
+                // 计算飞刀位置
+                const knifeX = player.x + Math.cos(angle) * knifeDistance;
+                const knifeY = player.y + Math.sin(angle) * knifeDistance;
+                
+                // 绘制飞刀
+                ctx.save();
+                ctx.translate(knifeX, knifeY);
+                ctx.rotate(angle + Math.PI / 2);
+                
+                // 飞刀刀身
+                ctx.fillStyle = '#9E9E9E';
+                ctx.fillRect(-knifeSize/4, -knifeSize/2, knifeSize/2, knifeSize);
+                
+                // 飞刀刀柄
+                ctx.fillStyle = '#795548';
+                ctx.fillRect(-knifeSize/4, knifeSize/2, knifeSize/2, knifeSize/4);
+                
+                ctx.restore();
+            }
+        }
+        
+        // 更新敌人
+        function updateEnemies() {
+            const enemySize = TILE_SIZE * ENEMY_SIZE_RATIO;
+            
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                
+                // 计算敌人与玩家的角度和距离
+                const dx = player.x - enemy.screenX;
+                const dy = player.y - enemy.screenY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // 敌人朝玩家移动
+                if (distance > 0) {
+                    const moveX = (dx / distance) * ENEMY_SPEED;
+                    const moveY = (dy / distance) * ENEMY_SPEED;
+                    
+                    enemy.screenX += moveX;
+                    enemy.screenY += moveY;
+                    
+                    // 更新网格位置
+                    const offsetX = (canvas.width - GRID_WIDTH * TILE_SIZE) / 2;
+                    const offsetY = (canvas.height - GRID_HEIGHT * TILE_SIZE) / 2;
+                    
+                    enemy.gridX = (enemy.screenX - offsetX) / TILE_SIZE;
+                    enemy.gridY = (enemy.screenY - offsetY) / TILE_SIZE;
+                }
+                
+                // 绘制敌人
+                ctx.fillStyle = '#FF5722';
+                ctx.beginPath();
+                ctx.arc(enemy.screenX, enemy.screenY, enemySize / 2, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // 敌人表情
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                ctx.arc(enemy.screenX - enemySize * 0.15, enemy.screenY - enemySize * 0.1, enemySize * 0.08, 0, 2 * Math.PI);
+                ctx.arc(enemy.screenX + enemySize * 0.15, enemy.screenY - enemySize * 0.1, enemySize * 0.08, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // 敌人嘴 - 邪恶的笑容
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(enemy.screenX, enemy.screenY + enemySize * 0.1, enemySize * 0.15, 1.8 * Math.PI, 1.2 * Math.PI, true);
+                ctx.stroke();
+            }
+        }
+        
+        // 更新BOSS
+        function updateBosses() {
+            const bossSize = TILE_SIZE * BOSS_SIZE_RATIO;
+            
+            for (let i = bosses.length - 1; i >= 0; i--) {
+                const boss = bosses[i];
+                
+                // 计算BOSS与玩家的角度和距离
+                const dx = player.x - boss.screenX;
+                const dy = player.y - boss.screenY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // BOSS行为
+                if (distance > bossSize * 3) {
+                    // 朝玩家移动
+                    const moveX = (dx / distance) * BOSS_SPEED;
+                    const moveY = (dy / distance) * BOSS_SPEED;
+                    
+                    boss.screenX += moveX;
+                    boss.screenY += moveY;
+                    
+                    // 更新网格位置
+                    const offsetX = (canvas.width - GRID_WIDTH * TILE_SIZE) / 2;
+                    const offsetY = (canvas.height - GRID_HEIGHT * TILE_SIZE) / 2;
+                    
+                    boss.gridX = (boss.screenX - offsetX) / TILE_SIZE;
+                    boss.gridY = (boss.screenY - offsetY) / TILE_SIZE;
+                } else {
+                    // 保持距离，并向玩家发射飞刀
+                    const now = Date.now();
+                    if (now - boss.lastShot > 2000) { // 每2秒发射一次
+                        boss.lastShot = now;
+                        
+                        // 计算角度
+                        const angle = Math.atan2(dy, dx);
+                        
+                        // 发射飞刀
+                        const offsetX = (canvas.width - GRID_WIDTH * TILE_SIZE) / 2;
+                        const offsetY = (canvas.height - GRID_HEIGHT * TILE_SIZE) / 2;
+                        
+                        bossKnives.push({
+                            gridX: boss.gridX,
+                            gridY: boss.gridY,
+                            screenX: boss.screenX,
+                            screenY: boss.screenY,
+                            angle: angle,
+                            speed: BOSS_KNIFE_SPEED
+                        });
+                    }
+                }
+                
+                // 绘制BOSS
+                ctx.fillStyle = '#9C27B0';
+                ctx.beginPath();
+                ctx.arc(boss.screenX, boss.screenY, bossSize / 2, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // BOSS表情
+                ctx.fillStyle = 'white';
+                // 眼睛 - 愤怒的眉毛
+                ctx.beginPath();
+                ctx.arc(boss.screenX - bossSize * 0.15, boss.screenY - bossSize * 0.1, bossSize * 0.08, 0, 2 * Math.PI);
+                ctx.arc(boss.screenX + bossSize * 0.15, boss.screenY - bossSize * 0.1, bossSize * 0.08, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // 眉毛
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = 'white';
+                ctx.beginPath();
+                ctx.moveTo(boss.screenX - bossSize * 0.25, boss.screenY - bossSize * 0.2);
+                ctx.lineTo(boss.screenX - bossSize * 0.05, boss.screenY - bossSize * 0.25);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(boss.screenX + bossSize * 0.25, boss.screenY - bossSize * 0.2);
+                ctx.lineTo(boss.screenX + bossSize * 0.05, boss.screenY - bossSize * 0.25);
+                ctx.stroke();
+                
+                // 嘴 - 邪恶的笑容
+                ctx.beginPath();
+                ctx.arc(boss.screenX, boss.screenY + bossSize * 0.1, bossSize * 0.2, 1.75 * Math.PI, 1.25 * Math.PI, true);
+                ctx.stroke();
+                ctx.lineWidth = 1;
+                
+                // 绘制BOSS生命值
+                const healthBarWidth = bossSize;
+                const healthBarHeight = bossSize * 0.1;
+                
+                ctx.fillStyle = '#F44336';
+                ctx.fillRect(
+                    boss.screenX - healthBarWidth / 2, 
+                    boss.screenY - bossSize / 2 - healthBarHeight * 1.5, 
+                    healthBarWidth, 
+                    healthBarHeight
+                );
+                
+                ctx.fillStyle = '#4CAF50';
+                const healthWidth = (boss.health / 5) * healthBarWidth;
+                ctx.fillRect(
+                    boss.screenX - healthBarWidth / 2, 
+                    boss.screenY - bossSize / 2 - healthBarHeight * 1.5, 
+                    healthWidth, 
+                    healthBarHeight
+                );
+            }
+        }
+        
+        // 更新BOSS飞刀
+        function updateBossKnives() {
+            const knifeSize = TILE_SIZE * KNIFE_SIZE_RATIO;
+            
+            for (let i = bossKnives.length - 1; i >= 0; i--) {
+                const knife = bossKnives[i];
+                
+                // 移动飞刀
+                knife.screenX += Math.cos(knife.angle) * knife.speed;
+                knife.screenY += Math.sin(knife.angle) * knife.speed;
+                
+                // 更新网格位置
+                const offsetX = (canvas.width - GRID_WIDTH * TILE_SIZE) / 2;
+                const offsetY = (canvas.height - GRID_HEIGHT * TILE_SIZE) / 2;
+                
+                knife.gridX = (knife.screenX - offsetX) / TILE_SIZE;
+                knife.gridY = (knife.screenY - offsetY) / TILE_SIZE;
+                
+                // 绘制飞刀
+                ctx.save();
+                ctx.translate(knife.screenX, knife.screenY);
+                ctx.rotate(knife.angle + Math.PI / 2);
+                
+                // 飞刀刀身
+                ctx.fillStyle = '#673AB7';
+                ctx.fillRect(-knifeSize/4, -knifeSize/2, knifeSize/2, knifeSize);
+                
+                // 飞刀刀柄
+                ctx.fillStyle = '#4A148C';
+                ctx.fillRect(-knifeSize/4, knifeSize/2, knifeSize/2, knifeSize/4);
+                
+                ctx.restore();
+            }
+        }
+        
+        // 检查玩家飞刀碰撞
+        function checkKnifeCollisions() {
+            const knifeSize = TILE_SIZE * KNIFE_SIZE_RATIO;
+            const enemySize = TILE_SIZE * ENEMY_SIZE_RATIO;
+            const bossSize = TILE_SIZE * BOSS_SIZE_RATIO;
+            const knifeDistance = TILE_SIZE * KNIFE_DISTANCE_RATIO;
+            
+            // 检查玩家飞刀与敌人的碰撞
+            for (let i = 0; i < player.knifeAngles.length; i++) {
+                const angle = player.knifeAngles[i];
+                
+                // 计算飞刀位置
+                const knifeX = player.x + Math.cos(angle) * knifeDistance;
+                const knifeY = player.y + Math.sin(angle) * knifeDistance;
+                
+                // 检查与敌人的碰撞
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    const enemy = enemies[j];
+                    
+                    const dx = knifeX - enemy.screenX;
+                    const dy = knifeY - enemy.screenY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < (knifeSize + enemySize) / 2) {
+                        // 击中敌人
+                        enemy.health -= KNIFE_DAMAGE;
+                        
+                        if (enemy.health <= 0) {
+                            // 敌人死亡
+                            enemies.splice(j, 1);
+                            
+                            // 增加分数
+                            score++;
+                            document.getElementById('kills').textContent = score;
+                        }
+                        
+                        // 移除飞刀
+                        player.knifeAngles.splice(i, 1);
+                        document.getElementById('knives').textContent = player.knives = player.knifeAngles.length;
+                        
+                        // 重新调整剩余飞刀的角度
+                        resetKnifeAngles();
+                        
+                        break;
+                    }
+                }
+                
+                // 检查与BOSS的碰撞
+                for (let j = bosses.length - 1; j >= 0; j--) {
+                    const boss = bosses[j];
+                    
+                    const dx = knifeX - boss.screenX;
+                    const dy = knifeY - boss.screenY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < (knifeSize + bossSize) / 2) {
+                        // 击中BOSS
+                        boss.health -= KNIFE_DAMAGE;
+                        
+                        if (boss.health <= 0) {
+                            // BOSS死亡
+                            bosses.splice(j, 1);
+                            
+                            // 增加BOSS击杀数
+                            bossKills++;
+                            document.getElementById('boss-kills').textContent = bossKills;
+                            
+                            // 生成新的BOSS
+                            setTimeout(spawnBoss, 5000);
+                        }
+                        
+                        // 移除飞刀
+                        player.knifeAngles.splice(i, 1);
+                        document.getElementById('knives').textContent = player.knives = player.knifeAngles.length;
+                        
+                        // 重新调整剩余飞刀的角度
+                        resetKnifeAngles();
+                        
+                        break;
+                    }
+                }
+                
+                // 检查与BOSS飞刀的碰撞
+                for (let j = bossKnives.length - 1; j >= 0; j--) {
+                    const bossKnife = bossKnives[j];
+                    
+                    const dx = knifeX - bossKnife.screenX;
+                    const dy = knifeY - bossKnife.screenY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < knifeSize) {
+                        // 击中BOSS飞刀
+                        bossKnives.splice(j, 1);
+                        
+                        // 移除玩家飞刀
+                        player.knifeAngles.splice(i, 1);
+                        document.getElementById('knives').textContent = player.knives = player.knifeAngles.length;
+                        
+                        // 重新调整剩余飞刀的角度
+                        resetKnifeAngles();
+                        
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // 检查玩家与敌人和BOSS的碰撞
+        function checkPlayerCollisions() {
+            const playerSize = TILE_SIZE * PLAYER_SIZE_RATIO;
+            const enemySize = TILE_SIZE * ENEMY_SIZE_RATIO;
+            const bossSize = TILE_SIZE * BOSS_SIZE_RATIO;
+            
+            // 检查与敌人的碰撞
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                
+                const dx = player.x - enemy.screenX;
+                const dy = player.y - enemy.screenY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < (playerSize + enemySize) / 2) {
+                    // 玩家被敌人碰到 - 击退和伤害
+                    knockbackPlayer(enemy.screenX, enemy.screenY, ENEMY_DAMAGE);
+                    
+                    // 移除敌人
+                    enemies.splice(i, 1);
+                }
+            }
+            
+            // 检查与BOSS的碰撞
+            for (let i = bosses.length - 1; i >= 0; i--) {
+                const boss = bosses[i];
+                
+                const dx = player.x - boss.screenX;
+                const dy = player.y - boss.screenY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < (playerSize + bossSize) / 2) {
+                    // 玩家被BOSS碰到 - 击退和伤害
+                    knockbackPlayer(boss.screenX, boss.screenY, BOSS_DAMAGE);
+                    
+                    // BOSS稍微后退
+                    const moveAmount = 50; // 后退距离
+                    if (distance > 0) {
+                        const moveX = (dx / distance) * moveAmount;
+                        const moveY = (dy / distance) * moveAmount;
+                        
+                        boss.screenX -= moveX;
+                        boss.screenY -= moveY;
+                        
+                        // 更新网格位置
+                        const offsetX = (canvas.width - GRID_WIDTH * TILE_SIZE) / 2;
+                        const offsetY = (canvas.height - GRID_HEIGHT * TILE_SIZE) / 2;
+                        
+                        boss.gridX = (boss.screenX - offsetX) / TILE_SIZE;
+                        boss.gridY = (boss.screenY - offsetY) / TILE_SIZE;
+                    }
+                }
+            }
+        }
+        
+        // 检查玩家与BOSS飞刀的碰撞
+        function checkBossKnifeCollisions() {
+            const playerSize = TILE_SIZE * PLAYER_SIZE_RATIO;
+            const knifeSize = TILE_SIZE * KNIFE_SIZE_RATIO;
+            
+            for (let i = bossKnives.length - 1; i >= 0; i--) {
+                const knife = bossKnives[i];
+                
+                const dx = player.x - knife.screenX;
+                const dy = player.y - knife.screenY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < (playerSize + knifeSize) / 2) {
+                    // 玩家被BOSS飞刀击中 - 击退和伤害
+                    knockbackPlayer(knife.screenX, knife.screenY, BOSS_KNIFE_DAMAGE);
+                    
+                    // 移除飞刀
+                    bossKnives.splice(i, 1);
+                }
+            }
+        }
+        
+        // 移除屏幕外很远的实体
+        function removeOffscreenEntities() {
+            // 计算视野边界
+            const viewBoundary = 5; // 屏幕外的格子数
+            
+            // 移除屏幕外很远的敌人
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                if (
+                    enemy.gridX < -viewBoundary || 
+                    enemy.gridX > GRID_WIDTH + viewBoundary ||
+                    enemy.gridY < -viewBoundary || 
+                    enemy.gridY > GRID_HEIGHT + viewBoundary
+                ) {
+                    enemies.splice(i, 1);
+                }
+            }
+            
+            // 移除屏幕外很远的BOSS飞刀
+            for (let i = bossKnives.length - 1; i >= 0; i--) {
+                const knife = bossKnives[i];
+                if (
+                    knife.gridX < -viewBoundary || 
+                    knife.gridX > GRID_WIDTH + viewBoundary ||
+                    knife.gridY < -viewBoundary || 
+                    knife.gridY > GRID_HEIGHT + viewBoundary
+                ) {
+                    bossKnives.splice(i, 1);
+                }
+            }
+        }
+        
+        // 游戏结束
+        function endGame() {
+            gameOver = true;
+            clearInterval(gameLoop);
+            
+            // 清除所有按键状态
+            keyStates.w = false;
+            keyStates.a = false;
+            keyStates.s = false;
+            keyStates.d = false;
+            
+            // 显示游戏结束屏幕
+            document.getElementById('final-score').textContent = `击杀数: ${score}, BOSS击杀: ${bossKills}`;
+            document.getElementById('game-over').style.display = 'flex';
+        }
+        
+        // 重新开始游戏
+        function restartGame() {
+            // 重置游戏状态
+            gameOver = false;
+            score = 0;
+            bossKills = 0;
+            moveInProgress = false;
+            lastMoveTime = 0;
+            
+            // 重置玩家
+            player.gridX = Math.floor(GRID_WIDTH / 2);
+            player.gridY = Math.floor(GRID_HEIGHT / 2);
+            player.health = 100;
+            player.maxHealth = 100;
+            player.knives = 3;
+            player.isKnockedBack = false;
+            updatePlayerPosition();
+            
+            // 重置飞刀角度
+            resetKnifeAngles();
+            
+            // 清空敌人和BOSS
+            enemies = [];
+            bosses = [];
+            bossKnives = [];
+            
+            // 重新初始化地图
+            initializeGrid();
+            
+            // 更新UI
+            updateHealthUI();
+            document.getElementById('knives').textContent = player.knives;
+            document.getElementById('kills').textContent = score;
+            document.getElementById('boss-kills').textContent = bossKills;
+            
+            // 隐藏游戏结束屏幕
+            document.getElementById('game-over').style.display = 'none';
+            
+            // 重新开始游戏循环
+            gameLoop = setInterval(update, 1000 / 60);
+            
+            // 生成第一个BOSS
+            setTimeout(spawnBoss, 10000);
+        }
+        
+        // 游戏初始化
+        window.onload = initGame;
+    </script>
+</body>
+</html>
