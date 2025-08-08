@@ -1043,9 +1043,23 @@
                 try {
                     this.context = new (window.AudioContext || window.webkitAudioContext)();
                     this.createSounds();
+                    // 检查并尝试恢复AudioContext，但主要恢复操作应在用户交互后
+                    if (this.context.state === 'suspended') {
+                        console.log('AudioContext is suspended. Waiting for user gesture to resume.');
+                    }
                 } catch (e) {
-                    console.warn('Web Audio API not supported, sound disabled');
+                    console.warn('Web Audio API not supported, sound disabled', e);
                     CONFIG.sounds.enabled = false;
+                }
+            },
+            // 新增方法：恢复AudioContext
+            resumeContext() {
+                if (this.context && this.context.state === 'suspended') {
+                    this.context.resume().then(() => {
+                        console.log('AudioContext resumed successfully.');
+                    }).catch(e => {
+                        console.error('Failed to resume AudioContext:', e);
+                    });
                 }
             },
             createSounds() {
@@ -1228,8 +1242,17 @@
 
         // 键盘事件处理
         const keys = {};
+        let contextActivated = false;
+        
+        function activateAudioContext() {
+            if (!contextActivated) {
+                soundManager.resumeContext();
+                contextActivated = true;
+            }
+        }
         
         document.addEventListener('keydown', (e) => {
+            activateAudioContext();
             keys[e.key.toLowerCase()] = true;
             
             if (e.code === 'Space') {
@@ -1244,6 +1267,7 @@
 
         // 手机控制
         function startMove(player, direction) {
+            activateAudioContext();
             mobileControls[player][direction] = true;
         }
 
@@ -1701,6 +1725,9 @@
 
         function confirmStart() {
             if (selectedMode) {
+                // 激活音频上下文（需要用户交互）
+                soundManager.resumeContext();
+                
                 gameMode = selectedMode;
                 
                 // 设置模式按钮状态
