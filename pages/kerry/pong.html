@@ -1040,14 +1040,13 @@
         const soundManager = {
             context: null,
             sounds: {},
+            isInitialized: false,
             init() {
+                if (this.isInitialized) return;
                 try {
                     this.context = new (window.AudioContext || window.webkitAudioContext)();
                     this.createSounds();
-                    // 检查并尝试恢复AudioContext，但主要恢复操作应在用户交互后
-                    if (this.context.state === 'suspended') {
-                        console.log('AudioContext is suspended. Waiting for user gesture to resume.');
-                    }
+                    this.isInitialized = true;
                 } catch (e) {
                     console.warn('Web Audio API not supported, sound disabled', e);
                     CONFIG.sounds.enabled = false;
@@ -1055,6 +1054,9 @@
             },
             // 新增方法：恢复AudioContext
             resumeContext() {
+                if (!this.isInitialized) {
+                    this.init();
+                }
                 if (this.context && this.context.state === 'suspended') {
                     this.context.resume().then(() => {
                         console.log('AudioContext resumed successfully.');
@@ -1799,9 +1801,7 @@
         }
 
         // 初始化游戏
-        soundManager.init();
         setupEventListeners();
-        updateScore();
         setDifficulty(3); // 默认3级难度
         resetBall();
     </script>
