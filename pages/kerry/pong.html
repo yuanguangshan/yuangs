@@ -884,6 +884,13 @@
                             <small>挑战智能AI</small>
                         </span>
                     </button>
+                    <button class="start-btn" onclick="startGame('spectator')">
+                        <span class="start-btn-icon">🍿</span>
+                        <span class="start-btn-text">
+                            <strong>观赏模式</strong>
+                            <small>看AI左右互搏</small>
+                        </span>
+                    </button>
                 </div>
             </div>
             
@@ -930,6 +937,7 @@
                 <div class="mode-buttons">
                     <button class="mode-btn active" onclick="setGameMode('human')">👥 双人模式</button>
                     <button class="mode-btn" onclick="setGameMode('ai')">🤖 AI模式</button>
+                    <button class="mode-btn" onclick="setGameMode('spectator')">🍿 观赏模式</button>
                 </div>
                 <div class="difficulty-selector" id="difficultySelector">
                     <div class="difficulty-title">🎯 AI难度选择</div>
@@ -1010,7 +1018,7 @@
         const aiModeControls = document.getElementById('aiModeControls');
 
         // 游戏配置
-        let gameMode = 'human'; // 'human' 或 'ai'
+        let gameMode = 'human'; // 'human', 'ai', or 'spectator'
         let aiDifficulty = 3; // 1-5级
         let gameState = 'playing';
         let animationId;
@@ -1031,7 +1039,11 @@
         };
 
         // AI状态
-        let aiState = {
+        let ai1State = { // For player 1 in spectator mode
+            targetY: 0,
+            reactionDelay: 0
+        };
+        let aiState = { // For player 2 in AI/spectator mode
             targetY: 0,
             reactionDelay: 0,
             lastBallX: 0
@@ -1250,15 +1262,16 @@
             if (mode === 'ai') {
                 difficultySelector.style.display = 'block';
                 document.getElementById('instructions').innerHTML = '📱 手机: 使用下方按钮控制你的球拍移动';
-                
-                // 切换移动端控制布局
                 humanModeControls.style.display = 'none';
                 aiModeControls.style.display = 'flex';
-            } else {
+            } else if (mode === 'spectator') {
+                difficultySelector.style.display = 'block';
+                document.getElementById('instructions').innerHTML = '🍿 观赏模式：AI vs AI';
+                humanModeControls.style.display = 'none';
+                aiModeControls.style.display = 'none';
+            } else { // human
                 difficultySelector.style.display = 'none';
                 document.getElementById('instructions').innerHTML = '💻 电脑: 玩家1 (W/S键) | 玩家2 (↑/↓键) | 空格键暂停<br>📱 手机: 使用下方圆形按钮控制球拍移动';
-                
-                // 切换移动端控制布局
                 humanModeControls.style.display = 'grid';
                 aiModeControls.style.display = 'none';
             }
@@ -1284,7 +1297,12 @@
             winRateInfo.textContent = `${config.name}难度 - 预期胜率约为 ${config.winRate}%`;
             
             // 更新AI速度
-            game.player2.speed = config.speed;
+            if (gameMode === 'ai' || gameMode === 'spectator') {
+                game.player2.speed = config.speed;
+                if (gameMode === 'spectator') {
+                    game.player1.speed = config.speed;
+                }
+            }
             
             resetGame();
         }
@@ -1338,31 +1356,77 @@
             volumeBtn.innerHTML = isEnabled ? '🔊ON' : '🔇OFF';
         }
 
-        // AI逻辑
+        // AI 1 (左边)
+        function updateAI1() {
+            if (gameMode !== 'spectator') return;
+
+            const config = aiConfig[aiDifficulty];
+            const paddle = game.player1;
+            const ball = game.ball;
+
+            if (ball.speedX < 0) {
+                if (ai1State.reactionDelay <= 0) {
+                    let targetY = ball.y;
+                    const accuracy = config.accuracy;
+                    const error = (1 - accuracy) * (Math.random() - 0.5) * paddle.height;
+                    targetY += error;
+
+                    const timeToReach = (ball.x - paddle.x) / Math.abs(ball.speedX);
+                    const predictedY = ball.y + ball.speedY * timeToReach;
+
+                    targetY = targetY * (1 - accuracy) + predictedY * accuracy;
+
+                    ai1State.targetY = targetY - paddle.height / 2;
+                    ai1State.reactionDelay = config.reactionTime;
+                } else {
+                    ai1State.reactionDelay--;
+                }
+
+                const paddleCenter = paddle.y + paddle.height / 2;
+                const targetCenter = ai1State.targetY + paddle.height / 2;
+                const diff = targetCenter - paddleCenter;
+
+                if (Math.abs(diff) > 5) {
+                    if (diff > 0 && paddle.y < canvas.height - paddle.height) {
+                        paddle.y += Math.min(paddle.speed, diff);
+                    } else if (diff < 0 && paddle.y > 0) {
+                        paddle.y += Math.max(-paddle.speed, diff);
+                    }
+                }
+            } else {
+                const centerY = canvas.height / 2 - paddle.height / 2;
+                const diff = centerY - paddle.y;
+                if (Math.abs(diff) > 5) {
+                    const moveSpeed = paddle.speed * 0.3;
+                    if (diff > 0) {
+                        paddle.y += Math.min(moveSpeed, diff);
+                    } else {
+                        paddle.y += Math.max(-moveSpeed, diff);
+                    }
+                }
+                ai1State.reactionDelay = Math.max(0, ai1State.reactionDelay - 1);
+            }
+            paddle.y = Math.max(0, Math.min(canvas.height - paddle.height, paddle.y));
+        }
+
+        // AI 2 (右边)
         function updateAI() {
-            if (gameMode !== 'ai') return;
+            if (gameMode !== 'ai' && gameMode !== 'spectator') return;
             
             const config = aiConfig[aiDifficulty];
             const paddle = game.player2;
             const ball = game.ball;
             
-            // 检测球是否朝向AI
             if (ball.speedX > 0) {
-                // 球朝向AI，开始反应
                 if (aiState.reactionDelay <= 0) {
-                    // 计算目标位置
                     let targetY = ball.y;
-                    
-                    // 添加一些随机性和误差，降低准确度
                     const accuracy = config.accuracy;
                     const error = (1 - accuracy) * (Math.random() - 0.5) * paddle.height;
                     targetY += error;
                     
-                    // 预测球的轨迹
                     const timeToReach = (paddle.x - ball.x) / ball.speedX;
                     const predictedY = ball.y + ball.speedY * timeToReach;
                     
-                    // 根据难度调整预测准确性
                     targetY = targetY * (1 - accuracy) + predictedY * accuracy;
                     
                     aiState.targetY = targetY - paddle.height / 2;
@@ -1371,7 +1435,6 @@
                     aiState.reactionDelay--;
                 }
                 
-                // 移动向目标位置
                 const paddleCenter = paddle.y + paddle.height / 2;
                 const targetCenter = aiState.targetY + paddle.height / 2;
                 const diff = targetCenter - paddleCenter;
@@ -1384,11 +1447,10 @@
                     }
                 }
             } else {
-                // 球不朝向AI，回到中心位置
                 const centerY = canvas.height / 2 - paddle.height / 2;
                 const diff = centerY - paddle.y;
                 if (Math.abs(diff) > 5) {
-                    const moveSpeed = paddle.speed * 0.3; // 回中心速度较慢
+                    const moveSpeed = paddle.speed * 0.3; 
                     if (diff > 0) {
                         paddle.y += Math.min(moveSpeed, diff);
                     } else {
@@ -1398,23 +1460,32 @@
                 aiState.reactionDelay = Math.max(0, aiState.reactionDelay - 1);
             }
             
-            // 确保AI球拍不超出边界
             paddle.y = Math.max(0, Math.min(canvas.height - paddle.height, paddle.y));
         }
 
         function updatePaddles() {
-            // 玩家1控制 (键盘 + 手机)
-            if ((keys['w'] || mobileControls.player1.up) && game.player1.y > 0) {
-                game.player1.y -= game.player1.speed;
-            }
-            if ((keys['s'] || mobileControls.player1.down) && game.player1.y < canvas.height - game.player1.height) {
-                game.player1.y += game.player1.speed;
-            }
-            
-            // 玩家2控制 (键盘 + 手机 或 AI)
-            if (gameMode === 'ai') {
+            if (gameMode === 'spectator') {
+                updateAI1();
                 updateAI();
-            } else {
+            } else if (gameMode === 'ai') {
+                // Player 1 control (human)
+                if ((keys['w'] || mobileControls.player1.up) && game.player1.y > 0) {
+                    game.player1.y -= game.player1.speed;
+                }
+                if ((keys['s'] || mobileControls.player1.down) && game.player1.y < canvas.height - game.player1.height) {
+                    game.player1.y += game.player1.speed;
+                }
+                // Player 2 control (AI)
+                updateAI();
+            } else { // human vs human
+                // Player 1 control
+                if ((keys['w'] || mobileControls.player1.up) && game.player1.y > 0) {
+                    game.player1.y -= game.player1.speed;
+                }
+                if ((keys['s'] || mobileControls.player1.down) && game.player1.y < canvas.height - game.player1.height) {
+                    game.player1.y += game.player1.speed;
+                }
+                // Player 2 control
                 if ((keys['arrowup'] || mobileControls.player2.up) && game.player2.y > 0) {
                     game.player2.y -= game.player2.speed;
                 }
@@ -1567,6 +1638,8 @@
             // 重置AI状态
             aiState.reactionDelay = 0;
             aiState.targetY = game.player2.y;
+            ai1State.reactionDelay = 0;
+            ai1State.targetY = game.player1.y;
         }
 
         function startNextRound() {
@@ -1580,6 +1653,8 @@
             
             aiState.reactionDelay = 0;
             aiState.targetY = game.player2.y;
+            ai1State.reactionDelay = 0;
+            ai1State.targetY = game.player1.y;
 
             const countdownInterval = setInterval(() => {
                 countdown--;
@@ -1610,7 +1685,9 @@
                 gameState = 'gameOver';
                 let winner;
                 if (gameMode === 'ai') {
-                    winner = game.player1.score >= 11 ? '🎉 恭喜你战胜了AI! 🎉' : ' AI获胜! ';
+                    winner = game.player1.score >= 11 ? '🎉 恭喜你战胜了AI! 🎉' : '🤖 AI获胜! 🤖';
+                } else if (gameMode === 'spectator') {
+                    winner = game.player1.score >= 11 ? '🔴 AI 1 获胜! 🔴' : '🔵 AI 2 获胜! 🔵';
                 } else {
                     winner = game.player1.score >= 11 ? '🎉 玩家1获胜! 🎉' : '🎉 玩家2获胜! 🎉';
                 }
@@ -1774,9 +1851,15 @@
             
             // 重置AI设置
             if (gameMode === 'ai') {
+                game.player1.speed = CONFIG.paddle.speed;
                 game.player2.speed = aiConfig[aiDifficulty].speed;
-            } else {
-                game.player2.speed = 6;
+            } else if (gameMode === 'spectator') {
+                const config = aiConfig[aiDifficulty];
+                game.player1.speed = config.speed;
+                game.player2.speed = config.speed;
+            } else { // human
+                game.player1.speed = CONFIG.paddle.speed;
+                game.player2.speed = CONFIG.paddle.speed;
             }
             
             resetBall();
@@ -1813,7 +1896,7 @@
         async function startGame(mode) {
             await activateAudioContext();
             selectedMode = mode;
-            if (mode === 'ai') {
+            if (mode === 'ai' || mode === 'spectator') {
                 document.getElementById('startDifficultySelector').style.display = 'block';
             } else {
                 document.getElementById('startDifficultySelector').style.display = 'none';
@@ -1825,7 +1908,7 @@
             aiDifficulty = level;
             document.querySelectorAll('.difficulty-option').forEach(btn => btn.classList.remove('active'));
             if (event && event.target) {
-                 event.target.classList.add('active');
+                 event.target.closest('.difficulty-option').classList.add('active');
              }
         }
 
@@ -1838,14 +1921,15 @@
                 
                 // 设置模式按钮状态
                 document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
-                document.querySelectorAll('.mode-btn')[selectedMode === 'human' ? 0 : 1].classList.add('active');
-                
+                const modeIndex = selectedMode === 'human' ? 0 : (selectedMode === 'ai' ? 1 : 2);
+                document.querySelectorAll('.mode-btn')[modeIndex].classList.add('active');
+
                 // 显示游戏界面
                 document.getElementById('startMenu').style.display = 'none';
                 document.getElementById('gameWrapper').style.display = 'flex';
                 
                 // 设置难度显示
-                if (selectedMode === 'ai') {
+                if (selectedMode === 'ai' || selectedMode === 'spectator') {
                     document.getElementById('difficultySelector').style.display = 'block';
                     document.querySelectorAll('.difficulty-btn').forEach((btn, index) => {
                         btn.classList.toggle('active', index + 1 === aiDifficulty);
@@ -1853,6 +1937,9 @@
                     const config = aiConfig[aiDifficulty];
                     document.getElementById('winRateInfo').textContent = `${config.name}难度 - 预期胜率约为 ${config.winRate}%`;
                     game.player2.speed = config.speed;
+                    if (selectedMode === 'spectator') {
+                        game.player1.speed = config.speed; // Also set for player 1 AI
+                    }
                 } else {
                     document.getElementById('difficultySelector').style.display = 'none';
                 }
@@ -1861,7 +1948,10 @@
                 if (selectedMode === 'ai') {
                     humanModeControls.style.display = 'none';
                     aiModeControls.style.display = 'flex';
-                } else {
+                } else if (selectedMode === 'spectator') {
+                    humanModeControls.style.display = 'none';
+                    aiModeControls.style.display = 'none';
+                } else { // human
                     humanModeControls.style.display = 'grid';
                     aiModeControls.style.display = 'none';
                 }
@@ -1907,6 +1997,8 @@
             let touches = {};
 
             const getPaddleFromTouch = (touch) => {
+                if (gameMode === 'spectator') return null;
+
                 const canvasRect = canvas.getBoundingClientRect();
                 const touchX = touch.clientX - canvasRect.left;
 
