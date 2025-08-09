@@ -1014,6 +1014,7 @@
         let aiDifficulty = 3; // 1-5级
         let gameState = 'playing';
         let animationId;
+        let countdown = 0;
         
         // AI难度配置
         const aiConfig = {
@@ -1230,10 +1231,7 @@
                 maxSpeed: CONFIG.ball.maxSpeed,
                 color: CONFIG.ball.color,
                 trail: [],
-                isRainbow: false,
-                rainbowColors: ['#FF0000', '#FF7F00', '#FFFF00', '#00FF00', '#0000FF', '#4B0082', '#9400D3'], // 红橙黄绿蓝靛紫
-                rainbowColorIndex: 0,
-                rainbowBallRemaining: 2 // 每局彩球出现次数
+                isSpecial: false
             },
             particles: []
         };
@@ -1436,14 +1434,6 @@
             // 移动球
             game.ball.x += game.ball.speedX;
             game.ball.y += game.ball.speedY;
-
-            // 根据球的位置改变颜色
-            // 在自己一方时变为对方的颜色，因为是对手的攻击
-            if (game.ball.x < canvas.width / 2 && game.ball.color !== game.player2.color) {
-                game.ball.color = game.player2.color;
-            } else if (game.ball.x >= canvas.width / 2 && game.ball.color !== game.player1.color) {
-                game.ball.color = game.player1.color;
-            }
             
             // 上下边界碰撞
             if (game.ball.y <= game.ball.radius || game.ball.y >= canvas.height - game.ball.radius) {
@@ -1456,28 +1446,18 @@
             
             // 左右得分检测
             if (game.ball.x <= 0) {
-                if (game.ball.isRainbow) {
-                    game.player2.score += 2;
-                    game.ball.rainbowColorIndex = (game.ball.rainbowColorIndex + 1) % game.ball.rainbowColors.length;
-                } else {
-                    game.player2.score++;
-                }
+                game.player2.score++;
                 createScoreParticles(canvas.width - 100, canvas.height / 2, game.player2.color);
                 soundManager.play('score');
                 vibrate(100);
-                resetBall();
+                startNextRound();
                 checkGameOver();
             } else if (game.ball.x >= canvas.width) {
-                if (game.ball.isRainbow) {
-                    game.player1.score += 2;
-                    game.ball.rainbowColorIndex = (game.ball.rainbowColorIndex + 1) % game.ball.rainbowColors.length;
-                } else {
-                    game.player1.score++;
-                }
+                game.player1.score++;
                 createScoreParticles(100, canvas.height / 2, game.player1.color);
                 soundManager.play('score');
                 vibrate(100);
-                resetBall();
+                startNextRound();
                 checkGameOver();
             }
             
@@ -1576,25 +1556,52 @@
         }
 
         function resetBall() {
-            game.ball.x = CONFIG.canvas.width / 2;
-            game.ball.y = CONFIG.canvas.height / 2;
-            game.ball.speedX = CONFIG.ball.initialSpeedX * (Math.random() > 0.5 ? 1 : -1);
-            game.ball.speedY = CONFIG.ball.initialSpeedY * (Math.random() > 0.5 ? 1 : -1);
+            game.ball.x = canvas.width / 2;
+            game.ball.y = canvas.height / 2;
+            game.ball.speedX = (Math.random() > 0.5 ? 1 : -1) * 5;
+            game.ball.speedY = (Math.random() - 0.5) * 8;
             game.ball.trail = [];
-
-            // 随机生成彩球
-            if (game.rainbowBallRemaining > 0 && Math.random() < 0.5) { // 50%几率生成彩球
-                game.ball.isRainbow = true;
-                game.ball.color = game.ball.rainbowColors[game.ball.rainbowColorIndex];
-                game.rainbowBallRemaining--;
-            } else {
-                game.ball.isRainbow = false;
-                game.ball.color = CONFIG.ball.color; // 恢复默认颜色
-            }
+            game.ball.isSpecial = false;
+            game.ball.radius = CONFIG.ball.radius;
             
             // 重置AI状态
             aiState.reactionDelay = 0;
             aiState.targetY = game.player2.y;
+        }
+
+        function startNextRound() {
+            gameState = 'countdown';
+            countdown = 3;
+            game.ball.x = canvas.width / 2;
+            game.ball.y = canvas.height / 2;
+            game.ball.speedX = 0;
+            game.ball.speedY = 0;
+            game.ball.trail = [];
+            
+            aiState.reactionDelay = 0;
+            aiState.targetY = game.player2.y;
+
+            const countdownInterval = setInterval(() => {
+                countdown--;
+                if (countdown <= 0) {
+                    clearInterval(countdownInterval);
+                    gameState = 'playing';
+                    game.ball.speedX = (Math.random() > 0.5 ? 1 : -1) * CONFIG.ball.initialSpeedX;
+                    game.ball.speedY = (Math.random() - 0.5) * 8;
+                    
+                    game.ball.isSpecial = false;
+                    game.ball.radius = CONFIG.ball.radius;
+
+                    if (Math.random() < 0.2) { // 20% chance for a special ball
+                        game.ball.isSpecial = true;
+                        game.ball.radius = CONFIG.ball.radius * 2;
+                        setTimeout(() => {
+                            game.ball.isSpecial = false;
+                            game.ball.radius = CONFIG.ball.radius;
+                        }, 10000);
+                    }
+                }
+            }, 1000);
         }
 
 
@@ -1660,21 +1667,25 @@
             for (let i = 0; i < game.ball.trail.length; i++) {
                 const trail = game.ball.trail[i];
                 const alpha = (i + 1) / game.ball.trail.length * 0.5;
-                // 使用小球的当前颜色作为拖尾颜色
-                const ballColor = game.ball.color;
-                const r = parseInt(ballColor.slice(1, 3), 16);
-                const g = parseInt(ballColor.slice(3, 5), 16);
-                const b = parseInt(ballColor.slice(5, 7), 16);
-                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                ctx.fillStyle = `rgba(0, 245, 255, ${alpha})`;
                 ctx.beginPath();
                 ctx.arc(trail.x, trail.y, game.ball.radius * (alpha + 0.2), 0, Math.PI * 2);
                 ctx.fill();
             }
             
             // 绘制发光球
-            ctx.fillStyle = game.ball.color;
-            ctx.shadowBlur = 20;
-            ctx.shadowColor = game.ball.color;
+            if (game.ball.isSpecial) {
+                const gradient = ctx.createRadialGradient(game.ball.x, game.ball.y, 0, game.ball.x, game.ball.y, game.ball.radius);
+                gradient.addColorStop(0, `hsl(${Date.now() / 10 % 360}, 100%, 70%)`);
+                gradient.addColorStop(1, `hsl(${(Date.now() / 10 + 180) % 360}, 100%, 50%)`);
+                ctx.fillStyle = gradient;
+                ctx.shadowBlur = 30;
+                ctx.shadowColor = `hsl(${Date.now() / 10 % 360}, 100%, 50%)`;
+            } else {
+                ctx.fillStyle = game.ball.color;
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = game.ball.color;
+            }
             ctx.beginPath();
             ctx.arc(game.ball.x, game.ball.y, game.ball.radius, 0, Math.PI * 2);
             ctx.fill();
@@ -1715,6 +1726,16 @@
                 ctx.fillText('⏸️ 暂停', canvas.width / 2, canvas.height / 2);
                 ctx.textAlign = 'start';
             }
+            
+            if (gameState === 'countdown') {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 100px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(countdown, canvas.width / 2, canvas.height / 2);
+                ctx.textAlign = 'start';
+            }
         }
 
         function gameLoop() {
@@ -1722,7 +1743,7 @@
                 updatePaddles();
                 updateBall();
                 updateParticles();
-            } else if (gameState === 'paused') {
+            } else if (gameState === 'paused' || gameState === 'countdown') {
                 updateParticles();
             }
             
@@ -1748,7 +1769,6 @@
             game.player1.score = 0;
             game.player2.score = 0;
             game.player1.y = canvas.height / 2 - 75;
-            game.rainbowBallRemaining = 2; // 重置彩球剩余次数
             game.player2.y = canvas.height / 2 - 75;
             game.particles = [];
             
@@ -1941,42 +1961,11 @@
             canvas.addEventListener('touchcancel', touchEndOrCancel, { passive: false });
         }
 
-        // 初始化音频系统
-        async function initializeAudio() {
-            try {
-                await soundManager.init();
-                console.log('Audio system initialized');
-            } catch (e) {
-                console.error("音频初始化失败:", e);
-            }
-        }
-
-        // 在页面加载完成后初始化
-        document.addEventListener('DOMContentLoaded', () => {
-            initializeAudio();
-            setupEventListeners();
-            setDifficulty(3, null); // 默认3级难度，传递null作为event对象
-            resetBall();
-        });
-        
-        // 为了确保在用户交互时激活音频，添加一次性事件监听器
-        function addUserInteractionListeners() {
-            const events = ['click', 'keydown', 'touchstart'];
-            const handler = async () => {
-                await activateAudioContext();
-                // 移除事件监听器，因为只需要第一次交互
-                events.forEach(event => {
-                    document.removeEventListener(event, handler);
-                });
-            };
-            
-            events.forEach(event => {
-                document.addEventListener(event, handler);
-            });
-        }
-
-        // 添加用户交互监听器
-        addUserInteractionListeners();
+        // 初始化
+        soundManager.init();
+        setupEventListeners();
+        setDifficulty(3); // 默认3级难度
+        resetBall();
     </script>
 </body>
 </html>
