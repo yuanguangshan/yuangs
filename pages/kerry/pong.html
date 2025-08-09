@@ -890,11 +890,11 @@
             <div class="start-difficulty-selector" id="startDifficultySelector" style="display: none;">
                 <h3>选择AI难度</h3>
                 <div class="difficulty-options">
-                    <button class="difficulty-option" onclick="setDifficultyForStart(1)">
+                    <button class="difficulty-option" onclick="setDifficultyForStart(1, event)">
                         <span class="difficulty-name">新手</span>
                         <span class="difficulty-desc">胜率: 70%</span>
                     </button>
-                    <button class="difficulty-option" onclick="setDifficultyForStart(2)">
+                    <button class="difficulty-option" onclick="setDifficultyForStart(2, event)">
                         <span class="difficulty-name">简单</span>
                         <span class="difficulty-desc">胜率: 60%</span>
                     </button>
@@ -1054,15 +1054,21 @@
             },
             // 新增方法：恢复AudioContext
             resumeContext() {
+                console.log('Attempting to resume AudioContext. Current state:', this.context ? this.context.state : 'not created');
                 if (!this.isInitialized) {
+                    console.log('SoundManager not initialized, initializing now.');
                     this.init();
                 }
                 if (this.context && this.context.state === 'suspended') {
                     this.context.resume().then(() => {
-                        console.log('AudioContext resumed successfully.');
+                        console.log('AudioContext resumed successfully. New state:', this.context.state);
                     }).catch(e => {
                         console.error('Failed to resume AudioContext:', e);
                     });
+                } else if (this.context && this.context.state === 'running') {
+                    console.log('AudioContext is already running.');
+                } else {
+                    console.log('AudioContext not in suspended state or not created.');
                 }
             },
             createSounds() {
@@ -1071,6 +1077,7 @@
                 this.sounds.wall = this.createTone(400, 0.1, 'sine');
                 this.sounds.score = this.createTone(600, 0.3, 'triangle');
                 this.sounds.victory = this.createTone(800, 0.5, 'sine');
+                console.log('createSounds called. this.sounds.score:', this.sounds.score);
             },
             createTone(frequency, duration, type = 'sine') {
                 return () => {
@@ -1094,7 +1101,10 @@
             },
             play(soundName) {
                 if (this.sounds[soundName]) {
+                    console.log(`Attempting to play sound: ${soundName}`);
                     this.sounds[soundName]();
+                } else {
+                    console.warn(`Sound not found: ${soundName}`);
                 }
             },
             toggleMute() {
@@ -1200,7 +1210,11 @@
             
             // 更新按钮状态
             document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
+            if (event && event.target) {
+                if (event && event.target) {
+                event.target.classList.add('active');
+            }
+            }
             
             // 显示/隐藏难度选择器和控制区域
             if (mode === 'ai') {
@@ -1212,7 +1226,6 @@
                 aiModeControls.style.display = 'flex';
             } else {
                 difficultySelector.style.display = 'none';
-                player2LabelEl.textContent = '玩家2';
                 document.getElementById('instructions').innerHTML = '💻 电脑: 玩家1 (W/S键) | 玩家2 (↑/↓键) | 空格键暂停<br>📱 手机: 使用下方圆形按钮控制球拍移动';
                 
                 // 切换移动端控制布局
@@ -1229,7 +1242,10 @@
             
             // 更新按钮状态
             document.querySelectorAll('.difficulty-btn').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
+            // 只有当event对象存在时才尝试访问target
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
             
             // 更新信息显示
             const config = aiConfig[level];
@@ -1719,10 +1735,12 @@
             }
         }
 
-        function setDifficultyForStart(level) {
+        function setDifficultyForStart(level, event) {
             aiDifficulty = level;
             document.querySelectorAll('.difficulty-option').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
+            if (event && event.target) {
+                 event.target.classList.add('active');
+             }
         }
 
         function confirmStart() {
@@ -1862,6 +1880,7 @@
             try {
                 // 确保在用户第一次交互时初始化音频
                 soundManager.init();
+                console.log('AudioContext state after init:', soundManager.context ? soundManager.context.state : 'not created');
                 document.removeEventListener('click', initAudio);
                 document.removeEventListener('keydown', initAudio);
                 document.removeEventListener('touchstart', initAudio);
