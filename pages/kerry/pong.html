@@ -1036,79 +1036,109 @@
             lastBallX: 0
         };
 
-        // 声音系统
+        // 改进的声音系统
         const soundManager = {
             context: null,
             sounds: {},
             isInitialized: false,
-            init() {
+            
+            async init() {
                 if (this.isInitialized) return;
+                
                 try {
                     this.context = new (window.AudioContext || window.webkitAudioContext)();
+                    console.log('AudioContext created, state:', this.context.state);
+                    
+                    // 如果是suspended状态，等待用户交互后激活
+                    if (this.context.state === 'suspended') {
+                        console.log('AudioContext suspended, waiting for user interaction...');
+                    }
+                    
                     this.createSounds();
                     this.isInitialized = true;
+                    console.log('SoundManager initialized successfully');
                 } catch (e) {
                     console.warn('Web Audio API not supported, sound disabled', e);
                     CONFIG.sounds.enabled = false;
                 }
             },
-            // 新增方法：恢复AudioContext
-            resumeContext() {
-                console.log('Attempting to resume AudioContext. Current state:', this.context ? this.context.state : 'not created');
-                if (!this.isInitialized) {
-                    console.log('SoundManager not initialized, initializing now.');
-                    this.init();
+            
+            async resumeContext() {
+                if (!this.context) {
+                    await this.init();
                 }
+                
                 if (this.context && this.context.state === 'suspended') {
-                    this.context.resume().then(() => {
-                        console.log('AudioContext resumed successfully. New state:', this.context.state);
-                    }).catch(e => {
+                    try {
+                        await this.context.resume();
+                        console.log('AudioContext resumed successfully. State:', this.context.state);
+                    } catch (e) {
                         console.error('Failed to resume AudioContext:', e);
-                    });
-                } else if (this.context && this.context.state === 'running') {
-                    console.log('AudioContext is already running.');
-                } else {
-                    console.log('AudioContext not in suspended state or not created.');
+                    }
                 }
             },
+            
             createSounds() {
+                if (!this.context) return;
+                
                 // 创建各种音效
                 this.sounds.paddle = this.createTone(800, 0.1, 'square');
                 this.sounds.wall = this.createTone(400, 0.1, 'sine');
                 this.sounds.score = this.createTone(600, 0.3, 'triangle');
                 this.sounds.victory = this.createTone(800, 0.5, 'sine');
-                console.log('createSounds called. this.sounds.score:', this.sounds.score);
+                console.log('Sounds created successfully');
             },
+            
             createTone(frequency, duration, type = 'sine') {
                 return () => {
-                    if (!CONFIG.sounds.enabled || !this.context) return;
+                    if (!CONFIG.sounds.enabled || !this.context || this.context.state !== 'running') {
+                        console.log('Sound playback skipped - context not running or sounds disabled');
+                        return;
+                    }
                     
-                    const oscillator = this.context.createOscillator();
-                    const gainNode = this.context.createGain();
-                    
-                    oscillator.connect(gainNode);
-                    gainNode.connect(this.context.destination);
-                    
-                    oscillator.frequency.value = frequency;
-                    oscillator.type = type;
-                    
-                    gainNode.gain.setValueAtTime(CONFIG.sounds.volume, this.context.currentTime);
-                    gainNode.gain.exponentialRampToValueAtTime(0.001, this.context.currentTime + duration);
-                    
-                    oscillator.start(this.context.currentTime);
-                    oscillator.stop(this.context.currentTime + duration);
+                    try {
+                        const oscillator = this.context.createOscillator();
+                        const gainNode = this.context.createGain();
+                        
+                        oscillator.connect(gainNode);
+                        gainNode.connect(this.context.destination);
+                        
+                        oscillator.frequency.value = frequency;
+                        oscillator.type = type;
+                        
+                        gainNode.gain.setValueAtTime(CONFIG.sounds.volume, this.context.currentTime);
+                        gainNode.gain.exponentialRampToValueAtTime(0.001, this.context.currentTime + duration);
+                        
+                        oscillator.start(this.context.currentTime);
+                        oscillator.stop(this.context.currentTime + duration);
+                        
+                        console.log(`Playing ${type} tone at ${frequency}Hz for ${duration}s`);
+                    } catch (e) {
+                        console.error('Error playing sound:', e);
+                    }
                 };
             },
-            play(soundName) {
+            
+            async play(soundName) {
+                if (!CONFIG.sounds.enabled) {
+                    console.log('Sounds disabled, skipping:', soundName);
+                    return;
+                }
+                
+                // 确保音频上下文已激活
+                await this.resumeContext();
+                
                 if (this.sounds[soundName]) {
-                    console.log(`Attempting to play sound: ${soundName}`);
+                    console.log(`Playing sound: ${soundName}`);
                     this.sounds[soundName]();
                 } else {
                     console.warn(`Sound not found: ${soundName}`);
                 }
             },
+            
             toggleMute() {
                 CONFIG.sounds.enabled = !CONFIG.sounds.enabled;
+                console.log('Sound toggled:', CONFIG.sounds.enabled ? 'enabled' : 'disabled');
                 return CONFIG.sounds.enabled;
             }
         };
@@ -1211,9 +1241,7 @@
             // 更新按钮状态
             document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
             if (event && event.target) {
-                if (event && event.target) {
                 event.target.classList.add('active');
-            }
             }
             
             // 显示/隐藏难度选择器和控制区域
@@ -1257,19 +1285,16 @@
             resetGame();
         }
 
+        // 激活音频上下文的函数
+        async function activateAudioContext() {
+            await soundManager.resumeContext();
+        }
+
         // 键盘事件处理
         const keys = {};
-        let contextActivated = false;
         
-        function activateAudioContext() {
-            if (!contextActivated) {
-                soundManager.resumeContext();
-                contextActivated = true;
-            }
-        }
-        
-        document.addEventListener('keydown', (e) => {
-            activateAudioContext();
+        document.addEventListener('keydown', async (e) => {
+            await activateAudioContext();
             keys[e.key.toLowerCase()] = true;
             
             if (e.code === 'Space') {
@@ -1283,8 +1308,8 @@
         });
 
         // 手机控制
-        function startMove(player, direction) {
-            activateAudioContext();
+        async function startMove(player, direction) {
+            await activateAudioContext();
             mobileControls[player][direction] = true;
         }
 
@@ -1302,8 +1327,8 @@
             }
         }
 
-        function toggleVolume() {
-            soundManager.resumeContext();
+        async function toggleVolume() {
+            await activateAudioContext();
             const volumeBtn = document.getElementById('volumeBtn');
             const isEnabled = soundManager.toggleMute();
             volumeBtn.innerHTML = isEnabled ? '🔊' : '🔇';
@@ -1725,7 +1750,8 @@
         // 开始菜单逻辑
         let selectedMode = null;
 
-        function startGame(mode) {
+        async function startGame(mode) {
+            await activateAudioContext();
             selectedMode = mode;
             if (mode === 'ai') {
                 document.getElementById('startDifficultySelector').style.display = 'block';
@@ -1743,10 +1769,10 @@
              }
         }
 
-        function confirmStart() {
+        async function confirmStart() {
             if (selectedMode) {
                 // 激活音频上下文（需要用户交互）
-                soundManager.resumeContext();
+                await activateAudioContext();
                 
                 gameMode = selectedMode;
                 
@@ -1801,9 +1827,9 @@
                 const player = button.dataset.player;
                 const direction = button.dataset.direction;
                 
-                button.addEventListener('pointerdown', (e) => {
+                button.addEventListener('pointerdown', async (e) => {
                     e.preventDefault();
-                    startMove(player, direction);
+                    await startMove(player, direction);
                 });
                 
                 button.addEventListener('pointerup', (e) => {
@@ -1835,9 +1861,9 @@
                 }
             };
 
-            canvas.addEventListener('touchstart', (e) => {
+            canvas.addEventListener('touchstart', async (e) => {
                 e.preventDefault();
-                soundManager.resumeContext();
+                await activateAudioContext();
                 for (let i = 0; i < e.changedTouches.length; i++) {
                     const touch = e.changedTouches[i];
                     const paddle = getPaddleFromTouch(touch);
@@ -1875,29 +1901,42 @@
             canvas.addEventListener('touchcancel', touchEndOrCancel, { passive: false });
         }
 
-        // 改进音频初始化
-        function initAudio() {
+        // 初始化音频系统
+        async function initializeAudio() {
             try {
-                // 确保在用户第一次交互时初始化音频
-                soundManager.init();
-                console.log('AudioContext state after init:', soundManager.context ? soundManager.context.state : 'not created');
-                document.removeEventListener('click', initAudio);
-                document.removeEventListener('keydown', initAudio);
-                document.removeEventListener('touchstart', initAudio);
+                await soundManager.init();
+                console.log('Audio system initialized');
             } catch (e) {
-                console.error("初始化音频失败:", e);
+                console.error("音频初始化失败:", e);
             }
         }
 
-        // 添加事件监听器以初始化音频
-        document.addEventListener('click', initAudio);
-        document.addEventListener('keydown', initAudio);
-        document.addEventListener('touchstart', initAudio);
+        // 在页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeAudio();
+            setupEventListeners();
+            setDifficulty(3); // 默认3级难度
+            resetBall();
+        });
+        
+        // 为了确保在用户交互时激活音频，添加一次性事件监听器
+        function addUserInteractionListeners() {
+            const events = ['click', 'keydown', 'touchstart'];
+            const handler = async () => {
+                await activateAudioContext();
+                // 移除事件监听器，因为只需要第一次交互
+                events.forEach(event => {
+                    document.removeEventListener(event, handler);
+                });
+            };
+            
+            events.forEach(event => {
+                document.addEventListener(event, handler);
+            });
+        }
 
-        // 初始化游戏
-        setupEventListeners();
-        setDifficulty(3); // 默认3级难度
-        resetBall();
+        // 添加用户交互监听器
+        addUserInteractionListeners();
     </script>
 </body>
 </html>
