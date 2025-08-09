@@ -934,11 +934,11 @@
                 <div class="difficulty-selector" id="difficultySelector">
                     <div class="difficulty-title">🎯 AI难度选择</div>
                     <div class="difficulty-buttons">
-                        <button class="difficulty-btn" onclick="setDifficulty(1)">1级</button>
-                        <button class="difficulty-btn" onclick="setDifficulty(2)">2级</button>
-                        <button class="difficulty-btn active" onclick="setDifficulty(3)">3级</button>
-                        <button class="difficulty-btn" onclick="setDifficulty(4)">4级</button>
-                        <button class="difficulty-btn" onclick="setDifficulty(5)">5级</button>
+                        <button class="difficulty-btn" onclick="setDifficulty(1, event)">1级</button>
+                        <button class="difficulty-btn" onclick="setDifficulty(2, event)">2级</button>
+                        <button class="difficulty-btn active" onclick="setDifficulty(3, event)">3级</button>
+                        <button class="difficulty-btn" onclick="setDifficulty(4, event)">4级</button>
+                        <button class="difficulty-btn" onclick="setDifficulty(5, event)">5级</button>
                     </div>
                     <div class="win-rate-info" id="winRateInfo">当前难度胜率约为 50%</div>
                 </div>
@@ -1229,7 +1229,11 @@
                 speedY: CONFIG.ball.initialSpeedY,
                 maxSpeed: CONFIG.ball.maxSpeed,
                 color: CONFIG.ball.color,
-                trail: []
+                trail: [],
+                isRainbow: false,
+                rainbowColors: ['#FF0000', '#FF7F00', '#FFFF00', '#00FF00', '#0000FF', '#4B0082', '#9400D3'], // 红橙黄绿蓝靛紫
+                rainbowColorIndex: 0,
+                rainbowBallRemaining: 2 // 每局彩球出现次数
             },
             particles: []
         };
@@ -1270,10 +1274,12 @@
             
             // 更新按钮状态
             document.querySelectorAll('.difficulty-btn').forEach(btn => btn.classList.remove('active'));
-            // 只有当event对象存在时才尝试访问target
-            if (event && event.target) {
-                event.target.classList.add('active');
-            }
+            // 根据level参数设置active状态
+            document.querySelectorAll('.difficulty-btn').forEach(btn => {
+                if (parseInt(btn.textContent) === level) {
+                    btn.classList.add('active');
+                }
+            });
             
             // 更新信息显示
             const config = aiConfig[level];
@@ -1430,6 +1436,14 @@
             // 移动球
             game.ball.x += game.ball.speedX;
             game.ball.y += game.ball.speedY;
+
+            // 根据球的位置改变颜色
+            // 在自己一方时变为对方的颜色，因为是对手的攻击
+            if (game.ball.x < canvas.width / 2 && game.ball.color !== game.player2.color) {
+                game.ball.color = game.player2.color;
+            } else if (game.ball.x >= canvas.width / 2 && game.ball.color !== game.player1.color) {
+                game.ball.color = game.player1.color;
+            }
             
             // 上下边界碰撞
             if (game.ball.y <= game.ball.radius || game.ball.y >= canvas.height - game.ball.radius) {
@@ -1442,14 +1456,24 @@
             
             // 左右得分检测
             if (game.ball.x <= 0) {
-                game.player2.score++;
+                if (game.ball.isRainbow) {
+                    game.player2.score += 2;
+                    game.ball.rainbowColorIndex = (game.ball.rainbowColorIndex + 1) % game.ball.rainbowColors.length;
+                } else {
+                    game.player2.score++;
+                }
                 createScoreParticles(canvas.width - 100, canvas.height / 2, game.player2.color);
                 soundManager.play('score');
                 vibrate(100);
                 resetBall();
                 checkGameOver();
             } else if (game.ball.x >= canvas.width) {
-                game.player1.score++;
+                if (game.ball.isRainbow) {
+                    game.player1.score += 2;
+                    game.ball.rainbowColorIndex = (game.ball.rainbowColorIndex + 1) % game.ball.rainbowColors.length;
+                } else {
+                    game.player1.score++;
+                }
                 createScoreParticles(100, canvas.height / 2, game.player1.color);
                 soundManager.play('score');
                 vibrate(100);
@@ -1552,11 +1576,21 @@
         }
 
         function resetBall() {
-            game.ball.x = canvas.width / 2;
-            game.ball.y = canvas.height / 2;
-            game.ball.speedX = (Math.random() > 0.5 ? 1 : -1) * 5;
-            game.ball.speedY = (Math.random() - 0.5) * 8;
+            game.ball.x = CONFIG.canvas.width / 2;
+            game.ball.y = CONFIG.canvas.height / 2;
+            game.ball.speedX = CONFIG.ball.initialSpeedX * (Math.random() > 0.5 ? 1 : -1);
+            game.ball.speedY = CONFIG.ball.initialSpeedY * (Math.random() > 0.5 ? 1 : -1);
             game.ball.trail = [];
+
+            // 随机生成彩球
+            if (game.rainbowBallRemaining > 0 && Math.random() < 0.5) { // 50%几率生成彩球
+                game.ball.isRainbow = true;
+                game.ball.color = game.ball.rainbowColors[game.ball.rainbowColorIndex];
+                game.rainbowBallRemaining--;
+            } else {
+                game.ball.isRainbow = false;
+                game.ball.color = CONFIG.ball.color; // 恢复默认颜色
+            }
             
             // 重置AI状态
             aiState.reactionDelay = 0;
@@ -1626,7 +1660,12 @@
             for (let i = 0; i < game.ball.trail.length; i++) {
                 const trail = game.ball.trail[i];
                 const alpha = (i + 1) / game.ball.trail.length * 0.5;
-                ctx.fillStyle = `rgba(0, 245, 255, ${alpha})`;
+                // 使用小球的当前颜色作为拖尾颜色
+                const ballColor = game.ball.color;
+                const r = parseInt(ballColor.slice(1, 3), 16);
+                const g = parseInt(ballColor.slice(3, 5), 16);
+                const b = parseInt(ballColor.slice(5, 7), 16);
+                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
                 ctx.beginPath();
                 ctx.arc(trail.x, trail.y, game.ball.radius * (alpha + 0.2), 0, Math.PI * 2);
                 ctx.fill();
@@ -1709,6 +1748,7 @@
             game.player1.score = 0;
             game.player2.score = 0;
             game.player1.y = canvas.height / 2 - 75;
+            game.rainbowBallRemaining = 2; // 重置彩球剩余次数
             game.player2.y = canvas.height / 2 - 75;
             game.particles = [];
             
@@ -1915,7 +1955,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             initializeAudio();
             setupEventListeners();
-            setDifficulty(3); // 默认3级难度
+            setDifficulty(3, null); // 默认3级难度，传递null作为event对象
             resetBall();
         });
         
