@@ -905,15 +905,15 @@
                         <span class="difficulty-name">简单</span>
                         <span class="difficulty-desc">胜率: 60%</span>
                     </button>
-                    <button class="difficulty-option active" onclick="setDifficultyForStart(3)">
+                    <button class="difficulty-option active" onclick="setDifficultyForStart(3, event)">
                         <span class="difficulty-name">普通</span>
                         <span class="difficulty-desc">胜率: 50%</span>
                     </button>
-                    <button class="difficulty-option" onclick="setDifficultyForStart(4)">
+                    <button class="difficulty-option" onclick="setDifficultyForStart(4, event)">
                         <span class="difficulty-name">困难</span>
                         <span class="difficulty-desc">胜率: 35%</span>
                     </button>
-                    <button class="difficulty-option" onclick="setDifficultyForStart(5)">
+                    <button class="difficulty-option" onclick="setDifficultyForStart(5, event)">
                         <span class="difficulty-name">地狱</span>
                         <span class="difficulty-desc">胜率: 20%</span>
                     </button>
@@ -1280,17 +1280,21 @@
         }
 
         // 设置AI难度
-        function setDifficulty(level) {
+        function setDifficulty(level, event) {
             aiDifficulty = level;
             
             // 更新按钮状态
             document.querySelectorAll('.difficulty-btn').forEach(btn => btn.classList.remove('active'));
             // 根据level参数设置active状态
-            document.querySelectorAll('.difficulty-btn').forEach(btn => {
-                if (parseInt(btn.textContent) === level) {
-                    btn.classList.add('active');
-                }
-            });
+            if (event && event.target) {
+                event.target.classList.add('active');
+            } else {
+                document.querySelectorAll('.difficulty-btn').forEach(btn => {
+                    if (parseInt(btn.textContent) === level) {
+                        btn.classList.add('active');
+                    }
+                });
+            }
             
             // 更新信息显示
             const config = aiConfig[level];
@@ -1353,7 +1357,7 @@
             await activateAudioContext();
             const volumeBtn = document.getElementById('volumeBtn');
             const isEnabled = soundManager.toggleMute();
-            volumeBtn.innerHTML = isEnabled ? '🔊ON' : '🔇OFF';
+            volumeBtn.innerHTML = isEnabled ? '🔊音效' : '🔇静音';
         }
 
         // AI 1 (左边)
@@ -1728,10 +1732,10 @@
 
             // Function to draw a racket
             function drawRacket(x, y, width, height, color, direction = 'left') {
-                const handleHeight = height * 0.3;
-                const handleWidth = width * 0.8;
-                const headHeight = height * 0.7;
-                const headWidth = width * 2.5;
+                const handleHeight = height * 0.2;
+                const handleWidth = width;
+                const headHeight = height * 0.9; // Made head taller
+                const headWidth = width * 3;   // Made head wider
 
                 ctx.fillStyle = color;
                 ctx.shadowBlur = 15;
@@ -1739,23 +1743,35 @@
 
                 ctx.beginPath();
                 if (direction === 'left') {
+                    // Head
+                    ctx.ellipse(x + width / 2, y + height / 2, headWidth / 2, headHeight / 2, 0, Math.PI / 2, Math.PI * 3 / 2, true);
+                     // Handle
+                    ctx.rect(x, y + (height - handleHeight) / 2, handleWidth, handleHeight);
+                } else { // right
+                    // Head
+                    ctx.ellipse(x + width / 2, y + height / 2, headWidth / 2, headHeight / 2, 0, Math.PI * 3 / 2, Math.PI / 2, true);
                     // Handle
                     ctx.rect(x, y + (height - handleHeight) / 2, handleWidth, handleHeight);
-                    // Head
-                    ctx.ellipse(x + handleWidth, y + height / 2, headWidth / 2, headHeight / 2, 0, Math.PI / 2, Math.PI * 3 / 2, true);
-                } else { // right
-                    // Handle
-                    ctx.rect(x + width - handleWidth, y + (height - handleHeight) / 2, handleWidth, handleHeight);
-                    // Head
-                    ctx.ellipse(x + width - handleWidth, y + height / 2, headWidth / 2, headHeight / 2, 0, Math.PI * 3 / 2, Math.PI / 2, true);
                 }
                 ctx.closePath();
                 ctx.fill();
             }
 
-            // Draw rackets instead of simple rectangles
-            drawRacket(game.player1.x, game.player1.y, game.player1.width, game.player1.height, game.player1.color, 'left');
-            drawRacket(game.player2.x, game.player2.y, game.player2.width, game.player2.height, game.player2.color, 'right');
+            if (gameMode === 'spectator') {
+                // Draw rackets in spectator mode
+                drawRacket(game.player1.x, game.player1.y, game.player1.width, game.player1.height, game.player1.color, 'left');
+                drawRacket(game.player2.x, game.player2.y, game.player2.width, game.player2.height, game.player2.color, 'right');
+            } else {
+                // Draw simple rectangles for player modes
+                ctx.fillStyle = game.player1.color;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = game.player1.color;
+                ctx.fillRect(game.player1.x, game.player1.y, game.player1.width, game.player1.height);
+
+                ctx.fillStyle = game.player2.color;
+                ctx.shadowColor = game.player2.color;
+                ctx.fillRect(game.player2.x, game.player2.y, game.player2.width, game.player2.height);
+            }
             
             ctx.shadowBlur = 0;
             
@@ -1896,6 +1912,10 @@
             resetBall();
             gameOverEl.style.display = 'none';
             gameState = 'playing';
+            
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
             gameLoop();
         }
 
@@ -1939,8 +1959,8 @@
             aiDifficulty = level;
             document.querySelectorAll('.difficulty-option').forEach(btn => btn.classList.remove('active'));
             if (event && event.target) {
-                 event.target.closest('.difficulty-option').classList.add('active');
-             }
+                event.target.closest('.difficulty-option').classList.add('active');
+            }
         }
 
         async function confirmStart() {
@@ -1987,17 +2007,26 @@
                     aiModeControls.style.display = 'none';
                 }
                 
-                // 初始化游戏
                 resetGame();
             }
         }
 
+        // 修复后的返回菜单函数
         function backToMenu() {
+            // 停止当前游戏循环
             gameState = 'paused';
-            cancelAnimationFrame(animationId);
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+            
+            // 显示开始菜单，隐藏游戏界面
             document.getElementById('startMenu').style.display = 'flex';
             document.getElementById('gameWrapper').style.display = 'none';
+            
+            // 重置难度选择器状态
             document.getElementById('startDifficultySelector').style.display = 'none';
+            
+            // 重置选择的模式
             selectedMode = null;
         }
 
