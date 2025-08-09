@@ -1798,6 +1798,63 @@
                     stopMove(player, direction);
                 });
             });
+
+            // 手机滑动控制
+            let touches = {};
+
+            const getPaddleFromTouch = (touch) => {
+                const canvasRect = canvas.getBoundingClientRect();
+                const touchX = touch.clientX - canvasRect.left;
+
+                if (gameMode === 'ai') {
+                    return game.player1;
+                } else { // human mode
+                    if (touchX < canvasRect.width / 2) {
+                        return game.player1;
+                    } else {
+                        return game.player2;
+                    }
+                }
+            };
+
+            canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                activateAudioContext();
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    const touch = e.changedTouches[i];
+                    const paddle = getPaddleFromTouch(touch);
+                    if (paddle) {
+                        touches[touch.identifier] = {
+                            startY: touch.clientY,
+                            initialY: paddle.y,
+                            paddle: paddle
+                        };
+                    }
+                }
+            }, { passive: false });
+
+            canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    const touch = e.changedTouches[i];
+                    const touchInfo = touches[touch.identifier];
+                    if (touchInfo) {
+                        const deltaY = touch.clientY - touchInfo.startY;
+                        const newY = touchInfo.initialY + deltaY;
+                        touchInfo.paddle.y = Math.max(0, Math.min(canvas.height - touchInfo.paddle.height, newY));
+                    }
+                }
+            }, { passive: false });
+
+            const touchEndOrCancel = (e) => {
+                e.preventDefault();
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    delete touches[e.changedTouches[i].identifier];
+                }
+            };
+
+            canvas.addEventListener('touchend', touchEndOrCancel, { passive: false });
+            canvas.addEventListener('touchcancel', touchEndOrCancel, { passive: false });
         }
 
         // 初始化游戏
