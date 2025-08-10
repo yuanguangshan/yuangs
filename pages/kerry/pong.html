@@ -212,6 +212,40 @@
         .paddle-size-option:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,.22); }
         .paddle-size-option.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0,245,255,0.2); background: rgba(255,255,255,0.12); }
         
+        /* 背景音乐选择器 */
+        .music-selector {
+            margin-top: 10px;
+        }
+        .music-title {
+            font-size: 15px;
+            margin-bottom: 6px;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .music-options {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 6px;
+        }
+        .music-option {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 6px 10px;
+            border-radius: 12px;
+            cursor: pointer;
+            color: #fff;
+            font-size: 12px;
+            transition: all .15s ease;
+            user-select: none;
+        }
+        .music-option:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,.22); }
+        .music-option.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0,245,255,0.2); background: rgba(255,255,255,0.12); }
+        
         /* 设置区域展开/折叠控制 */
         .settings-toggle {
             background: rgba(0, 0, 0, 0.2);
@@ -474,6 +508,14 @@
             #winner {
                 font-size: 20px;
             }
+            .music-options {
+                gap: 4px;
+            }
+            .music-option {
+                padding: 4px 6px;
+                font-size: 10px;
+            }
+            
             #encouragement {
                 font-size: 16px;
             }
@@ -540,6 +582,17 @@
             border: 1px solid rgba(255,255,255,0.1);
         }
         .start-theme-selector h3 {
+            margin-bottom: 6px; color: var(--accent); font-size: 15px;
+        }
+
+        .start-music-selector {
+            margin: 12px 0;
+            padding: 10px;
+            background: rgba(0,0,0,0.12);
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .start-music-selector h3 {
             margin-bottom: 6px; color: var(--accent); font-size: 15px;
         }
 
@@ -635,6 +688,25 @@
                     <button class="theme-option" data-theme="vaporwave" onclick="setTheme('vaporwave', event)">
                         <span class="swatch" style="background: linear-gradient(45deg, #a18cd1, #fbc2eb)"></span>
                         <span class="theme-name">Vaporwave</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 新增：开始菜单音乐选择 -->
+            <div class="start-music-selector">
+                <h3>选择背景音乐</h3>
+                <div class="music-options">
+                    <button class="music-option active" data-track="none" onclick="setStartMusic('none', event)">
+                        无音乐
+                    </button>
+                    <button class="music-option" data-track="calm" onclick="setStartMusic('calm', event)">
+                        舒缓 🌙
+                    </button>
+                    <button class="music-option" data-track="tense" onclick="setStartMusic('tense', event)">
+                        紧张 ⚡
+                    </button>
+                    <button class="music-option" data-track="cheerful" onclick="setStartMusic('cheerful', event)">
+                        欢快 😊
                     </button>
                 </div>
             </div>
@@ -855,6 +927,25 @@
                             </button>
                         </div>
                     </div>
+                    
+                    <!-- 背景音乐选择 -->
+                    <div class="music-selector">
+                        <div class="music-title">🎵 背景音乐</div>
+                        <div class="music-options">
+                            <button class="music-option" data-track="none" onclick="selectMusic('none', event)">
+                                无音乐
+                            </button>
+                            <button class="music-option" data-track="calm" onclick="selectMusic('calm', event)">
+                                舒缓 🌙
+                            </button>
+                            <button class="music-option" data-track="tense" onclick="selectMusic('tense', event)">
+                                紧张 ⚡
+                            </button>
+                            <button class="music-option" data-track="cheerful" onclick="selectMusic('cheerful', event)">
+                                欢快 😊
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -874,6 +965,7 @@
                 <button class="control-btn" onclick="togglePause()">⏸️ 暂停</button>
                 <button class="control-btn" onclick="resetGame()">🔄 重来</button>
                 <button id="volumeBtn" class="control-btn" onclick="toggleVolume()">🔊音效</button>
+                <button id="musicBtn" class="control-btn" onclick="toggleMusic()">🎵音乐</button>
                 <button class="control-btn" onclick="backToMenu()">🏠 返回</button>
             </div>
             
@@ -1123,6 +1215,11 @@
         const soundManager = {
             context: null,
             sounds: {},
+            music: {
+                tracks: {},
+                currentTrack: null,
+                gainNode: null
+            },
             isInitialized: false,
             
             async init() {
@@ -1131,6 +1228,7 @@
                 try {
                     this.context = new (window.AudioContext || window.webkitAudioContext)();
                     this.createSounds();
+                    this.loadMusicTracks();
                     this.isInitialized = true;
                 } catch (e) {
                     console.warn('Web Audio API not supported, sound disabled', e);
@@ -1156,6 +1254,77 @@
                 this.sounds.wall = this.createTone(400, 0.1, 'sine');
                 this.sounds.score = this.createTone(600, 0.3, 'triangle');
                 this.sounds.victory = this.createTone(800, 0.5, 'sine');
+            },
+            
+            // 加载背景音乐轨道
+            async loadMusicTracks() {
+                if (!this.context) return;
+                
+                // 创建音乐增益节点
+                this.music.gainNode = this.context.createGain();
+                this.music.gainNode.connect(this.context.destination);
+                this.music.gainNode.gain.value = CONFIG.music.volume;
+                
+                // 定义音乐文件路径
+                const musicFiles = {
+                    'calm': 'tools/1.mp3',
+                    'tense': 'tools/2.mp3',
+                    'cheerful': 'tools/3.mp3'
+                };
+                
+                // 尝试加载音乐文件
+                for (const [key, path] of Object.entries(musicFiles)) {
+                    try {
+                        const response = await fetch(path);
+                        const arrayBuffer = await response.arrayBuffer();
+                        this.music.tracks[key] = await this.context.decodeAudioData(arrayBuffer);
+                    } catch (e) {
+                        console.warn(`Failed to load music file ${path}`, e);
+                    }
+                }
+            },
+            
+            // 播放背景音乐
+            async playMusic(trackName) {
+                if (!CONFIG.music.enabled || !this.context) return;
+                
+                // 停止当前音乐
+                if (this.music.currentTrack) {
+                    this.music.currentTrack.source.stop();
+                }
+                
+                // 播放新音乐
+                if (this.music.tracks[trackName]) {
+                    try {
+                        const source = this.context.createBufferSource();
+                        source.buffer = this.music.tracks[trackName];
+                        source.connect(this.music.gainNode);
+                        source.loop = true;
+                        source.start(0);
+                        
+                        this.music.currentTrack = {
+                            source: source,
+                            name: trackName
+                        };
+                        
+                        CONFIG.music.currentTrack = trackName;
+                    } catch (e) {
+                        console.warn(`Failed to play music track ${trackName}`, e);
+                    }
+                }
+            },
+            
+            // 停止背景音乐
+            stopMusic() {
+                if (this.music.currentTrack) {
+                    try {
+                        this.music.currentTrack.source.stop();
+                    } catch (e) {
+                        console.warn('Failed to stop music', e);
+                    }
+                    this.music.currentTrack = null;
+                }
+                CONFIG.music.currentTrack = 'none';
             },
             
             createTone(frequency, duration, type = 'sine') {
@@ -1189,6 +1358,30 @@
             toggleMute() {
                 CONFIG.sounds.enabled = !CONFIG.sounds.enabled;
                 return CONFIG.sounds.enabled;
+            },
+            
+            // 切换音乐开关
+            toggleMusic() {
+                CONFIG.music.enabled = !CONFIG.music.enabled;
+                
+                if (CONFIG.music.enabled) {
+                    // 如果之前有选择音乐，则继续播放
+                    if (CONFIG.music.currentTrack !== 'none') {
+                        this.playMusic(CONFIG.music.currentTrack);
+                    }
+                } else {
+                    this.stopMusic();
+                }
+                
+                return CONFIG.music.enabled;
+            },
+            
+            // 设置音乐音量
+            setMusicVolume(volume) {
+                CONFIG.music.volume = volume;
+                if (this.music.gainNode) {
+                    this.music.gainNode.gain.value = volume;
+                }
             }
         };
 
@@ -1247,6 +1440,11 @@
             sounds: {
                 enabled: true,
                 volume: 0.3
+            },
+            music: {
+                enabled: false,
+                volume: 0.2,
+                currentTrack: 'none'
             }
         };
 
@@ -1457,6 +1655,37 @@
             const volumeBtn = document.getElementById('volumeBtn');
             const isEnabled = soundManager.toggleMute();
             volumeBtn.innerHTML = isEnabled ? '🔊音效' : '🔇静音';
+        }
+        
+        // 切换音乐开关
+        async function toggleMusic() {
+            await activateAudioContext();
+            const musicBtn = document.getElementById('musicBtn');
+            const isEnabled = soundManager.toggleMusic();
+            musicBtn.innerHTML = isEnabled ? '🎵音乐' : '🔇音乐';
+            
+            // 如果启用了音乐但没有选择音乐轨道，则默认选择舒缓音乐
+            if (isEnabled && CONFIG.music.currentTrack === 'none') {
+                selectMusic('calm');
+            }
+        }
+        
+        // 选择背景音乐
+        async function selectMusic(track, event) {
+            await activateAudioContext();
+            
+            // 更新按钮状态
+            document.querySelectorAll('.music-option').forEach(btn => btn.classList.remove('active'));
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
+            
+            // 播放选中的音乐
+            if (track === 'none') {
+                soundManager.stopMusic();
+            } else {
+                soundManager.playMusic(track);
+            }
         }
 
         // AI 1 (左边)
@@ -1806,6 +2035,10 @@
                 }
                 
                 gameOverEl.style.display = 'flex'; // 改为flex以确保居中
+                
+                // 停止背景音乐
+                soundManager.stopMusic();
+                
                 cancelAnimationFrame(animationId);
                 
                 for (let i = 0; i < CONFIG.game.victoryParticleCount; i++) {
@@ -2006,11 +2239,24 @@
         function pauseGame() {
             gameState = 'paused';
             cancelAnimationFrame(animationId);
+            
+            // 暂停音乐
+            if (soundManager.music.currentTrack) {
+                // 这里我们不真正暂停音乐，因为Web Audio API没有暂停功能
+                // 可以选择降低音量或让音乐继续播放
+            }
+            
             gameLoop();
         }
 
         function resumeGame() {
             gameState = 'playing';
+            
+            // 恢复音乐
+            if (CONFIG.music.enabled && CONFIG.music.currentTrack !== 'none' && !soundManager.music.currentTrack) {
+                soundManager.playMusic(CONFIG.music.currentTrack);
+            }
+            
             gameLoop();
         }
 
@@ -2030,9 +2276,11 @@
                 game.player1.speed = CONFIG.paddle.speed;
                 game.player2.speed = aiConfig[aiDifficulty].speed;
             } else if (gameMode === 'spectator') {
-                const config = aiConfig[aiDifficulty];
-                game.player1.speed = config.speed;
-                game.player2.speed = config.speed;
+                // 在观察模式下，使用各自的难度设置
+                const ai1Config = aiConfig[spectatorDifficulty.ai1];
+                const ai2Config = aiConfig[spectatorDifficulty.ai2];
+                game.player1.speed = ai1Config.speed;
+                game.player2.speed = ai2Config.speed;
             } else {
                 game.player1.speed = CONFIG.paddle.speed;
                 game.player2.speed = CONFIG.paddle.speed;
@@ -2045,6 +2293,11 @@
             resetBall();
             gameOverEl.style.display = 'none';
             gameState = 'playing';
+            
+            // 重新开始游戏时，如果音乐已启用则继续播放
+            if (CONFIG.music.enabled && CONFIG.music.currentTrack !== 'none') {
+                soundManager.playMusic(CONFIG.music.currentTrack);
+            }
             
             if (animationId) {
                 cancelAnimationFrame(animationId);
@@ -2114,6 +2367,23 @@
             }
         }
         
+        // 开始菜单中的音乐选择
+        async function setStartMusic(track, event) {
+            // 更新按钮状态
+            document.querySelectorAll('.start-music-selector .music-option').forEach(btn => btn.classList.remove('active'));
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
+            
+            // 设置音乐选项
+            CONFIG.music.currentTrack = track;
+            
+            // 如果选择了音乐，则启用音乐
+            if (track !== 'none') {
+                CONFIG.music.enabled = true;
+            }
+        }
+        
         // 设置区域展开/折叠切换函数
         function toggleSettings() {
             const settingsContent = document.getElementById('settingsContent');
@@ -2149,6 +2419,23 @@
                 const gameContainer = document.getElementById('gameContainer');
                 gameContainer.className = '';
                 gameContainer.classList.add(`mode-${selectedMode}`);
+                
+                // 处理音乐设置
+                const musicBtn = document.getElementById('musicBtn');
+                if (CONFIG.music.enabled) {
+                    musicBtn.innerHTML = '🎵音乐';
+                    if (CONFIG.music.currentTrack !== 'none') {
+                        // 播放选中的音乐
+                        soundManager.playMusic(CONFIG.music.currentTrack);
+                    }
+                } else {
+                    musicBtn.innerHTML = '🔇音乐';
+                }
+                
+                // 更新音乐选择按钮状态
+                document.querySelectorAll('.music-option').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.track === CONFIG.music.currentTrack);
+                });
                 
                 if (selectedMode === 'ai') {
                     document.getElementById('singleDifficulty').style.display = 'flex';
@@ -2220,6 +2507,10 @@
             if (animationId) {
                 cancelAnimationFrame(animationId);
             }
+            
+            // 停止背景音乐
+            soundManager.stopMusic();
+            
             document.getElementById('startMenu').style.display = 'flex';
             document.getElementById('gameWrapper').style.display = 'none';
             document.getElementById('startDifficultySelector').style.display = 'none';
@@ -2339,6 +2630,13 @@
                 startSettingsContent.classList.add('collapsed');
                 startSettingsToggles[1].classList.add('collapsed'); // 第二个切换按钮
             }
+            
+            // 初始化音乐选择按钮状态
+            document.querySelectorAll('.music-option').forEach(btn => {
+                if (btn.dataset.track === CONFIG.music.currentTrack) {
+                    btn.classList.add('active');
+                }
+            });
         });
     </script>
 </body>
