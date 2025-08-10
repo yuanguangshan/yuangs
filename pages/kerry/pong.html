@@ -1010,6 +1010,91 @@
     </div>
 
     <script>
+        let selectedStartMode = 'human';
+        let selectedStartDifficulty = 3;
+        let selectedStartPaddleStyle = 'rectangle';
+        let selectedStartPaddleSize = 'medium';
+
+        function updateMusicButtons(track) {
+            document.querySelectorAll('.music-option').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.track === track);
+            });
+        }
+
+        function setStartMusic(track, event) {
+            CONFIG.music.currentTrack = track;
+            CONFIG.music.enabled = track !== 'none';
+            updateMusicButtons(track);
+        }
+
+        function setDifficultyForStart(level, event) {
+            selectedStartDifficulty = level;
+            document.querySelectorAll('.start-difficulty-selector .difficulty-option').forEach(btn => btn.classList.remove('active'));
+            if (event.target) event.target.closest('.difficulty-option').classList.add('active');
+        }
+
+        function setStartPaddleStyle(style, event) {
+            selectedStartPaddleStyle = style;
+            document.querySelectorAll('.start-paddle-settings .paddle-option').forEach(btn => btn.classList.remove('active'));
+            if (event.target) event.target.classList.add('active');
+        }
+
+        function setStartPaddleSize(size, event) {
+            selectedStartPaddleSize = size;
+            document.querySelectorAll('.start-paddle-settings .paddle-size-option').forEach(btn => btn.classList.remove('active'));
+            if (event.target) event.target.classList.add('active');
+        }
+
+        function toggleStartSettings() {
+            const content = document.getElementById('startSettingsContent');
+            const toggleBtn = document.querySelector('.start-difficulty-selector .settings-toggle');
+            content.classList.toggle('collapsed');
+            toggleBtn.classList.toggle('collapsed');
+        }
+
+        function startGame(mode) {
+            selectedStartMode = mode;
+            const difficultySelector = document.getElementById('startDifficultySelector');
+            const modeSelector = document.querySelector('.start-mode-selector');
+            
+            document.querySelectorAll('.start-btn').forEach(b => b.classList.remove('active'));
+            if(event && event.currentTarget) event.currentTarget.classList.add('active');
+
+            if (mode === 'ai') {
+                modeSelector.style.display = 'none';
+                difficultySelector.style.display = 'block';
+            } else {
+                confirmStart();
+            }
+        }
+
+        function confirmStart() {
+            document.getElementById('startMenu').style.display = 'none';
+            document.getElementById('gameWrapper').style.display = 'flex';
+            
+            gameMode = selectedStartMode;
+            aiDifficulty = selectedStartDifficulty;
+            paddleStyle = selectedStartPaddleStyle;
+            paddleSize = selectedStartPaddleSize;
+
+            setGameMode(gameMode);
+            
+            document.querySelectorAll('.paddle-selector .paddle-option').forEach(b => b.classList.toggle('active', b.dataset.style === paddleStyle));
+            document.querySelectorAll('.paddle-selector .paddle-size-option').forEach(b => b.classList.toggle('active', b.dataset.size === paddleSize));
+            if(gameMode === 'ai') {
+                 document.querySelectorAll('#singleDifficulty .difficulty-btn').forEach(b => b.classList.toggle('active', parseInt(b.textContent) === aiDifficulty));
+                 const config = aiConfig[aiDifficulty];
+                 if(config) winRateInfo.textContent = `${config.name}难度 - 预期胜率约为 ${config.winRate}%`;
+            }
+            
+            updateMusicButtons(CONFIG.music.currentTrack);
+            if (CONFIG.music.enabled && CONFIG.music.currentTrack !== 'none') {
+                soundManager.playMusic(CONFIG.music.currentTrack);
+            } else {
+                soundManager.stopMusic();
+            }
+        }
+
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const gameOverEl = document.getElementById('gameOver');
@@ -1686,13 +1771,8 @@
         async function selectMusic(track, event) {
             await activateAudioContext();
             
-            // 更新按钮状态
-            document.querySelectorAll('.music-option').forEach(btn => btn.classList.remove('active'));
-            if (event && event.target) {
-                event.target.classList.add('active');
-            }
-            
-            // 播放选中的音乐
+            updateMusicButtons(track);
+
             if (track === 'none') {
                 soundManager.stopMusic();
             } else {
