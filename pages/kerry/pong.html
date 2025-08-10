@@ -1272,14 +1272,16 @@
                     'cheerful': 'https://pic.want.biz/pages/3.mp3'
                 };
                 
-                // 尝试加载音乐文件
+                // 创建HTML5 Audio元素来处理音乐文件
                 for (const [key, path] of Object.entries(musicFiles)) {
                     try {
-                        const response = await fetch(path);
-                        const arrayBuffer = await response.arrayBuffer();
-                        this.music.tracks[key] = await this.context.decodeAudioData(arrayBuffer);
+                        const audio = new Audio();
+                        audio.src = path;
+                        audio.crossOrigin = "anonymous";
+                        audio.preload = "auto";
+                        this.music.tracks[key] = audio;
                     } catch (e) {
-                        console.warn(`Failed to load music file ${path}`, e);
+                        console.warn(`Failed to create audio element for ${path}`, e);
                     }
                 }
             },
@@ -1290,20 +1292,20 @@
                 
                 // 停止当前音乐
                 if (this.music.currentTrack) {
-                    this.music.currentTrack.source.stop();
+                    this.music.currentTrack.audio.pause();
+                    this.music.currentTrack.audio.currentTime = 0;
                 }
                 
                 // 播放新音乐
                 if (this.music.tracks[trackName]) {
                     try {
-                        const source = this.context.createBufferSource();
-                        source.buffer = this.music.tracks[trackName];
-                        source.connect(this.music.gainNode);
-                        source.loop = true;
-                        source.start(0);
+                        const audio = this.music.tracks[trackName];
+                        audio.loop = true;
+                        audio.volume = CONFIG.music.volume;
+                        await audio.play();
                         
                         this.music.currentTrack = {
-                            source: source,
+                            audio: audio,
                             name: trackName
                         };
                         
