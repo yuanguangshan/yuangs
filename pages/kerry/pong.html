@@ -1890,23 +1890,116 @@
             // 背景与星空
             ctx.fillStyle = '#000011';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            const time = Date.now() * 0.001;
-            for (let i = 0; i < 100; i++) {
-                const x = (i * 137.5) % canvas.width;
-                const y = (i * 197.3) % canvas.height;
-                const twinkle = Math.sin(time + i * 0.1) * 0.5 + 0.5;
-                const size = (i % 3) * 0.5 + 0.5;
-                const brightness = 0.3 + twinkle * 0.7;
-                ctx.fillStyle = `rgba(255, 255, 255, ${brightness})`;
-                ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill();
+            
+            // 初始化星星数组（如果尚未初始化）
+            if (!window.stars) {
+                window.stars = [];
+                // 创建背景星星
+                for (let i = 0; i < 150; i++) {
+                    window.stars.push({
+                        x: Math.random() * canvas.width,
+                        y: Math.random() * canvas.height,
+                        z: Math.random() * 1000, // 深度值
+                        size: Math.random() * 2 + 0.5,
+                        speed: Math.random() * 0.5 + 0.1,
+                        brightness: Math.random() * 0.5 + 0.3
+                    });
+                }
             }
-            for (let i = 0; i < 20; i++) {
-                const x = (i * 89.7) % canvas.width;
-                const y = (i * 123.4) % canvas.height;
-                const twinkle = Math.sin(time * 0.7 + i * 0.2) * 0.5 + 0.5;
-                const size = 1 + twinkle * 1.5;
-                ctx.fillStyle = `rgba(255, 255, 220, ${0.5 + twinkle * 0.5})`;
-                ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill();
+            
+            const time = Date.now() * 0.001;
+            
+            // 更新并绘制星星
+            for (let i = 0; i < window.stars.length; i++) {
+                const star = window.stars[i];
+                
+                // 更新星星位置（向玩家移动的效果）
+                star.z -= star.speed;
+                if (star.z <= 0) {
+                    // 重置星星到远处
+                    star.x = Math.random() * canvas.width;
+                    star.y = Math.random() * canvas.height;
+                    star.z = 1000;
+                }
+                
+                // 计算屏幕上的位置（透视效果）
+                const perspective = 1000 / (star.z + 1);
+                const screenX = star.x * perspective;
+                const screenY = star.y * perspective;
+                
+                // 使星星围绕屏幕中心分布
+                const centerX = canvas.width / 2;
+                const centerY = canvas.height / 2;
+                const finalX = centerX + (screenX - centerX);
+                const finalY = centerY + (screenY - centerY);
+                
+                // 闪烁效果
+                const twinkle = Math.sin(time * 2 + i * 0.1) * 0.5 + 0.5;
+                const brightness = star.brightness + twinkle * 0.3;
+                const size = star.size * perspective;
+                
+                // 绘制星星
+                ctx.fillStyle = `rgba(255, 255, 255, ${brightness})`;
+                ctx.beginPath(); 
+                ctx.arc(finalX, finalY, Math.max(0.1, size), 0, Math.PI * 2); 
+                ctx.fill();
+            }
+            
+            // 添加一些特殊的亮星
+            for (let i = 0; i < 10; i++) {
+                if (!window.brightStars) {
+                    window.brightStars = [];
+                    for (let j = 0; j < 10; j++) {
+                        window.brightStars.push({
+                            x: Math.random() * canvas.width,
+                            y: Math.random() * canvas.height,
+                            z: Math.random() * 1000,
+                            size: Math.random() * 3 + 1,
+                            speed: Math.random() * 0.8 + 0.2,
+                            hue: Math.random() * 360
+                        });
+                    }
+                }
+                
+                const brightStar = window.brightStars[i];
+                
+                // 更新位置
+                brightStar.z -= brightStar.speed;
+                if (brightStar.z <= 0) {
+                    brightStar.x = Math.random() * canvas.width;
+                    brightStar.y = Math.random() * canvas.height;
+                    brightStar.z = 1000;
+                    brightStar.hue = (brightStar.hue + 10) % 360;
+                }
+                
+                // 计算屏幕位置
+                const perspective = 1000 / (brightStar.z + 1);
+                const centerX = canvas.width / 2;
+                const centerY = canvas.height / 2;
+                const screenX = brightStar.x * perspective;
+                const screenY = brightStar.y * perspective;
+                const finalX = centerX + (screenX - centerX);
+                const finalY = centerY + (screenY - centerY);
+                
+                // 闪烁效果
+                const twinkle = Math.sin(time * 1.5 + i * 0.3) * 0.5 + 0.5;
+                const brightness = 0.6 + twinkle * 0.4;
+                const size = brightStar.size * perspective;
+                
+                // 绘制彩色亮星
+                ctx.fillStyle = `hsla(${brightStar.hue}, 100%, 80%, ${brightness})`;
+                ctx.beginPath();
+                ctx.arc(finalX, finalY, Math.max(0.2, size), 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 添加光晕效果
+                const gradient = ctx.createRadialGradient(finalX, finalY, 0, finalX, finalY, size * 3);
+                gradient.addColorStop(0, `hsla(${brightStar.hue}, 100%, 80%, ${brightness * 0.5})`);
+                gradient.addColorStop(1, `hsla(${brightStar.hue}, 100%, 80%, 0)`);
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(finalX, finalY, size * 3, 0, Math.PI * 2);
+                ctx.fill();
             }
             // 中线
             const themeLine = (THEMES[currentTheme] && THEMES[currentTheme].line) || '#00f5ff';
