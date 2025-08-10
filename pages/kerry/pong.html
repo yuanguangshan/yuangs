@@ -304,6 +304,24 @@
             border: 2px solid var(--accent);
             box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 50%, transparent);
             text-align: center;
+            max-width: 80%;
+        }
+        #gameOverMessage {
+            font-size: 16px;
+            margin-top: 20px;
+            color: rgba(255, 255, 255, 0.9);
+            cursor: pointer;
+        }
+        #gameOverMessage:hover {
+            color: white;
+            text-decoration: underline;
+        }
+        #encouragement {
+            font-size: 18px;
+            margin-top: 15px;
+            font-style: italic;
+            color: #4ecdc4;
+            min-height: 26px;
         }
         #winner {
             font-size: 24px;
@@ -802,8 +820,11 @@
             <div id="gameContainer">
                 <canvas id="gameCanvas" width="800" height="600"></canvas>
                 <div id="gameOver">
-                    <div id="winner"></div>
-                    <div style="font-size: 16px; margin-top: 20px;">可点重来继续</div>
+                    <div class="panel">
+                        <div id="winner"></div>
+                        <div id="encouragement"></div>
+                        <div id="gameOverMessage">点击任意位置或按空格键重新开始</div>
+                    </div>
                 </div>
             </div>
             
@@ -1005,6 +1026,25 @@
             medium: 150,
             long: 200
         };
+        
+        // 鼓励话语库
+        const encouragementMessages = [
+            "太棒了！你打得很好！",
+            "继续努力，胜利就在前方！",
+            "每场比赛都是学习的机会！",
+            "你已经进步了很多，坚持下去！",
+            "相信自己，下次会更好！",
+            "精彩的表现，继续保持！",
+            "失败是成功之母，加油！",
+            "你有很大的潜力，继续挑战！",
+            "每一拍都很精彩，再试一次！",
+            "你的技术在不断提升！"
+        ];
+        
+        // 获取随机鼓励话语
+        function getRandomEncouragement() {
+            return encouragementMessages[Math.floor(Math.random() * encouragementMessages.length)];
+        }
         
         // AI难度配置
         const aiConfig = {
@@ -1338,7 +1378,11 @@
             
             if (e.code === 'Space') {
                 e.preventDefault();
-                togglePause();
+                if (gameState === 'gameOver') {
+                    resetGame();
+                } else {
+                    togglePause();
+                }
             }
         });
         
@@ -1527,14 +1571,18 @@
             }
             
             if (game.ball.x <= 0) {
-                game.player2.score++;
+                // 彩球时得2分，普通球时得1分
+                const points = game.ball.isSpecial ? 2 : 1;
+                game.player2.score += points;
                 createScoreParticles(canvas.width - 100, canvas.height / 2, game.player2.color);
                 soundManager.play('score');
                 vibrate(100);
                 startNextRound();
                 checkGameOver();
             } else if (game.ball.x >= canvas.width) {
-                game.player1.score++;
+                // 彩球时得2分，普通球时得1分
+                const points = game.ball.isSpecial ? 2 : 1;
+                game.player1.score += points;
                 createScoreParticles(100, canvas.height / 2, game.player1.color);
                 soundManager.play('score');
                 vibrate(100);
@@ -1690,15 +1738,32 @@
             if (game.player1.score >= 11 || game.player2.score >= 11) {
                 gameState = 'gameOver';
                 let winner;
+                let showEncouragement = false;
+                
                 if (gameMode === 'ai') {
-                    winner = game.player1.score >= 11 ? '🎉 恭喜你战胜了AI! 🎉' : '🤖 AI获胜! 🤖';
+                    if (game.player1.score >= 11) {
+                        winner = '🎉 恭喜你战胜了AI! 🎉';
+                    } else {
+                        winner = '🤖 AI获胜! 🤖';
+                        showEncouragement = true; // 用户输了，显示鼓励话语
+                    }
                 } else if (gameMode === 'spectator') {
                     winner = game.player1.score >= 11 ? '🔴 AI 1 获胜! 🔴' : '🔵 AI 2 获胜! 🔵';
                 } else {
                     winner = game.player1.score >= 11 ? '🎉 玩家1获胜! 🎉' : '🎉 玩家2获胜! 🎉';
                 }
+                
                 winnerEl.textContent = winner;
-                gameOverEl.style.display = 'block';
+                
+                // 显示鼓励话语
+                const encouragementEl = document.getElementById('encouragement');
+                if (showEncouragement && gameMode === 'ai') {
+                    encouragementEl.textContent = getRandomEncouragement();
+                } else {
+                    encouragementEl.textContent = '';
+                }
+                
+                gameOverEl.style.display = 'flex'; // 改为flex以确保居中
                 cancelAnimationFrame(animationId);
                 
                 for (let i = 0; i < CONFIG.game.victoryParticleCount; i++) {
@@ -2137,6 +2202,13 @@
                     e.preventDefault();
                     stopMove(player, direction);
                 });
+            });
+
+            // 添加canvas点击事件来重新开始游戏
+            canvas.addEventListener('click', (e) => {
+                if (gameState === 'gameOver') {
+                    resetGame();
+                }
             });
 
             let touches = {};
