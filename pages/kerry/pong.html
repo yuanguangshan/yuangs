@@ -33,6 +33,7 @@
             justify-content: space-between;
             max-width: 1200px;
             margin: 0 auto;
+            width: 100%;
         }
         
         .top-section {
@@ -40,6 +41,9 @@
             text-align: center;
             padding: 0;
             transition: padding-bottom .2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
         
         .mode-selector {
@@ -49,6 +53,8 @@
             margin-bottom: 12px;
             backdrop-filter: blur(10px);
             border: 2px solid rgba(255, 255, 255, 0.1);
+            width: 100%;
+            max-width: 100%;
         }
         
         .mode-title {
@@ -242,6 +248,18 @@
             margin: 0 !important;
         }
         
+        /* 难度选择子标题 */
+        .difficulty-subtitle {
+            font-size: 14px;
+            margin: 8px 0 4px;
+            color: rgba(255, 255, 255, 0.9);
+            text-align: center;
+        }
+        
+        .difficulty-section {
+            margin-top: 10px;
+        }
+        
         #gameContainer {
             background: rgba(0, 0, 0, 0.2);
             border-radius: 20px;
@@ -252,6 +270,7 @@
             position: relative;
             margin: 8px auto;
             width: fit-content;
+            max-width: 100%;
         }
         
         #gameCanvas {
@@ -298,6 +317,7 @@
         
         .controls {
             display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin: 10px 0;
+            width: 100%;
         }
         .control-btn {
             background: linear-gradient(45deg, #667eea, #764ba2);
@@ -316,6 +336,7 @@
             color: rgba(255, 255, 255, 0.8);
             line-height: 1.4;
             margin: 8px 0;
+            width: 100%;
         }
         
         /* 底部移动端控制条（固定在底部） */
@@ -684,12 +705,30 @@
                 <div class="settings-content" id="settingsContent">
                     <div class="difficulty-selector" id="difficultySelector">
                         <div class="difficulty-title">🎯 AI难度选择</div>
-                        <div class="difficulty-buttons">
+                        <div class="difficulty-buttons" id="singleDifficulty">
                             <button class="difficulty-btn" onclick="setDifficulty(1, event)">1级</button>
                             <button class="difficulty-btn" onclick="setDifficulty(2, event)">2级</button>
                             <button class="difficulty-btn active" onclick="setDifficulty(3, event)">3级</button>
                             <button class="difficulty-btn" onclick="setDifficulty(4, event)">4级</button>
                             <button class="difficulty-btn" onclick="setDifficulty(5, event)">5级</button>
+                        </div>
+                        <div class="difficulty-section" id="spectatorDifficulty" style="display: none;">
+                            <div class="difficulty-subtitle">🔴 左侧AI (AI 1)</div>
+                            <div class="difficulty-buttons">
+                                <button class="difficulty-btn" onclick="setSpectatorDifficulty(1, 1, event)">1级</button>
+                                <button class="difficulty-btn" onclick="setSpectatorDifficulty(1, 2, event)">2级</button>
+                                <button class="difficulty-btn active" onclick="setSpectatorDifficulty(1, 3, event)">3级</button>
+                                <button class="difficulty-btn" onclick="setSpectatorDifficulty(1, 4, event)">4级</button>
+                                <button class="difficulty-btn" onclick="setSpectatorDifficulty(1, 5, event)">5级</button>
+                            </div>
+                            <div class="difficulty-subtitle" style="margin-top: 10px;">🔵 右侧AI (AI 2)</div>
+                            <div class="difficulty-buttons">
+                                <button class="difficulty-btn" onclick="setSpectatorDifficulty(2, 1, event)">1级</button>
+                                <button class="difficulty-btn" onclick="setSpectatorDifficulty(2, 2, event)">2级</button>
+                                <button class="difficulty-btn active" onclick="setSpectatorDifficulty(2, 3, event)">3级</button>
+                                <button class="difficulty-btn" onclick="setSpectatorDifficulty(2, 4, event)">4级</button>
+                                <button class="difficulty-btn" onclick="setSpectatorDifficulty(2, 5, event)">5级</button>
+                            </div>
                         </div>
                         <div class="win-rate-info" id="winRateInfo">当前难度胜率约为 50%</div>
                     </div>
@@ -975,6 +1014,12 @@
             4: { winRate: 35, speed: 6, reactionTime: 8, accuracy: 0.9, name: '困难' },
             5: { winRate: 20, speed: 7, reactionTime: 5, accuracy: 0.95, name: '地狱' }
         };
+        
+        // 观察模式下两个AI的难度设置
+        let spectatorDifficulty = {
+            ai1: 3,  // 左侧AI难度
+            ai2: 3   // 右侧AI难度
+        };
 
         let mobileControls = {
             player1: { up: false, down: false },
@@ -1177,17 +1222,27 @@
             
             // 显示/隐藏难度选择器和控制区域
             if (mode === 'ai') {
-                difficultySelector.style.display = 'block';
+                document.getElementById('singleDifficulty').style.display = 'flex';
+                document.getElementById('spectatorDifficulty').style.display = 'none';
+                document.getElementById('difficultySelector').style.display = 'block';
                 document.getElementById('instructions').innerHTML = '📱 手机: 使用下方按钮控制你的球拍移动';
                 humanModeControls.style.display = 'none';
                 aiModeControls.style.display = 'flex';
             } else if (mode === 'spectator') {
-                difficultySelector.style.display = 'block';
+                document.getElementById('singleDifficulty').style.display = 'none';
+                document.getElementById('spectatorDifficulty').style.display = 'block';
+                document.getElementById('difficultySelector').style.display = 'block';
                 document.getElementById('instructions').innerHTML = '🍿 观赏模式：AI vs AI';
                 humanModeControls.style.display = 'none';
                 aiModeControls.style.display = 'none';
+                
+                // 应用观察模式的难度设置
+                const ai1Config = aiConfig[spectatorDifficulty.ai1];
+                const ai2Config = aiConfig[spectatorDifficulty.ai2];
+                game.player1.speed = ai1Config.speed;
+                game.player2.speed = ai2Config.speed;
             } else { // human
-                difficultySelector.style.display = 'none';
+                document.getElementById('difficultySelector').style.display = 'none';
                 document.getElementById('instructions').innerHTML = '💻 电脑: 玩家1 (W/S键) | 玩家2 (↑/↓键) | 空格键暂停<br>📱 手机: 使用下方圆形按钮控制球拍移动';
                 humanModeControls.style.display = 'grid';
                 aiModeControls.style.display = 'none';
@@ -1213,11 +1268,14 @@
             if (event && event.target) {
                 event.target.classList.add('active');
             } else {
-                document.querySelectorAll('.difficulty-btn').forEach(btn => {
-                    if (parseInt(btn.textContent) === level) {
-                        btn.classList.add('active');
-                    }
-                });
+                // 在观察模式下，确保只更新对应的难度按钮
+                if (gameMode !== 'spectator') {
+                    document.querySelectorAll('#singleDifficulty .difficulty-btn').forEach(btn => {
+                        if (parseInt(btn.textContent) === level) {
+                            btn.classList.add('active');
+                        }
+                    });
+                }
             }
             
             // 更新信息显示
@@ -1225,11 +1283,42 @@
             winRateInfo.textContent = `${config.name}难度 - 预期胜率约为 ${config.winRate}%`;
             
             // 更新AI速度
-            if (gameMode === 'ai' || gameMode === 'spectator') {
+            if (gameMode === 'ai') {
                 game.player2.speed = config.speed;
-                if (gameMode === 'spectator') {
-                    game.player1.speed = config.speed;
-                }
+            } else if (gameMode === 'spectator') {
+                // 在观察模式下，使用各自的难度设置
+                const ai1Config = aiConfig[spectatorDifficulty.ai1];
+                const ai2Config = aiConfig[spectatorDifficulty.ai2];
+                game.player1.speed = ai1Config.speed;
+                game.player2.speed = ai2Config.speed;
+            }
+            
+            resetGame();
+        }
+        
+        // 为观察模式设置AI难度
+        function setSpectatorDifficulty(aiNumber, level, event) {
+            if (aiNumber === 1) {
+                spectatorDifficulty.ai1 = level;
+            } else if (aiNumber === 2) {
+                spectatorDifficulty.ai2 = level;
+            }
+            
+            // 更新按钮状态
+            document.querySelectorAll(`#spectatorDifficulty .difficulty-buttons:nth-child(${aiNumber * 2}) .difficulty-btn`).forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
+            
+            // 更新AI速度
+            if (gameMode === 'spectator') {
+                const ai1Config = aiConfig[spectatorDifficulty.ai1];
+                const ai2Config = aiConfig[spectatorDifficulty.ai2];
+                game.player1.speed = ai1Config.speed;
+                game.player2.speed = ai2Config.speed;
             }
             
             resetGame();
@@ -1288,7 +1377,7 @@
         function updateAI1() {
             if (gameMode !== 'spectator') return;
 
-            const config = aiConfig[aiDifficulty];
+            const config = aiConfig[spectatorDifficulty.ai1];  // 使用AI 1的难度设置
             const paddle = game.player1;
             const ball = game.ball;
 
@@ -1341,7 +1430,8 @@
         function updateAI() {
             if (gameMode !== 'ai' && gameMode !== 'spectator') return;
             
-            const config = aiConfig[aiDifficulty];
+            // 根据游戏模式选择不同的难度配置
+            const config = gameMode === 'spectator' ? aiConfig[spectatorDifficulty.ai2] : aiConfig[aiDifficulty];
             const paddle = game.player2;
             const ball = game.ball;
             
@@ -1937,7 +2027,7 @@
 
         async function confirmStart() {
             if (selectedMode) {
-                await activateAudioContext();
+                activateAudioContext();
                 
                 gameMode = selectedMode;
                 
@@ -1953,17 +2043,35 @@
                 gameContainer.className = '';
                 gameContainer.classList.add(`mode-${selectedMode}`);
                 
-                if (selectedMode === 'ai' || selectedMode === 'spectator') {
+                if (selectedMode === 'ai') {
+                    document.getElementById('singleDifficulty').style.display = 'flex';
+                    document.getElementById('spectatorDifficulty').style.display = 'none';
                     document.getElementById('difficultySelector').style.display = 'block';
-                    document.querySelectorAll('.difficulty-btn').forEach((btn, index) => {
+                    document.querySelectorAll('#singleDifficulty .difficulty-btn').forEach((btn, index) => {
                         btn.classList.toggle('active', index + 1 === aiDifficulty);
                     });
                     const config = aiConfig[aiDifficulty];
                     document.getElementById('winRateInfo').textContent = `${config.name}难度 - 预期胜率约为 ${config.winRate}%`;
                     game.player2.speed = config.speed;
-                    if (selectedMode === 'spectator') {
-                        game.player1.speed = config.speed;
-                    }
+                } else if (selectedMode === 'spectator') {
+                    document.getElementById('singleDifficulty').style.display = 'none';
+                    document.getElementById('spectatorDifficulty').style.display = 'block';
+                    document.getElementById('difficultySelector').style.display = 'block';
+                    
+                    // 设置观察模式下两个AI的难度按钮状态
+                    document.querySelectorAll('#spectatorDifficulty .difficulty-buttons:nth-child(2) .difficulty-btn').forEach((btn, index) => {
+                        btn.classList.toggle('active', index + 1 === spectatorDifficulty.ai1);
+                    });
+                    document.querySelectorAll('#spectatorDifficulty .difficulty-buttons:nth-child(4) .difficulty-btn').forEach((btn, index) => {
+                        btn.classList.toggle('active', index + 1 === spectatorDifficulty.ai2);
+                    });
+                    
+                    // 应用观察模式的难度设置
+                    const ai1Config = aiConfig[spectatorDifficulty.ai1];
+                    const ai2Config = aiConfig[spectatorDifficulty.ai2];
+                    document.getElementById('winRateInfo').textContent = `AI 1 (${ai1Config.name}) vs AI 2 (${ai2Config.name})`;
+                    game.player1.speed = ai1Config.speed;
+                    game.player2.speed = ai2Config.speed;
                 } else {
                     document.getElementById('difficultySelector').style.display = 'none';
                 }
