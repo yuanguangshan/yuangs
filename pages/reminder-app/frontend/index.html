@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <title>网页提醒工具</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0b0c10;
+      --card: #16181d;
+      --text: #e5e7eb;
+      --muted: #9aa3af;
+      --brand: #4f46e5;
+      --brand-2: #22c55e;
+      --danger: #ef4444;
+      --border: #2a2f3a;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f6f7fb;
+        --card: #ffffff;
+        --text: #111827;
+        --muted: #6b7280;
+        --border: #e5e7eb;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background: var(--bg); color: var(--text);
+    }
+    header {
+      padding: 16px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px;
+    }
+    header h1 { font-size: 18px; margin: 0; }
+    .container { max-width: 900px; margin: 0 auto; padding: 16px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    @media (min-width: 740px) { .grid { grid-template-columns: 1fr 1fr; } }
+    label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 8px; }
+    input[type="text"], textarea, input[type="datetime-local"] {
+      width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: transparent; color: var(--text);
+      outline: none;
+    }
+    textarea { resize: vertical; min-height: 88px; }
+    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .btn {
+      padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer;
+    }
+    .btn.primary { background: var(--brand); border-color: var(--brand); color: white; }
+    .btn.success { background: var(--brand-2); border-color: var(--brand-2); color: #0b1118; }
+    .btn.danger { background: var(--danger); border-color: var(--danger); color: white; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .list { display: flex; flex-direction: column; gap: 12px; }
+    .item { padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: transparent; display: grid; grid-template-columns: 1fr auto; gap: 12px; }
+    .item h3 { margin: 0 0 8px 0; font-size: 16px; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .status { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); }
+    .status.sent { border-color: var(--brand); color: var(--brand); }
+    .status.delivered { border-color: var(--brand-2); color: var(--brand-2); }
+    .status.pending { }
+    .settings { display: flex; gap: 8px; align-items: center; }
+    .kvs { display: grid; grid-template-columns: 120px 1fr; gap: 12px; align-items: center; }
+    .help { font-size: 12px; color: var(--muted); }
+    footer { padding: 24px; text-align: center; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>网页提醒工具</h1>
+    <div class="row">
+      <button id="btn-perm" class="btn">授权通知</button>
+      <button id="btn-settings" class="btn">设置</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div id="settings-card" class="card" style="display:none;">
+      <div class="kvs">
+        <div>API 地址</div>
+        <input id="input-api" type="text" placeholder="例如：https://your-worker.workers.dev"/>
+        <div></div>
+        <div class="help">此地址应指向部署的 Worker，后端路由前缀为 /api。保存后会自动重新注册 Service Worker。</div>
+        <div>设备 ID</div>
+        <input id="input-device" type="text" disabled/>
+      </div>
+      <div style="height:12px"></div>
+      <div class="row">
+        <button id="btn-save-settings" class="btn success">保存设置</button>
+        <button id="btn-hide-settings" class="btn">关闭</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2 style="margin-top:0;">创建提醒</h2>
+        <div class="row" style="flex-direction:column; align-items:stretch;">
+          <div>
+            <label>标题</label>
+            <input id="title" type="text" maxlength="120" placeholder="例如：喝水、开会、提交报告"/>
+          </div>
+          <div>
+            <label>内容（可选）</label>
+            <textarea id="content" maxlength="2000" placeholder="提醒的内容说明"></textarea>
+          </div>
+          <div>
+            <label>提醒时间</label>
+            <input id="dueAt" type="datetime-local"/>
+          </div>
+          <div class="row">
+            <button id="btn-create" class="btn primary">添加提醒</button>
+          </div>
+          <div class="help">提示：请确保已“授权通知”，并允许浏览器显示通知。</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-top:0;">我的提醒</h2>
+        <div class="list" id="list"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    使用 Cloudflare Workers + D1 + Pages + Push API 构建
+  </footer>
+
+  <script>
+    // ------------------ Config & State ------------------
+    const $ = sel => document.querySelector(sel);
+
+    const storage = {
+      get apiBase() { return localStorage.getItem("API_BASE") || ""; },
+      set apiBase(v) { localStorage.setItem("API_BASE", v || ""); },
+      get deviceId() {
+        let id = localStorage.getItem("DEVICE_ID");
+        if (!id) { id = crypto.randomUUID(); localStorage.setItem("DEVICE_ID", id); }
+        return id;
+      },
+      get vapidKey() { return localStorage.getItem("VAPID_PUBLIC_KEY") || ""; },
+      set vapidKey(v) { localStorage.setItem("VAPID_PUBLIC_KEY", v || ""); },
+    };
+
+    const state = {
+      loading: false,
+      items: [],
+      swReg: null,
+    };
+
+    // ------------------ Helpers ------------------
+    function fmt(ts) {
+      const d = new Date(ts);
+      const pad = n => String(n).padStart(2, "0");
+      const y = d.getFullYear(), m = pad(d.getMonth()+1), day = pad(d.getDate());
+      const h = pad(d.getHours()), mi = pad(d.getMinutes());
+      return `${y}-${m}-${day} ${h}:${mi}`;
+    }
+    function parseLocalDateTime(val) {
+      // "YYYY-MM-DDTHH:mm"
+      if (!val) return NaN;
+      const [date, time] = val.split("T");
+      const [y,m,d] = date.split("-").map(Number);
+      const [hh,mm] = time.split(":").map(Number);
+      // 按本地时区生成时间戳
+      const dt = new Date(y, m-1, d, hh, mm, 0, 0);
+      return dt.getTime();
+    }
+    function el(tag, attrs={}, ...children) {
+      const e = document.createElement(tag);
+      for (const [k,v] of Object.entries(attrs)) {
+        if (k === "class") e.className = v;
+        else if (k.startsWith("on") && typeof v === "function") e.addEventListener(k.slice(2), v);
+        else e.setAttribute(k, v);
+      }
+      for (const c of children) {
+        if (c == null) continue;
+        e.append(c.nodeType ? c : document.createTextNode(c));
+      }
+      return e;
+    }
+    async function api(path, opt={}) {
+      const base = storage.apiBase;
+      if (!base) throw new Error("请先在设置中配置 API 地址");
+      const url = base.replace(/\/+$/,"") + path;
+      const res = await fetch(url, {
+        ...opt,
+        headers: { "content-type": "application/json", ...(opt.headers || {}) },
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(()=> "");
+        throw new Error(`API ${res.status}: ${text || res.statusText}`);
+      }
+      return res.json();
+    }
+
+    function urlBase64ToUint8Array(base64String) {
+      console.log("Converting base64 string:", base64String);
+      if (!base64String) {
+        throw new Error("Base64 string is undefined or empty");
+      }
+      const padding = "=".repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+      const rawData = atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      return outputArray;
+    }
+
+    async function ensurePermission() {
+      if (!("Notification" in window)) throw new Error("此浏览器不支持通知");
+      if (Notification.permission === "granted") return true;
+      if (Notification.permission === "denied") throw new Error("通知权限被拒绝");
+      const r = await Notification.requestPermission();
+      if (r !== "granted") throw new Error("用户未授权通知");
+      return true;
+    }
+
+    async function registerSWAndSubscribe() {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+        throw new Error("此浏览器不支持 Push API 或 Service Worker");
+      }
+      const apiBase = storage.apiBase;
+      if (!apiBase) throw new Error("请在设置中配置 API 地址");
+
+      // 获取/缓存 VAPID 公钥
+      let vapidKey = storage.vapidKey;
+      console.log("Cached VAPID key:", vapidKey);
+      if (!vapidKey) {
+        const data = await api("/api/vapidPublicKey");
+        console.log("Fetched VAPID key data:", data);
+        vapidKey = data.key;
+        storage.vapidKey = vapidKey;
+      }
+      console.log("Using VAPID key:", vapidKey);
+      
+      // 检查 VAPID 公钥是否有效
+      if (!vapidKey) {
+        throw new Error("无法获取 VAPID 公钥");
+      }
+
+      // 注册独立的 Service Worker 文件
+      let reg;
+      try {
+        // 先尝试注销可能已注册的 SW
+        if (state.swReg) {
+          try {
+            await state.swReg.unregister();
+          } catch (e) {
+            console.warn("Failed to unregister previous SW:", e);
+          }
+        }
+        
+        // 注册新的 Service Worker
+        reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+        state.swReg = reg;
+        
+        // 等待注册完成
+        await navigator.serviceWorker.ready;
+        
+        // 更新 Service Worker 中的全局变量
+        navigator.serviceWorker.controller?.postMessage({
+          type: "UPDATE_CONFIG",
+          apiBase: apiBase,
+          deviceId: storage.deviceId
+        });
+      } catch (e) {
+        console.error("Failed to register Service Worker:", e);
+        throw new Error("Service Worker 注册失败: " + e.message);
+      }
+
+      // 订阅 push（主线程也尝试一次，便于首次注册）
+      try {
+        const swReg = reg || state.swReg || await navigator.serviceWorker.getRegistration();
+        if (!swReg) throw new Error("Service Worker 未注册");
+        
+        const sub = await swReg.pushManager.getSubscription() || await swReg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        });
+        
+        await api("/api/subscribe", {
+          method: "POST",
+          body: JSON.stringify({ deviceId: storage.deviceId, subscription: sub.toJSON() }),
+        });
+      } catch (e) {
+        console.error("Failed to subscribe to push:", e);
+        throw new Error("Push 订阅失败: " + e.message);
+      }
+    }
+
+    // ------------------ UI Actions ------------------
+    async function refreshList() {
+      try {
+        const data = await api(`/api/reminders?deviceId=${encodeURIComponent(storage.deviceId)}`);
+        state.items = data.items || [];
+        renderList();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function renderList() {
+      const list = $("#list");
+      list.innerHTML = "";
+      if (!state.items.length) {
+        list.append(el("div", { class: "muted" }, "暂无提醒"));
+        return;
+      }
+      for (const it of state.items) {
+        const status = it.deliveredAt ? "delivered" : (it.nudgeSent ? "sent" : "pending");
+        const line = el("div", { class: "item" },
+          el("div", {},
+            el("h3", {}, it.title),
+            it.body ? el("div", { class: "muted" }, it.body) : null,
+            el("div", { class: "muted" }, "提醒时间：", fmt(it.dueAt))
+          ),
+          el("div", { style: "display:flex; gap:8px; align-items:center;" },
+            el("span", { class: `status ${status}` }, status),
+            el("button", {
+              class: "btn danger",
+              onclick: async () => {
+                try {
+                  await api(`/api/reminders/${it.id}?deviceId=${encodeURIComponent(storage.deviceId)}`, { method: "DELETE" });
+                  await refreshList();
+                } catch (e) { alert(e.message); }
+              }
+            }, "删除")
+          )
+        );
+        list.append(line);
+      }
+    }
+
+    async function onCreate() {
+      const title = $("#title").value.trim();
+      const content = $("#content").value.trim();
+      const dueVal = $("#dueAt").value;
+      const dueAt = parseLocalDateTime(dueVal);
+      if (!title) return alert("请输入标题");
+      if (!Number.isFinite(dueAt)) return alert("请选择提醒时间");
+      if (dueAt < Date.now() - 60000) return alert("提醒时间不能早于当前时间");
+
+      try {
+        await api("/api/reminders", {
+          method: "POST",
+          body: JSON.stringify({ deviceId: storage.deviceId, title, content, dueAt }),
+        });
+        $("#title").value = "";
+        $("#content").value = "";
+        $("#dueAt").value = "";
+        await refreshList();
+        alert("提醒已创建");
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    function showSettings(show) {
+      $("#settings-card").style.display = show ? "block" : "none";
+      $("#input-api").value = storage.apiBase || "";
+      $("#input-device").value = storage.deviceId;
+    }
+
+    async function init() {
+      $("#btn-settings").addEventListener("click", () => showSettings(true));
+      $("#btn-hide-settings").addEventListener("click", () => showSettings(false));
+      $("#btn-save-settings").addEventListener("click", async () => {
+        const v = $("#input-api").value.trim();
+        storage.apiBase = v;
+        // 重新注册 SW 以更新 API_BASE
+        if (state.swReg) {
+          try { await state.swReg.unregister(); } catch {}
+          state.swReg = null;
+        }
+        if (v) {
+          try {
+            await ensurePermission();
+            await registerSWAndSubscribe();
+            alert("已保存并注册 Service Worker");
+            await refreshList();
+          } catch (e) {
+            alert(e.message);
+          }
+        } else {
+          alert("已保存空 API 地址，请重新填写以启用");
+        }
+      });
+
+      $("#btn-perm").addEventListener("click", async () => {
+        try {
+          await ensurePermission();
+          await registerSWAndSubscribe();
+          alert("已授权并完成订阅");
+        } catch (e) {
+          alert(e.message);
+        }
+      });
+
+      $("#btn-create").addEventListener("click", onCreate);
+
+      // 自动初始化：如果已配置 API，尝试注册 SW 并刷新
+      if (storage.apiBase) {
+        try {
+          await ensurePermission();
+          await registerSWAndSubscribe();
+        } catch (e) {
+          console.warn(e);
+        }
+        await refreshList();
+      }
+    }
+
+    init();
+    navigator.serviceWorker?.addEventListener("message", (e) => {
+      if (e.data?.type === "focus-from-notification") {
+        // 可在此刷新列表
+        refreshList();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+export default { async fetch(request, env, ctx) { return new Response(JSON.stringify({ key: env.VAPID_PUBLIC_KEY, hasKey: !!env.VAPID_PUBLIC_KEY }), { headers: { "content-type": "application/json" } }); } };
