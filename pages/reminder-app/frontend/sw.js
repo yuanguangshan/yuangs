@@ -21,14 +21,17 @@ self.addEventListener("message", function(event) {
   }
 });
 
+// 安装事件 - 缓存重要资源
 self.addEventListener("install", function(e) {
   self.skipWaiting();
 });
 
+// 激活事件 - 清理旧缓存
 self.addEventListener("activate", function(e) {
   e.waitUntil(self.clients.claim());
 });
 
+// 推送事件处理
 self.addEventListener("push", function(event) {
   event.waitUntil(handlePushEvent(event));
 });
@@ -56,18 +59,28 @@ async function handlePushEvent(event) {
       var it = items[i];
       await self.registration.showNotification(it.title || "提醒", {
         body: it.body || "",
-        icon: undefined,
-        badge: undefined,
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
         timestamp: it.dueAt || Date.now(),
         data: { id: it.id },
-        requireInteraction: false,
+        requireInteraction: true,
+        tag: "reminder-" + it.id
       });
     }
   } catch (e) {
     console.error("push handler error", e);
+    // 显示通用通知
+    await self.registration.showNotification("提醒工具", {
+      body: "您有一个新的提醒",
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      timestamp: Date.now(),
+      requireInteraction: true
+    });
   }
 }
 
+// 通知点击事件处理
 self.addEventListener("notificationclick", function(event) {
   event.notification.close();
   event.waitUntil(handleNotificationClick(event));
@@ -78,8 +91,34 @@ async function handleNotificationClick(event) {
   if (all.length) {
     var client = all[0];
     client.focus();
-    // 注意：这里可能无法直接通信，因为变量作用域问题
   } else {
     clients.openWindow("/");
+  }
+}
+
+// 订阅变更事件处理
+self.addEventListener("pushsubscriptionchange", function(event) {
+  event.waitUntil(handlePushSubscriptionChange(event));
+});
+
+async function handlePushSubscriptionChange(event) {
+  try {
+    // 重新订阅
+    var res = await fetch(API_BASE.replace(/\/+$/, "") + "/api/vapidPublicKey");
+    var data = await res.json();
+    var appKey = urlBase64ToUint8Array(data.key);
+    var sub = await self.registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: appKey,
+    });
+    
+    // 发送新的订阅信息到服务器
+    await fetch(API_BASE.replace(/\/+$/, "") + "/api/subscribe", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ deviceId: DEVICE_ID, subscription: sub.toJSON() }),
+    });
+  } catch (e) {
+    console.error("pushsubscriptionchange error", e);
   }
 }

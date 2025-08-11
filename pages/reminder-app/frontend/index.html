@@ -3,6 +3,16 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="description" content="网页提醒工具 - 支持推送通知的Web应用">
+  
+  <!-- PWA相关meta标签 -->
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="提醒工具">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  
   <title>网页提醒工具</title>
   <style>
     :root {
@@ -14,6 +24,7 @@
       --brand: #4f46e5;
       --brand-2: #22c55e;
       --danger: #ef4444;
+      --warning: #f59e0b;
       --border: #2a2f3a;
     }
     @media (prefers-color-scheme: light) {
@@ -47,12 +58,14 @@
     }
     textarea { resize: vertical; min-height: 88px; }
     .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
     .btn {
       padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer;
     }
     .btn.primary { background: var(--brand); border-color: var(--brand); color: white; }
     .btn.success { background: var(--brand-2); border-color: var(--brand-2); color: #0b1118; }
     .btn.danger { background: var(--danger); border-color: var(--danger); color: white; }
+    .btn.warning { background: var(--warning); border-color: var(--warning); color: #0b1118; }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .list { display: flex; flex-direction: column; gap: 12px; }
     .item { padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: transparent; display: grid; grid-template-columns: 1fr auto; gap: 12px; }
@@ -86,6 +99,10 @@
         <div class="help">此地址应指向部署的 Worker，后端路由前缀为 /api。保存后会自动重新注册 Service Worker。</div>
         <div>设备 ID</div>
         <input id="input-device" type="text" disabled/>
+        <div>Pushdeer Key</div>
+        <input id="input-pushdeer-key" type="text" placeholder="Pushdeer推送密钥"/>
+        <div></div>
+        <div class="help">用于向Pushdeer发送推送通知的密钥，留空则不启用Pushdeer推送。</div>
       </div>
       <div style="height:12px"></div>
       <div class="row">
@@ -110,6 +127,10 @@
             <label>提醒时间</label>
             <input id="dueAt" type="datetime-local"/>
           </div>
+          <div class="checkbox-row">
+            <input id="pushdeer" type="checkbox"/>
+            <label for="pushdeer">同时推送到Pushdeer</label>
+          </div>
           <div class="row">
             <button id="btn-create" class="btn primary">添加提醒</button>
           </div>
@@ -129,6 +150,19 @@
   </footer>
 
   <script>
+    // ------------------ PWA Registration ------------------
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js')
+          .then(function(registration) {
+            console.log('SW registered: ', registration);
+          })
+          .catch(function(registrationError) {
+            console.log('SW registration failed: ', registrationError);
+          });
+      });
+    }
+    
     // ------------------ Config & State ------------------
     const $ = sel => document.querySelector(sel);
 
@@ -142,6 +176,8 @@
       },
       get vapidKey() { return localStorage.getItem("VAPID_PUBLIC_KEY") || ""; },
       set vapidKey(v) { localStorage.setItem("VAPID_PUBLIC_KEY", v || ""); },
+      get pushdeerKey() { return localStorage.getItem("PUSHDEER_KEY") || ""; },
+      set pushdeerKey(v) { localStorage.setItem("PUSHDEER_KEY", v || ""); }
     };
 
     const state = {
@@ -304,6 +340,49 @@
       }
     }
 
+    function showEditForm(item) {
+      $("#title").value = item.title;
+      $("#content").value = item.body || "";
+      
+      // 转换时间格式
+      const dueDate = new Date(item.dueAt);
+      const pad = n => String(n).padStart(2, "0");
+      const y = dueDate.getFullYear();
+      const m = pad(dueDate.getMonth() + 1);
+      const d = pad(dueDate.getDate());
+      const h = pad(dueDate.getHours());
+      const mi = pad(dueDate.getMinutes());
+      $("#dueAt").value = `${y}-${m}-${d}T${h}:${mi}`;
+      
+      // 设置Pushdeer选项
+      $("#pushdeer").checked = item.pushdeer || false;
+      
+      // 更改按钮文本和行为
+      const createBtn = $("#btn-create");
+      createBtn.textContent = "更新提醒";
+      createBtn.onclick = () => onUpdate(item.id);
+      
+      // 显示取消按钮
+      $("#btn-cancel-edit").style.display = "block";
+      
+      // 滚动到表单顶部
+      document.querySelector(".container").scrollIntoView({ behavior: "smooth" });
+    }
+
+    function resetForm() {
+      $("#title").value = "";
+      $("#content").value = "";
+      $("#dueAt").value = "";
+      $("#pushdeer").checked = false;
+      
+      const createBtn = $("#btn-create");
+      createBtn.textContent = "添加提醒";
+      createBtn.onclick = onCreate;
+      
+      // 隐藏取消按钮
+      $("#btn-cancel-edit").style.display = "none";
+    }
+
     function renderList() {
       const list = $("#list");
       list.innerHTML = "";
@@ -321,6 +400,10 @@
           ),
           el("div", { style: "display:flex; gap:8px; align-items:center;" },
             el("span", { class: `status ${status}` }, status),
+            el("button", {
+              class: "btn warning",
+              onclick: () => showEditForm(it)
+            }, "修改"),
             el("button", {
               class: "btn danger",
               onclick: async () => {
@@ -341,18 +424,28 @@
       const content = $("#content").value.trim();
       const dueVal = $("#dueAt").value;
       const dueAt = parseLocalDateTime(dueVal);
+      const pushdeer = $("#pushdeer").checked;
+      
       if (!title) return alert("请输入标题");
       if (!Number.isFinite(dueAt)) return alert("请选择提醒时间");
       if (dueAt < Date.now() - 60000) return alert("提醒时间不能早于当前时间");
 
       try {
+        const payload = { deviceId: storage.deviceId, title, content, dueAt, pushdeer };
         await api("/api/reminders", {
           method: "POST",
-          body: JSON.stringify({ deviceId: storage.deviceId, title, content, dueAt }),
+          body: JSON.stringify(payload),
         });
+        
+        // 如果勾选了Pushdeer，则发送推送
+        if (pushdeer) {
+          await sendPushdeerNotification(title, content);
+        }
+        
         $("#title").value = "";
         $("#content").value = "";
         $("#dueAt").value = "";
+        $("#pushdeer").checked = false;
         await refreshList();
         alert("提醒已创建");
       } catch (e) {
@@ -360,10 +453,84 @@
       }
     }
 
+    async function onUpdate(id) {
+      const title = $("#title").value.trim();
+      const content = $("#content").value.trim();
+      const dueVal = $("#dueAt").value;
+      const dueAt = parseLocalDateTime(dueVal);
+      const pushdeer = $("#pushdeer").checked;
+      
+      if (!title) return alert("请输入标题");
+      if (!Number.isFinite(dueAt)) return alert("请选择提醒时间");
+      if (dueAt < Date.now() - 60000) return alert("提醒时间不能早于当前时间");
+
+      try {
+        const payload = { deviceId: storage.deviceId, title, content, dueAt, pushdeer };
+        await api(`/api/reminders/${id}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+        
+        // 如果勾选了Pushdeer，则发送推送
+        if (pushdeer) {
+          await sendPushdeerNotification(title, content);
+        }
+        
+        resetForm();
+        await refreshList();
+        alert("提醒已更新");
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    // 发送Pushdeer通知
+    async function sendPushdeerNotification(title, content) {
+      try {
+        const pushdeerKey = storage.pushdeerKey;
+        if (!pushdeerKey) {
+          console.log("未配置Pushdeer Key，跳过推送");
+          return;
+        }
+        
+        const pushdeerUrl = "http://95.169.30.85:8800/message/push";
+        const text = title;
+        const desp = content || "无内容";
+        
+        const response = await fetch(pushdeerUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            pushkey: pushdeerKey,
+            text: text,
+            desp: desp,
+            type: "text"
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Pushdeer推送失败: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        if (result.code !== 0) {
+          throw new Error(`Pushdeer推送失败: ${result.content}`);
+        }
+        
+        console.log("Pushdeer推送成功:", result);
+      } catch (e) {
+        console.error("Pushdeer推送错误:", e);
+        // 不中断主流程，只是记录错误
+      }
+    }
+
     function showSettings(show) {
       $("#settings-card").style.display = show ? "block" : "none";
       $("#input-api").value = storage.apiBase || "";
       $("#input-device").value = storage.deviceId;
+      $("#input-pushdeer-key").value = storage.pushdeerKey || "";
     }
 
     async function init() {
@@ -372,6 +539,9 @@
       $("#btn-save-settings").addEventListener("click", async () => {
         const v = $("#input-api").value.trim();
         storage.apiBase = v;
+        // 保存Pushdeer Key
+        storage.pushdeerKey = $("#input-pushdeer-key").value.trim();
+        
         // 重新注册 SW 以更新 API_BASE
         if (state.swReg) {
           try { await state.swReg.unregister(); } catch {}
@@ -402,6 +572,12 @@
       });
 
       $("#btn-create").addEventListener("click", onCreate);
+      // 添加取消编辑按钮
+      const cancelBtn = el("button", { class: "btn", id: "btn-cancel-edit", style: "display:none;" }, "取消编辑");
+      cancelBtn.addEventListener("click", () => {
+        resetForm();
+      });
+      document.querySelector(".row").appendChild(cancelBtn);
 
       // 自动初始化：如果已配置 API，尝试注册 SW 并刷新
       if (storage.apiBase) {
