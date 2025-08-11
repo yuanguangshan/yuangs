@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS reminders (
   nudge_sent INTEGER NOT NULL DEFAULT 0,
   delivered_at INTEGER,                -- ms since epoch
   deleted INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  pushdeer INTEGER NOT NULL DEFAULT 0  -- 是否推送至Pushdeer
 );
 
 CREATE INDEX IF NOT EXISTS idx_reminders_device ON reminders(device_id);

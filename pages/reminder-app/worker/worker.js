@@ -94,26 +94,61 @@ async function handleRequest(request, env, ctx) {
     if (pathname === "/api/reminders" && request.method === "POST") {
       const body = await safeJson(request);
       if (!body) return badRequest("Invalid JSON");
-      const { deviceId, title, content, dueAt } = body;
+      const { deviceId, title, content, dueAt, pushdeer } = body;
       if (!deviceId || !title || !Number.isFinite(dueAt)) {
         return badRequest("Missing deviceId/title/dueAt");
       }
       const now = Date.now();
+      
+      // 添加调试日志
+      console.log("Creating reminder:", { deviceId, title, content, dueAt, pushdeer, now, dueAtFormatted: new Date(dueAt).toISOString(), nowFormatted: new Date(now).toISOString() });
+      
       if (dueAt < now - 60000) {
         return badRequest("dueAt is in the past");
       }
       const result = await env.reminderDB.prepare(
-        `INSERT INTO reminders (device_id, title, body, due_at, nudge_sent, deleted, created_at)
-         VALUES (?1, ?2, ?3, ?4, 0, 0, ?5)`
-      ).bind(deviceId, title, content || "", dueAt, now).run();
+        `INSERT INTO reminders (device_id, title, body, due_at, nudge_sent, deleted, created_at, pushdeer)
+         VALUES (?1, ?2, ?3, ?4, 0, 0, ?5, ?6)`
+      ).bind(deviceId, title, content || "", dueAt, now, pushdeer ? 1 : 0).run();
       return JSON_RESPONSE({ ok: true, id: result.lastRowId });
+    }
+
+    if (pathname.startsWith("/api/reminders/") && request.method === "PUT") {
+      const idStr = pathname.split("/").pop();
+      const id = Number(idStr);
+      const body = await safeJson(request);
+      if (!body) return badRequest("Invalid JSON");
+      const { deviceId, title, content, dueAt, pushdeer } = body;
+      if (!id || !deviceId || !title || !Number.isFinite(dueAt)) {
+        return badRequest("Missing id/deviceId/title/dueAt");
+      }
+      const now = Date.now();
+      
+      // 添加调试日志
+      console.log("Updating reminder:", { id, deviceId, title, content, dueAt, pushdeer, now, dueAtFormatted: new Date(dueAt).toISOString(), nowFormatted: new Date(now).toISOString() });
+      
+      if (dueAt < now - 60000) {
+        return badRequest("dueAt is in the past");
+      }
+      
+      const result = await env.reminderDB.prepare(
+        `UPDATE reminders 
+         SET title=?1, body=?2, due_at=?3, pushdeer=?4
+         WHERE id=?5 AND device_id=?6`
+      ).bind(title, content || "", dueAt, pushdeer ? 1 : 0, id, deviceId).run();
+      
+      if (result.changes === 0) {
+        return notFound("Reminder not found or not owned by device");
+      }
+      
+      return JSON_RESPONSE({ ok: true });
     }
 
     if (pathname === "/api/reminders" && request.method === "GET") {
       const deviceId = searchParams.get("deviceId");
       if (!deviceId) return badRequest("Missing deviceId");
       const rows = await env.reminderDB.prepare(
-        `SELECT id, title, body, due_at AS dueAt, nudge_sent AS nudgeSent, delivered_at AS deliveredAt, deleted
+        `SELECT id, title, body, due_at AS dueAt, nudge_sent AS nudgeSent, delivered_at AS deliveredAt, deleted, pushdeer
          FROM reminders
          WHERE device_id=?1 AND deleted=0
          ORDER BY due_at ASC`
@@ -141,13 +176,19 @@ async function handleRequest(request, env, ctx) {
       ).bind(endpoint).get();
       if (!sub) return notFound("Subscription not found");
       const now = Date.now();
+      
+      // 添加调试日志
+      console.log("Checking due reminders:", { deviceId: sub.device_id, now, nowFormatted: new Date(now).toISOString() });
+      
       // 查询未删除、未标记 delivered 的到期提醒
       const rows = await env.reminderDB.prepare(
-        `SELECT id, title, body, due_at AS dueAt
+        `SELECT id, title, body, due_at AS dueAt, pushdeer
          FROM reminders
          WHERE device_id=?1 AND deleted=0 AND due_at<=?2 AND delivered_at IS NULL`
       ).bind(sub.device_id, now).all();
 
+      console.log("Due reminders found:", rows.results || []);
+      
       const ids = (rows.results || []).map(r => r.id);
       if (ids.length > 0) {
         const placeholders = ids.map(() => "?").join(",");
@@ -177,6 +218,9 @@ async function safeJson(request) {
 
 async function runCron(env) {
   const now = Date.now();
+  
+  // 添加调试日志
+  console.log("Running cron job:", { now, nowFormatted: new Date(now).toISOString() });
 
   // 找到有到期未推送的设备订阅 endpoint
   const endpoints = await env.reminderDB.prepare(
@@ -193,6 +237,8 @@ async function runCron(env) {
   ).bind(now).all();
 
   const list = endpoints.results || [];
+  console.log("Endpoints with due reminders:", list);
+  
   if (!list.length) return;
 
   // 预导入 VAPID 私钥
@@ -219,16 +265,44 @@ async function runCron(env) {
 
       if (res.ok || res.status === 201 || res.status === 202) {
         // 将这台设备的到期提醒标记已推送（避免重复推送）
+        console.log("Marking reminders as sent for device:", row.device_id);
         await env.reminderDB.prepare(
           `UPDATE reminders SET nudge_sent=1
            WHERE device_id=?1 AND deleted=0 AND delivered_at IS NULL AND due_at<=?2`
         ).bind(row.device_id, now).run();
+        
+        // 查找需要Pushdeer推送的提醒并发送
+        await sendPushdeerNotifications(env, row.device_id, now);
       } else {
         console.warn("Push send failed", endpoint, res.status, await safeText(res));
       }
     } catch (e) {
       console.error("Push error", endpoint, e);
     }
+  }
+}
+
+// 发送Pushdeer通知
+async function sendPushdeerNotifications(env, deviceId, now) {
+  try {
+    // 获取需要Pushdeer推送的到期提醒
+    const rows = await env.reminderDB.prepare(
+      `SELECT title, body
+       FROM reminders
+       WHERE device_id=?1 AND deleted=0 AND delivered_at IS NULL AND due_at<=?2 AND pushdeer=1`
+    ).bind(deviceId, now).all();
+    
+    const reminders = rows.results || [];
+    if (reminders.length === 0) {
+      return;
+    }
+    
+    // 获取Pushdeer Key (这里需要从环境变量或数据库中获取)
+    // 由于前端存储了Pushdeer Key，我们暂时不实现后端推送
+    // 实际应用中，你可能需要将Key存储在安全的地方
+    console.log("Found reminders for Pushdeer:", reminders);
+  } catch (e) {
+    console.error("Error sending Pushdeer notifications:", e);
   }
 }
 
