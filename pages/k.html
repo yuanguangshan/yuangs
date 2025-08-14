@@ -53,6 +53,114 @@
         }
       
         /* ==============================================
+           一言组件样式
+           ============================================== */
+        .yiyan-container {
+          background: var(--card-bg);
+          border: 1px solid var(--border-light);
+          border-radius: 15px;
+          box-shadow: 0 4px 20px var(--shadow);
+          backdrop-filter: blur(10px);
+          padding: 20px;
+          margin-bottom: 20px;
+          text-align: center;
+          position: relative;
+          overflow: hidden;
+        }
+        
+        .yiyan-content {
+          font-size: 1.1rem;
+          line-height: 1.6;
+          color: var(--text-dark);
+          margin-bottom: 10px;
+          position: relative;
+          z-index: 2;
+        }
+        
+        .yiyan-source {
+          font-size: 0.9rem;
+          color: #666;
+          font-style: italic;
+          position: relative;
+          z-index: 2;
+        }
+        
+        .yiyan-actions {
+          display: flex;
+          justify-content: center;
+          gap: 15px;
+          margin-top: 15px;
+          position: relative;
+          z-index: 2;
+        }
+        
+        .yiyan-btn {
+          padding: 5px 15px;
+          background: linear-gradient(45deg, var(--primary), var(--primary-dark));
+          color: white;
+          border: none;
+          border-radius: 15px;
+          cursor: pointer;
+          font-size: 0.9rem;
+          transition: all 0.3s ease;
+          box-shadow: 0 2px 5px var(--primary-shadow);
+        }
+        
+        .yiyan-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 10px var(--primary-shadow);
+        }
+        
+        .yiyan-btn.secondary {
+          background: linear-gradient(45deg, var(--secondary), var(--secondary-dark));
+          box-shadow: 0 2px 5px var(--secondary-shadow);
+        }
+        
+        .yiyan-btn.secondary:hover {
+          box-shadow: 0 4px 10px var(--secondary-shadow);
+        }
+        
+        .yiyan-loading {
+          display: none;
+          justify-content: center;
+          align-items: center;
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(255, 255, 255, 0.7);
+          z-index: 10;
+          border-radius: 15px;
+        }
+        
+        .yiyan-spinner {
+          width: 30px;
+          height: 30px;
+          border: 3px solid #f3f3f3;
+          border-top: 3px solid var(--primary);
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        
+        .yiyan-decoration {
+          position: absolute;
+          bottom: -20px;
+          right: -20px;
+          width: 100px;
+          height: 100px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, var(--primary-light), var(--primary));
+          opacity: 0.1;
+          z-index: 1;
+        }
+      
+        /* ==============================================
            全局重置和基础样式
            确保所有元素使用border-box，统一外边距内边距
            ============================================== */
@@ -692,6 +800,20 @@
         <!-- 页面主标题，显示当前时间 -->
         <h1 id="current-time">🎗期货品种实时监控🎗</h1>
         
+        <!-- 一言组件 -->
+        <div class="yiyan-container">
+            <div class="yiyan-decoration"></div>
+            <div class="yiyan-loading" id="yiyan-loading">
+                <div class="yiyan-spinner"></div>
+            </div>
+            <div class="yiyan-content" id="yiyan-content">正在获取今日一言...</div>
+            <div class="yiyan-source" id="yiyan-source"></div>
+            <div class="yiyan-actions">
+                <button class="yiyan-btn secondary" id="yiyan-copy">复制</button>
+                <button class="yiyan-btn" id="yiyan-refresh">换一句</button>
+            </div>
+        </div>
+        
         <!-- 状态面板：显示交易状态、时间和控制按钮 -->
         <div class="status-panel">
             <!-- 左侧：交易状态和时间显示 -->
@@ -1009,6 +1131,104 @@ function formatVolumeOrCCL(value) {
 }
 
 // ==============================================
+// 一言功能相关函数
+// ==============================================
+
+// 全局变量存储一言数据
+let currentHitokoto = "";
+let currentSource = "";
+
+// 显示一言加载状态
+function showYiyanLoading() {
+    const loadingElement = document.getElementById('yiyan-loading');
+    if (loadingElement) {
+        loadingElement.style.display = 'flex';
+    }
+}
+
+// 隐藏一言加载状态
+function hideYiyanLoading() {
+    const loadingElement = document.getElementById('yiyan-loading');
+    if (loadingElement) {
+        loadingElement.style.display = 'none';
+    }
+}
+
+// 获取一言数据
+async function fetchHitokoto() {
+    showYiyanLoading();
+    
+    try {
+        const response = await fetch('https://v1.hitokoto.cn/?c=a&c=b&c=c&c=d&c=e&c=f&c=g&c=h&c=i&c=j&c=k');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data && data.hitokoto) {
+            // 保存数据
+            currentHitokoto = data.hitokoto;
+            currentSource = data.from_who ? 
+                `${data.from_who}《${data.from}》` : 
+                data.from;
+            
+            // 更新UI
+            const contentElement = document.getElementById('yiyan-content');
+            const sourceElement = document.getElementById('yiyan-source');
+            
+            if (contentElement && sourceElement) {
+                contentElement.textContent = currentHitokoto;
+                sourceElement.textContent = currentSource;
+            }
+        }
+    } catch (error) {
+        console.error('获取一言失败:', error);
+        const contentElement = document.getElementById('yiyan-content');
+        if (contentElement) {
+            contentElement.textContent = '获取一言失败，请点击刷新重试';
+        }
+    } finally {
+        hideYiyanLoading();
+    }
+}
+
+// 复制一言到剪贴板
+function copyYiyan() {
+    const textToCopy = `${currentHitokoto}\n${currentSource}`;
+    
+    navigator.clipboard.writeText(textToCopy)
+        .then(() => {
+            // 可以添加复制成功的提示
+            alert('已复制到剪贴板');
+        })
+        .catch(err => {
+            console.error('复制失败:', err);
+            alert('复制失败，请重试');
+        });
+}
+
+// 初始化一言功能
+function initializeYiyan() {
+    // 获取DOM元素
+    const copyButton = document.getElementById('yiyan-copy');
+    const refreshButton = document.getElementById('yiyan-refresh');
+    
+    // 绑定事件监听器
+    if (copyButton) {
+        copyButton.addEventListener('click', copyYiyan);
+    }
+    
+    if (refreshButton) {
+        refreshButton.addEventListener('click', fetchHitokoto);
+    }
+    
+    // 首次获取一言
+    fetchHitokoto();
+}
+
+// ==============================================
 // 页面初始化
 // DOM加载完成后执行的初始化流程
 // ==============================================
@@ -1016,6 +1236,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeCharts();        // 初始化所有图表实例
     initializeControls();      // 初始化控制按钮和事件监听
     initializeMenu();          // 初始化设置菜单功能
+    initializeYiyan();         // 初始化一言功能
     fetchData();               // 首次获取数据
     startAutoRefresh();        // 启动自动刷新
     updateTimeDisplay();       // 更新时间显示
