@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>BMI 计算器（中国成人标准）| 身高体重指数在线计算与健康建议</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="在线BMI计算器，支持中国成人标准。输入身高和体重，立即计算BMI，获取分级分析与个性化健康建议。适配手机与电脑。" />
+  <meta name="keywords" content="BMI, 身高体重指数, 中国标准, 超重, 肥胖, 健康管理, 体重评估, 在线计算器" />
+  <link rel="canonical" href="https://example.com/tools/bmi-cn" />
+  <meta property="og:title" content="BMI 计算器（中国成人标准）" />
+  <meta property="og:description" content="输入身高体重，立刻获得BMI、分级解读和健康建议（基于中国成人标准）。" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="zh_CN" />
+  <meta name="format-detection" content="telephone=no,email=no" />
+  <meta name="theme-color" content="#0ea5e9" />
+  <style>
+    :root{
+      --bg:#0b1020; --card:#121a2b; --text:#e8eef8; --muted:#a7b3c9;
+      --primary:#10b981; --warn:#f59e0b; --danger:#ef4444; --info:#3b82f6;
+      --accent:#8b5cf6; --border:#20304f; --shadow:0 10px 24px rgba(0,0,0,.35);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      background: radial-gradient(1200px 800px at 20% -10%, #14213a 0%, #0b1020 60%) fixed;
+      color:var(--text); line-height:1.6;
+    }
+    header,main,footer{display:block}
+    header{
+      padding:24px 16px 8px; text-align:center;
+    }
+    header h1{margin:.2em 0 .1em; font-size:clamp(20px,3.8vw,32px)}
+    header p{margin:0; color:var(--muted); font-size:14px}
+    .container{
+      max-width:860px; margin:16px auto; padding:16px;
+    }
+    .grid{
+      display:grid; gap:16px;
+      grid-template-columns: 1fr;
+    }
+    @media(min-width:720px){
+      .grid{ grid-template-columns: 1.1fr .9fr; }
+    }
+    .card{
+      background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0)) , var(--card);
+      border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow);
+      padding:18px;
+    }
+    .card h2{margin:.2em 0 .6em; font-size:18px}
+    label{display:block; font-weight:600; margin-bottom:6px}
+    .row{display:flex; gap:10px; align-items:center}
+    input[type="number"], input[type="text"], select{
+      appearance:none; width:100%; padding:12px 14px; color:var(--text);
+      background:#0f172a; border:1px solid #1e293b; border-radius:12px;
+      outline:none; transition:.2s border-color,.2s box-shadow;
+    }
+    input:focus, select:focus{border-color:#38bdf8; box-shadow:0 0 0 3px rgba(56,189,248,.2)}
+    .hint{font-size:12px; color:var(--muted); margin-top:6px}
+    .actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px}
+    button{
+      cursor:pointer; border:1px solid #1e293b; color:#0b1020; background:#e2e8f0;
+      border-radius:12px; padding:10px 14px; font-weight:700; transition:.2s transform,.2s filter;
+    }
+    button.primary{ background:linear-gradient(135deg,#34d399,#06b6d4); color:white; border:none }
+    button:hover{ filter:brightness(1.05) }
+    button:active{ transform:scale(.98) }
+    .result{
+      display:grid; grid-template-columns: 1fr; gap:12px; margin-top:6px;
+    }
+    .kpi{
+      display:flex; align-items:center; justify-content:space-between;
+      background:#0f172a; border:1px solid #1e293b; border-radius:12px; padding:12px 14px;
+    }
+    .kpi strong{font-size:22px}
+    .badge{padding:4px 10px; border-radius:999px; font-size:12px; font-weight:700}
+    .badge.low{background:rgba(99,102,241,.15); color:#a5b4fc; border:1px solid #6366f1}
+    .badge.normal{background:rgba(16,185,129,.15); color:#86efac; border:1px solid #10b981}
+    .badge.over{background:rgba(245,158,11,.15); color:#fcd34d; border:1px solid #f59e0b}
+    .badge.obese{background:rgba(239,68,68,.15); color:#fecaca; border:1px solid #ef4444}
+    .scale{
+      height:12px; border-radius:999px; background:#0f172a; border:1px solid #1e293b; position:relative; overflow:hidden;
+    }
+    .seg{position:absolute; top:0; bottom:0}
+    .seg.low{left:0; width:18.5/40*100%}
+    .seg.low{background:#6366f1}
+    .seg.normal{left:18.5/40*100%; width:(24-18.5)/40*100%}
+    .seg.normal{background:#10b981}
+    .seg.over{left:24/40*100%; width:(28-24)/40*100%}
+    .seg.over{background:#f59e0b}
+    .seg.obese{left:28/40*100%; right:0; background:#ef4444}
+    .thumb{
+      position:absolute; top:-4px; width:4px; height:20px; border-radius:2px; background:#e5e7eb;
+      box-shadow:0 0 0 2px rgba(229,231,235,.25); transform:translateX(-2px);
+    }
+    .advice{
+      background:linear-gradient(180deg, rgba(16,185,129,.08), rgba(16,185,129,0));
+      border:1px solid #1f3c2f; border-radius:12px; padding:12px 14px; color:#d1fae5;
+    }
+    .advice h3{margin:.2em 0 .4em; font-size:16px}
+    .list{margin:0; padding-left:18px}
+    .list li{margin:.2em 0}
+    .table{
+      width:100%; border-collapse:separate; border-spacing:0; overflow:hidden; border-radius:12px; border:1px solid #1e293b;
+    }
+    .table th, .table td{padding:10px 12px; text-align:left}
+    .table thead{background:#0f172a}
+    .table tbody tr:nth-child(odd){background:rgba(255,255,255,.02)}
+    footer{color:var(--muted); font-size:12px; text-align:center; padding:24px 12px}
+    .sr-only{position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0}
+  </style>
+
+  <!-- 结构化数据（FAQ，用于SEO富结果） -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "BMI中国成人标准如何划分？",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "低体重：<18.5；正常：18.5–23.9；超重：24.0–27.9；肥胖：≥28.0。"
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "如何计算BMI？",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "BMI = 体重(kg) / 身高(m)^2。将身高从厘米换算为米再计算。"
+        }
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <a class="sr-only" href="#calculator">跳到BMI计算器</a>
+  <header role="banner">
+    <h1>BMI 计算器（中国成人标准）</h1>
+    <p>输入身高和体重，立即获得 BMI、分级解读与健康建议。</p>
+  </header>
+
+  <main id="main" class="container" role="main">
+    <section id="calculator" class="grid" aria-labelledby="calc-title">
+      <div class="card" aria-live="polite">
+        <h2 id="calc-title">快速计算</h2>
+
+        <form id="bmiForm" aria-describedby="unit-hint">
+          <div class="row">
+            <div style="flex:1">
+              <label for="height">身高</label>
+              <input id="height" name="height" type="number" step="0.1" inputmode="decimal" placeholder="例如：170 或 1.70"
+                     autocomplete="off" aria-describedby="height-hint" required />
+              <div id="height-hint" class="hint">支持厘米(如 170)或米(如 1.70)。</div>
+            </div>
+            <div style="width:110px">
+              <label for="hunit" class="sr-only">身高单位</label>
+              <select id="hunit" name="hunit" aria-label="身高单位">
+                <option value="auto">自动识别</option>
+                <option value="cm">厘米(cm)</option>
+                <option value="m">米(m)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            <div style="flex:1">
+              <label for="weight">体重</label>
+              <input id="weight" name="weight" type="number" step="0.1" inputmode="decimal" placeholder="例如：65.5"
+                     autocomplete="off" aria-describedby="weight-hint" required />
+              <div id="weight-hint" class="hint">单位：千克(kg)。</div>
+            </div>
+            <div style="width:110px">
+              <label for="age" class="sr-only">年龄</label>
+              <input id="age" name="age" type="number" step="1" min="1" max="120" placeholder="年龄(选填)" />
+            </div>
+          </div>
+
+          <div class="actions">
+            <button type="button" class="primary" id="calcBtn" aria-label="计算BMI">计算 BMI</button>
+            <button type="reset" id="resetBtn">清空</button>
+          </div>
+          <div id="unit-hint" class="hint">提示：BMI适用于成人的总体评估，不直接用于儿童、孕妇、运动员等特殊人群。</div>
+        </form>
+
+        <div class="result" id="result" hidden>
+          <div class="kpi" aria-live="polite">
+            <div>
+              <div>您的 BMI</div>
+              <strong id="bmiValue">--</strong>
+            </div>
+            <div>
+              <span id="bmiBadge" class="badge">--</span>
+            </div>
+          </div>
+
+          <div>
+            <div class="scale" role="img" aria-label="BMI区间刻度">
+              <div class="seg low" style="left:0; width:46.25%"></div>
+              <div class="seg normal" style="left:46.25%; width:13.75%"></div>
+              <div class="seg over" style="left:60%; width:10%"></div>
+              <div class="seg obese" style="left:70%; right:0"></div>
+              <div id="thumb" class="thumb" style="left:0"></div>
+            </div>
+            <div class="hint">区间：低体重 <18.5 | 正常 18.5–23.9 | 超重 24.0–27.9 | 肥胖 ≥28.0</div>
+          </div>
+
+          <div class="advice" id="adviceBox">
+            <h3>分析与建议</h3>
+            <ul class="list" id="adviceList"></ul>
+          </div>
+        </div>
+      </div>
+
+      <aside class="card" aria-labelledby="std-title">
+        <h2 id="std-title">中国成人 BMI 标准</h2>
+        <table class="table" aria-describedby="std-desc">
+          <caption id="std-desc" class="sr-only">中国成人BMI分类表</caption>
+          <thead>
+            <tr><th>分类</th><th>BMI 区间</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>低体重</td><td>&lt; 18.5</td></tr>
+            <tr><td>正常</td><td>18.5 – 23.9</td></tr>
+            <tr><td>超重</td><td>24.0 – 27.9</td></tr>
+            <tr><td>肥胖</td><td>&ge; 28.0</td></tr>
+          </tbody>
+        </table>
+        <p class="hint" style="margin-top:8px">
+          说明：BMI仅作体重状况的粗略评估，未考虑体脂率、肌肉量与分布。建议结合腰围、体脂等指标综合判断。
+        </p>
+      </aside>
+    </section>
+  </main>
+
+  <footer role="contentinfo">
+    <p>© 2025 BMI 计算器（中国标准）。本工具仅用于科普与一般健康参考，不构成医疗建议。</p>
+  </footer>
+
+  <script>
+    // 工具函数
+    function parseHeightToMeter(hVal, unitSel){
+      if(!hVal && hVal !== 0) return null;
+      let val = Number(hVal);
+      if(!isFinite(val) || val <= 0) return null;
+
+      const unit = unitSel.value;
+      if(unit === "cm") return val / 100;
+      if(unit === "m") return val;
+
+      // 自动识别：> 3 视为厘米（如 170），否则视为米（如 1.7）
+      if(val > 3) return val / 100;
+      return val;
+    }
+
+    function calcBMI(weightKg, heightM){
+      if(!isFinite(weightKg) || !isFinite(heightM) || heightM <= 0) return null;
+      return weightKg / (heightM * heightM);
+    }
+
+    function classifyCN(bmi){
+      if(bmi < 18.5) return {label:"低体重", key:"low"};
+      if(bmi < 24) return {label:"正常", key:"normal"};
+      if(bmi < 28) return {label:"超重", key:"over"};
+      return {label:"肥胖", key:"obese"};
+    }
+
+    function format(num, digits=1){
+      return Number(num).toFixed(digits);
+    }
+
+    function thumbPosPct(bmi){
+      // 映射 0–40 到 0–100%，超过范围钳制
+      const clamped = Math.max(0, Math.min(40, bmi));
+      return (clamped / 40) * 100;
+    }
+
+    function buildAdvice(bmi, age){
+      const cls = classifyCN(bmi).key;
+      const tips = [];
+      const general = "保持规律作息、均衡饮食（蔬果、优质蛋白、全谷物）、适量运动，定期监测体重与腰围。";
+
+      if(cls === "low"){
+        tips.push("BMI偏低：优先保证能量与蛋白质摄入，增加奶制品、蛋类、瘦肉、坚果与复合碳水。");
+        tips.push("每周进行2–3次力量训练，配合加餐，避免只吃高糖零食。");
+      } else if(cls === "normal"){
+        tips.push("BMI正常：维持当前饮食与运动节奏，避免体重大幅波动。");
+        tips.push("每周≥150分钟中等强度有氧运动，结合2次力量训练。");
+      } else if(cls === "over"){
+        tips.push("超重：建议逐步营养干预，日均热量较当前略有缺口（200–300 kcal），优先减少含糖饮料与精制碳水。");
+        tips.push("增加步行/骑行等日常活动量，目标每天7000–10000步。");
+      } else {
+        tips.push("肥胖：建议在专业人士指导下进行体重管理，关注血压、血糖、血脂等代谢指标。");
+        tips.push("建立饮食记录与规律运动计划，循序渐进降低体脂。");
+      }
+
+      if(age && age >= 60){
+        tips.push("老年人请特别关注肌力与骨骼健康，适当补充蛋白与维生素D/Ca，运动以安全为先。");
+      }
+
+      tips.push(general);
+      return tips;
+    }
+
+    // DOM 引用
+    const heightEl = document.getElementById("height");
+    const hunitEl = document.getElementById("hunit");
+    const weightEl = document.getElementById("weight");
+    const ageEl = document.getElementById("age");
+    const calcBtn = document.getElementById("calcBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const resultWrap = document.getElementById("result");
+    const bmiValueEl = document.getElementById("bmiValue");
+    const bmiBadgeEl = document.getElementById("bmiBadge");
+    const thumbEl = document.getElementById("thumb");
+    const adviceListEl = document.getElementById("adviceList");
+
+    function update(){
+      const h = parseHeightToMeter(heightEl.value, hunitEl);
+      const w = Number(weightEl.value);
+      const age = ageEl.value ? Number(ageEl.value) : null;
+
+      if(!h || !isFinite(w) || w <= 0){
+        resultWrap.hidden = true;
+        return;
+      }
+
+      const bmi = calcBMI(w, h);
+      if(bmi == null){
+        resultWrap.hidden = true;
+        return;
+      }
+
+      // 展示
+      resultWrap.hidden = false;
+      const cls = classifyCN(bmi);
+      bmiValueEl.textContent = format(bmi, 1);
+
+      bmiBadgeEl.textContent = cls.label;
+      bmiBadgeEl.className = "badge " + cls.key;
+
+      // 刻度滑块
+      const pct = thumbPosPct(bmi);
+      thumbEl.style.left = pct + "%";
+
+      // 建议
+      adviceListEl.innerHTML = "";
+      const advice = buildAdvice(bmi, age);
+      advice.forEach(t => {
+        const li = document.createElement("li");
+        li.textContent = t;
+        adviceListEl.appendChild(li);
+      });
+
+      // 动态标题（轻度SEO与分享体验）
+      document.title = `BMI ${format(bmi,1)}（${cls.label}）- 中国标准在线计算器`;
+      // 更新描述
+      const desc = document.querySelector('meta[name="description"]');
+      if(desc) desc.setAttribute("content", `您的BMI为 ${format(bmi,1)}，属于“${cls.label}”区间（中国成人标准）。查看个性化健康建议与区间解读。`);
+    }
+
+    calcBtn.addEventListener("click", update);
+    [heightEl, hunitEl, weightEl, ageEl].forEach(el=>{
+      el.addEventListener("input", () => {
+        // 实时更新但避免空值误触
+        if(heightEl.value && weightEl.value) update();
+      });
+    });
+    resetBtn.addEventListener("click", ()=>{
+      resultWrap.hidden = true;
+      bmiBadgeEl.className = "badge";
+      bmiBadgeEl.textContent = "--";
+      bmiValueEl.textContent = "--";
+      adviceListEl.innerHTML = "";
+      document.title = "BMI 计算器（中国成人标准）| 身高体重指数在线计算与健康建议";
+      const desc = document.querySelector('meta[name="description"]');
+      if(desc) desc.setAttribute("content", "在线BMI计算器，支持中国成人标准。输入身高和体重，立即计算BMI，获取分级分析与健康建议。适配手机与电脑。");
+    });
+
+    // 可访问性：回车触发
+    document.getElementById("bmiForm").addEventListener("submit", (e)=>{
+      e.preventDefault();
+      update();
+    });
+  </script>
+</body>
+</html>
