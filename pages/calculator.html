@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>基础数学运算计算器</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg-color: #f5f5f5;
+      --panel-color: #ffffff;
+      --btn-color: #e0e0e0;
+      --btn-operator: #ffca28;
+      --btn-equal: #29b6f6;
+      --btn-text: #212121;
+      --display-bg: #1c1c1c;
+      --display-text: #f1f1f1;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-color);
+    }
+
+    .calculator {
+      width: min(420px, 92vw);
+      background: var(--panel-color);
+      border-radius: 20px;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .display {
+      background: var(--display-bg);
+      color: var(--display-text);
+      padding: 24px;
+      text-align: right;
+      font-size: clamp(28px, 6vw, 42px);
+      word-break: break-all;
+      min-height: 88px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-end;
+      box-sizing: border-box;
+    }
+
+    .keys {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      padding: 20px;
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    button {
+      border: none;
+      border-radius: 14px;
+      padding: 18px;
+      font-size: clamp(18px, 4vw, 26px);
+      font-weight: 600;
+      color: var(--btn-text);
+      background: var(--btn-color);
+      cursor: pointer;
+      transition: transform 0.08s ease, box-shadow 0.08s ease;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+      touch-action: manipulation;
+    }
+
+    button:active {
+      transform: scale(0.97);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    }
+
+    button.operator {
+      background: var(--btn-operator);
+    }
+
+    button.equal {
+      background: var(--btn-equal);
+      grid-column: span 2;
+    }
+
+    button.wide {
+      grid-column: span 2;
+    }
+
+    @media (max-width: 480px) {
+      .keys {
+        gap: 10px;
+        padding: 18px;
+      }
+      button {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="calculator" role="application" aria-label="基础数学运算计算器">
+    <div class="display" id="display" aria-live="polite">0</div>
+    <div class="keys">
+      <button class="wide" data-action="clear">AC</button>
+      <button data-action="percent">%</button>
+      <button data-action="divide" class="operator">÷</button>
+
+      <button data-digit="7">7</button>
+      <button data-digit="8">8</button>
+      <button data-digit="9">9</button>
+      <button data-action="multiply" class="operator">×</button>
+
+      <button data-digit="4">4</button>
+      <button data-digit="5">5</button>
+      <button data-digit="6">6</button>
+      <button data-action="subtract" class="operator">−</button>
+
+      <button data-digit="1">1</button>
+      <button data-digit="2">2</button>
+      <button data-digit="3">3</button>
+      <button data-action="add" class="operator">+</button>
+
+      <button data-digit="0" class="wide">0</button>
+      <button data-digit=".">.</button>
+      <button data-action="equals" class="equal">=</button>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const display = document.getElementById("display");
+      let currentInput = "0";
+      let storedValue = null;
+      let currentOperator = null;
+      let isResultShown = false;
+
+      const formatNumber = (value) => {
+        if (!isFinite(value)) return "错误";
+        const [integerPart, decimalPart] = value.split(".");
+        const formattedInteger = Number(integerPart).toLocaleString("zh-CN");
+        return decimalPart ? `${formattedInteger}.${decimalPart}` : formattedInteger;
+      };
+
+      const refreshDisplay = () => {
+        display.textContent = currentInput;
+      };
+
+      const handleDigit = (digit) => {
+        if (isResultShown) {
+          currentInput = digit === "." ? "0." : digit;
+          isResultShown = false;
+          refreshDisplay();
+          return;
+        }
+
+        if (digit === ".") {
+          if (!currentInput.includes(".")) {
+            currentInput += ".";
+          }
+        } else {
+          currentInput = currentInput === "0" ? digit : currentInput + digit;
+        }
+        refreshDisplay();
+      };
+
+      const applyOperation = () => {
+        if (storedValue === null || currentOperator === null) return;
+        const a = parseFloat(storedValue.replace(/,/g, ""));
+        const b = parseFloat(currentInput.replace(/,/g, ""));
+        let result;
+
+        switch (currentOperator) {
+          case "add":
+            result = a + b;
+            break;
+          case "subtract":
+            result = a - b;
+            break;
+          case "multiply":
+            result = a * b;
+            break;
+          case "divide":
+            if (b === 0) {
+              currentInput = "除数不能为0";
+              storedValue = null;
+              currentOperator = null;
+              refreshDisplay();
+              return;
+            }
+            result = a / b;
+            break;
+          default:
+            return;
+        }
+
+        currentInput = formatNumber(result.toString());
+        storedValue = null;
+        currentOperator = null;
+        isResultShown = true;
+        refreshDisplay();
+      };
+
+      const handleOperator = (operator) => {
+        if (currentOperator && !isResultShown) {
+          applyOperation();
+        }
+        storedValue = currentInput;
+        currentOperator = operator;
+        isResultShown = false;
+        currentInput = "0";
+      };
+
+      const handlePercent = () => {
+        const value = parseFloat(currentInput.replace(/,/g, ""));
+        currentInput = formatNumber((value / 100).toString());
+        refreshDisplay();
+      };
+
+      const clearAll = () => {
+        currentInput = "0";
+        storedValue = null;
+        currentOperator = null;
+        isResultShown = false;
+        refreshDisplay();
+      };
+
+      document.querySelector(".keys").addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLButtonElement)) return;
+
+        const digit = target.getAttribute("data-digit");
+        const action = target.getAttribute("data-action");
+
+        if (digit !== null) {
+          handleDigit(digit);
+          return;
+        }
+
+        if (action === "clear") {
+          clearAll();
+        } else if (action === "percent") {
+          handlePercent();
+        } else if (action === "equals") {
+          applyOperation();
+        } else if (["add", "subtract", "multiply", "divide"].includes(action)) {
+          handleOperator(action);
+        }
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if ((event.key >= "0" && event.key <= "9") || event.key === ".") {
+          handleDigit(event.key);
+        } else if (event.key === "Enter" || event.key === "=") {
+          applyOperation();
+        } else if (event.key === "Escape") {
+          clearAll();
+        } else if (event.key === "+" || event.key === "-") {
+          handleOperator(event.key === "+" ? "add" : "subtract");
+        } else if (event.key === "*" || event.key === "x") {
+          handleOperator("multiply");
+        } else if (event.key === "/") {
+          handleOperator("divide");
+        } else if (event.key === "%") {
+          handlePercent();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
