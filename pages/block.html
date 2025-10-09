@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>俄罗斯方块</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        .game-container {
+            width: 100vw;
+            max-width: 500px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .score-box {
+            text-align: center;
+            flex: 1;
+        }
+
+        .score-label {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .score-value {
+            color: white;
+            font-size: 28px;
+            font-weight: 700;
+            margin-top: 5px;
+        }
+
+        .game-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        #gameCanvas {
+            border-radius: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3),
+                        inset 0 0 40px rgba(255, 255, 255, 0.05);
+            max-width: 100%;
+            height: auto;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 25px;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .control-btn {
+            height: 70px;
+            border: none;
+            border-radius: 18px;
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.1));
+            color: white;
+            font-size: 32px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .control-btn:active {
+            transform: scale(0.95);
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05));
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .control-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .control-btn:active::before {
+            opacity: 1;
+        }
+
+        .rotate-btn {
+            grid-column: 2;
+            background: linear-gradient(145deg, rgba(255, 200, 100, 0.3), rgba(255, 150, 50, 0.2));
+        }
+
+        .down-btn {
+            grid-column: 2;
+            background: linear-gradient(145deg, rgba(100, 200, 255, 0.3), rgba(50, 150, 255, 0.2));
+        }
+
+        .game-over {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .game-over.show {
+            display: flex;
+        }
+
+        .game-over-content {
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(240, 240, 255, 0.9));
+            padding: 40px;
+            border-radius: 30px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            max-width: 90%;
+        }
+
+        .game-over-title {
+            font-size: 36px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 20px;
+        }
+
+        .final-score {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 30px;
+            font-weight: 600;
+        }
+
+        .restart-btn {
+            padding: 15px 40px;
+            border: none;
+            border-radius: 15px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s ease;
+        }
+
+        .restart-btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .next-piece {
+            position: absolute;
+            top: 100px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 15px;
+            backdrop-filter: blur(20px);
+        }
+
+        .next-label {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        @media (max-height: 700px) {
+            .game-container {
+                padding: 10px;
+            }
+            
+            .header {
+                padding: 10px;
+                margin-bottom: 10px;
+            }
+            
+            .controls {
+                padding: 15px;
+                gap: 10px;
+            }
+            
+            .control-btn {
+                height: 60px;
+                font-size: 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="header">
+            <div class="score-box">
+                <div class="score-label">分数</div>
+                <div class="score-value" id="score">0</div>
+            </div>
+            <div class="score-box">
+                <div class="score-label">等级</div>
+                <div class="score-value" id="level">1</div>
+            </div>
+            <div class="score-box">
+                <div class="score-label">行数</div>
+                <div class="score-value" id="lines">0</div>
+            </div>
+        </div>
+
+        <div class="game-area">
+            <canvas id="gameCanvas" width="300" height="600"></canvas>
+        </div>
+
+        <div class="controls">
+            <button class="control-btn" id="leftBtn">←</button>
+            <button class="control-btn rotate-btn" id="rotateBtn">↻</button>
+            <button class="control-btn" id="rightBtn">→</button>
+            <button class="control-btn down-btn" id="downBtn">↓</button>
+        </div>
+    </div>
+
+    <div class="game-over" id="gameOver">
+        <div class="game-over-content">
+            <div class="game-over-title">游戏结束</div>
+            <div class="final-score">最终分数: <span id="finalScore">0</span></div>
+            <button class="restart-btn" id="restartBtn">重新开始</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const ROWS = 20;
+        const COLS = 10;
+        const BLOCK_SIZE = 30;
+
+        // 方块形状定义
+        const SHAPES = [
+            [[1,1,1,1]], // I
+            [[1,1],[1,1]], // O
+            [[0,1,0],[1,1,1]], // T
+            [[1,0,0],[1,1,1]], // L
+            [[0,0,1],[1,1,1]], // J
+            [[0,1,1],[1,1,0]], // S
+            [[1,1,0],[0,1,1]]  // Z
+        ];
+
+        const COLORS = [
+            '#00f0f0', // I - 青色
+            '#f0f000', // O - 黄色
+            '#a000f0', // T - 紫色
+            '#f0a000', // L - 橙色
+            '#0000f0', // J - 蓝色
+            '#00f000', // S - 绿色
+            '#f00000'  // Z - 红色
+        ];
+
+        let board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+        let currentPiece = null;
+        let currentX = 0;
+        let currentY = 0;
+        let score = 0;
+        let lines = 0;
+        let level = 1;
+        let gameLoop = null;
+        let dropSpeed = 1000;
+
+        function createPiece() {
+            const shapeIndex = Math.floor(Math.random() * SHAPES.length);
+            return {
+                shape: SHAPES[shapeIndex],
+                color: COLORS[shapeIndex]
+            };
+        }
+
+        function drawBlock(x, y, color) {
+            const gradient = ctx.createLinearGradient(
+                x * BLOCK_SIZE, y * BLOCK_SIZE,
+                (x + 1) * BLOCK_SIZE, (y + 1) * BLOCK_SIZE
+            );
+            gradient.addColorStop(0, color);
+            gradient.addColorStop(1, shadeColor(color, -20));
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(x * BLOCK_SIZE + 1, y * BLOCK_SIZE + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+            
+            ctx.strokeStyle = shadeColor(color, 20);
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x * BLOCK_SIZE + 1, y * BLOCK_SIZE + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+            
+            // 高光效果
+            const highlight = ctx.createLinearGradient(
+                x * BLOCK_SIZE, y * BLOCK_SIZE,
+                x * BLOCK_SIZE, y * BLOCK_SIZE + BLOCK_SIZE / 2
+            );
+            highlight.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
+            highlight.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = highlight;
+            ctx.fillRect(x * BLOCK_SIZE + 1, y * BLOCK_SIZE + 1, BLOCK_SIZE - 2, BLOCK_SIZE / 2);
+        }
+
+        function shadeColor(color, percent) {
+            const num = parseInt(color.slice(1), 16);
+            const amt = Math.round(2.55 * percent);
+            const R = (num >> 16) + amt;
+            const G = (num >> 8 & 0x00FF) + amt;
+            const B = (num & 0x0000FF) + amt;
+            return "#" + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
+                (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
+                (B < 255 ? B < 1 ? 0 : B : 255))
+                .toString(16).slice(1);
+        }
+
+        function drawBoard() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制网格
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= ROWS; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, i * BLOCK_SIZE);
+                ctx.lineTo(COLS * BLOCK_SIZE, i * BLOCK_SIZE);
+                ctx.stroke();
+            }
+            for (let i = 0; i <= COLS; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * BLOCK_SIZE, 0);
+                ctx.lineTo(i * BLOCK_SIZE, ROWS * BLOCK_SIZE);
+                ctx.stroke();
+            }
+
+            for (let row = 0; row < ROWS; row++) {
+                for (let col = 0; col < COLS; col++) {
+                    if (board[row][col]) {
+                        drawBlock(col, row, board[row][col]);
+                    }
+                }
+            }
+
+            if (currentPiece) {
+                drawPiece();
+            }
+        }
+
+        function drawPiece() {
+            currentPiece.shape.forEach((row, r) => {
+                row.forEach((cell, c) => {
+                    if (cell) {
+                        drawBlock(currentX + c, currentY + r, currentPiece.color);
+                    }
+                });
+            });
+        }
+
+        function collision(x, y, shape) {
+            for (let r = 0; r < shape.length; r++) {
+                for (let c = 0; c < shape[r].length; c++) {
+                    if (shape[r][c]) {
+                        const newX = x + c;
+                        const newY = y + r;
+                        if (newX < 0 || newX >= COLS || newY >= ROWS) {
+                            return true;
+                        }
+                        if (newY >= 0 && board[newY][newX]) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        function merge() {
+            currentPiece.shape.forEach((row, r) => {
+                row.forEach((cell, c) => {
+                    if (cell) {
+                        if (currentY + r >= 0) {
+                            board[currentY + r][currentX + c] = currentPiece.color;
+                        }
+                    }
+                });
+            });
+        }
+
+        function rotate() {
+            const rotated = currentPiece.shape[0].map((_, i) =>
+                currentPiece.shape.map(row => row[i]).reverse()
+            );
+            if (!collision(currentX, currentY, rotated)) {
+                currentPiece.shape = rotated;
+                navigator.vibrate && navigator.vibrate(10);
+                drawBoard();
+            }
+        }
+
+        function moveLeft() {
+            if (!collision(currentX - 1, currentY, currentPiece.shape)) {
+                currentX--;
+                navigator.vibrate && navigator.vibrate(10);
+                drawBoard();
+            }
+        }
+
+        function moveRight() {
+            if (!collision(currentX + 1, currentY, currentPiece.shape)) {
+                currentX++;
+                navigator.vibrate && navigator.vibrate(10);
+                drawBoard();
+            }
+        }
+
+        function moveDown() {
+            if (!collision(currentX, currentY + 1, currentPiece.shape)) {
+                currentY++;
+                drawBoard();
+            } else {
+                merge();
+                clearLines();
+                spawnPiece();
+            }
+        }
+
+        function hardDrop() {
+            while (!collision(currentX, currentY + 1, currentPiece.shape)) {
+                currentY++;
+            }
+            navigator.vibrate && navigator.vibrate(50);
+            moveDown();
+        }
+
+        function clearLines() {
+            let linesCleared = 0;
+            for (let row = ROWS - 1; row >= 0; row--) {
+                if (board[row].every(cell => cell !== 0)) {
+                    board.splice(row, 1);
+                    board.unshift(Array(COLS).fill(0));
+                    linesCleared++;
+                    row++;
+                }
+            }
+            if (linesCleared > 0) {
+                lines += linesCleared;
+                score += linesCleared * 100 * level;
+                level = Math.floor(lines / 10) + 1;
+                dropSpeed = Math.max(100, 1000 - (level - 1) * 100);
+                navigator.vibrate && navigator.vibrate([50, 50, 50]);
+                updateScore();
+            }
+        }
+
+        function spawnPiece() {
+            currentPiece = createPiece();
+            currentX = Math.floor(COLS / 2) - Math.floor(currentPiece.shape[0].length / 2);
+            currentY = 0;
+
+            if (collision(currentX, currentY, currentPiece.shape)) {
+                gameOver();
+            }
+        }
+
+        function updateScore() {
+            document.getElementById('score').textContent = score;
+            document.getElementById('level').textContent = level;
+            document.getElementById('lines').textContent = lines;
+        }
+
+        function gameOver() {
+            clearInterval(gameLoop);
+            navigator.vibrate && navigator.vibrate([100, 50, 100]);
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('gameOver').classList.add('show');
+        }
+
+        function restart() {
+            board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+            score = 0;
+            lines = 0;
+            level = 1;
+            dropSpeed = 1000;
+            updateScore();
+            document.getElementById('gameOver').classList.remove('show');
+            spawnPiece();
+            startGame();
+        }
+
+        function startGame() {
+            clearInterval(gameLoop);
+            gameLoop = setInterval(() => {
+                moveDown();
+            }, dropSpeed);
+        }
+
+        // 触摸控制
+        document.getElementById('leftBtn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            moveLeft();
+        });
+
+        document.getElementById('rightBtn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            moveRight();
+        });
+
+        document.getElementById('rotateBtn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            rotate();
+        });
+
+        document.getElementById('downBtn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            hardDrop();
+        });
+
+        document.getElementById('restartBtn').addEventListener('click', restart);
+
+        // 滑动手势
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        canvas.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            const deltaX = touchEndX - touchStartX;
+            const deltaY = touchEndY - touchStartY;
+
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                if (deltaX > 30) moveRight();
+                else if (deltaX < -30) moveLeft();
+            } else {
+                if (deltaY > 30) hardDrop();
+                else if (deltaY < -30) rotate();
+            }
+        });
+
+        // 初始化游戏
+        spawnPiece();
+        drawBoard();
+        startGame();
+
+        // 定期更新速度
+        setInterval(() => {
+            if (gameLoop) {
+                clearInterval(gameLoop);
+                startGame();
+            }
+        }, 100);
+    </script>
+</body>
+</html>
