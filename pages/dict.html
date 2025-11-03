@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线词典链接生成器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+            text-align: center;
+        }
+
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        input {
+            flex: 1;
+            min-width: 200px;
+            padding: 15px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            padding: 15px 25px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.paste-btn {
+            background: #48bb78;
+        }
+
+        button.paste-btn:hover {
+            background: #38a169;
+            box-shadow: 0 5px 15px rgba(72, 187, 120, 0.3);
+        }
+
+        .links-container {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .links-container.active {
+            display: block;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .current-word {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+            text-align: center;
+            color: white;
+        }
+
+        .current-word .word {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .current-word .hint {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 2px;
+        }
+
+        .link-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 12px;
+        }
+
+        .link-item {
+            background: #f7fafc;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+
+        .link-item:hover {
+            background: #edf2f7;
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+        }
+
+        .link-item a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 15px;
+            display: block;
+        }
+
+        .link-item a:hover {
+            color: #5568d3;
+        }
+
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            text-align: center;
+            color: #666;
+            font-size: 13px;
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            display: none;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            display: block;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translate(-50%, -20px); }
+            to { opacity: 1; transform: translate(-50%, 0); }
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 25px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .input-group {
+                flex-direction: column;
+            }
+
+            input, button {
+                width: 100%;
+            }
+
+            .link-grid {
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            }
+
+            .current-word .word {
+                font-size: 26px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="toast" id="toast"></div>
+    
+    <div class="container">
+        <h1>📖 在线词典查询</h1>
+        <p class="subtitle">输入单词查询各大在线词典链接</p>
+
+        <div class="input-group">
+            <input type="text" id="wordInput" placeholder="请输入英文单词..." autocomplete="off">
+            <button class="paste-btn" onclick="pasteFromClipboard()">📋 粘贴</button>
+            <button onclick="searchWord()">🔍 查询</button>
+        </div>
+
+        <div class="links-container" id="linksContainer">
+            <div class="current-word">
+                <div class="word" id="currentWord"></div>
+                <div class="hint">点击下方链接在线查询</div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">在线翻译</div>
+                <div class="link-grid" id="translateLinks"></div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">在线词典</div>
+                <div class="link-grid" id="dictionaryLinks"></div>
+            </div>
+        </div>
+
+        <div class="footer">
+            作者：苑广山 | yuanguangshan@gmail.com
+        </div>
+    </div>
+
+    <script>
+        // 在线翻译资源
+        const translateResources = [
+            { name: 'Google 翻译', url: 'https://translate.google.com/?sl=auto&tl=zh-CN&text=' },
+            { name: 'DeepL', url: 'https://www.deepl.com/translator#en/zh/' },
+            { name: 'Bing 翻译', url: 'https://www.bing.com/translator?from=auto&to=zh-CHS&text=' },
+            { name: '百度翻译', url: 'https://fanyi.baidu.com/#en/zh/' }
+        ];
+
+        // 在线词典资源
+        const dictionaryResources = [
+            { name: '词源词典', url: 'https://www.etymonline.com/search?q=' },
+            { name: '有道词典', url: 'http://dict.youdao.com/w/' },
+            { name: '剑桥词典', url: 'https://dictionary.cambridge.org/dictionary/english-chinese-simplified/' },
+            { name: '韦氏词典', url: 'https://www.merriam-webster.com/dictionary/' },
+            { name: '牛津词典', url: 'https://www.oxfordlearnersdictionaries.com/definition/english/' },
+            { name: '柯林斯词典', url: 'https://www.collinsdictionary.com/dictionary/english/' },
+            { name: 'Vocabulary', url: 'https://www.vocabulary.com/dictionary/' },
+            { name: '朗文词典', url: 'https://www.ldoceonline.com/dictionary/' }
+        ];
+
+        // 显示提示消息
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2000);
+        }
+
+        // 从剪切板粘贴
+        async function pasteFromClipboard() {
+            try {
+                const text = await navigator.clipboard.readText();
+                if (text.trim()) {
+                    document.getElementById('wordInput').value = text.trim();
+                    showToast('已从剪切板粘贴');
+                    // 自动查询
+                    searchWord();
+                } else {
+                    showToast('剪切板为空');
+                }
+            } catch (err) {
+                showToast('无法访问剪切板，请手动粘贴');
+            }
+        }
+
+        // 查询单词
+        function searchWord() {
+            const word = document.getElementById('wordInput').value.trim();
+            
+            if (!word) {
+                showToast('请输入单词');
+                return;
+            }
+
+            const encodedWord = encodeURIComponent(word);
+            
+            // 显示当前单词
+            document.getElementById('currentWord').textContent = word;
+            
+            // 生成翻译链接
+            const translateLinksHtml = translateResources.map(resource => 
+                `<div class="link-item">
+                    <a href="${resource.url}${encodedWord}" target="_blank">${resource.name}</a>
+                </div>`
+            ).join('');
+            document.getElementById('translateLinks').innerHTML = translateLinksHtml;
+            
+            // 生成词典链接
+            const dictionaryLinksHtml = dictionaryResources.map(resource => 
+                `<div class="link-item">
+                    <a href="${resource.url}${encodedWord}" target="_blank">${resource.name}</a>
+                </div>`
+            ).join('');
+            document.getElementById('dictionaryLinks').innerHTML = dictionaryLinksHtml;
+            
+            // 显示链接容器
+            document.getElementById('linksContainer').classList.add('active');
+            
+            showToast('查询完成');
+        }
+
+        // 回车键触发查询
+        document.getElementById('wordInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchWord();
+            }
+        });
+
+        // 页面加载时自动尝试读取剪切板
+        window.addEventListener('load', async function() {
+            try {
+                const text = await navigator.clipboard.readText();
+                if (text.trim() && /^[a-zA-Z\s-']+$/.test(text.trim())) {
+                    document.getElementById('wordInput').value = text.trim();
+                    showToast('已自动读取剪切板内容');
+                    // 延迟自动查询
+                    setTimeout(() => {
+                        searchWord();
+                    }, 500);
+                }
+            } catch (err) {
+                // 静默失败
+            }
+        });
+    </script>
+</body>
+</html>
