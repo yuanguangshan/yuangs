@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<title>空岛飞刀-超攻速版</title>
+<style>
+html,body{margin:0;padding:0;overflow:hidden;background:linear-gradient(to bottom,#87CEEB,#E0F7FA)}
+#gameCanvas{display:block;width:100vw;height:100vh}
+
+.control{position:fixed;border-radius:50%;background:rgba(60,179,113,.5);border:2px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;cursor:pointer;user-select:none;z-index:100;font-size:28px}
+#knifeBtn{width:100px;height:100px;bottom:20px;left:20px}
+#rightBtn{width:70px;height:70px;bottom:20px;right:20px}
+#leftBtn{width:70px;height:70px;bottom:20px;right:110px}
+#jumpBtn{width:70px;height:70px;bottom:100px;right:65px}
+
+#deadOverlay,#winOverlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:300}
+#deadBox,#winBox{background:#fff;border-radius:10px;padding:30px 50px;text-align:center;font-family:Arial,Helvetica,sans-serif}
+#deadBox h2{color:#e74c3c}#winBox h2{color:#27ae60}
+#restartBtn,#backBtn{padding:12px 28px;font-size:20px;border:none;border-radius:6px;background:#3498db;color:#fff;cursor:pointer}
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+
+<button id="knifeBtn" class="control">🔪</button>
+<button id="leftBtn"  class="control">⬅</button>
+<button id="rightBtn" class="control">➡</button>
+<button id="jumpBtn"  class="control">⬆</button>
+
+<div id="deadOverlay"><div id="deadBox"><h2>你已阵亡！</h2><button id="restartBtn">重新开始</button></div></div>
+<div id="winOverlay"><div id="winBox"><h2>恭喜通关！</h2><button id="backBtn">再来一局</button></div></div>
+
+<script>
+const cv=document.getElementById('gameCanvas'),ctx=cv.getContext('2d');
+function resize(){cv.width=window.innerWidth;cv.height=window.innerHeight;}
+resize();window.addEventListener('resize',resize);
+function screenDiag(){return Math.hypot(cv.width,cv.height);}
+const player={x:0,y:0,w:40,h:60,vx:0,vy:0,dir:1,hp:2500,onGround:false,atkCD:0,hitCD:0,jumps:0};
+const hook={active:false,sx:0,sy:0,ex:0,ey:0,spd:12,maxLen:0};
+let knives=[],islands=[],trees=[],enemies=[],arrows=[],particles=[],cam={x:0,y:0};
+let killCount=0,bossSpawned=false,boss=null,combo=0,lastKillTime=0,exp=0;
+let shakeFrames=0,flashFrames=0,autoFire=false,fireTimer=0;
+const SHAKE_DURATION=30,FLASH_DURATION=12;
+const EXP_RADIUS=60;let expTreeBtn=null,curExpTree=null;
+
+/* ---------- 新增：苹果系统 ---------- */
+let apples=[]; // 存储苹果
+function spawnApple(x, y) {
+    apples.push({x, y, w: 20, h: 20});
+}
+
+/* ---------- 新增：自动百岛入侵系统 ---------- */
+let invasionTimer = 0; // 入侵倒计时（帧数）
+const INVASION_INTERVAL = 60 * 60; // 60秒（假设60FPS）
+
+/* ---------- 多段跳 / 攻速系统 ---------- */
+let multiJump=false, maxJumps=1, ultraSpeed=false;
+function checkUnlock(){
+    if(exp>=100&&!multiJump){
+        multiJump=true; maxJumps=3;
+        alert('解锁多段跳！');
+    }
+    if(exp>=150&&!ultraSpeed){
+        ultraSpeed=true;
+        alert('解锁超高攻速！');
+    }
+    if(exp>=200&&!window.invasionTriggered){
+        triggerInvasion();
+    }
+}
+
+/* ---------- 百岛入侵（修改为可重复触发） ---------- */
+window.invasionTriggered=false;
+let invasionCount = 0; // 入侵次数计数器
+
+function triggerInvasion(){
+    invasionCount++;
+    alert(`第${invasionCount}次百岛入侵！`);
+    for(let i=0;i<100;i++){
+        const angle=Math.random()*Math.PI*2,dist=300+Math.random()*800;
+        const ix=player.x+Math.cos(angle)*dist,iy=player.y+Math.sin(angle)*dist;
+        spawnIsland(ix,iy,200+Math.random()*200);
+        for(let j=0;j<3;j++){
+            enemies.push({x:ix+(Math.random()-.5)*200,y:iy-50-Math.random()*50,w:25,h:45,type:'special',hp:6,dir:Math.random()<.5?1:-1,vx:0,vy:0,cd:0});
+        }
+    }
+    // 重置计时器
+    invasionTimer = 0;
+}
+
+function init(){
+    player.x=cv.width/2;player.y=cv.height/2;player.hp=2500;player.hitCD=0;player.jumps=0;
+    islands=[];trees=[];enemies=[];arrows=[];particles=[];knives=[];apples=[];
+    killCount=0;bossSpawned=false;boss=null;combo=0;lastKillTime=0;exp=0;
+    shakeFrames=0;flashFrames=0;autoFire=false;fireTimer=0;
+    hook.active=false;hook.maxLen=screenDiag();
+    multiJump=false;window.invasionTriggered=false; ultraSpeed=false; maxJumps=1;
+    invasionTimer = 0; // 重置入侵计时器
+    invasionCount = 0; // 重置入侵计数器
+    document.getElementById('deadOverlay').style.display='none';
+    document.getElementById('winOverlay').style.display='none';
+    if(expTreeBtn){expTreeBtn.remove();expTreeBtn=null;}
+    spawnIsland(cv.width/2,cv.height-150,300);
+    for(let i=0;i<4;i++)spawnIsland(cv.width/2+(i+1)*(250+Math.random()*300),cv.height/2-Math.random()*200,200+Math.random()*200);
+}
+init();
+
+function spawnIsland(x,y,w){
+    islands.push({x,y,w,h:20,color:`rgb(${100+~~(Math.random()*50)},${150+~~(Math.random()*50)},${50+~~(Math.random()*50)})`});
+    for(let i=0;i<Math.floor(w/100)+1;i++){
+        const tx=x-w/2+Math.random()*w;
+        trees.push({x:tx,y:y-25,w:10,h:60,top:25,canGiveExp:Math.random()<0.05});
+    }
+    // 生成苹果
+    if (Math.random() < 0.3) {
+        spawnApple(x + (Math.random() - 0.5) * (w - 30), y - 30);
+    }
+    
+    for(let i=0;i<5;i++){
+        const tp=Math.random()<0.5?'melee':'ranged';
+        enemies.push({x:x-w/2+Math.random()*w,y:y-50-Math.random()*30,w:25,h:45,type:tp,hp:tp==='melee'?3:2,dir:Math.random()<0.5?1:-1,vx:0,vy:0,cd:0});
+    }
+}
+
+function addKill(eType){
+    const now=Date.now();
+    if(now-lastKillTime<500)combo++;else combo=1;
+    lastKillTime=now;
+    killCount++;
+    if(eType==='special'){maxJumps++;createParticles(player.x,player.y,'#00ff00',20);}
+    if(killCount===450)flashFrames=FLASH_DURATION;
+    if(killCount>=5000&&!bossSpawned){bossSpawned=true;spawnBoss();}
+}
+
+function spawnBoss(){
+    boss={x:player.x,y:player.y-300,w:60,h:90,hp:1125,dir:1,vx:0,vy:0,cd:0,hookCD:0};
+}
+
+function createParticles(x,y,c,n){for(let i=0;i<n;i++)particles.push({x,y,vx:Math.random()*6-3,vy:Math.random()*6-3,life:15,color:c});}
+
+function respawnPlayer(){
+    player.hp=Math.max(0,player.hp-10);
+    let closest=null,minDist=Infinity;
+    islands.forEach(is=>{const d=Math.abs(is.x-player.x);if(d<minDist){minDist=d;closest=is;}});
+    if(closest){player.x=closest.x;player.y=closest.y-100;}else{player.x=cv.width/2;player.y=cv.height/2-100;}
+    player.vx=player.vy=0;player.onGround=false;player.hitCD=30;player.jumps=0;
+}
+
+function tryLaunchHook(e){
+    const x=(e.clientX??e.touches[0].clientX);
+    const y=(e.clientY??e.touches[0].clientY);
+    const tx=x+cam.x,ty=y+cam.y;
+    const dist=Math.hypot(tx-player.x-player.w/2,ty-player.y-player.h/2);
+    if(dist<=hook.maxLen&&!hook.active){
+        hook.active=true;hook.sx=player.x+player.w/2;hook.sy=player.y+player.h/2;hook.ex=tx;hook.ey=ty;
+        shakeFrames=SHAKE_DURATION;
+    }
+}
+cv.addEventListener('mousedown',tryLaunchHook);
+cv.addEventListener('touchstart',e=>{e.preventDefault();tryLaunchHook(e);});
+
+const keys={left:false,right:false};
+function setBtn(btn,down){
+    if(btn===leftBtn)keys.left=down;
+    else if(btn===rightBtn)keys.right=down;
+    else if(btn===jumpBtn){
+        if(!down)return;
+        if(player.onGround){player.vy=-15;player.onGround=false;player.jumps=1;}
+        else if(multiJump&&player.jumps<maxJumps){player.vy=-13;player.jumps++;}
+    }
+    else if(btn===document.getElementById('knifeBtn'))autoFire=down;
+}
+[leftBtn,rightBtn,jumpBtn,document.getElementById('knifeBtn')].forEach(btn=>{
+    ['mousedown','touchstart'].forEach(ev=>btn.addEventListener(ev,e=>{e.preventDefault();setBtn(btn,true);}));
+    ['mouseup','touchend','mouseleave'].forEach(ev=>btn.addEventListener(ev,e=>{e.preventDefault();setBtn(btn,false);}));
+});
+
+function throwKnife(){
+    if(player.atkCD>0)return;
+    const maxRange=screenDiag();
+    let target=null,minDist=maxRange;
+    if(boss){const d=Math.hypot(boss.x+boss.w/2-(player.x+player.w/2),boss.y+boss.h/2-(player.y+player.h/2));if(d<minDist){target=boss;minDist=d;}}
+    enemies.forEach(e=>{const d=Math.hypot(e.x+e.w/2-(player.x+player.w/2),e.y+e.h/2-(player.y+player.h/2));if(d<minDist){target=e;minDist=d;}});
+    if(!target)return;
+    player.atkCD=ultraSpeed?0:20;
+    const dx=(target.x+target.w/2)-(player.x+player.w/2);
+    const dy=(target.y+target.h/2)-(player.y+player.h/2);
+    const len=Math.hypot(dx,dy)||1;
+    knives.push({x:player.x+player.w/2,y:player.y+player.h/2,vx:dx/len*12,vy:dy/len*12});
+}
+
+function bossAI(){
+    if(!boss)return;
+    let onIsland=false,edgeDist=Infinity;
+    islands.forEach(is=>{if(boss.x+boss.w>is.x-is.w/2&&boss.x<is.x+is.w/2&&boss.y+boss.h>=is.y-2&&boss.y+boss.h<=is.y+2){onIsland=true;edgeDist=Math.min(boss.x-(is.x-is.w/2),(is.x+is.w/2)-boss.x);}});
+    if(onIsland&&edgeDist<35&&boss.hookCD<=0){
+        const dx=player.x-boss.x,dy=player.y-boss.y;
+        if(Math.hypot(dx,dy)<hook.maxLen){
+            boss.hookCD=120;
+            const len=Math.hypot(dx,dy)||1;
+            boss.vx=dx/len*8;boss.vy=dy/len*8-4;
+        }else{boss.vx=-boss.dir*5;boss.vy=-10;}
+    }
+    boss.hookCD--;
+}
+
+function update(){
+    if(boss&&boss.hp<=0){winOverlay.style.display='flex';return;}
+    if(player.hp<=0){deadOverlay.style.display='flex';return;}
+    
+    // 新增：自动百岛入侵计时
+    invasionTimer++;
+    if(invasionTimer >= INVASION_INTERVAL){
+        triggerInvasion();
+    }
+    
+    checkUnlock();
+    if(autoFire){
+        fireTimer++;
+        const fireRate=ultraSpeed?1:12;
+        if(fireTimer>=fireRate){throwKnife();fireTimer=0;}
+    }
+    if(shakeFrames>0)shakeFrames--;
+    if(flashFrames>0)flashFrames--;
+
+    curExpTree=null;
+    trees.forEach(t=>{if(!t.canGiveExp)return;const dx=t.x-(player.x+player.w/2),dy=t.y-(player.y+player.h/2);if(Math.hypot(dx,dy)<EXP_RADIUS)curExpTree=t;});
+    if(curExpTree){
+        if(!expTreeBtn){
+            expTreeBtn=document.createElement('button');
+            expTreeBtn.textContent='🌳';
+            expTreeBtn.style.cssText=`position:fixed;bottom:100px;right:20px;width:70px;height:70px;border-radius:50%;background:rgba(60,179,113,.5);border:2px solid #fff;color:#fff;font-size:28px;z-index:100;display:flex;align-items:center;justify-content:center;cursor:pointer;`;
+            document.body.appendChild(expTreeBtn);
+            expTreeBtn.onclick=()=>{if(curExpTree){createParticles(curExpTree.x,curExpTree.y,'#ffeb3b',15);curExpTree.canGiveExp=false;player.hp+=20;exp+=20;}};
+        }
+    }else{if(expTreeBtn){expTreeBtn.remove();expTreeBtn=null;}}
+
+    if(hook.active){
+        const dx=hook.ex-player.x-player.w/2,dy=hook.ey-player.y-player.h/2,len=Math.hypot(dx,dy);
+        if(len<hook.spd){hook.active=false;player.vx=0;player.vy=0;}
+        else{const nx=dx/len*hook.spd,ny=dy/len*hook.spd;player.x+=nx;player.y+=ny;player.vx=nx;player.vy=ny;}
+    }else{
+        if(!player.onGround)player.vy+=.5;
+        player.vx*=0.9;
+        if(keys.left){player.vx=-5;player.dir=-1;}
+        if(keys.right){player.vx=5;player.dir=1;}
+        player.x+=player.vx;player.y+=player.vy;player.onGround=false;
+        islands.forEach(is=>{if(player.x+player.w>is.x-is.w/2&&player.x<is.x+is.w/2&&player.y+player.h>is.y&&player.y+player.h<is.y+20){player.y=is.y-player.h;player.vy=0;player.onGround=true;player.jumps=0;}});
+    }
+    
+    // 苹果碰撞检测（无生命上限）
+    for (let i = apples.length - 1; i >= 0; i--) {
+        const apple = apples[i];
+        if (player.x < apple.x + apple.w &&
+            player.x + player.w > apple.x &&
+            player.y < apple.y + apple.h &&
+            player.y + player.h > apple.y) {
+            player.hp += 1000;
+            createParticles(apple.x, apple.y, '#ff0000', 15);
+            apples.splice(i, 1);
+        }
+    }
+    
+    if(player.atkCD>0)player.atkCD--;
+    if(player.hitCD>0)player.hitCD--;
+    if(player.y>cv.height+10000)respawnPlayer();
+    bossAI();
+
+    let right=null,left=null;
+    islands.forEach(is=>{if(!right||is.x>right.x)right=is;if(!left||is.x<left.x)left=is;});
+    if(right&&right.x<player.x+cv.width)spawnIsland(right.x+250+Math.random()*200,player.y-cv.height/4-Math.random()*100,200+Math.random()*200);
+    if(left&&left.x>player.x-cv.width)spawnIsland(left.x-250-Math.random()*200,player.y-cv.height/4-Math.random()*100,200+Math.random()*200);
+    if(enemies.length<20&&!bossSpawned)spawnIsland(player.x+(Math.random()-.5)*800,player.y-Math.random()*300,200);
+
+    enemies.forEach((e,idx)=>{
+        e.vy+=.5;e.x+=e.vx;e.y+=e.vy;e.onGround=false;
+        islands.forEach(is=>{if(e.x+e.w>is.x-is.w/2&&e.x<is.x+is.w/2&&e.y+e.h>is.y&&e.y+e.h<is.y+20){e.y=is.y-e.h;e.vy=0;e.onGround=true;}});
+        if(e.y>cv.height+1000){addKill(e.type);createParticles(e.x,e.y,'#ff0000',10);enemies.splice(idx,1);return;}
+        const dx=player.x-e.x;e.dir=dx>0?1:-1;
+        if(e.type==='melee'){
+            if(Math.abs(dx)>5)e.vx=e.dir*1.5;
+            if(player.hitCD<=0&&e.x+e.w>player.x&&e.x<player.x+player.w&&e.y+e.h>player.y&&e.y<player.y+player.h){player.hp--;player.hitCD=30;createParticles(player.x,player.y,'#ff0000',6);shakeFrames=SHAKE_DURATION;flashFrames=FLASH_DURATION;}
+        }else if(e.type==='ranged'){
+            if(Math.abs(dx)<200&&Math.abs(dx)>100)e.vx=e.dir*1;else e.vx*=0.9;
+            if(Math.abs(dx)<200&&e.cd<=0){arrows.push({x:e.x,y:e.y,vx:Math.cos(Math.atan2(player.y-e.y,dx))*5,vy:Math.sin(Math.atan2(player.y-e.y,dx))*5,w:10,h:5});e.cd=90;}
+        }else if(e.type==='special'){
+            if(Math.abs(dx)>5)e.vx=e.dir*2;
+            if(player.hitCD<=0&&e.x+e.w>player.x&&e.x<player.x+player.w&&e.y+e.h>player.y&&e.y<player.y+player.h){player.hp-=2;player.hitCD=30;createParticles(player.x,player.y,'#ff0000',8);shakeFrames=SHAKE_DURATION;flashFrames=FLASH_DURATION;}
+        }
+        e.cd--;
+        if(e.hp<=0){addKill(e.type);createParticles(e.x,e.y,'#ff0000',10);enemies.splice(idx,1);}
+    });
+    if(boss){
+        boss.vy+=.5;boss.x+=boss.vx;boss.y+=boss.vy;boss.onGround=false;
+        islands.forEach(is=>{if(boss.x+boss.w>is.x-is.w/2&&boss.x<is.x+is.w/2&&boss.y+boss.h>is.y&&boss.y+boss.h<is.y+20){boss.y=is.y-boss.h;boss.vy=0;boss.onGround=true;}});
+        const dxBoss=player.x-boss.x;boss.dir=dxBoss>0?1:-1;
+        if(Math.abs(dxBoss)>5)boss.vx=boss.dir*2;else boss.vx*=0.9;
+        if(player.hitCD<=0&&boss.x+boss.w>player.x&&boss.x<player.x+player.w&&boss.y+boss.h>player.y&&boss.y<player.y+player.h){player.hp-=2;player.hitCD=30;createParticles(player.x,player.y,'#ff0000',8);shakeFrames=SHAKE_DURATION;flashFrames=FLASH_DURATION;}
+        if(Math.abs(dxBoss)<250&&boss.cd<=0){arrows.push({x:boss.x+boss.w/2,y:boss.y+boss.h/2,vx:Math.cos(Math.atan2(player.y-boss.y,dxBoss))*7,vy:Math.sin(Math.atan2(player.y-boss.y,dxBoss))*7,w:12,h:6});boss.cd=60;}
+        boss.cd--;
+    }
+    for(let ki=knives.length-1;ki>=0;ki--){
+        const k=knives[ki];
+        k.x+=k.vx;k.y+=k.vy;
+        let hit=false;
+        for(let ei=enemies.length-1;ei>=0;ei--){
+            const e=enemies[ei];
+            if(k.x>e.x&&k.x<e.x+e.w&&k.y>e.y&&k.y<e.y+e.h){
+                e.hp-=2;
+                ctx.fillStyle='rgba(255,255,255,0.6)';ctx.fillRect(k.x-10-cam.x,k.y-10-cam.y,20,20);
+                createParticles(k.x,k.y,'#fff',6);
+                if(e.hp<=0){addKill(e.type);createParticles(e.x,e.y,'#ff0000',10);enemies.splice(ei,1);}
+                hit=true;break;
+            }
+        }
+        if(!hit&&boss){
+            if(k.x>boss.x&&k.x<boss.x+boss.w&&k.y>boss.y&&k.y<boss.y+boss.h){
+                boss.hp-=2;
+                ctx.fillStyle='rgba(255,255,255,0.6)';ctx.fillRect(k.x-10-cam.x,k.y-10-cam.y,20,20);
+                createParticles(k.x,k.y,'#fff',6);
+                hit=true;
+            }
+        }
+        if(hit||k.x<cam.x-50||k.x>cam.x+cv.width+50||k.y<cam.y-50||k.y>cam.y+cv.height+50)knives.splice(ki,1);
+    }
+    for(let ai=arrows.length-1;ai>=0;ai--){
+        const a=arrows[ai];
+        a.x+=a.vx;a.y+=a.vy;
+        const target=player,dmg=(a.w===12)?2:1;
+        if(a.x>target.x-target.w/2&&a.x<target.x+target.w/2&&a.y>target.y-target.h/2&&a.y<target.y+target.h/2){target.hp-=dmg;arrows.splice(ai,1);createParticles(target.x,target.y,'#ff0000',5);shakeFrames=SHAKE_DURATION;flashFrames=FLASH_DURATION;}
+        else if(a.x<cam.x-200||a.x>cam.x+cv.width+200||a.y>cv.height+200)arrows.splice(ai,1);
+    }
+    particles.forEach((p,i)=>{p.x+=p.vx;p.y+=p.vy;p.life--;if(p.life<=0)particles.splice(i,1);});
+}
+
+function render(){
+    cam.x=player.x-cv.width/2;cam.y=player.y-cv.height/2;
+    if(flashFrames>0){ctx.fillStyle=`rgba(255,255,255,${flashFrames/FLASH_DURATION})`;ctx.fillRect(0,0,cv.width,cv.height);}
+    let offsetX=0,offsetY=0;
+    if(shakeFrames>0){const t=(SHAKE_DURATION-shakeFrames)/SHAKE_DURATION;const amp=30*(1-t);offsetX=(Math.random()-.5)*amp;offsetY=(Math.random()-.5)*amp;}
+    ctx.save();ctx.translate(offsetX,offsetY);
+    const grd=ctx.createLinearGradient(0,0,0,cv.height);
+    grd.addColorStop(0,'#87CEEB');grd.addColorStop(1,'#E0F7FA');
+    ctx.fillStyle=grd;ctx.fillRect(0,0,cv.width,cv.height);
+    islands.forEach(is=>{const sx=is.x-cam.x,sy=is.y-cam.y;ctx.fillStyle=is.color;ctx.fillRect(sx-is.w/2,sy,is.w,is.h);ctx.fillStyle='rgba(0,0,0,.2)';ctx.fillRect(sx-is.w/2,sy+is.h,is.w,5);});
+    trees.forEach(t=>{const sx=t.x-cam.x,sy=t.y-cam.y;ctx.fillStyle='#8B4513';ctx.fillRect(sx-t.w/2,sy,t.w,t.h);ctx.fillStyle='#27ae60';ctx.beginPath();ctx.arc(sx,sy-t.top/2,t.top,0,Math.PI*2);ctx.fill();if(t.canGiveExp){ctx.strokeStyle='#ffeb3b';ctx.lineWidth=3;ctx.beginPath();ctx.arc(sx,sy-t.top/2,t.top+8,0,Math.PI*2);ctx.stroke();}});
+    
+    // 绘制苹果
+    apples.forEach(apple=>{
+        const sx=apple.x-cam.x,sy=apple.y-cam.y;
+        ctx.fillStyle='#ff0000';
+        ctx.beginPath();
+        ctx.arc(sx+apple.w/2, sy+apple.h/2, apple.w/2, 0, Math.PI*2);
+        ctx.fill();
+        ctx.fillStyle='#8B4513';
+        ctx.fillRect(sx+apple.w/2-2, sy-5, 4, 8);
+    });
+    
+    enemies.forEach(e=>{const sx=e.x-cam.x,sy=e.y-cam.y;if(e.type==='special'){ctx.fillStyle='#ff9800';}else{ctx.fillStyle=e.type==='melee'?'#e74c3c':'#9b59b6';}ctx.fillRect(sx,sy,e.w,e.h);ctx.fillStyle='#34495e';ctx.beginPath();ctx.arc(sx+e.w/2,sy-8,8,0,Math.PI*2);ctx.fill();ctx.fillStyle='red';const maxHp=e.type==='special'?6:(e.type==='melee'?3:2);ctx.fillRect(sx,sy-15,e.w*(e.hp/maxHp),3);});
+    if(boss){const sx=boss.x-cam.x,sy=boss.y-cam.y;ctx.fillStyle='#000';ctx.fillRect(sx,sy,boss.w,boss.h);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(sx+boss.w/2,sy-15,20,0,Math.PI*2);ctx.fill();ctx.fillStyle='red';ctx.fillRect(sx,sy-25,boss.w*(boss.hp/1125),5);}
+    arrows.forEach(a=>{const sx=a.x-cam.x,sy=a.y-cam.y;ctx.save();ctx.translate(sx,sy);ctx.rotate(Math.atan2(a.vy,a.vx));ctx.fillStyle='#8B4513';ctx.fillRect(0,-a.h/2,a.w,a.h);ctx.fillStyle='#bdc3c7';ctx.beginPath();ctx.moveTo(a.w,-a.h);ctx.lineTo(a.w+5,0);ctx.lineTo(a.w,a.h);ctx.closePath();ctx.fill();ctx.restore();});
+    knives.forEach(k=>{ctx.save();ctx.translate(k.x-cam.x,k.y-cam.y);ctx.rotate(Math.atan2(k.vy,k.vx));ctx.fillStyle='#fff';ctx.fillRect(-15,-3,30,6);ctx.restore();});
+    if(hook.active){ctx.beginPath();ctx.moveTo(hook.sx-cam.x,hook.sy-cam.y);ctx.lineTo(hook.ex-cam.x,hook.ey-cam.y);ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();}
+    ctx.restore();
+    ctx.globalAlpha=.8;particles.forEach(p=>{ctx.fillStyle=p.color;ctx.fillRect(p.x-cam.x,p.y-cam.y,4,4);});ctx.globalAlpha=1;
+    const sx=player.x-cam.x,sy=player.y-cam.y;
+    ctx.fillStyle='#3498db';ctx.fillRect(sx,sy,player.w,player.h);
+    ctx.fillStyle='#f1c40f';ctx.beginPath();ctx.arc(sx+player.w/2,sy-10,15,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='red';ctx.font='20px Arial';ctx.fillText(`生命:${player.hp}`,20,40);
+    ctx.fillStyle='black';ctx.font='20px Arial';ctx.fillText(`击杀:${killCount}/5000`,20,70);
+    ctx.fillStyle='black';ctx.font='20px Arial';ctx.fillText(`连击:${combo}`,cv.width-100,40);
+    ctx.fillText(`经验:${exp}`,cv.width-100,70);
+    ctx.fillText(`可跳:${maxJumps}`,cv.width-100,100);
+    
+    // 新增：显示下次入侵倒计时
+    const secondsLeft = Math.ceil((INVASION_INTERVAL - invasionTimer) / 60);
+    ctx.fillText(`下次入侵:${secondsLeft}秒`,20,100);
+    
+    if(ultraSpeed)ctx.fillText('【超高攻速】',cv.width-160,130);
+}
+function loop(){update();render();requestAnimationFrame(loop);}
+loop();
+document.getElementById('restartBtn').onclick=document.getElementById('backBtn').onclick=init;
+</script>
+</body>
+</html>
