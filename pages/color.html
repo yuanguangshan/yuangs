@@ -343,6 +343,9 @@
             text-shadow: 0 1px 1px rgba(0,0,0,0.5);
         }
     </style>
+
+    <!-- 引入 culori 库的 UMD/CDN 版本 -->
+    <script src="https://cdn.jsdelivr.net/npm/culori@3.0.0/dist/culori.min.js"></script>
 </head>
 <body>
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
@@ -434,6 +437,7 @@
                             <button class="mode-btn active" data-index="0">邻近(固H)</button>
                             <button class="mode-btn" data-index="1">同饱和(固S)</button>
                             <button class="mode-btn" data-index="2">同明度(固V)</button>
+                            <button class="mode-btn" data-index="3">LCH固明度</button>
                         </div>
                     </div>
                     <div class="color-grid dynamic-colors" id="dynamicColorMatrix">
@@ -1130,6 +1134,63 @@
           "#77DD77": { "en": "pastel-green", "cn": "马卡龙绿 (法国)" }
         };
 
+        // LCH conversion functions using culori (initialized later)
+        // Using culori's namespace - will be initialized when DOM is ready
+        let culoriConverter, culoriParse, culoriFormatHex, culoriClampChroma;
+
+        // Helper function: HEX -> LCH object
+        function hexToLch(hex) {
+            if (typeof culori === 'undefined') return null; // Fallback if library not loaded
+
+            // 1. Parse HEX color to RGB object
+            const rgbColor = culoriParse(hex);
+            if (!rgbColor) return null;
+
+            // 2. Convert RGB to LCH format
+            return culoriConverter('lch')(rgbColor);
+        }
+
+        // Helper function: LCH object -> HEX string (with gamut mapping)
+        function lchToHex(lchColor) {
+            if (typeof culori === 'undefined') return '#000000'; // Fallback if library not loaded
+
+            if (!lchColor) return '#000000';
+
+            // 1. Force LCH color to be within sRGB gamut boundaries (critical step)
+            const clippedLch = culoriClampChroma(lchColor, 'lch');
+
+            // 2. Convert clamped LCH back to RGB
+            const rgbColor = culoriConverter('rgb')(clippedLch);
+
+            // 3. Format RGB as HEX string
+            return culoriFormatHex(rgbColor);
+        }
+
+        // Helper function to generate LCH gradients
+        function generateLCHGradients(baseColor, steps = 5) {
+            if (typeof culori === 'undefined') return [baseColor]; // Fallback if library not loaded
+
+            const lch = hexToLch(baseColor);
+            if (!lch) return [baseColor];
+
+            const result = [];
+
+            // Create a gradient by changing L (lightness) while keeping C and H constant
+            for (let i = 0; i < steps; i++) {
+                const factor = i / (steps - 1); // 0 to 1
+                const newL = lch.l * factor + 100 * (1 - factor); // Interpolate to white (L=100)
+
+                const newLch = {
+                    mode: 'lch',
+                    l: newL,
+                    c: lch.c,
+                    h: lch.h
+                };
+                result.push(lchToHex(newLch));
+            }
+            return result;
+        }
+
         // Global variables
         let currentPalette = "Apple";
         let currentColor = { r: 0, g: 122, b: 255 };
@@ -1215,6 +1276,10 @@
                         valDelta: 0.05
                     });
                     break;
+                case 3: // LCH 同明度(固L)
+                    // Generate colors by varying C and H in LCH space while keeping L fixed
+                    colors = generateLCHColorMatrix(hsvToRgb(hsv.h, hsv.s, hsv.v));
+                    break;
                 default:
                     colors = generateColorMatrix(hsv, {
                         hueSteps: 1,
@@ -1232,6 +1297,89 @@
             }
 
             dynamicColorsCache.set(cacheKey, colors);
+            return colors;
+        }
+
+        // Generate LCH color matrix (perceptually uniform) - Fixed Lightness (L)
+        function generateLCHColorMatrix(rgb) {
+            if (typeof culori === 'undefined') {
+                // Fallback to HSV-based generation if culori library not loaded
+                return generateColorMatrix(rgbToHsv(rgb.r, rgb.g, rgb.b), {
+                    hueSteps: 10,
+                    satSteps: 10,
+                    valSteps: 1,
+                    hueDelta: 36,
+                    satDelta: 0.12,
+                    valDelta: 0.05
+                });
+            }
+
+            // Convert RGB to LCH
+            const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+            const lch = hexToLch(hex);
+            if (!lch) {
+                // Fallback to HSV-based generation if LCH conversion fails
+                return generateColorMatrix(rgbToHsv(rgb.r, rgb.g, rgb.b), {
+                    hueSteps: 10,
+                    satSteps: 10,
+                    valSteps: 1,
+                    hueDelta: 36,
+                    satDelta: 0.12,
+                    valDelta: 0.05
+                });
+            }
+
+            const colors = [];
+            const H_COUNT = 10; // Hue steps
+            const C_COUNT = 10; // Chroma steps
+
+            // Fixed lightness (L) - keep the original L
+            const fixedL = lch.l;
+
+            // Define the range of variation for hue (0 to 360)
+            const minH = 0;
+            const maxH = 360;
+            const hStep = maxH / H_COUNT;
+
+            // Define the range of variation for chroma - ensure reasonable range
+            // Use the base chroma as center and vary around it
+            let baseC = lch.c;
+            if (baseC < 10) baseC = 10; // Ensure some minimum chroma to work with
+            const minC = Math.max(0, baseC - 30);
+            const maxC = baseC + 50;
+            const cStep = (maxC - minC) / (C_COUNT - 1);
+
+            // Generate the matrix - vary Hue and Chroma while keeping Lightness fixed
+            for (let h_idx = 0; h_idx < H_COUNT; h_idx++) {
+                const newH = minH + h_idx * hStep;
+
+                for (let c_idx = 0; c_idx < C_COUNT; c_idx++) {
+                    const newC = minC + c_idx * cStep;
+
+                    const newLch = {
+                        mode: 'lch',
+                        l: fixedL,  // Keep lightness fixed
+                        c: newC,
+                        h: newH
+                    };
+
+                    // Convert back to hex with gamut mapping
+                    const hexColor = lchToHex(newLch);
+                    // Only add if conversion was successful
+                    if (hexColor && hexColor !== '#000000') {
+                        colors.push(hexColor);
+                    } else {
+                        // Fallback to the original color if conversion fails
+                        colors.push(hex);
+                    }
+                }
+            }
+
+            // Ensure we return the expected number of colors
+            while (colors.length < H_COUNT * C_COUNT) {
+                colors.push(hex); // Pad with original color if needed
+            }
+
             return colors;
         }
 
@@ -1654,7 +1802,7 @@
             }
         }
 
-        // Update the other two dynamic color variations for comparison (excluding the current left panel mode)
+        // Update the other dynamic color variations for comparison (excluding the current left panel mode)
         function updateDynamicComparison() {
             const hsv = rgbToHsv(currentColor.r, currentColor.g, currentColor.b);
             const currentHex = rgbToHex(currentColor.r, currentColor.g, currentColor.b);
@@ -1662,8 +1810,12 @@
             const container = document.getElementById('dynamicComparisonContainer');
             container.innerHTML = '';
 
-            // Show only the other two modes (not the one currently displayed in the left panel)
-            for (let modeIdx = 1; modeIdx < 3; modeIdx++) {  // Skip mode 0 (邻近固H) since it's in the left panel
+            // Show only 2 other modes (not the one currently displayed in the left panel)
+            // This maintains visual balance with the original design
+            // Show modes 1 and 3 to provide both traditional HSV and new LCH approaches
+            const modesToShow = [1, 3]; // Show traditional (mode 1) and LCH (mode 3)
+            for (let i = 0; i < modesToShow.length; i++) {
+                const modeIdx = modesToShow[i];
                 const dynamicColors = getDynamicColors(hsv, modeIdx);
 
                 const modeSection = document.createElement('div');
@@ -1671,7 +1823,7 @@
                 modeSection.style.marginBottom = '10px';
                 modeSection.style.padding = '10px';
 
-                const modeNames = ['邻近(固H)', '同饱和(固S)', '同明度(固V)'];
+                const modeNames = ['邻近(固H)', '同饱和(固S)', '同明度(固V)', 'LCH固明度'];
                 const modeTitle = document.createElement('div');
                 modeTitle.textContent = modeNames[modeIdx];
                 modeTitle.style.fontWeight = 'bold';
@@ -1914,37 +2066,120 @@
             return [baseColor, hex1, hex2];
         }
 
-        // LCH conversion functions (simplified)
+        // LCH conversion functions using culori
         function generateLCHComplementaryScheme(baseColor) {
-            return generateComplementaryScheme(baseColor); // Fallback for HTML version
+            if (typeof culori === 'undefined') return generateComplementaryScheme(baseColor); // Fallback if library not loaded
+
+            const lch = hexToLch(baseColor);
+            if (!lch) return [baseColor];
+
+            // Complementary: Add 180° to hue
+            const complementaryHue = (lch.h + 180) % 360;
+            const newLch = {
+                mode: 'lch',
+                l: lch.l,
+                c: lch.c,
+                h: complementaryHue
+            };
+
+            return [baseColor, lchToHex(newLch)];
         }
 
         function generateLCHAnalogousScheme(baseColor, angle = 30) {
-            return generateAnalogousScheme(baseColor, angle); // Fallback for HTML version
+            if (typeof culori === 'undefined') return generateAnalogousScheme(baseColor, angle); // Fallback if library not loaded
+
+            const lch = hexToLch(baseColor);
+            if (!lch) return [baseColor];
+
+            const hue1 = (lch.h - angle + 360) % 360;
+            const hue2 = (lch.h + angle) % 360;
+
+            const lch1 = { mode: 'lch', l: lch.l, c: lch.c, h: hue1 };
+            const lch2 = { mode: 'lch', l: lch.l, c: lch.c, h: hue2 };
+
+            return [lchToHex(lch1), baseColor, lchToHex(lch2)];
         }
 
         function generateLCHTriadicScheme(baseColor) {
-            return generateTriadicScheme(baseColor); // Fallback for HTML version
+            if (typeof culori === 'undefined') return generateTriadicScheme(baseColor); // Fallback if library not loaded
+
+            const lch = hexToLch(baseColor);
+            if (!lch) return [baseColor];
+
+            const hue1 = (lch.h + 120) % 360;
+            const hue2 = (lch.h + 240) % 360;
+
+            const lch1 = { mode: 'lch', l: lch.l, c: lch.c, h: hue1 };
+            const lch2 = { mode: 'lch', l: lch.l, c: lch.c, h: hue2 };
+
+            return [baseColor, lchToHex(lch1), lchToHex(lch2)];
         }
 
         function generateLCHTetradicScheme(baseColor) {
-            return generateTetradicScheme(baseColor); // Fallback for HTML version
+            if (typeof culori === 'undefined') return generateTetradicScheme(baseColor); // Fallback if library not loaded
+
+            const lch = hexToLch(baseColor);
+            if (!lch) return [baseColor];
+
+            const hue1 = (lch.h + 90) % 360;
+            const hue2 = (lch.h + 180) % 360;
+            const hue3 = (lch.h + 270) % 360;
+
+            const lch1 = { mode: 'lch', l: lch.l, c: lch.c, h: hue1 };
+            const lch2 = { mode: 'lch', l: lch.l, c: lch.c, h: hue2 };
+            const lch3 = { mode: 'lch', l: lch.l, c: lch.c, h: hue3 };
+
+            return [baseColor, lchToHex(lch1), lchToHex(lch2), lchToHex(lch3)];
         }
 
         function generateLCHMonochromaticScheme(baseColor) {
-            return generateMonochromaticScheme(baseColor); // Fallback for HTML version
+            if (typeof culori === 'undefined') return generateMonochromaticScheme(baseColor); // Fallback if library not loaded
+
+            const lch = hexToLch(baseColor);
+            if (!lch) return [baseColor];
+
+            const result = [];
+
+            // Define lightness and chroma variations
+            // L (lightness) from -20 to +20 in four steps, C (chroma) slightly adjusted for contrast.
+            const steps = [
+                { lDelta: -20, cFactor: 0.8 }, // Darker, slightly less chroma
+                { lDelta: -10, cFactor: 0.9 }, // Slightly darker
+                { lDelta: 0, cFactor: 1.0 },   // Base color
+                { lDelta: 10, cFactor: 1.05 }, // Slightly lighter
+                { lDelta: 20, cFactor: 1.1 }   // Lighter, slightly more chroma
+            ];
+
+            steps.forEach(step => {
+                const newL = Math.max(0, Math.min(100, lch.l + step.lDelta));
+                const newC = Math.max(0, lch.c * step.cFactor);
+
+                const newLch = {
+                    mode: 'lch',
+                    l: newL,
+                    c: newC,
+                    h: lch.h
+                };
+                result.push(lchToHex(newLch));
+            });
+
+            return result;
         }
 
         function generateLCHSplitComplementaryScheme(baseColor, angle = 30) {
-            return generateSplitComplementaryScheme(baseColor, angle); // Fallback for HTML version
-        }
+            if (typeof culori === 'undefined') return generateSplitComplementaryScheme(baseColor, angle); // Fallback if library not loaded
 
-        function generateLCHGradients(baseColor, steps = 5) {
-            const result = [];
-            for (let i = 0; i < steps; i++) {
-                result.push(baseColor); // Fallback for HTML version
-            }
-            return result;
+            const lch = hexToLch(baseColor);
+            if (!lch) return [baseColor];
+
+            const complementaryHue = (lch.h + 180) % 360;
+            const splitHue1 = (complementaryHue - angle + 360) % 360;
+            const splitHue2 = (complementaryHue + angle) % 360;
+
+            const lch1 = { mode: 'lch', l: lch.l, c: lch.c, h: splitHue1 };
+            const lch2 = { mode: 'lch', l: lch.l, c: lch.c, h: splitHue2 };
+
+            return [baseColor, lchToHex(lch1), lchToHex(lch2)];
         }
 
         // Generate and preview color schemes
@@ -2162,6 +2397,11 @@
 
         // Initialize the UI
         function initUI() {
+            // Initialize culori functions once library is loaded
+            if (typeof culori !== 'undefined') {
+                ({ converter: culoriConverter, parse: culoriParse, formatHex: culoriFormatHex, clampChroma: culoriClampChroma } = culori);
+            }
+
             // Set up palette selector
             const paletteNames = Object.keys(colorPalettes);
             const title = document.getElementById('title');
@@ -2208,6 +2448,14 @@
                 modeIndex = 2;
                 modeButtons.forEach(btn => btn.classList.remove('active'));
                 modeButtons[2].classList.add('active');
+                updateDynamicColorPalette();
+                updateDynamicComparison();
+            });
+
+            modeButtons[3].addEventListener('click', () => {
+                modeIndex = 3;
+                modeButtons.forEach(btn => btn.classList.remove('active'));
+                modeButtons[3].classList.add('active');
                 updateDynamicColorPalette();
                 updateDynamicComparison();
             });
