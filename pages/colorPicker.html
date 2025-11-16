@@ -274,7 +274,10 @@
     <div class="container">
         <div class="clipboard-header">
             <div id="clipboard-label">剪切板中没有发现颜色值</div>
-            <button class="restart-btn" id="restartClipboardMonitorButton">重新监控</button>
+            <div>
+                <button class="restart-btn" id="restartClipboardMonitorButton">重新监控</button>
+                <button class="restart-btn" id="manualClipboardCheckButton" style="background-color: #5C6BC0; margin-left: 5px;">手动检查</button>
+            </div>
         </div>
         <div class="color-grid clipboard-colors" id="clipboardColorsMatrix">
             <!-- Clipboard colors will appear here -->
@@ -1810,16 +1813,72 @@
             }
         }
 
+        function readClipboard() {
+            if (navigator.clipboard && window.isSecureContext) {
+                return navigator.clipboard.readText().catch(err => {
+                    console.error('Failed to read clipboard contents: ', err);
+                    return '';
+                });
+            } else {
+                // Fallback for non-secure contexts or unsupported browsers
+                return new Promise((resolve) => {
+                    const text = prompt("请粘贴剪贴板内容:");
+                    resolve(text || '');
+                });
+            }
+        }
+
+        async function checkClipboardForColors() {
+            try {
+                const clipboardText = await readClipboard();
+                if (clipboardText) {
+                    const foundColors = extractMultipleColors(clipboardText);
+                    if (foundColors.length > 0) {
+                        // Remove duplicates and add new colors to clipboardColors
+                        foundColors.forEach(color => {
+                            if (!clipboardColors.some(existingColor => colorsAreEqual(existingColor, color))) {
+                                clipboardColors.push(color);
+                            }
+                        });
+                        // Keep only the most recent 20 colors
+                        if (clipboardColors.length > 20) {
+                            clipboardColors = clipboardColors.slice(-20);
+                        }
+                        updateClipboardColorDisplay();
+                        return true;
+                    }
+                }
+            } catch (error) {
+                console.error('Error reading clipboard:', error);
+            }
+            return false;
+        }
+
         function startClipboardMonitoring() {
-            // In a browser environment, we can't truly monitor clipboard,
-            // but we can simulate by checking a text area or using clipboard API
-            // For now, let's just show a message
-            console.log("Clipboard monitoring started (simulated)");
+            // In a browser environment, we can't continuously monitor clipboard,
+            // but we can check it periodically when user interacts with the page
+            // Set up periodic check when user focuses on the page
+            stopClipboardMonitoring(); // Clear any existing interval first
+
+            // Check clipboard when page loads and every 10 seconds when page is focused
+            checkClipboardForColors();
+
+            // Set up interval to periodically check clipboard
+            clipboardMonitorInterval = setInterval(async () => {
+                await checkClipboardForColors();
+            }, 10000); // Check every 10 seconds
+
+            // Also check clipboard on keyup events for more responsive behavior
+            document.addEventListener('keyup', async () => {
+                await checkClipboardForColors();
+            });
         }
 
         function stopClipboardMonitoring() {
-            // Stop clipboard monitoring
-            console.log("Clipboard monitoring stopped");
+            if (clipboardMonitorInterval) {
+                clearInterval(clipboardMonitorInterval);
+                clipboardMonitorInterval = null;
+            }
         }
 
         // Initialize the UI
@@ -1959,9 +2018,20 @@
             });
 
             // Set up restart clipboard monitor button
-            document.getElementById('restartClipboardMonitorButton').addEventListener('click', () => {
+            document.getElementById('restartClipboardMonitorButton').addEventListener('click', async () => {
+                await checkClipboardForColors();
                 startClipboardMonitoring();
                 alert("已重新开始监控剪切板");
+            });
+
+            // Add event listener to the manual clipboard check button that already exists in HTML
+            document.getElementById('manualClipboardCheckButton').addEventListener('click', async () => {
+                const found = await checkClipboardForColors();
+                if (found) {
+                    alert(`发现新颜色值并已添加到剪切板颜色区域`);
+                } else {
+                    alert('未在剪切板中发现颜色值');
+                }
             });
 
             // Simulate clipboard check on page load
