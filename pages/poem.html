@@ -343,8 +343,16 @@
   </footer>
 
   <script>
+    // Store all poems globally after first fetch
+    let allPoems = null;
+
     // Function to fetch and cache XML data
     async function fetchAndCachePoems() {
+      // If poems are already loaded in memory, return them immediately
+      if (allPoems !== null) {
+        return allPoems;
+      }
+
       const CACHE_KEY = 'tang_poems_cache';
       const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
@@ -355,9 +363,10 @@
         const now = Date.now();
 
         if (now - timestamp < CACHE_DURATION) {
-          // Cache is still valid
+          // Cache is still valid - store in memory for subsequent requests
+          allPoems = data;
           console.log("Using cached poem data");
-          return data;
+          return allPoems;
         }
       }
 
@@ -400,8 +409,11 @@
         };
         localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
 
+        // Store in memory for subsequent requests
+        allPoems = poems;
+
         console.log(`Fetched and cached ${poems.length} poems`);
-        return poems;
+        return allPoems;
       } catch (error) {
         console.error('Error fetching poem data:', error);
 
@@ -409,11 +421,14 @@
         if (cachedData) {
           const { data } = JSON.parse(cachedData);
           console.warn("Using expired cached data due to fetch error");
-          return data;
+          // Store expired data in memory temporarily
+          allPoems = data;
+          return allPoems;
         }
 
         // If no cached data is available, return an empty array
-        return [];
+        allPoems = [];
+        return allPoems;
       }
     }
 
@@ -448,10 +463,7 @@
         return;
       }
 
-      // Wait a bit for visual effect
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Update poem content
+      // Update poem content immediately
       document.getElementById('poemTitle').textContent = poem.title;
       document.getElementById('poemAuthor').textContent = poem.auth;
       document.getElementById('poemType').textContent = poem.type;
