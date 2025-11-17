@@ -290,6 +290,45 @@
       animation: fadeIn 0.8s ease forwards;
     }
 
+    .filter-section {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      align-items: center;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 10px;
+      margin: 10px;
+    }
+
+    .filter-section label {
+      font-weight: bold;
+      color: #555;
+    }
+
+    .filter-section select {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      background: white;
+      font-size: 1rem;
+      min-width: 150px;
+    }
+
+    .filter-section button {
+      padding: 8px 16px;
+      background: #6c757d;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .filter-section button:hover {
+      background: #5a6268;
+    }
+
     /* Poetry-specific styling */
     strong {
       color: #667eea;
@@ -307,6 +346,20 @@
       <h1>古典唐诗</h1>
       <div class="subtitle">品味千年文化，感受诗词之美</div>
     </header>
+
+    <div class="controls">
+      <div class="filter-section">
+        <label for="authorFilter">筛选作者: </label>
+        <select id="authorFilter" onchange="filterByAuthor()">
+          <option value="">全部作者</option>
+        </select>
+        <label for="poemList">选择作品: </label>
+        <select id="poemList" onchange="selectPoem()">
+          <option value="">选择作品</option>
+        </select>
+        <button class="refresh-btn" onclick="clearFilter()">清除筛选</button>
+      </div>
+    </div>
 
     <div class="poem-content">
       <div class="poem-section">
@@ -345,6 +398,7 @@
   <script>
     // Store all poems globally after first fetch
     let allPoems = null;
+    let filteredPoems = null; // Store currently filtered poems
 
     // Function to fetch and cache XML data
     async function fetchAndCachePoems() {
@@ -448,6 +502,18 @@
       return `https://picsum.photos/400/300?random=${Date.now()}`;
     }
 
+    // Function to get a random poem from filtered data
+    async function getRandomPoem() {
+      // Use filtered poems if available, otherwise use all poems
+      const poems = filteredPoems || await fetchAndCachePoems();
+      if (poems.length === 0) {
+        console.warn("No poems available");
+        return null;
+      }
+      const randomIndex = Math.floor(Math.random() * poems.length);
+      return poems[randomIndex];
+    }
+
     // Function to load a random poem and image
     async function loadRandomPoem() {
       // Show loading
@@ -507,9 +573,138 @@
       }, 300); // Show content after 300ms if image hasn't loaded yet
     }
 
+    // Function to populate author filter dropdown
+    async function populateAuthorFilter() {
+      const authors = await getAllAuthors();
+      const authorFilter = document.getElementById('authorFilter');
+
+      // Clear existing options except the first one
+      authorFilter.innerHTML = '<option value="">全部作者</option>';
+
+      // Add unique authors to the dropdown
+      authors.forEach(author => {
+        const option = document.createElement('option');
+        option.value = author;
+        option.textContent = author;
+        authorFilter.appendChild(option);
+      });
+    }
+
+    // Function to get all unique authors
+    async function getAllAuthors() {
+      const poems = await fetchAndCachePoems();
+      const authors = [...new Set(poems.map(poem => poem.auth))];
+      return authors.sort();
+    }
+
+    // Function to filter poems by author
+    async function filterByAuthor() {
+      const selectedAuthor = document.getElementById('authorFilter').value;
+      const poems = await fetchAndCachePoems();
+
+      if (selectedAuthor === '') {
+        filteredPoems = poems;
+      } else {
+        filteredPoems = poems.filter(poem => poem.auth === selectedAuthor);
+      }
+
+      // Update poem list dropdown
+      updatePoemListDropdown();
+    }
+
+    // Function to update poem list dropdown based on filtered poems
+    function updatePoemListDropdown() {
+      const poemList = document.getElementById('poemList');
+
+      // Clear existing options except the first one
+      poemList.innerHTML = '<option value="">选择作品</option>';
+
+      if (filteredPoems && filteredPoems.length > 0) {
+        filteredPoems.forEach(poem => {
+          const option = document.createElement('option');
+          option.value = poem.title;
+          option.textContent = poem.title;
+          poemList.appendChild(option);
+        });
+      }
+    }
+
+    // Function to select a specific poem
+    async function selectPoem() {
+      const selectedTitle = document.getElementById('poemList').value;
+
+      if (selectedTitle) {
+        // Find the selected poem in the filtered poems
+        const poem = filteredPoems.find(p => p.title === selectedTitle);
+        if (poem) {
+          displayPoem(poem);
+        }
+      }
+    }
+
+    // Function to display a specific poem
+    function displayPoem(poem) {
+      // Show loading
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('poemTextContent').style.display = 'none';
+      document.getElementById('poemDescContent').style.display = 'none';
+
+      // Update poem content immediately
+      document.getElementById('poemTitle').textContent = poem.title;
+      document.getElementById('poemAuthor').textContent = poem.auth;
+      document.getElementById('poemType').textContent = poem.type;
+      document.getElementById('poemVerse').innerHTML = poem.content;
+      document.getElementById('poemDesc').innerHTML = poem.desc;
+
+      // Update image (in background, without blocking text display)
+      const img = document.getElementById('poemImage');
+      img.onload = function() {
+        // Show content once image is loaded
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('poemTextContent').style.display = 'block';
+        document.getElementById('poemDescContent').style.display = 'block';
+        document.getElementById('poemTextContent').classList.add('fade-in');
+        document.getElementById('poemDescContent').classList.add('fade-in');
+      };
+      img.onerror = function() {
+        // Show content even if image fails to load, then try fallback
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('poemTextContent').style.display = 'block';
+        document.getElementById('poemDescContent').style.display = 'block';
+        document.getElementById('poemTextContent').classList.add('fade-in');
+        document.getElementById('poemDescContent').classList.add('fade-in');
+
+        // Update image with fallback in background
+        img.src = 'https://picsum.photos/400/300?random=' + Date.now();
+      };
+
+      // Set the new image source
+      img.src = getRandomImageUrl();
+
+      // Show content immediately if this is the first load (image might take time)
+      setTimeout(() => {
+        if (document.getElementById('loading').style.display === 'block') {
+          document.getElementById('loading').style.display = 'none';
+          document.getElementById('poemTextContent').style.display = 'block';
+          document.getElementById('poemDescContent').style.display = 'block';
+          document.getElementById('poemTextContent').classList.add('fade-in');
+          document.getElementById('poemDescContent').classList.add('fade-in');
+        }
+      }, 300); // Show content after 300ms if image hasn't loaded yet
+    }
+
+    // Function to clear filters
+    function clearFilter() {
+      document.getElementById('authorFilter').value = '';
+      document.getElementById('poemList').value = '';
+      filteredPoems = allPoems; // Reset to all poems
+      updatePoemListDropdown();
+    }
+
     // Load a random poem when the page loads
-    window.onload = function() {
-      loadRandomPoem();
+    window.onload = async function() {
+      await loadRandomPoem();
+      await populateAuthorFilter(); // Populate the author filter after poems are loaded
     };
 
     // Add keyboard support (press spacebar for next poem)
