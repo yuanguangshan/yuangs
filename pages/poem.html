@@ -201,6 +201,15 @@
       overflow-y: auto;
     }
 
+    .poem-desc a {
+      color: #007bff;
+      text-decoration: underline;
+    }
+
+    .poem-desc a:hover {
+      color: #0056b3;
+    }
+
     @media (min-width: 768px) {
       .poem-desc {
         padding: 20px;
@@ -802,14 +811,27 @@
         const ciData = await response.json();
 
         // Process ci data to match poem structure
-        const processedCi = ciData.map(ci => ({
-          title: ci.rhythmic || '未知词牌', // Use rhythmic as title
-          auth: ci.author || '未知作者',
-          type: '宋词', // Mark as Song ci
-          content: ci.paragraphs ? ci.paragraphs.join('<br>') : '无内容',
-          desc: ci.tags ? `标签: ${ci.tags.join(', ')}` : '无标签',
-          source: 'ci' // Mark as ci
-        }));
+        const processedCi = ciData.map(ci => {
+          // Create a search link for analysis if no description is available
+          const searchQuery = encodeURIComponent(`${ci.author || ''} ${ci.rhythmic || ''}`);
+          const searchLink = `https://chat.baidu.com/search?word=${searchQuery}&setype=csaitab`;
+
+          let desc = '';
+          if (ci.tags && ci.tags.length > 0) {
+            desc = `标签: ${ci.tags.join(', ')}<br><a href="${searchLink}" target="_blank" style="color: #007bff; text-decoration: underline;">点击搜索诗词赏析</a>`;
+          } else {
+            desc = `<a href="${searchLink}" target="_blank" style="color: #007bff; text-decoration: underline;">点击搜索诗词赏析</a>`;
+          }
+
+          return {
+            title: ci.rhythmic || '未知词牌', // Use rhythmic as title
+            auth: ci.author || '未知作者',
+            type: '宋词', // Mark as Song ci
+            content: ci.paragraphs ? ci.paragraphs.join('<br>') : '无内容',
+            desc: desc,
+            source: 'ci' // Mark as ci
+          };
+        });
 
         // Cache the fetched data
         const cacheData = {
