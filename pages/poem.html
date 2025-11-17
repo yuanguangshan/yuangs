@@ -575,26 +575,50 @@
 
     // Function to populate author filter dropdown
     async function populateAuthorFilter() {
-      const authors = await getAllAuthors();
+      const authorsWithCount = await getAllAuthors();
       const authorFilter = document.getElementById('authorFilter');
 
       // Clear existing options except the first one
       authorFilter.innerHTML = '<option value="">全部作者</option>';
 
-      // Add unique authors to the dropdown
-      authors.forEach(author => {
+      // Add authors with poem counts to the dropdown
+      authorsWithCount.forEach(authorObj => {
         const option = document.createElement('option');
-        option.value = author;
-        option.textContent = author;
+        option.value = authorObj.name;
+        option.textContent = `${authorObj.name} (${authorObj.count})`;
         authorFilter.appendChild(option);
       });
     }
 
-    // Function to get all unique authors
+    // Function to get all authors sorted by poem count
     async function getAllAuthors() {
       const poems = await fetchAndCachePoems();
-      const authors = [...new Set(poems.map(poem => poem.auth))];
-      return authors.sort();
+
+      // Count poems per author
+      const authorCount = {};
+      poems.forEach(poem => {
+        if (authorCount[poem.auth]) {
+          authorCount[poem.auth]++;
+        } else {
+          authorCount[poem.auth] = 1;
+        }
+      });
+
+      // Create array of {name, count} objects and sort by count (descending)
+      const authorsWithCount = Object.entries(authorCount).map(([name, count]) => ({
+        name: name,
+        count: count
+      }));
+
+      // Sort by poem count (descending), then by name (ascending) for ties
+      authorsWithCount.sort((a, b) => {
+        if (b.count !== a.count) {
+          return b.count - a.count; // Sort by count descending
+        }
+        return a.name.localeCompare(b.name); // Sort by name ascending for ties
+      });
+
+      return authorsWithCount;
     }
 
     // Function to filter poems by author
@@ -605,7 +629,9 @@
       if (selectedAuthor === '') {
         filteredPoems = poems;
       } else {
-        filteredPoems = poems.filter(poem => poem.auth === selectedAuthor);
+        // Extract just the author name (before the parentheses)
+        const authorName = selectedAuthor.split(' (')[0];
+        filteredPoems = poems.filter(poem => poem.auth === authorName);
       }
 
       // Update poem list dropdown
