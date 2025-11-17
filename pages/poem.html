@@ -341,6 +341,125 @@
       background: #5a6268;
     }
 
+    .search-section {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      align-items: center;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 10px;
+      margin: 10px;
+      margin-top: 5px;
+    }
+
+    .search-section.show {
+      display: flex;
+    }
+
+    .search-section input {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 1rem;
+      min-width: 200px;
+      flex: 1;
+    }
+
+    .search-section button {
+      padding: 8px 16px;
+      background: #28a745;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .search-section button:nth-child(3) {
+      background: #6c757d; /* Different color for clear button */
+    }
+
+    .search-section button:hover {
+      background: #218838;
+    }
+
+    .search-section button:nth-child(3):hover {
+      background: #5a6268; /* Different hover for clear button */
+    }
+
+    .search-toggle-section {
+      display: flex;
+      justify-content: center;
+      padding: 10px;
+      margin: 10px 0;
+    }
+
+    .search-toggle-section button {
+      padding: 10px 20px;
+      background: #17a2b8;
+      color: white;
+      border: none;
+      border-radius: 25px;
+      cursor: pointer;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .search-toggle-section button:hover {
+      background: #138496;
+    }
+
+    .search-results {
+      margin: 15px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 10px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .search-results h3 {
+      margin-top: 0;
+      color: #333;
+      text-align: center;
+    }
+
+    .search-results ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .search-results li {
+      padding: 8px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+    }
+
+    .search-results li:hover {
+      background-color: #e9ecef;
+    }
+
+    .search-results .result-title {
+      font-weight: bold;
+      color: #007bff;
+    }
+
+    .search-results .result-author {
+      font-style: italic;
+      color: #6c757d;
+      font-size: 0.9em;
+    }
+
+    .search-results .result-preview {
+      margin-top: 4px;
+      color: #495057;
+      font-size: 0.9em;
+    }
+
     /* Mobile-specific styles for filter section */
     @media (max-width: 767px) {
       .filter-section {
@@ -398,6 +517,46 @@
       }
     }
 
+    /* Mobile-specific styles for search section */
+    @media (max-width: 767px) {
+      .search-section {
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: 8px;
+        margin: 5px;
+        gap: 4px;
+      }
+
+      .search-section input {
+        font-size: 0.8rem;
+        padding: 5px;
+        min-width: 100px;
+        flex: 2;
+        min-height: 30px;
+      }
+
+      .search-section button {
+        font-size: 0.8rem;
+        padding: 5px 8px;
+        min-height: 30px;
+        flex: 1;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .search-section {
+        flex-direction: column;
+      }
+
+      .search-section input {
+        width: 100%;
+      }
+
+      .search-section button {
+        width: 100%;
+      }
+    }
+
     /* Poetry-specific styling */
     strong {
       color: #667eea;
@@ -406,6 +565,12 @@
 
     p {
       margin: 10px 0;
+    }
+
+    mark {
+      background-color: #ffeb3b;
+      padding: 0 2px;
+      border-radius: 2px;
     }
   </style>
 </head>
@@ -427,6 +592,24 @@
           <option value="">作品</option>
         </select>
         <button class="refresh-btn" onclick="clearFilter()">清除</button>
+      </div>
+
+      <!-- Search Toggle Button -->
+      <div class="search-toggle-section">
+        <button class="refresh-btn" onclick="toggleSearch()">🔍 搜索诗歌</button>
+      </div>
+
+      <!-- Search Section (Initially Hidden) -->
+      <div id="searchSection" class="search-section" style="display: none;">
+        <input type="text" id="searchInput" placeholder="搜索诗歌标题或正文..." onkeypress="handleSearchKeyPress(event)">
+        <button class="refresh-btn" onclick="performSearch()">搜索</button>
+        <button class="refresh-btn" onclick="hideSearch()">收起</button>
+      </div>
+
+      <!-- Search Results Section -->
+      <div id="searchResults" class="search-results" style="display: none;">
+        <h3>搜索结果</h3>
+        <ul id="searchResultsList"></ul>
       </div>
     </div>
 
@@ -794,6 +977,126 @@
       document.getElementById('poemList').value = '';
       filteredPoems = allPoems; // Reset to all poems
       updatePoemListDropdown();
+    }
+
+    // Function to perform search
+    async function performSearch() {
+      const searchTerm = document.getElementById('searchInput').value.trim();
+      if (!searchTerm) {
+        alert('请输入搜索关键词');
+        return;
+      }
+
+      const poems = await fetchAndCachePoems();
+      const searchResults = [];
+
+      // Search in title and content
+      poems.forEach(poem => {
+        const title = poem.title.toLowerCase();
+        const content = poem.content.toLowerCase();
+        const auth = poem.auth.toLowerCase();
+        const desc = poem.desc.toLowerCase();
+
+        if (title.includes(searchTerm.toLowerCase()) ||
+            content.includes(searchTerm.toLowerCase()) ||
+            auth.includes(searchTerm.toLowerCase()) ||
+            desc.includes(searchTerm.toLowerCase())) {
+          // Create a preview of where the match occurred
+          let preview = '';
+          if (content.includes(searchTerm.toLowerCase())) {
+            const matchIndex = content.indexOf(searchTerm.toLowerCase());
+            const start = Math.max(0, matchIndex - 20);
+            const end = Math.min(content.length, matchIndex + searchTerm.length + 20);
+            preview = '...' + content.substring(start, end) + '...';
+          } else {
+            preview = content.substring(0, 60) + '...';
+          }
+
+          searchResults.push({
+            ...poem,
+            preview: preview
+          });
+        }
+      });
+
+      displaySearchResults(searchResults, searchTerm);
+    }
+
+    // Function to handle Enter key in search input
+    function handleSearchKeyPress(event) {
+      if (event.key === 'Enter') {
+        performSearch();
+      }
+    }
+
+    // Function to display search results
+    function displaySearchResults(results, searchTerm) {
+      const resultsContainer = document.getElementById('searchResults');
+      const resultsList = document.getElementById('searchResultsList');
+
+      if (results.length === 0) {
+        resultsList.innerHTML = '<li>未找到匹配的诗歌</li>';
+      } else {
+        resultsList.innerHTML = '';
+
+        results.forEach((poem, index) => {
+          const li = document.createElement('li');
+          li.innerHTML = `
+            <div class="result-title">${highlightText(poem.title, searchTerm)}</div>
+            <div class="result-author">作者: ${highlightText(poem.auth, searchTerm)}</div>
+            <div class="result-preview">${highlightText(poem.preview, searchTerm)}</div>
+          `;
+          li.onclick = () => selectSearchResult(poem);
+          resultsList.appendChild(li);
+        });
+      }
+
+      resultsContainer.style.display = 'block';
+    }
+
+    // Function to highlight search term in text
+    function highlightText(text, searchTerm) {
+      if (!searchTerm) return text;
+
+      const regex = new RegExp(`(${searchTerm})`, 'gi');
+      return text.replace(regex, '<mark>$1</mark>');
+    }
+
+    // Function to select a search result
+    function selectSearchResult(poem) {
+      displayPoem(poem);
+
+      // Close search results and search section
+      document.getElementById('searchResults').style.display = 'none';
+      document.getElementById('searchSection').style.display = 'none';
+      document.getElementById('searchInput').value = '';
+    }
+
+    // Function to clear search
+    function clearSearch() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('searchResults').style.display = 'none';
+    }
+
+    // Function to toggle search section
+    function toggleSearch() {
+      const searchSection = document.getElementById('searchSection');
+      const isCurrentlyVisible = searchSection.style.display !== 'none';
+
+      if (isCurrentlyVisible) {
+        hideSearch();
+      } else {
+        searchSection.style.display = 'flex';
+        // Focus on the search input when showing
+        document.getElementById('searchInput').focus();
+      }
+    }
+
+    // Function to hide search section
+    function hideSearch() {
+      document.getElementById('searchSection').style.display = 'none';
+      document.getElementById('searchResults').style.display = 'none';
+      document.getElementById('searchInput').value = '';
     }
 
     // Load a random poem when the page loads
