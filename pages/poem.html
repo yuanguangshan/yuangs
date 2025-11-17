@@ -608,7 +608,7 @@
 <body>
   <div class="container">
     <header>
-      <h1>古典唐诗</h1>
+      <h1>古典诗词</h1>
       <div class="subtitle">品味千年文化，感受诗词之美</div>
     </header>
 
@@ -672,17 +672,18 @@
   </div>
 
   <footer>
-    <p>Powered by yuangs| 随机展示经典唐诗</p>
+    <p>Powered by yuangs| 随机展示经典诗词</p>
   </footer>
 
   <script>
-    // Store all poems globally after first fetch
+    // Store all poems and ci globally after first fetch
     let allPoems = null;
+    let allCi = null;
+    let allCombined = null; // Combined poems and ci
     let filteredPoems = null; // Store currently filtered poems
 
-    // Function to fetch and cache XML data
+    // Function to fetch and cache Tang poems
     async function fetchAndCachePoems() {
-      // If poems are already loaded in memory, return them immediately
       if (allPoems !== null) {
         return allPoems;
       }
@@ -699,14 +700,14 @@
         if (now - timestamp < CACHE_DURATION) {
           // Cache is still valid - store in memory for subsequent requests
           allPoems = data;
-          console.log("Using cached poem data");
+          console.log("Using cached Tang poem data");
           return allPoems;
         }
       }
 
       // Fetch new data from the XML file
       try {
-        console.log("Fetching fresh poem data from API...");
+        console.log("Fetching fresh Tang poem data from API...");
         const response = await fetch('https://wealth.want.biz/pages/poem.xml');
         if (!response.ok) {
           throw new Error(`HTTP error! Status: ${response.status}`);
@@ -732,7 +733,8 @@
             auth: auth,
             type: type,
             content: content,
-            desc: desc
+            desc: desc,
+            source: 'poem' // Mark as poem
           });
         });
 
@@ -746,15 +748,15 @@
         // Store in memory for subsequent requests
         allPoems = poems;
 
-        console.log(`Fetched and cached ${poems.length} poems`);
+        console.log(`Fetched and cached ${poems.length} Tang poems`);
         return allPoems;
       } catch (error) {
-        console.error('Error fetching poem data:', error);
+        console.error('Error fetching Tang poem data:', error);
 
         // If fetching failed, try to return cached data even if it's expired
         if (cachedData) {
           const { data } = JSON.parse(cachedData);
-          console.warn("Using expired cached data due to fetch error");
+          console.warn("Using expired cached Tang poem data due to fetch error");
           // Store expired data in memory temporarily
           allPoems = data;
           return allPoems;
@@ -764,6 +766,98 @@
         allPoems = [];
         return allPoems;
       }
+    }
+
+    // Function to fetch and cache Song ci
+    async function fetchAndCacheCi() {
+      if (allCi !== null) {
+        return allCi;
+      }
+
+      const CACHE_KEY = 'song_ci_cache';
+      const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+      // Check if we have cached data and it's still valid
+      const cachedData = localStorage.getItem(CACHE_KEY);
+      if (cachedData) {
+        const { data, timestamp } = JSON.parse(cachedData);
+        const now = Date.now();
+
+        if (now - timestamp < CACHE_DURATION) {
+          // Cache is still valid - store in memory for subsequent requests
+          allCi = data;
+          console.log("Using cached Song ci data");
+          return allCi;
+        }
+      }
+
+      // Fetch new data from the JSON file
+      try {
+        console.log("Fetching fresh Song ci data from API...");
+        const response = await fetch('https://wealth.want.biz/pages/songci.json');
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        const ciData = await response.json();
+
+        // Process ci data to match poem structure
+        const processedCi = ciData.map(ci => ({
+          title: ci.rhythmic || '未知词牌', // Use rhythmic as title
+          auth: ci.author || '未知作者',
+          type: '宋词', // Mark as Song ci
+          content: ci.paragraphs ? ci.paragraphs.join('<br>') : '无内容',
+          desc: ci.tags ? `标签: ${ci.tags.join(', ')}` : '无标签',
+          source: 'ci' // Mark as ci
+        }));
+
+        // Cache the fetched data
+        const cacheData = {
+          data: processedCi,
+          timestamp: Date.now()
+        };
+        localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+
+        // Store in memory for subsequent requests
+        allCi = processedCi;
+
+        console.log(`Fetched and cached ${processedCi.length} Song ci`);
+        return allCi;
+      } catch (error) {
+        console.error('Error fetching Song ci data:', error);
+
+        // If fetching failed, try to return cached data even if it's expired
+        if (cachedData) {
+          const { data } = JSON.parse(cachedData);
+          console.warn("Using expired cached Song ci data due to fetch error");
+          // Store expired data in memory temporarily
+          allCi = data;
+          return allCi;
+        }
+
+        // If no cached data is available, return an empty array
+        allCi = [];
+        return allCi;
+      }
+    }
+
+    // Function to fetch and combine both poems and ci
+    async function fetchAndCombineAll() {
+      if (allCombined !== null) {
+        return allCombined;
+      }
+
+      // Fetch both poems and ci in parallel
+      const [poems, ci] = await Promise.all([
+        fetchAndCachePoems(),
+        fetchAndCacheCi()
+      ]);
+
+      // Combine both arrays
+      allCombined = [...poems, ...ci];
+      console.log(`Combined ${poems.length} Tang poems and ${ci.length} Song ci, total ${allCombined.length} entries`);
+
+      return allCombined;
     }
 
     // Function to get a random poem from cached data
@@ -784,14 +878,20 @@
 
     // Function to get a random poem from filtered data
     async function getRandomPoem() {
-      // Use filtered poems if available, otherwise use all poems
-      const poems = filteredPoems || await fetchAndCachePoems();
-      if (poems.length === 0) {
-        console.warn("No poems available");
-        return null;
+      // Use filtered poems if available, otherwise use combined poems and ci
+      if (filteredPoems && filteredPoems.length > 0) {
+        const randomIndex = Math.floor(Math.random() * filteredPoems.length);
+        return filteredPoems[randomIndex];
+      } else {
+        // Use combined poems and ci
+        const allItems = await fetchAndCombineAll();
+        if (allItems.length === 0) {
+          console.warn("No poems or ci available");
+          return null;
+        }
+        const randomIndex = Math.floor(Math.random() * allItems.length);
+        return allItems[randomIndex];
       }
-      const randomIndex = Math.floor(Math.random() * poems.length);
-      return poems[randomIndex];
     }
 
     // Function to load a random poem and image
@@ -872,15 +972,16 @@
 
     // Function to get all authors sorted by poem count
     async function getAllAuthors() {
-      const poems = await fetchAndCachePoems();
+      // Use combined poems and ci for author list
+      const allItems = await fetchAndCombineAll();
 
-      // Count poems per author
+      // Count items per author
       const authorCount = {};
-      poems.forEach(poem => {
-        if (authorCount[poem.auth]) {
-          authorCount[poem.auth]++;
+      allItems.forEach(item => {
+        if (authorCount[item.auth]) {
+          authorCount[item.auth]++;
         } else {
-          authorCount[poem.auth] = 1;
+          authorCount[item.auth] = 1;
         }
       });
 
@@ -1015,15 +1116,15 @@
         return;
       }
 
-      const poems = await fetchAndCachePoems();
+      const allItems = await fetchAndCombineAll();
       const searchResults = [];
 
       // Search in title and content
-      poems.forEach(poem => {
-        const title = poem.title.toLowerCase();
-        const content = poem.content.toLowerCase();
-        const auth = poem.auth.toLowerCase();
-        const desc = poem.desc.toLowerCase();
+      allItems.forEach(item => {
+        const title = item.title.toLowerCase();
+        const content = item.content.toLowerCase();
+        const auth = item.auth.toLowerCase();
+        const desc = item.desc.toLowerCase();
 
         if (title.includes(searchTerm.toLowerCase()) ||
             content.includes(searchTerm.toLowerCase()) ||
@@ -1041,7 +1142,7 @@
           }
 
           searchResults.push({
-            ...poem,
+            ...item,
             preview: preview
           });
         }
@@ -1129,6 +1230,8 @@
 
     // Load a random poem when the page loads
     window.onload = async function() {
+      // Preload both poems and ci data
+      await fetchAndCombineAll();
       await loadRandomPoem();
       await populateAuthorFilter(); // Populate the author filter after poems are loaded
     };
