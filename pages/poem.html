@@ -1005,9 +1005,29 @@
       return poems[randomIndex];
     }
 
-    // Function to get a random image URL from picsum
-    function getRandomImageUrl() {
-      return `https://picsum.photos/400/300?random=${Date.now()}`;
+    // Function to get a random image URL from various sources with fallbacks
+    function getRandomImageUrl(fallbackNum = 1) {
+      const timestamp = Date.now();
+      switch(fallbackNum) {
+        case 1:
+          // Primary source: picsum with random seed
+          return `https://picsum.photos/seed/${timestamp}/400/300`;
+        case 2:
+          // Fallback 1: picsum without seed (random image)
+          return `https://picsum.photos/400/300?random=${timestamp}`;
+        case 3:
+          // Fallback 2: Unsplash source with random seed
+          return `https://source.unsplash.com/400x300/?nature,random&ts=${timestamp}`;
+        case 4:
+          // Fallback 3: Pexel source with random seed
+          return `https://images.pexels.com/photos/3225517/pexels-photo-3225517.jpeg?auto=compress&cs=tinysrgb&dpr=1&w=400&h=300&ts=${timestamp}`;
+        case 5:
+          // Local fallback: base64 encoded placeholder image
+          return `data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjY2NjIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzY2NiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkPDpXNpIFBvaWN0cnkgUGxhY2Vob2xkZXI8L3RleHQ+PC9zdmc+`;
+        default:
+          // Last resort: simple placeholder if all other sources fail
+          return `https://placehold.co/400x300/cccccc/666666?text=诗词配图`;
+      }
     }
 
     // Function to get a random poem from filtered data
@@ -1050,9 +1070,65 @@
       document.getElementById('poemVerse').innerHTML = poem.content;
       document.getElementById('poemDesc').innerHTML = poem.desc;
 
-      // Update image (in background, without blocking text display)
+      // Update image with multiple fallbacks and timeout
       const img = document.getElementById('poemImage');
+      let currentFallback = 1;
+      const maxFallbacks = 6; // Primary + 4 fallbacks + 1 local fallback
+      let timeoutId;
+
+      // Function to try loading next fallback image
+      function tryNextFallback() {
+        if (currentFallback < maxFallbacks) {
+          currentFallback++;
+          // Clear previous timeout
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+          // Set a new timeout for this fallback
+          timeoutId = setTimeout(() => {
+            console.log(`Image loading timeout for fallback ${currentFallback}, trying next...`);
+            if (currentFallback < maxFallbacks) {
+              tryNextFallback();
+            } else {
+              // All fallbacks exhausted, show content without image and indicate failure
+              handleImageFailure();
+            }
+          }, 5000); // 5 seconds timeout for each fallback
+
+          img.src = getRandomImageUrl(currentFallback);
+        } else {
+          // All fallbacks exhausted, show content without image and indicate failure
+          handleImageFailure();
+        }
+      }
+
+      // Function to handle the case when all image sources fail
+      function handleImageFailure() {
+        console.warn("All image loading attempts failed, displaying content without image");
+
+        // Hide loading indicator
+        document.getElementById('loading').style.display = 'none';
+
+        // Show poem content
+        document.getElementById('poemTextContent').style.display = 'block';
+        document.getElementById('poemDescContent').style.display = 'block';
+
+        // Apply fade-in animation
+        document.getElementById('poemTextContent').classList.add('fade-in');
+        document.getElementById('poemDescContent').classList.add('fade-in');
+
+        // Optionally, add a visual indicator that image loading failed
+        const img = document.getElementById('poemImage');
+        img.onerror = null; // Remove error handler to prevent loops
+        img.onload = null;  // Remove load handler
+      }
+
+      // Set up image event handlers
       img.onload = function() {
+        // Clear timeout on successful load
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
         // Show content once image is loaded
         document.getElementById('loading').style.display = 'none';
         document.getElementById('poemTextContent').style.display = 'block';
@@ -1060,20 +1136,26 @@
         document.getElementById('poemTextContent').classList.add('fade-in');
         document.getElementById('poemDescContent').classList.add('fade-in');
       };
-      img.onerror = function() {
-        // Show content even if image fails to load, then try fallback
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('poemTextContent').style.display = 'block';
-        document.getElementById('poemDescContent').style.display = 'block';
-        document.getElementById('poemTextContent').classList.add('fade-in');
-        document.getElementById('poemDescContent').classList.add('fade-in');
 
-        // Update image with fallback in background
-        img.src = 'https://picsum.photos/400/300?random=' + Date.now();
+      img.onerror = function() {
+        console.log(`Image loading error for fallback ${currentFallback}, trying next...`);
+        // Try next fallback image
+        tryNextFallback();
       };
 
-      // Set the new image source
-      img.src = getRandomImageUrl();
+      // Set the new image source with primary URL
+      img.src = getRandomImageUrl(currentFallback);
+
+      // Set timeout for primary image
+      timeoutId = setTimeout(() => {
+        console.log(`Image loading timeout for fallback ${currentFallback}, trying next...`);
+        if (currentFallback < maxFallbacks) {
+          tryNextFallback();
+        } else {
+          // All fallbacks exhausted, show content without image and indicate failure
+          handleImageFailure();
+        }
+      }, 5000); // 5 seconds timeout for primary image
 
       // Show content immediately if this is the first load (image might take time)
       setTimeout(() => {
@@ -1202,9 +1284,65 @@
 
       document.getElementById('poemDesc').innerHTML = poem.desc;
 
-      // Update image (in background, without blocking text display)
+      // Update image with multiple fallbacks and timeout
       const img = document.getElementById('poemImage');
+      let currentFallback = 1;
+      const maxFallbacks = 6; // Primary + 4 fallbacks + 1 local fallback
+      let timeoutId;
+
+      // Function to try loading next fallback image
+      function tryNextFallback() {
+        if (currentFallback < maxFallbacks) {
+          currentFallback++;
+          // Clear previous timeout
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+          // Set a new timeout for this fallback
+          timeoutId = setTimeout(() => {
+            console.log(`Image loading timeout for fallback ${currentFallback}, trying next...`);
+            if (currentFallback < maxFallbacks) {
+              tryNextFallback();
+            } else {
+              // All fallbacks exhausted, show content without image and indicate failure
+              handleImageFailure();
+            }
+          }, 5000); // 5 seconds timeout for each fallback
+
+          img.src = getRandomImageUrl(currentFallback);
+        } else {
+          // All fallbacks exhausted, show content without image and indicate failure
+          handleImageFailure();
+        }
+      }
+
+      // Function to handle the case when all image sources fail
+      function handleImageFailure() {
+        console.warn("All image loading attempts failed, displaying content without image");
+
+        // Hide loading indicator
+        document.getElementById('loading').style.display = 'none';
+
+        // Show poem content
+        document.getElementById('poemTextContent').style.display = 'block';
+        document.getElementById('poemDescContent').style.display = 'block';
+
+        // Apply fade-in animation
+        document.getElementById('poemTextContent').classList.add('fade-in');
+        document.getElementById('poemDescContent').classList.add('fade-in');
+
+        // Optionally, add a visual indicator that image loading failed
+        const img = document.getElementById('poemImage');
+        img.onerror = null; // Remove error handler to prevent loops
+        img.onload = null;  // Remove load handler
+      }
+
+      // Set up image event handlers
       img.onload = function() {
+        // Clear timeout on successful load
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
         // Show content once image is loaded
         document.getElementById('loading').style.display = 'none';
         document.getElementById('poemTextContent').style.display = 'block';
@@ -1212,20 +1350,26 @@
         document.getElementById('poemTextContent').classList.add('fade-in');
         document.getElementById('poemDescContent').classList.add('fade-in');
       };
-      img.onerror = function() {
-        // Show content even if image fails to load, then try fallback
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('poemTextContent').style.display = 'block';
-        document.getElementById('poemDescContent').style.display = 'block';
-        document.getElementById('poemTextContent').classList.add('fade-in');
-        document.getElementById('poemDescContent').classList.add('fade-in');
 
-        // Update image with fallback in background
-        img.src = 'https://picsum.photos/400/300?random=' + Date.now();
+      img.onerror = function() {
+        console.log(`Image loading error for fallback ${currentFallback}, trying next...`);
+        // Try next fallback image
+        tryNextFallback();
       };
 
-      // Set the new image source
-      img.src = getRandomImageUrl();
+      // Set the new image source with primary URL
+      img.src = getRandomImageUrl(currentFallback);
+
+      // Set timeout for primary image
+      timeoutId = setTimeout(() => {
+        console.log(`Image loading timeout for fallback ${currentFallback}, trying next...`);
+        if (currentFallback < maxFallbacks) {
+          tryNextFallback();
+        } else {
+          // All fallbacks exhausted, show content without image and indicate failure
+          handleImageFailure();
+        }
+      }, 5000); // 5 seconds timeout for primary image
 
       // Show content immediately if this is the first load (image might take time)
       setTimeout(() => {
