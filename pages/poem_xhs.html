@@ -969,6 +969,113 @@
         font-size: 20px;
       }
     }
+
+    /* Waterfall Flow Layout */
+    .waterfall-container {
+      display: none;
+      width: 100%;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px 10px;
+    }
+
+    .waterfall-container.active {
+      display: block;
+    }
+
+    .waterfall-content {
+      column-count: 2;
+      column-gap: 20px;
+    }
+
+    @media (max-width: 767px) {
+      .waterfall-content {
+        column-count: 1;
+      }
+    }
+
+    .waterfall-card {
+      display: block;
+      background: var(--container-bg);
+      border-radius: 20px;
+      overflow: hidden;
+      margin-bottom: 20px;
+      break-inside: avoid;
+      box-shadow: var(--card-shadow);
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .waterfall-card:hover {
+      transform: translateY(-5px);
+      box-shadow: var(--card-shadow-hover);
+    }
+
+    .waterfall-image {
+      width: 100%;
+      height: 200px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .overlay-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-size: 1.2rem;
+      font-weight: 500;
+      text-align: center;
+      width: 90%;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+      z-index: 10;
+    }
+
+    .image-overlay-container {
+      position: relative;
+      width: 100%;
+      height: 200px;
+    }
+
+    .waterfall-content-section {
+      padding: 15px;
+    }
+
+    .waterfall-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .waterfall-author {
+      font-size: 0.9rem;
+      color: var(--text-tertiary);
+      margin: 5px 0 0 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .poem-content.symmetric-layout {
+      display: flex;
+    }
+
+    .poem-content.waterfall-layout {
+      display: none;
+    }
+
+    .poem-content.waterfall-active {
+      display: none;
+    }
+
+    .poem-content.symmetric-active {
+      display: flex;
+    }
   </style>
 </head>
 
@@ -994,6 +1101,7 @@
         </select>
         <button class="refresh-btn" onclick="clearFilter()">清除</button>
         <button class="refresh-btn search-toggle-btn" onclick="toggleSearch()">🔍 搜诗词</button>
+        <button class="refresh-btn" id="layoutToggle" onclick="toggleLayout()">瀑布流</button>
       </div>
 
       <!-- Search Section (Initially Hidden) -->
@@ -1036,6 +1144,14 @@
         </div>
       </div>
     </div>
+
+    <!-- Waterfall Flow Container -->
+    <div id="waterfallContainer" class="waterfall-container">
+      <div id="waterfallContent" class="waterfall-content">
+        <!-- Waterfall cards will be dynamically generated here -->
+      </div>
+    </div>
+
   <!-- Floating Refresh Button -->
   <button class="floating-refresh-btn" onclick="loadRandomPoem()" title="换一首诗">
     ♻️
@@ -1861,6 +1977,100 @@
         }
       });
     });
+
+    // Toggle layout between symmetric and waterfall
+    function toggleLayout() {
+      const symmetricContainer = document.querySelector('.poem-content');
+      const waterfallContainer = document.getElementById('waterfallContainer');
+      const layoutToggle = document.getElementById('layoutToggle');
+
+      if (symmetricContainer.style.display === 'none') {
+        // Switch to symmetric layout
+        symmetricContainer.style.display = 'flex';
+        waterfallContainer.classList.remove('active');
+        layoutToggle.textContent = '瀑布流';
+        generateWaterfallContent(); // Generate waterfall content if needed
+      } else {
+        // Switch to waterfall layout
+        symmetricContainer.style.display = 'none';
+        waterfallContainer.classList.add('active');
+        layoutToggle.textContent = '对称布局';
+        generateWaterfallContent(); // Generate waterfall content
+      }
+    }
+
+    // Generate waterfall content from poem data
+    function generateWaterfallContent() {
+      const waterfallContent = document.getElementById('waterfallContent');
+      // Only generate if content is not already there or if we want to refresh
+      if (allCombined && allCombined.length > 0) {
+        waterfallContent.innerHTML = ''; // Clear existing content
+        allCombined.forEach((poem, index) => {
+          const card = document.createElement('div');
+          card.className = 'waterfall-card';
+          card.onclick = function() {
+            showPoemDetail(poem);
+          };
+
+          // Get a random line from the poem content
+          const lines = poem.content.split('\n').filter(line => line.trim() !== '');
+          const randomLine = lines.length > 0 ? lines[Math.floor(Math.random() * lines.length)] : '诗词内容';
+
+          card.innerHTML = `
+            <div class="image-overlay-container">
+              <img src="${getRandomImageUrl(0)}" alt="${poem.title}" class="waterfall-image" onerror="this.onerror=null;this.src='https://picsum.photos/400/200?random=${index}';">
+              <div class="overlay-text">${randomLine}</div>
+            </div>
+            <div class="waterfall-content-section">
+              <h3 class="waterfall-title">${poem.title}</h3>
+              <p class="waterfall-author">${poem.auth}</p>
+            </div>
+          `;
+          waterfallContent.appendChild(card);
+        });
+      }
+    }
+
+    // Show detailed poem view when clicking a card
+    function showPoemDetail(poem) {
+      // Update the main content with the selected poem
+      document.getElementById('poemTitle').textContent = poem.title;
+      document.getElementById('poemAuthor').textContent = poem.auth;
+      document.getElementById('poemType').textContent = poem.type;
+      document.getElementById('poemVerse').innerHTML = poem.content.split('\n').join('<br>');
+      document.getElementById('poemDesc').innerHTML = poem.desc;
+
+      // Update the image
+      const img = document.getElementById('poemImage');
+      img.src = getRandomImageUrl(0);
+      img.onerror = function() {
+        this.onerror = null;
+        this.src = 'https://picsum.photos/600/400?random=' + Math.floor(Math.random() * 1000);
+      };
+
+      // Show the content sections
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('poemTextContent').style.display = 'block';
+      document.getElementById('poemDescContent').style.display = 'block';
+
+      // Apply fade-in animation
+      document.getElementById('poemTextContent').classList.remove('fade-in');
+      document.getElementById('poemDescContent').classList.remove('fade-in');
+      // Trigger reflow
+      void document.getElementById('poemTextContent').offsetWidth;
+      void document.getElementById('poemDescContent').offsetWidth;
+      document.getElementById('poemTextContent').classList.add('fade-in');
+      document.getElementById('poemDescContent').classList.add('fade-in');
+
+      // Switch to symmetric layout to show details
+      const symmetricContainer = document.querySelector('.poem-content');
+      const waterfallContainer = document.getElementById('waterfallContainer');
+      const layoutToggle = document.getElementById('layoutToggle');
+
+      symmetricContainer.style.display = 'flex';
+      waterfallContainer.classList.remove('active');
+      layoutToggle.textContent = '瀑布流';
+    }
   </script>
 </body>
 
