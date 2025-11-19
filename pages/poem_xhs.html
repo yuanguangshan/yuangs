@@ -1050,10 +1050,7 @@
       /* Allow text to wrap to multiple lines */
       white-space: normal;
       word-wrap: break-word;
-      display: -webkit-box;
-      -webkit-line-clamp: 4; /* Increased from 3 to 4 lines to use more space */
-      -webkit-box-orient: vertical;
-      overflow: hidden;
+      overflow: hidden; /* Keep text within bounds */
     }
 
     .color-block-container {
@@ -2127,10 +2124,9 @@
           // Get a random line from the poem content and limit its length
           const lines = poem.content.split('\n').filter(line => line.trim() !== '');
           let randomLine = lines.length > 0 ? lines[Math.floor(Math.random() * lines.length)] : '诗词内容';
-          // Display first 50 characters, add ellipsis if needed
-          if (randomLine.length > 300) {
-              randomLine = randomLine.substring(0, 300) + '...';
-          }
+
+          // Break the line into chunks of maximum 20 characters
+          randomLine = breakTextIntoLines(randomLine, 20);
 
           // Generate a random color for the background
           const backgroundColor = getRandomColor();
@@ -2170,13 +2166,43 @@
       return shuffled.slice(0, Math.min(count, shuffled.length));
     }
 
+    // Break text into lines with maximum specified length
+    function breakTextIntoLines(text, maxLength) {
+      if (!text) return '';
+
+      const result = [];
+      let currentLine = '';
+
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        currentLine += char;
+
+        // If we've reached the max length, add the line and start a new one
+        if (currentLine.length >= maxLength) {
+          result.push(currentLine);
+          currentLine = '';
+        }
+      }
+
+      // Add the remaining line if there is one
+      if (currentLine) {
+        result.push(currentLine);
+      }
+
+      return result.join('<br>');
+    }
+
     // Show detailed poem view when clicking a card
     function showPoemDetail(poem) {
       // Update the main content with the selected poem
       document.getElementById('poemTitle').textContent = poem.title;
       document.getElementById('poemAuthor').textContent = poem.auth;
       document.getElementById('poemType').textContent = poem.type;
-      document.getElementById('poemVerse').innerHTML = poem.content.split('\n').join('<br>');
+      // Apply line break function only to lines longer than 20 characters
+      const formattedContent = poem.content.split('\n')
+        .map(line => line.length > 20 ? breakTextIntoLines(line, 20) : line)
+        .join('<br>');
+      document.getElementById('poemVerse').innerHTML = formattedContent;
       document.getElementById('poemDesc').innerHTML = poem.desc;
 
       // Update the image
