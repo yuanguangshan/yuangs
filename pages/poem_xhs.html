@@ -360,6 +360,102 @@
       margin: 2px 0;
     }
 
+    /* Enhanced styles for improved default mode */
+
+    /* Dynasty tag styling */
+    .poem-author-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 8px 0;
+      justify-content: center;
+    }
+
+    .dynasty-tag {
+      background-color: var(--xhs-pink);
+      color: white;
+      font-size: 0.8rem;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-family: sans-serif; /* 衬线体配无衬线标签 */
+      vertical-align: middle;
+    }
+
+    /* 正文排版容器 */
+    .poem-verse-container {
+      position: relative;
+      padding: 20px;
+      min-height: 200px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* 竖排模式 (关键优化) */
+    .poem-verse.vertical-mode {
+      writing-mode: vertical-rl;
+      text-orientation: upright;
+      font-size: 1.6rem;
+      letter-spacing: 0.4em;
+      line-height: 2.5; /* 行间距拉大 */
+      height: auto;
+      max-height: 500px; /* 防止过高 */
+      text-align: justify;
+      margin: 0 auto;
+      font-family: 'Noto Serif SC', serif;
+    }
+
+    /* 横排模式优化 */
+    .poem-verse.horizontal-mode {
+      font-size: 1.4rem;
+      line-height: 2.2;
+      text-align: center;
+      max-width: 80%;
+    }
+
+    /* This seal will be used in the main display */
+    .main-seal {
+      position: absolute;
+      bottom: 10px;
+      right: 20px;
+      width: 40px;
+      height: 40px;
+      font-size: 20px;
+      border: 2px solid #d44c4c;
+      color: #d44c4c;
+      background: transparent;
+      opacity: 0.6;
+      transform: rotate(-5deg);
+      pointer-events: none; /* 不挡鼠标 */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+    }
+
+    /* Adjusted description section styling */
+    .desc-section {
+      /* 变成一个稍微深一点的背景，像书的封底 */
+      background: #fdfdfd;
+      border-left: 4px solid var(--xhs-pink-lighter); /* 左侧装饰线 */
+    }
+
+    .poem-desc {
+      font-size: 1rem;
+      color: #555;
+      text-align: justify; /* 两端对齐更像书 */
+    }
+
+    /* 首字下沉效果 (可选) */
+    .poem-desc::first-letter {
+      font-size: 1.5em;
+      font-weight: bold;
+      color: var(--xhs-pink);
+      float: left;
+      margin-right: 4px;
+      line-height: 1;
+    }
+
     /* Seal decoration for default mode */
     .seal-default-mode {
       position: absolute;
@@ -1329,16 +1425,30 @@
         </div>
         <div class="text-section">
           <div id="loading" class="loading">诗词加载中...</div>
-          <div id="poemTextContent" style="display: none;">
-            <div class="poem-meta">
-              <span id="poemTitle" class="poem-title"></span>
-              <button id="inlineSearchBtn" class="inline-search-btn" title="搜索诗词赏析">
-                🔍
-              </button>
+
+          <div id="poemTextContent" style="display: none; width: 100%; display: flex; flex-direction: column; align-items: center;">
+
+            <!-- 头部组合：标题+作者 -->
+            <div class="poem-header-group">
+              <div class="poem-meta" style="margin-bottom: 10px; display: flex; justify-content: center; gap: 10px;">
+                 <!-- 搜索按钮保留 -->
+                 <button id="inlineSearchBtn" class="inline-search-btn" style="position:static;" title="搜索诗词赏析">🔍</button>
+                 <button onclick="copyPoemToClipboard()" class="inline-search-btn" style="position:static;" title="复制诗词">📋</button>
+              </div>
+              <h2 id="poemTitle" class="poem-title"></h2>
+              <div class="poem-author-badge">
+                <span id="poemDynasty" class="dynasty-tag">唐</span> <!-- 动态年份 -->
+                <span id="poemAuthor"></span>
+              </div>
             </div>
-            <div class="poem-author" id="poemAuthor"></div>
-            <div class="poem-type" id="poemType"></div>
-            <div class="poem-verse" id="poemVerse"></div>
+
+            <!-- 正文容器 -->
+            <div class="poem-verse-container">
+              <div id="poemVerse" class="poem-verse"></div>
+              <!-- 大印章 -->
+              <div class="seal-decoration main-seal">赏</div>
+            </div>
+
           </div>
         </div>
       </div>
@@ -1716,43 +1826,42 @@
           return;
         }
 
-        // Update poem content immediately
+        // 1. 设置基本信息
         document.getElementById('poemTitle').textContent = poem.title;
         document.getElementById('poemAuthor').textContent = poem.auth;
-        document.getElementById('poemType').textContent = poem.type;
 
-        // Determine if we should use vertical layout
-        const shouldUseVerticalLayout = isVerticalLayoutPoem(poem);
-        const poemVerseElement = document.getElementById('poemVerse');
-
-        if (shouldUseVerticalLayout) {
-          // Prepare content for vertical layout - each line becomes a span for vertical display
-          const lines = poem.content.split('\n').map(line => line.trim()).filter(line => line !== '');
-          let verticalContent = '';
-          for (let line of lines) {
-            if (line) {
-              // Split by punctuation to create proper vertical flow
-              const parts = line.split(/([，。！？!?])/);
-              verticalContent += '<span class="vertical-line">';
-              for (let part of parts) {
-                if (part) {
-                  verticalContent += `<span class="vertical-char">${part}</span>`;
-                }
-              }
-              verticalContent += '</span>';
-            }
-          }
-          poemVerseElement.innerHTML = verticalContent;
-          poemVerseElement.className = 'poem-verse vertical-layout'; // Apply vertical layout class
-
-          // Apply vertical text class to text section
-          document.querySelector('.text-section').classList.add('vertical-text');
+        // 优化：尝试从 type 中提取朝代，如果没有则默认显示诗词类型
+        const dynastyElement = document.getElementById('poemDynasty');
+        if (poem.source === 'ci') {
+           dynastyElement.textContent = '宋';
+           dynastyElement.style.backgroundColor = '#88485E'; // 宋词用紫红色
         } else {
-          // Regular horizontal layout
-          poemVerseElement.innerHTML = poem.content.split('\n').join('<br>');
-          poemVerseElement.className = 'poem-verse'; // Reset to default class
-          // Remove vertical text class if it exists
-          document.querySelector('.text-section').classList.remove('vertical-text');
+           dynastyElement.textContent = '唐'; // 你的数据源主要是唐诗
+           dynastyElement.style.backgroundColor = '#FE2C55'; // 唐诗用小红书红
+        }
+
+        // 2. 智能排版逻辑 (复用 analyzePoemLayout)
+        // 注意：这里我们稍微改一下，如果是 analyzePoemLayout 返回 vertical，我们就用竖排
+        // 但对于主展示区，我们可以稍微放宽竖排的条件（比如只要是律诗绝句都竖排，不受32字限制，因为空间大）
+
+        const content = poem.content;
+        const verseElement = document.getElementById('poemVerse');
+
+        // 清除之前的类
+        verseElement.className = 'poem-verse';
+
+        // 简单判断：不包含逗号且句子长度整齐的，或者你是用 analyzePoemLayout
+        const layoutInfo = analyzePoemLayout(poem);
+
+        if (layoutInfo.mode === 'vertical') {
+          verseElement.classList.add('vertical-mode');
+          // 竖排时，换行符保留，且标点符号可能会影响美观，可以考虑用空格替换标点，或者保留
+          // 这里直接保留原文排版
+          verseElement.innerHTML = poem.content.split('\n').join('<br>');
+        } else {
+          verseElement.classList.add('horizontal-mode');
+          // 横排居中，适合长短句
+          verseElement.innerHTML = poem.content.split('\n').join('<br>');
         }
 
         document.getElementById('poemDesc').innerHTML = poem.desc;
@@ -1804,20 +1913,6 @@
           document.getElementById('poemTextContent').classList.add('fade-in');
           document.getElementById('poemDescContent').classList.add('fade-in');
 
-          // Add seal decoration to the text section based on poem type
-          const sealContainer = document.querySelector('.text-section');
-          // Remove any existing seal first
-          const existingSeal = sealContainer.querySelector('.seal-default-mode');
-          if (existingSeal) {
-            existingSeal.remove();
-          }
-
-          // Add new seal based on poem type
-          const sealText = poem.source === 'ci' ? '词' : '诗';
-          const sealElement = document.createElement('div');
-          sealElement.className = 'seal-default-mode';
-          sealElement.textContent = sealText;
-          sealContainer.appendChild(sealElement);
 
           // Optionally, add a visual indicator that image loading failed
           const img = document.getElementById('poemImage');
@@ -1840,20 +1935,6 @@
           document.getElementById('poemTextContent').classList.add('fade-in');
           document.getElementById('poemDescContent').classList.add('fade-in');
 
-          // Add seal decoration to the text section based on poem type
-          const sealContainer = document.querySelector('.text-section');
-          // Remove any existing seal first
-          const existingSeal = sealContainer.querySelector('.seal-default-mode');
-          if (existingSeal) {
-            existingSeal.remove();
-          }
-
-          // Add new seal based on poem type
-          const sealText = poem.source === 'ci' ? '词' : '诗';
-          const sealElement = document.createElement('div');
-          sealElement.className = 'seal-default-mode';
-          sealElement.textContent = sealText;
-          sealContainer.appendChild(sealElement);
         };
 
         img.onerror = function () {
@@ -1899,20 +1980,6 @@
             document.getElementById('poemTextContent').classList.add('fade-in');
             document.getElementById('poemDescContent').classList.add('fade-in');
 
-            // Add seal decoration to the text section based on poem type
-            const sealContainer = document.querySelector('.text-section');
-            // Remove any existing seal first
-            const existingSeal = sealContainer.querySelector('.seal-default-mode');
-            if (existingSeal) {
-              existingSeal.remove();
-            }
-
-            // Add new seal based on poem type
-            const sealText = poem.source === 'ci' ? '词' : '诗';
-            const sealElement = document.createElement('div');
-            sealElement.className = 'seal-default-mode';
-            sealElement.textContent = sealText;
-            sealContainer.appendChild(sealElement);
           }
         }, 300); // Show content after 300ms if image hasn't loaded yet
       }
@@ -2020,43 +2087,42 @@
         document.getElementById('poemTextContent').style.display = 'none';
         document.getElementById('poemDescContent').style.display = 'none';
 
-        // Update poem content immediately
+        // 1. 设置基本信息
         document.getElementById('poemTitle').textContent = poem.title;
         document.getElementById('poemAuthor').textContent = poem.auth;
-        document.getElementById('poemType').textContent = poem.type;
 
-        // Determine if we should use vertical layout
-        const shouldUseVerticalLayout = isVerticalLayoutPoem(poem);
-        const poemVerseElement = document.getElementById('poemVerse');
-
-        if (shouldUseVerticalLayout) {
-          // Prepare content for vertical layout - each line becomes a span for vertical display
-          const lines = poem.content.split('\n').map(line => line.trim()).filter(line => line !== '');
-          let verticalContent = '';
-          for (let line of lines) {
-            if (line) {
-              // Split by punctuation to create proper vertical flow
-              const parts = line.split(/([，。！？!?])/);
-              verticalContent += '<span class="vertical-line">';
-              for (let part of parts) {
-                if (part) {
-                  verticalContent += `<span class="vertical-char">${part}</span>`;
-                }
-              }
-              verticalContent += '</span>';
-            }
-          }
-          poemVerseElement.innerHTML = verticalContent;
-          poemVerseElement.className = 'poem-verse vertical-layout'; // Apply vertical layout class
-
-          // Apply vertical text class to text section
-          document.querySelector('.text-section').classList.add('vertical-text');
+        // 优化：尝试从 type 中提取朝代，如果没有则默认显示诗词类型
+        const dynastyElement = document.getElementById('poemDynasty');
+        if (poem.source === 'ci') {
+           dynastyElement.textContent = '宋';
+           dynastyElement.style.backgroundColor = '#88485E'; // 宋词用紫红色
         } else {
-          // Regular horizontal layout
-          poemVerseElement.innerHTML = poem.content.split('\n').join('<br>');
-          poemVerseElement.className = 'poem-verse'; // Reset to default class
-          // Remove vertical text class if it exists
-          document.querySelector('.text-section').classList.remove('vertical-text');
+           dynastyElement.textContent = '唐'; // 你的数据源主要是唐诗
+           dynastyElement.style.backgroundColor = '#FE2C55'; // 唐诗用小红书红
+        }
+
+        // 2. 智能排版逻辑 (复用 analyzePoemLayout)
+        // 注意：这里我们稍微改一下，如果是 analyzePoemLayout 返回 vertical，我们就用竖排
+        // 但对于主展示区，我们可以稍微放宽竖排的条件（比如只要是律诗绝句都竖排，不受32字限制，因为空间大）
+
+        const content = poem.content;
+        const verseElement = document.getElementById('poemVerse');
+
+        // 清除之前的类
+        verseElement.className = 'poem-verse';
+
+        // 简单判断：不包含逗号且句子长度整齐的，或者你是用 analyzePoemLayout
+        const layoutInfo = analyzePoemLayout(poem);
+
+        if (layoutInfo.mode === 'vertical') {
+          verseElement.classList.add('vertical-mode');
+          // 竖排时，换行符保留，且标点符号可能会影响美观，可以考虑用空格替换标点，或者保留
+          // 这里直接保留原文排版
+          verseElement.innerHTML = poem.content.split('\n').join('<br>');
+        } else {
+          verseElement.classList.add('horizontal-mode');
+          // 横排居中，适合长短句
+          verseElement.innerHTML = poem.content.split('\n').join('<br>');
         }
 
         // Debug: Log the desc content to console
@@ -2112,20 +2178,6 @@
           document.getElementById('poemTextContent').classList.add('fade-in');
           document.getElementById('poemDescContent').classList.add('fade-in');
 
-          // Add seal decoration to the text section based on poem type
-          const sealContainer = document.querySelector('.text-section');
-          // Remove any existing seal first
-          const existingSeal = sealContainer.querySelector('.seal-default-mode');
-          if (existingSeal) {
-            existingSeal.remove();
-          }
-
-          // Add new seal based on poem type
-          const sealText = poem.source === 'ci' ? '词' : '诗';
-          const sealElement = document.createElement('div');
-          sealElement.className = 'seal-default-mode';
-          sealElement.textContent = sealText;
-          sealContainer.appendChild(sealElement);
 
           // Optionally, add a visual indicator that image loading failed
           const img = document.getElementById('poemImage');
@@ -2148,20 +2200,6 @@
           document.getElementById('poemTextContent').classList.add('fade-in');
           document.getElementById('poemDescContent').classList.add('fade-in');
 
-          // Add seal decoration to the text section based on poem type
-          const sealContainer = document.querySelector('.text-section');
-          // Remove any existing seal first
-          const existingSeal = sealContainer.querySelector('.seal-default-mode');
-          if (existingSeal) {
-            existingSeal.remove();
-          }
-
-          // Add new seal based on poem type
-          const sealText = poem.source === 'ci' ? '词' : '诗';
-          const sealElement = document.createElement('div');
-          sealElement.className = 'seal-default-mode';
-          sealElement.textContent = sealText;
-          sealContainer.appendChild(sealElement);
         };
 
         img.onerror = function () {
@@ -2207,20 +2245,6 @@
             document.getElementById('poemTextContent').classList.add('fade-in');
             document.getElementById('poemDescContent').classList.add('fade-in');
 
-            // Add seal decoration to the text section based on poem type
-            const sealContainer = document.querySelector('.text-section');
-            // Remove any existing seal first
-            const existingSeal = sealContainer.querySelector('.seal-default-mode');
-            if (existingSeal) {
-              existingSeal.remove();
-            }
-
-            // Add new seal based on poem type
-            const sealText = poem.source === 'ci' ? '词' : '诗';
-            const sealElement = document.createElement('div');
-            sealElement.className = 'seal-default-mode';
-            sealElement.textContent = sealText;
-            sealContainer.appendChild(sealElement);
           }
         }, 300); // Show content after 300ms if image hasn't loaded yet
       }
@@ -2599,43 +2623,42 @@
 
       // Show detailed poem view when clicking a card
       function showPoemDetail(poem) {
-        // Update the main content with the selected poem
+        // 1. 设置基本信息
         document.getElementById('poemTitle').textContent = poem.title;
         document.getElementById('poemAuthor').textContent = poem.auth;
-        document.getElementById('poemType').textContent = poem.type;
 
-        // Determine if we should use vertical layout
-        const shouldUseVerticalLayout = isVerticalLayoutPoem(poem);
-        const poemVerseElement = document.getElementById('poemVerse');
-
-        if (shouldUseVerticalLayout) {
-          // Prepare content for vertical layout - each line becomes a span for vertical display
-          const lines = poem.content.split('\n').map(line => line.trim()).filter(line => line !== '');
-          let verticalContent = '';
-          for (let line of lines) {
-            if (line) {
-              // Split by punctuation to create proper vertical flow
-              const parts = line.split(/([，。！？!?])/);
-              verticalContent += '<span class="vertical-line">';
-              for (let part of parts) {
-                if (part) {
-                  verticalContent += `<span class="vertical-char">${part}</span>`;
-                }
-              }
-              verticalContent += '</span>';
-            }
-          }
-          poemVerseElement.innerHTML = verticalContent;
-          poemVerseElement.className = 'poem-verse vertical-layout'; // Apply vertical layout class
-
-          // Apply vertical text class to text section
-          document.querySelector('.text-section').classList.add('vertical-text');
+        // 优化：尝试从 type 中提取朝代，如果没有则默认显示诗词类型
+        const dynastyElement = document.getElementById('poemDynasty');
+        if (poem.source === 'ci') {
+           dynastyElement.textContent = '宋';
+           dynastyElement.style.backgroundColor = '#88485E'; // 宋词用紫红色
         } else {
-          // Regular horizontal layout
-          poemVerseElement.innerHTML = poem.content.split('\n').join('<br>');
-          poemVerseElement.className = 'poem-verse'; // Reset to default class
-          // Remove vertical text class if it exists
-          document.querySelector('.text-section').classList.remove('vertical-text');
+           dynastyElement.textContent = '唐'; // 你的数据源主要是唐诗
+           dynastyElement.style.backgroundColor = '#FE2C55'; // 唐诗用小红书红
+        }
+
+        // 2. 智能排版逻辑 (复用 analyzePoemLayout)
+        // 注意：这里我们稍微改一下，如果是 analyzePoemLayout 返回 vertical，我们就用竖排
+        // 但对于主展示区，我们可以稍微放宽竖排的条件（比如只要是律诗绝句都竖排，不受32字限制，因为空间大）
+
+        const content = poem.content;
+        const verseElement = document.getElementById('poemVerse');
+
+        // 清除之前的类
+        verseElement.className = 'poem-verse';
+
+        // 简单判断：不包含逗号且句子长度整齐的，或者你是用 analyzePoemLayout
+        const layoutInfo = analyzePoemLayout(poem);
+
+        if (layoutInfo.mode === 'vertical') {
+          verseElement.classList.add('vertical-mode');
+          // 竖排时，换行符保留，且标点符号可能会影响美观，可以考虑用空格替换标点，或者保留
+          // 这里直接保留原文排版
+          verseElement.innerHTML = poem.content.split('\n').join('<br>');
+        } else {
+          verseElement.classList.add('horizontal-mode');
+          // 横排居中，适合长短句
+          verseElement.innerHTML = poem.content.split('\n').join('<br>');
         }
 
         document.getElementById('poemDesc').innerHTML = poem.desc;
@@ -2672,20 +2695,6 @@
         document.getElementById('poemTextContent').classList.add('fade-in');
         document.getElementById('poemDescContent').classList.add('fade-in');
 
-        // Add seal decoration to the text section based on poem type
-        const sealContainer = document.querySelector('.text-section');
-        // Remove any existing seal first
-        const existingSeal = sealContainer.querySelector('.seal-default-mode');
-        if (existingSeal) {
-          existingSeal.remove();
-        }
-
-        // Add new seal based on poem type
-        const sealText = poem.source === 'ci' ? '词' : '诗';
-        const sealElement = document.createElement('div');
-        sealElement.className = 'seal-default-mode';
-        sealElement.textContent = sealText;
-        sealContainer.appendChild(sealElement);
 
         // Switch to symmetric layout to show details
         const symmetricContainer = document.querySelector('.poem-content');
@@ -2695,6 +2704,25 @@
         symmetricContainer.style.display = 'flex';
         waterfallContainer.classList.remove('active');
         layoutToggle.textContent = '瀑布流';
+      }
+
+      // Copy poem to clipboard function (优化二: 添加"复制/分享"功能)
+      function copyPoemToClipboard() {
+         const title = document.getElementById('poemTitle').textContent;
+         const author = document.getElementById('poemAuthor').textContent;
+         // 获取原始文本，把 <br> 换回换行符
+         const verseHtml = document.getElementById('poemVerse').innerHTML;
+         const verse = verseHtml.replace(/<br\s*\/?>/gi, '\n').replace(/&nbsp;/g, ' ');
+
+         const textToCopy = `【${title}】\n${author}\n\n${verse}\n\n—— 来自古典诗词小站`;
+
+         navigator.clipboard.writeText(textToCopy).then(() => {
+             // 简单的提示 feedback
+             const btn = document.querySelector('button[title="复制诗词"]');
+             const originalText = btn.innerHTML;
+             btn.innerHTML = '✅';
+             setTimeout(() => btn.innerHTML = originalText, 2000);
+         });
       }
 
       // New: intelligent poem layout analysis
