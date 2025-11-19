@@ -2144,6 +2144,7 @@
 
       // Helper function to get optimal poem lines for waterfall display
       // Ensures seven-character poems show two lines (couplets) for proper structure
+      // Also handles text by 16-char estimation and sentence boundaries
       function getOptimalPoemLines(poem) {
         const lines = poem.content.split('\n').map(line => line.trim()).filter(line => line !== '');
 
@@ -2177,19 +2178,59 @@
           // For five-character poems, show two lines if available
           const randomIndex = Math.floor(Math.random() * (lines.length - 1));
           return lines[randomIndex] + '<br>' + lines[randomIndex + 1];
-        } else if (lines.length >= 2) {
-          // For Song ci or other formats, show 1-2 lines based on length
-          const randomIndex = Math.floor(Math.random() * lines.length);
-          const firstLine = lines[randomIndex];
-
-          // If the line is short and there's a next line, show both
-          if (firstLine.length <= 10 && randomIndex < lines.length - 1) {
-            return firstLine + '<br>' + lines[randomIndex + 1];
-          }
-          return firstLine;
         } else {
-          // Single line poem
-          return lines[0];
+          // For other formats, use 16-char estimation with sentence boundaries
+          // Select a random starting point from the poem
+          const randomIndex = Math.floor(Math.random() * lines.length);
+          let selectedText = lines[randomIndex];
+
+          // If the selected line is too long, process it by sentences
+          if (selectedText.length > 16) {
+            // Split by sentence endings (句号)
+            const sentences = selectedText.split('。');
+            const result = [];
+
+            let currentLine = '';
+            for (let i = 0; i < sentences.length; i++) {
+              if (sentences[i].trim() === '') continue; // Skip empty parts
+
+              const sentence = sentences[i].trim() + '。';
+
+              // Check if adding this sentence would exceed 16 chars
+              if ((currentLine + sentence).length <= 16) {
+                currentLine += sentence;
+              } else {
+                // If current line has content, save it and start a new line
+                if (currentLine) {
+                  result.push(currentLine);
+                }
+                // If the sentence itself is longer than 16 chars, break it into 16-char chunks
+                if (sentence.length > 16) {
+                  // Break the long sentence into 16-char segments
+                  for (let j = 0; j < sentence.length; j += 16) {
+                    const segment = sentence.substring(j, j + 16);
+                    if (segment) result.push(segment);
+                  }
+                } else {
+                  currentLine = sentence;
+                }
+              }
+            }
+
+            // Add any remaining content in currentLine
+            if (currentLine) {
+              result.push(currentLine);
+            }
+
+            // Limit to 4 lines to avoid overcrowding the card
+            return result.slice(0, 4).join('<br>');
+          } else {
+            // If it's short, and there's a next line and total is reasonable, show both
+            if (randomIndex < lines.length - 1 && (selectedText + lines[randomIndex + 1]).length <= 24) {
+              return selectedText + '<br>' + lines[randomIndex + 1];
+            }
+            return selectedText;
+          }
         }
       }
 
