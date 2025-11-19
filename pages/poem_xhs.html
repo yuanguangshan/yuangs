@@ -1153,7 +1153,7 @@
     </div>
 
   <!-- Floating Refresh Button -->
-  <button class="floating-refresh-btn" onclick="loadRandomPoem()" title="换一首诗">
+  <button class="floating-refresh-btn" onclick="refreshContent()" title="刷新内容">
     ♻️
   </button>
 
@@ -1167,6 +1167,34 @@
     let allCi = null;
     let allCombined = null; // Combined poems and ci
     let filteredPoems = null; // Store currently filtered poems
+
+    // Image cache to store latest 20 images
+    let imageCache = [];
+    const MAX_CACHE_SIZE = 20;
+
+    // Function to add image to cache
+    function addToImageCache(imgUrl) {
+      // Check if image is already in cache
+      const existingIndex = imageCache.indexOf(imgUrl);
+      if (existingIndex !== -1) {
+        // Move to front if already in cache
+        imageCache.splice(existingIndex, 1);
+      } else if (imageCache.length >= MAX_CACHE_SIZE) {
+        // Remove oldest item if cache is full
+        imageCache.pop();
+      }
+      // Add to front of cache
+      imageCache.unshift(imgUrl);
+    }
+
+    // Function to get a random cached image
+    function getRandomCachedImage() {
+      if (imageCache.length === 0) {
+        return null;
+      }
+      // Return a random image from the cache
+      return imageCache[Math.floor(Math.random() * imageCache.length)];
+    }
 
     // Function to fetch and cache Tang poems
     async function fetchAndCachePoems() {
@@ -1504,6 +1532,8 @@
 
       // Set up image event handlers
       img.onload = function () {
+        // Add loaded image to cache
+        addToImageCache(img.src);
         // Clear timeout on successful load
         if (timeoutId) {
           clearTimeout(timeoutId);
@@ -1518,6 +1548,13 @@
 
       img.onerror = function () {
         console.log(`Image loading error for fallback ${currentFallback}, trying next...`);
+        // If we have cached images, try using one as a fallback
+        const cachedImage = getRandomCachedImage();
+        if (cachedImage && currentFallback >= maxFallbacks - 1) { // Only try cached on last attempt
+          console.log(`Using cached image as final fallback: ${cachedImage}`);
+          img.src = cachedImage;
+          return; // Don't try next fallback, try the cached image instead
+        }
         // Try next fallback image
         tryNextFallback();
       };
@@ -1531,8 +1568,15 @@
         if (currentFallback < maxFallbacks) {
           tryNextFallback();
         } else {
-          // All fallbacks exhausted, show content without image and indicate failure
-          handleImageFailure();
+          // Try cached image if available before showing content without image
+          const cachedImage = getRandomCachedImage();
+          if (cachedImage) {
+            console.log(`Using cached image as final fallback due to timeout: ${cachedImage}`);
+            img.src = cachedImage;
+          } else {
+            // All fallbacks exhausted, show content without image and indicate failure
+            handleImageFailure();
+          }
         }
       }, 5000); // 5 seconds timeout for primary image
 
@@ -1718,6 +1762,8 @@
 
       // Set up image event handlers
       img.onload = function () {
+        // Add loaded image to cache
+        addToImageCache(img.src);
         // Clear timeout on successful load
         if (timeoutId) {
           clearTimeout(timeoutId);
@@ -1732,6 +1778,13 @@
 
       img.onerror = function () {
         console.log(`Image loading error for fallback ${currentFallback}, trying next...`);
+        // If we have cached images, try using one as a fallback
+        const cachedImage = getRandomCachedImage();
+        if (cachedImage && currentFallback >= maxFallbacks - 1) { // Only try cached on last attempt
+          console.log(`Using cached image as final fallback: ${cachedImage}`);
+          img.src = cachedImage;
+          return; // Don't try next fallback, try the cached image instead
+        }
         // Try next fallback image
         tryNextFallback();
       };
@@ -1745,8 +1798,15 @@
         if (currentFallback < maxFallbacks) {
           tryNextFallback();
         } else {
-          // All fallbacks exhausted, show content without image and indicate failure
-          handleImageFailure();
+          // Try cached image if available before showing content without image
+          const cachedImage = getRandomCachedImage();
+          if (cachedImage) {
+            console.log(`Using cached image as final fallback due to timeout: ${cachedImage}`);
+            img.src = cachedImage;
+          } else {
+            // All fallbacks exhausted, show content without image and indicate failure
+            handleImageFailure();
+          }
         }
       }, 5000); // 5 seconds timeout for primary image
 
@@ -2005,7 +2065,11 @@
       // Only generate if content is not already there or if we want to refresh
       if (allCombined && allCombined.length > 0) {
         waterfallContent.innerHTML = ''; // Clear existing content
-        allCombined.forEach((poem, index) => {
+
+        // Select 10 random poems from allCombined
+        const randomPoems = getRandomPoems(allCombined, 10);
+
+        randomPoems.forEach((poem, index) => {
           const card = document.createElement('div');
           card.className = 'waterfall-card';
           card.onclick = function() {
@@ -2018,7 +2082,7 @@
 
           card.innerHTML = `
             <div class="image-overlay-container">
-              <img src="${getRandomImageUrl(0)}" alt="${poem.title}" class="waterfall-image" onerror="this.onerror=null;this.src='https://picsum.photos/400/200?random=${index}';">
+              <img src="${getRandomImageUrl(0)}" alt="${poem.title}" class="waterfall-image" onerror="this.onerror=null;this.src=getRandomCachedImage() || 'https://picsum.photos/400/200?random=${index}';">
               <div class="overlay-text">${randomLine}</div>
             </div>
             <div class="waterfall-content-section">
@@ -2029,6 +2093,15 @@
           waterfallContent.appendChild(card);
         });
       }
+    }
+
+    // Function to get a specified number of random poems from an array
+    function getRandomPoems(poemsArray, count) {
+      // Create a copy of the array to avoid modifying the original
+      const arrayCopy = [...poemsArray];
+      const shuffled = arrayCopy.sort(() => 0.5 - Math.random());
+      // Return the first 'count' elements or all elements if array is smaller
+      return shuffled.slice(0, Math.min(count, shuffled.length));
     }
 
     // Show detailed poem view when clicking a card
@@ -2042,10 +2115,20 @@
 
       // Update the image
       const img = document.getElementById('poemImage');
+      // Try to add current src to cache if it's loaded successfully
+      img.onload = function() {
+        addToImageCache(img.src);
+      };
       img.src = getRandomImageUrl(0);
       img.onerror = function() {
         this.onerror = null;
-        this.src = 'https://picsum.photos/600/400?random=' + Math.floor(Math.random() * 1000);
+        // Try cached image first, then fallback to random image
+        const cachedImage = getRandomCachedImage();
+        if (cachedImage) {
+          this.src = cachedImage;
+        } else {
+          this.src = 'https://picsum.photos/600/400?random=' + Math.floor(Math.random() * 1000);
+        }
       };
 
       // Show the content sections
@@ -2070,6 +2153,19 @@
       symmetricContainer.style.display = 'flex';
       waterfallContainer.classList.remove('active');
       layoutToggle.textContent = '瀑布流';
+    }
+
+    // Function to refresh content based on current layout
+    function refreshContent() {
+      const waterfallContainer = document.getElementById('waterfallContainer');
+
+      if (waterfallContainer.classList.contains('active')) {
+        // If in waterfall layout, refresh the waterfall content with new random poems
+        generateWaterfallContent();
+      } else {
+        // If in symmetric layout, load a new random poem
+        loadRandomPoem();
+      }
     }
   </script>
 </body>
