@@ -344,10 +344,40 @@
       color: var(--text-secondary);
     }
 
+    .dark-mode .poem-verse.vertical-mode,
     .dark-mode .poem-verse.horizontal-mode {
       color: var(--text-primary);
     }
 
+    /* Vertical text layout for regular poems (shi) */
+    .text-section.vertical-text {
+      align-items: center;
+    }
+
+    .poem-verse.vertical-layout {
+      display: flex;
+      flex-direction: column;
+      writing-mode: vertical-rl;
+      text-orientation: upright;
+      font-family: 'Noto Serif SC', 'STSong', 'Songti SC', serif;
+      font-size: 1.4rem;
+      letter-spacing: 0.4em;
+      line-height: 2.0;
+      color: var(--text-secondary);
+      text-align: center;
+      margin: 0 auto;
+      height: auto;
+      white-space: nowrap;
+    }
+
+    .vertical-line {
+      display: inline-flex;
+      flex-direction: column;
+    }
+
+    .vertical-char {
+      margin: 2px 0;
+    }
 
     /* Enhanced styles for improved default mode */
 
@@ -386,6 +416,22 @@
     }
 
     /* 竖排模式 (关键优化) */
+    .poem-verse.vertical-mode {
+      writing-mode: vertical-rl;
+      text-orientation: upright;
+      font-size: 1.6rem;
+      letter-spacing: 0.4em;
+      line-height: 2.5; /* 行间距拉大 */
+      height: auto;
+      max-height: 500px; /* 防止过高 */
+      text-align: justify;
+      margin: 0 auto;
+      font-family: 'Noto Serif SC', serif;
+    }
+
+    .dark-mode .poem-verse.vertical-mode {
+      color: var(--text-primary);
+    }
 
     /* 横排模式优化 */
     .poem-verse.horizontal-mode {
@@ -399,6 +445,27 @@
       color: var(--text-primary);
     }
 
+    /* Couplets for 7-character poems - display two lines together */
+    /* 确保这是最新的样式 */
+    .couplet-row {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin: 0;          /* 关键：去掉外边距 */
+      padding: 10px 0;    /* 关键：只用内边距控制，10px-12px 比较合适 */
+      border-bottom: 1px dashed rgba(128, 128, 128, 0.15);
+      width: 100%;
+    }
+
+    /* 稍微增加一点行内文字的紧凑度，让两行诗靠近，这样组与组的区分度更好 */
+    .horizontal-mode .couplet-row {
+        line-height: 1.6;
+    }
+
+    .dark-mode .couplet-row {
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+    }
 
     /* This seal will be used in the main display */
     .main-seal {
@@ -1249,6 +1316,31 @@
       color: #ffffff;
     }
 
+    /* Mode 1: Vertical layout (suitable for 5/7-character poems) */
+    .layout-vertical {
+      flex-direction: row-reverse; /* Ancient Chinese reads from right to left */
+      gap: 12px;
+    }
+
+    .layout-vertical .poem-line {
+      writing-mode: vertical-rl; /* Vertical text */
+      text-orientation: upright;
+      font-family: 'Noto Serif SC', serif;
+      font-size: 1.4rem; /* Vertical text can be larger */
+      letter-spacing: 0.3em; /* Increase letter spacing for more breathing room */
+      color: rgba(255, 255, 255, 0.95);
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+      border-left: 1px solid rgba(255,255,255,0.2); /* Decorative line */
+      padding-left: 8px;
+    }
+    .layout-vertical .poem-line:last-child {
+      border-left: none;
+    }
+
+    .dark-mode .layout-vertical .poem-line {
+      color: rgba(255, 255, 255, 0.98);
+      text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+    }
 
     /* Mode 2: Horizontal center layout (suitable for ci/named phrases) */
     .layout-horizontal-center {
@@ -1807,7 +1899,59 @@
         }
       }
 
+      // Function to determine if poem is suitable for vertical layout
+      function isVerticalLayoutPoem(poem) {
+        const content = poem.content.replace(/\s+/g, ''); // Remove whitespace
+        const sentences = content.split(/[。！？!?]/).filter(s => s.trim() !== '');
 
+        // Check if it's a 5-character or 7-character regulated verse
+        const firstLineLen = sentences[0] ? sentences[0].replace(/[，,]/g, '').length : 0;
+        const isRegular = (firstLineLen === 5 || firstLineLen === 7) &&
+                          sentences.every(s => {
+                            const cleanLen = s.replace(/[，,]/g, '').length;
+                            return cleanLen === firstLineLen * 2 || cleanLen === firstLineLen;
+                          });
+
+        // Suitable for vertical layout if it's a regular 5/7 character poem and not too long
+        return isRegular && content.length <= 64;
+      }
+
+      // Function to determine if poem is a 7-character regulated verse (七言诗)
+      function isRegularPoem(poem) {
+        const content = poem.content.replace(/\s+/g, ''); // Remove whitespace
+        const sentences = content.split(/[。！？!?]/).filter(s => s.trim() !== '');
+
+        // 获取第一句长度（通常是 5 或 7）
+        const firstLineLen = sentences[0] ? sentences[0].replace(/[，,]/g, '').length : 0;
+
+        // 允许 5言 或 7言，且每句长度要一致
+        const isRegular = (firstLineLen === 5 || firstLineLen === 7) &&
+                          sentences.every(s => {
+                            const cleanLen = s.replace(/[，,]/g, '').length;
+                            // 一句可能是5/7字，或者是一联10/14字
+                            return cleanLen === firstLineLen * 2 || cleanLen === firstLineLen;
+                          });
+
+        return isRegular;
+      }
+
+      // 【修改 2】 通用的成对格式化函数 (原 formatSevenCharacterPoem)
+      function formatCoupletPoem(poem) {
+        // 关键点：filter(line => line !== '') 会自动把造成大间距的空行过滤掉！
+        const lines = poem.content.split('\n').map(line => line.trim()).filter(line => line !== '');
+
+        const formattedLines = [];
+        for (let i = 0; i < lines.length; i += 2) {
+          if (i + 1 < lines.length) {
+            // 成对输出
+            formattedLines.push(`<div class="couplet-row">${lines[i]}<br>${lines[i + 1]}</div>`);
+          } else {
+            // 落单的最后一句
+            formattedLines.push(`<div class="couplet-row">${lines[i]}</div>`);
+          }
+        }
+        return formattedLines.join('');
+      }
 
       // Function to insert line breaks at commas and periods for better layout
       function insertLineBreaksAtPunctuation(content) {
@@ -1823,7 +1967,7 @@
         // 然后添加标点符号后的换行
         processed = processed
           .replace(/([，,])(?!\n)/g, '$1\n') // 在逗号后添加换行（如果没有已经存在的换行）
-         // .replace(/([。.])(?!\n)/g, '$1\n'); // 在句号后添加换行（如果没有已经存在的换行）
+        //  .replace(/([。.])(?!\n)/g, '$1\n'); // 在句号后添加换行（如果没有已经存在的换行）
 
         // 最后，将所有换行符统一转换为 <br> 标签
         processed = processed.replace(/\n/g, '<br>');
@@ -1881,10 +2025,23 @@
         // 简单判断：不包含逗号且句子长度整齐的，或者你是用 analyzePoemLayout
         const layoutInfo = analyzePoemLayout(poem);
 
-        verseElement.classList.add('horizontal-mode');
-        // 横排居中，适合长短句
-        // 其他长短句（词）继续使用默认排版
-        verseElement.innerHTML = insertLineBreaksAtPunctuation(poem.content);
+        if (layoutInfo.mode === 'vertical') {
+          verseElement.classList.add('vertical-mode');
+          // 竖排时，换行符保留，且标点符号可能会影响美观，可以考虑用空格替换标点，或者保留
+          // 这里直接保留原文排版 but add line breaks at punctuation
+          verseElement.innerHTML = insertLineBreaksAtPunctuation(poem.content);
+        } else {
+          verseElement.classList.add('horizontal-mode');
+          // 横排居中，适合长短句
+          // 【修改 3】 只要是格律诗（五言或七言），且行数足够，就使用成对布局
+          // 这样就能利用 .couplet-row 的 CSS 来控制间距，消灭大空行
+          if (isRegularPoem(poem) && poem.content.split('\n').length >= 2) {
+            verseElement.innerHTML = formatCoupletPoem(poem);
+          } else {
+            // 其他长短句（词）继续使用默认排版
+            verseElement.innerHTML = insertLineBreaksAtPunctuation(poem.content);
+          }
+        }
 
         document.getElementById('poemDesc').innerHTML = poem.desc;
 
@@ -2139,10 +2296,23 @@
         // 简单判断：不包含逗号且句子长度整齐的，或者你是用 analyzePoemLayout
         const layoutInfo = analyzePoemLayout(poem);
 
-        verseElement.classList.add('horizontal-mode');
-        // 横排居中，适合长短句
-        // 其他长短句（词）继续使用默认排版
-        verseElement.innerHTML = insertLineBreaksAtPunctuation(poem.content);
+        if (layoutInfo.mode === 'vertical') {
+          verseElement.classList.add('vertical-mode');
+          // 竖排时，换行符保留，且标点符号可能会影响美观，可以考虑用空格替换标点，或者保留
+          // 这里直接保留原文排版 but add line breaks at punctuation
+          verseElement.innerHTML = insertLineBreaksAtPunctuation(poem.content);
+        } else {
+          verseElement.classList.add('horizontal-mode');
+          // 横排居中，适合长短句
+          // 【修改 3】 只要是格律诗（五言或七言），且行数足够，就使用成对布局
+          // 这样就能利用 .couplet-row 的 CSS 来控制间距，消灭大空行
+          if (isRegularPoem(poem) && poem.content.split('\n').length >= 2) {
+            verseElement.innerHTML = formatCoupletPoem(poem);
+          } else {
+            // 其他长短句（词）继续使用默认排版
+            verseElement.innerHTML = insertLineBreaksAtPunctuation(poem.content);
+          }
+        }
 
         // Debug: Log the desc content to console
         console.log("Poem desc content:", poem.desc);
@@ -2672,10 +2842,23 @@
         // 简单判断：不包含逗号且句子长度整齐的，或者你是用 analyzePoemLayout
         const layoutInfo = analyzePoemLayout(poem);
 
-        verseElement.classList.add('horizontal-mode');
-        // 横排居中，适合长短句
-        // 其他长短句（词）继续使用默认排版
-        verseElement.innerHTML = insertLineBreaksAtPunctuation(poem.content);
+        if (layoutInfo.mode === 'vertical') {
+          verseElement.classList.add('vertical-mode');
+          // 竖排时，换行符保留，且标点符号可能会影响美观，可以考虑用空格替换标点，或者保留
+          // 这里直接保留原文排版 but add line breaks at punctuation
+          verseElement.innerHTML = insertLineBreaksAtPunctuation(poem.content);
+        } else {
+          verseElement.classList.add('horizontal-mode');
+          // 横排居中，适合长短句
+          // 【修改 3】 只要是格律诗（五言或七言），且行数足够，就使用成对布局
+          // 这样就能利用 .couplet-row 的 CSS 来控制间距，消灭大空行
+          if (isRegularPoem(poem) && poem.content.split('\n').length >= 2) {
+            verseElement.innerHTML = formatCoupletPoem(poem);
+          } else {
+            // 其他长短句（词）继续使用默认排版
+            verseElement.innerHTML = insertLineBreaksAtPunctuation(poem.content);
+          }
+        }
 
         document.getElementById('poemDesc').innerHTML = poem.desc;
 
@@ -2730,7 +2913,7 @@
          const verseHtml = document.getElementById('poemVerse').innerHTML;
          const verse = verseHtml.replace(/<br\s*\/?>/gi, '\n').replace(/&nbsp;/g, ' ');
 
-         const textToCopy = `【${title}】\n${author}\n\n${verse}\n\n—— 来自苑广山古典诗词小站`;
+         const textToCopy = `【${title}】\n${author}\n\n${verse}\n\n—— 来自古典诗词小站`;
 
          navigator.clipboard.writeText(textToCopy).then(() => {
              // 简单的提示 feedback
@@ -2772,19 +2955,56 @@
         const content = poem.content.replace(/\s+/g, ''); // Remove whitespace
         const sentences = content.split(/[。！？!?]/).filter(s => s.trim() !== '');
 
+        // 1. Check if it's a 5-character or 7-character regulated verse (整齐的格律)
+        // Simple check: see if the first line length is 5 or 7
+        const firstLineLen = sentences[0] ? sentences[0].replace(/[，,]/g, '').length : 0;
+        const isRegular = (firstLineLen === 5 || firstLineLen === 7) &&
+                          sentences.every(s => {
+                            const cleanLen = s.replace(/[，,]/g, '').length;
+                            return cleanLen === firstLineLen * 2 || cleanLen === firstLineLen;
+                          });
+
         let displayLines = [];
         let layoutMode = 'horizontal'; // Default horizontal layout
 
-        // Split content by commas and periods to get individual lines
-        const lines = content.split(/[，。！？!?]/).filter(s => s.trim() !== '');
-
-        if (lines.length > 0) {
-          // Simply use the first few lines without pairing
-          displayLines = lines.slice(0, 4); // Take up to 4 lines
-          layoutMode = 'horizontal-center'; // Quote mode suitable for center alignment
+        if (isRegular && content.length <= 32) {
+          // 2. If it's a short 5/7-character poem (like a jueju), suitable for vertical display
+          layoutMode = 'vertical';
+          // Split the poem into lines by punctuation
+          displayLines = content.split(/[，。！？!?]/).filter(s => s.trim() !== '');
         } else {
-          displayLines = ['诗词内容', '诗词内容'];
-          layoutMode = 'horizontal-center';
+          // 3. If it's a long poem or ci (with uneven lines), just show a random couplet
+          // Prefer selecting middle sentences, avoid very short ones
+          const validCouplets = [];
+          // Try splitting by sentence punctuation, then by commas for couplets
+          for(let s of sentences) {
+            const parts = s.split(/[，,]/);
+            if (parts.length >= 2) {
+              // This is a complete sentence with commas, likely a couplet
+              if (parts[0].length + parts[1].length < 20) { // Limit length
+                validCouplets.push(parts[0] + '，' + parts[1]);
+              }
+            }
+          }
+
+          if (validCouplets.length > 0) {
+            // Randomly take a couplet
+            const randomCouplet = validCouplets[Math.floor(Math.random() * validCouplets.length)];
+            // Replace commas with line breaks for display
+            displayLines = randomCouplet.split(/[，,]/);
+            layoutMode = 'horizontal-center'; // Quote mode suitable for center alignment
+          } else {
+            // Fallback: take first two sentences
+            if (sentences.length >= 2) {
+              displayLines = [sentences[0].split(/[，,]/)[0] || '', sentences[0].split(/[，,]/)[1] || ''];
+            } else if (sentences.length === 1) {
+              const parts = sentences[0].split(/[，,]/);
+              displayLines = [parts[0] || '', parts[1] || ''];
+            } else {
+              displayLines = ['诗词内容', '诗词内容'];
+            }
+            layoutMode = 'horizontal-center';
+          }
         }
 
         return {
