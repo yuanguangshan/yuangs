@@ -974,7 +974,7 @@
       width: 100%;
       max-width: 1200px;
       margin: 0 auto;
-      padding: 20px 10px;
+      padding: 10px 5px; /* Reduced from 20px 10px to save space */
     }
 
     .waterfall-container.active {
@@ -983,7 +983,7 @@
 
     .waterfall-content {
       column-count: 2;
-      column-gap: 20px;
+      column-gap: 12px; /* Reduced from 20px to save space */
     }
 
     @media (max-width: 1024px) {
@@ -1010,12 +1010,12 @@
       background: var(--container-bg);
       border-radius: 20px;
       overflow: hidden;
-      margin-bottom: 20px;
+      margin-bottom: 12px; /* Reduced from 20px to save space */
       break-inside: avoid;
       box-shadow: var(--card-shadow);
       transition: all 0.3s ease;
       cursor: pointer;
-      height: 320px; /* Increased height to give more space for content */
+      height: 300px; /* Reduced from 320px to allocate more relative space to text */
       display: flex;
       flex-direction: column;
     }
@@ -1027,7 +1027,7 @@
 
     .color-block {
       width: 100%;
-      height: 200px; /* Increased from 160px to 200px to make upper part larger */
+      height: 170px; /* Reduced from 200px to give more space to text content */
       display: block;
       position: relative;
     }
@@ -1038,28 +1038,30 @@
       left: 50%;
       transform: translate(-50%, -50%);
       color: white;
-      font-size: 1.1rem; /* Increased font size to make better use of larger space */
+      font-size: 1rem; /* Slightly reduced font size to better accommodate 7 characters */
       font-weight: 500;
       text-align: center;
-      width: 90%;
+      width: 85%; /* Reduced from 95% to provide better fit for 7-character lines */
       text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
       z-index: 10;
       /* Allow text to wrap to multiple lines */
       white-space: normal;
       word-wrap: break-word;
       overflow: hidden; /* Keep text within bounds */
+      line-height: 1.6; /* Increase line height for better spacing between verse lines */
+      font-family: 'Noto Serif SC', 'STSong', 'Songti SC', serif; /* Use Chinese typography for proper character alignment */
     }
 
     .color-block-container {
       position: relative;
       width: 100%;
-      height: 200px; /* Increased from 160px to 200px to make upper part larger */
+      height: 170px; /* Reduced from 200px to give more space to text content */
       border-radius: 20px 20px 0 0;
       overflow: hidden;
     }
 
     .waterfall-content-section {
-      padding: 8px; /* Reduced from 12px to 8px to save space */
+      padding: 4px 6px; /* Reduced from 8px to save more space */
       flex: 1;
       display: flex;
       flex-direction: column;
@@ -1067,7 +1069,7 @@
     }
 
     .waterfall-title {
-      font-size: 0.95rem; /* Reduced from 1.1rem to make smaller */
+      font-size: 0.9rem; /* Reduced from 0.95rem to make smaller */
       font-weight: 600;
       color: var(--text-primary);
       margin: 0;
@@ -1077,9 +1079,9 @@
     }
 
     .waterfall-author {
-      font-size: 0.8rem; /* Reduced from 0.9rem to make smaller */
+      font-size: 0.75rem; /* Reduced from 0.8rem to make smaller */
       color: var(--text-tertiary);
-      margin: 5px 0 0 0; /* Reduced margin from 8px to 5px */
+      margin: 3px 0 0 0; /* Reduced margin from 5px to 3px */
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -2118,9 +2120,25 @@
             showPoemDetail(poem);
           };
 
-          // Get a random line from the poem content and limit its length
+          // Get potentially multiple lines from the poem content to maintain verse structure
           const lines = poem.content.split('\n').filter(line => line.trim() !== '');
-          let randomLine = lines.length > 0 ? lines[Math.floor(Math.random() * lines.length)] : '诗词内容';
+          let randomLine = '';
+
+          if (lines.length > 0) {
+            // Try to get a random line, but also consider the next line for couplets
+            const randomIndex = Math.floor(Math.random() * lines.length);
+            randomLine = lines[randomIndex];
+
+            // Optionally, add the next line to maintain couplet structure if it exists
+            if (randomIndex < lines.length - 1) {
+              // For 七言诗, we might want to show two lines together sometimes
+              if (Math.random() > 0.5) { // 50% chance of showing a couplet
+                randomLine += '<br>' + lines[randomIndex + 1];
+              }
+            }
+          } else {
+            randomLine = '诗词内容';
+          }
 
           // Break the line into chunks of maximum 20 characters
           randomLine = breakTextIntoLines(randomLine, 20);
@@ -2186,14 +2204,21 @@
           continue;
         }
 
-        // If the sentence is longer than maxLength, break it into smaller chunks at appropriate boundaries
+        // Special handling for Chinese poetry (especially 7-character verses) and long sentences
         if (sentence.length > maxLength) {
-          // For very long sentences, break them into smaller chunks
-          let start = 0;
-          while (start < sentence.length) {
-            const chunk = sentence.substring(start, Math.min(start + maxLength, sentence.length));
-            result.push(chunk);
-            start += maxLength;
+          // For Chinese poetry, try to break at natural boundaries
+          // If we have a 七言诗 (7-character verse), keep it as one line if possible
+          if (sentence.includes('。') && sentence.length <= maxLength + 2) {
+            // If the sentence with period is only slightly over the limit, include it
+            result.push(sentence);
+          } else {
+            // For very long sentences, break them into smaller chunks
+            let start = 0;
+            while (start < sentence.length) {
+              const chunk = sentence.substring(start, Math.min(start + maxLength, sentence.length));
+              result.push(chunk);
+              start += maxLength;
+            }
           }
         } else {
           // Check if we can add this sentence to the current line without exceeding maxLength
