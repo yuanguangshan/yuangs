@@ -2167,23 +2167,50 @@
     function breakTextIntoLines(text, maxLength) {
       if (!text) return '';
 
+      // First, split by periods to ensure sentences end at periods
+      const sentences = text.split('。');
       const result = [];
-      let currentLine = '';
 
-      for (let i = 0; i < text.length; i++) {
-        const char = text[i];
-        currentLine += char;
+      for (let i = 0; i < sentences.length; i++) {
+        // Only add the period back if it wasn't the last element from a text that ended with a period
+        let sentence = sentences[i];
 
-        // If we've reached the max length, add the line and start a new one
-        if (currentLine.length >= maxLength) {
-          result.push(currentLine);
-          currentLine = '';
+        // Check if this is not the last segment or if the original text didn't end with a period
+        const isLastSegment = (i === sentences.length - 1);
+        const originalTextEndedWithPeriod = (i === sentences.length - 1 && sentence === '');
+
+        if (!originalTextEndedWithPeriod) {
+          sentence += '。';
+        } else {
+          // If it's an empty string because text ended with a period, skip it
+          continue;
         }
-      }
 
-      // Add the remaining line if there is one
-      if (currentLine) {
-        result.push(currentLine);
+        // If the sentence is longer than maxLength, break it into smaller chunks at appropriate boundaries
+        if (sentence.length > maxLength) {
+          // For very long sentences, break them into smaller chunks
+          let start = 0;
+          while (start < sentence.length) {
+            const chunk = sentence.substring(start, Math.min(start + maxLength, sentence.length));
+            result.push(chunk);
+            start += maxLength;
+          }
+        } else {
+          // Check if we can add this sentence to the current line without exceeding maxLength
+          if (result.length === 0) {
+            // First sentence goes directly to result
+            result.push(sentence);
+          } else {
+            const currentLine = result[result.length - 1];
+            if ((currentLine + sentence).length <= maxLength) {
+              // Add to current line if it doesn't exceed maxLength
+              result[result.length - 1] += sentence;
+            } else {
+              // Start a new line
+              result.push(sentence);
+            }
+          }
+        }
       }
 
       return result.join('<br>');
