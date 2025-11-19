@@ -446,15 +446,21 @@
     }
 
     /* Couplets for 7-character poems - display two lines together */
-    /* 七言诗成对展示 - 优化间距 */
+    /* 确保这是最新的样式 */
     .couplet-row {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      margin: 0;          /* 1. 去掉外边距，消除巨大的间隔 */
-      padding: 12px 0;    /* 2. 使用适度的上下内边距，保持呼吸感但不过分 */
-      border-bottom: 1px dashed rgba(128, 128, 128, 0.2);
+      margin: 0;          /* 关键：去掉外边距 */
+      padding: 10px 0;    /* 关键：只用内边距控制，10px-12px 比较合适 */
+      border-bottom: 1px dashed rgba(128, 128, 128, 0.15);
+      width: 100%;
+    }
+
+    /* 稍微增加一点行内文字的紧凑度，让两行诗靠近，这样组与组的区分度更好 */
+    .horizontal-mode .couplet-row {
+        line-height: 1.6;
     }
 
     .dark-mode .couplet-row {
@@ -1915,36 +1921,35 @@
         const content = poem.content.replace(/\s+/g, ''); // Remove whitespace
         const sentences = content.split(/[。！？!?]/).filter(s => s.trim() !== '');
 
-        // Check if it's a 5-character or 7-character regulated verse
+        // 获取第一句长度（通常是 5 或 7）
         const firstLineLen = sentences[0] ? sentences[0].replace(/[，,]/g, '').length : 0;
-        const isFiveOrSevenChar = (firstLineLen === 5 || firstLineLen === 7) &&
+
+        // 允许 5言 或 7言，且每句长度要一致
+        const isRegular = (firstLineLen === 5 || firstLineLen === 7) &&
                           sentences.every(s => {
                             const cleanLen = s.replace(/[，,]/g, '').length;
-                            return cleanLen === firstLineLen * 2 || cleanLen === firstLineLen; // 5/7 char lines or 10/14 char sentences
+                            // 一句可能是5/7字，或者是一联10/14字
+                            return cleanLen === firstLineLen * 2 || cleanLen === firstLineLen;
                           });
 
-        return isFiveOrSevenChar;
+        return isRegular;
       }
 
-      // Function to format 5-character or 7-character poems with two lines per row for better balance
-      function formatRegularPoem(poem) {
-        // Split content by newlines, filter out empty lines, and trim whitespace
-        const lines = poem.content.split('\n')
-                    .map(line => line.trim())
-                    .filter(line => line !== '');
+      // 【修改 2】 通用的成对格式化函数 (原 formatSevenCharacterPoem)
+      function formatCoupletPoem(poem) {
+        // 关键点：filter(line => line !== '') 会自动把造成大间距的空行过滤掉！
+        const lines = poem.content.split('\n').map(line => line.trim()).filter(line => line !== '');
 
-        // Process in pairs (couplets)
         const formattedLines = [];
         for (let i = 0; i < lines.length; i += 2) {
           if (i + 1 < lines.length) {
-            // Create a container for two lines (couplet)
+            // 成对输出
             formattedLines.push(`<div class="couplet-row">${lines[i]}<br>${lines[i + 1]}</div>`);
           } else {
-            // Last line if odd number of lines
+            // 落单的最后一句
             formattedLines.push(`<div class="couplet-row">${lines[i]}</div>`);
           }
         }
-
         return formattedLines.join('');
       }
 
@@ -2015,10 +2020,12 @@
         } else {
           verseElement.classList.add('horizontal-mode');
           // 横排居中，适合长短句
-          // 检查是否为五言或七言诗，如果是则成对显示
+          // 【修改 3】 只要是格律诗（五言或七言），且行数足够，就使用成对布局
+          // 这样就能利用 .couplet-row 的 CSS 来控制间距，消灭大空行
           if (isRegularPoem(poem) && poem.content.split('\n').length >= 2) {
-            verseElement.innerHTML = formatRegularPoem(poem);
+            verseElement.innerHTML = formatCoupletPoem(poem);
           } else {
+            // 其他长短句（词）继续使用默认排版
             verseElement.innerHTML = insertLineBreaksAtPunctuation(poem.content.split('\n').join('<br>'));
           }
         }
@@ -2284,10 +2291,12 @@
         } else {
           verseElement.classList.add('horizontal-mode');
           // 横排居中，适合长短句
-          // 检查是否为五言或七言诗，如果是则成对显示
+          // 【修改 3】 只要是格律诗（五言或七言），且行数足够，就使用成对布局
+          // 这样就能利用 .couplet-row 的 CSS 来控制间距，消灭大空行
           if (isRegularPoem(poem) && poem.content.split('\n').length >= 2) {
-            verseElement.innerHTML = formatRegularPoem(poem);
+            verseElement.innerHTML = formatCoupletPoem(poem);
           } else {
+            // 其他长短句（词）继续使用默认排版
             verseElement.innerHTML = insertLineBreaksAtPunctuation(poem.content.split('\n').join('<br>'));
           }
         }
@@ -2828,10 +2837,12 @@
         } else {
           verseElement.classList.add('horizontal-mode');
           // 横排居中，适合长短句
-          // 检查是否为五言或七言诗，如果是则成对显示
+          // 【修改 3】 只要是格律诗（五言或七言），且行数足够，就使用成对布局
+          // 这样就能利用 .couplet-row 的 CSS 来控制间距，消灭大空行
           if (isRegularPoem(poem) && poem.content.split('\n').length >= 2) {
-            verseElement.innerHTML = formatRegularPoem(poem);
+            verseElement.innerHTML = formatCoupletPoem(poem);
           } else {
+            // 其他长短句（词）继续使用默认排版
             verseElement.innerHTML = insertLineBreaksAtPunctuation(poem.content.split('\n').join('<br>'));
           }
         }
