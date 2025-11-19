@@ -2144,52 +2144,69 @@
 
       // Helper function to get optimal poem lines for waterfall display
       // Ensures seven-character poems show two lines (couplets) for proper structure
+      // For ci (词), display as continuous text; for poetry (诗), keep with line breaks
       function getOptimalPoemLines(poem) {
-        const lines = poem.content.split('\n').map(line => line.trim()).filter(line => line !== '');
+        // Check if the poem is poetry or ci
+        if (poem.source === 'ci') {
+          // For ci (词), display as continuous text without line breaks
+          let content = poem.content.replace(/<br\s*\/?>/gi, ' ');
+          content = content.replace(/\n/g, ' ');
+          content = content.trim();
 
-        if (lines.length === 0) {
-          return '诗词内容';
-        }
-
-        // Remove punctuation to count actual characters
-        const cleanLines = lines.map(line => line.replace(/[,。、;:!?,.;:!?]/g, ''));
-
-        // Check if it's a seven-character poem (七言诗)
-        // A line is considered seven-character if it has 7 or 14 characters (for compound lines)
-        const hasSevenChar = cleanLines.some(line => {
-          const len = line.length;
-          return len === 7 || len === 14;
-        });
-
-        // Check if it's a five-character poem (五言诗)
-        const hasFiveChar = cleanLines.some(line => {
-          const len = line.length;
-          return len === 5 || len === 10;
-        });
-
-        if (hasSevenChar && lines.length >= 2) {
-          // For seven-character poems, ALWAYS show two lines (couplet)
-          // Select a random starting point that allows for two lines
-          const maxStartIndex = lines.length - 2;
-          const randomIndex = Math.floor(Math.random() * (maxStartIndex + 1));
-          return lines[randomIndex] + '<br>' + lines[randomIndex + 1];
-        } else if (hasFiveChar && lines.length >= 2) {
-          // For five-character poems, show two lines if available
-          const randomIndex = Math.floor(Math.random() * (lines.length - 1));
-          return lines[randomIndex] + '<br>' + lines[randomIndex + 1];
-        } else if (lines.length >= 2) {
-          // For Song ci or other formats, show 1-2 lines based on length
-          const randomIndex = Math.floor(Math.random() * lines.length);
-          const firstLine = lines[randomIndex];
-
-          // If the line is short and there's a next line, show both
-          if (firstLine.length <= 10 && randomIndex < lines.length - 1) {
-            return firstLine + '<br>' + lines[randomIndex + 1];
+          // Ensure content is not too long for display
+          if (content.length > 40) {
+            content = content.substring(0, 40) + '...';
           }
-          return firstLine;
+
+          return content;
         } else {
-          // Single line poem
-          return lines[0];
+          // For poetry (诗), keep current behavior with line breaks
+          const lines = poem.content.split('\n').map(line => line.trim()).filter(line => line !== '');
+
+          if (lines.length === 0) {
+            return '诗词内容';
+          }
+
+          // Remove punctuation to count actual characters
+          const cleanLines = lines.map(line => line.replace(/[,。、;:!?,.;:!?]/g, ''));
+
+          // Check if it's a seven-character poem (七言诗)
+          // A line is considered seven-character if it has 7 or 14 characters
+          const hasSevenChar = cleanLines.some(line => {
+            const len = line.length;
+            return len === 7 || len === 14;
+          });
+
+          // Check if it's a five-character poem (五言诗)
+          const hasFiveChar = cleanLines.some(line => {
+            const len = line.length;
+            return len === 5 || len === 10;
+          });
+
+          if (hasSevenChar && lines.length >= 2) {
+            // For seven-character poems, ALWAYS show two lines (couplet)
+            // Select a random starting point that allows for two lines
+            const maxStartIndex = lines.length - 2;
+            const randomIndex = Math.floor(Math.random() * (maxStartIndex + 1));
+            return lines[randomIndex] + '<br>' + lines[randomIndex + 1];
+          } else if (hasFiveChar && lines.length >= 2) {
+            // For five-character poems, show two lines if available
+            const randomIndex = Math.floor(Math.random() * (lines.length - 1));
+            return lines[randomIndex] + '<br>' + lines[randomIndex + 1];
+          } else if (lines.length >= 2) {
+            // For other formats, show 1-2 lines based on length
+            const randomIndex = Math.floor(Math.random() * lines.length);
+            const firstLine = lines[randomIndex];
+
+            // If the line is short and there's a next line, show both
+            if (firstLine.length <= 10 && randomIndex < lines.length - 1) {
+              return firstLine + '<br>' + lines[randomIndex + 1];
+            }
+            return firstLine;
+          } else {
+            // Single line poem
+            return lines[0];
+          }
         }
       }
 
