@@ -445,6 +445,21 @@
       color: var(--text-primary);
     }
 
+    /* Couplets for 7-character poems - display two lines together */
+    .couplet-row {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin: 10px 0;
+      padding: 8px;
+      border-bottom: 1px dashed rgba(128, 128, 128, 0.2);
+    }
+
+    .dark-mode .couplet-row {
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+    }
+
     /* This seal will be used in the main display */
     .main-seal {
       position: absolute;
@@ -1877,6 +1892,41 @@
         return isRegular && content.length <= 64;
       }
 
+      // Function to determine if poem is a 7-character regulated verse (七言诗)
+      function isSevenCharacterPoem(poem) {
+        const content = poem.content.replace(/\s+/g, ''); // Remove whitespace
+        const sentences = content.split(/[。！？!?]/).filter(s => s.trim() !== '');
+
+        // Check if it's a 7-character regulated verse
+        const firstLineLen = sentences[0] ? sentences[0].replace(/[，,]/g, '').length : 0;
+        const isSevenChar = firstLineLen === 7 &&
+                          sentences.every(s => {
+                            const cleanLen = s.replace(/[，,]/g, '').length;
+                            return cleanLen === 14 || cleanLen === 7; // 7 char lines or 14 char sentences
+                          });
+
+        return isSevenChar;
+      }
+
+      // Function to format 7-character poems with two lines per row for better balance
+      function formatSevenCharacterPoem(poem) {
+        const lines = poem.content.split('\n').map(line => line.trim()).filter(line => line !== '');
+
+        // Process in pairs (couplets)
+        const formattedLines = [];
+        for (let i = 0; i < lines.length; i += 2) {
+          if (i + 1 < lines.length) {
+            // Create a container for two lines (couplet)
+            formattedLines.push(`<div class="couplet-row">${lines[i]}<br>${lines[i + 1]}</div>`);
+          } else {
+            // Last line if odd number of lines
+            formattedLines.push(`<div class="couplet-row">${lines[i]}</div>`);
+          }
+        }
+
+        return formattedLines.join('');
+      }
+
       // Function to load a random poem and image
       async function loadRandomPoem() {
         // Show loading
@@ -1930,7 +1980,12 @@
         } else {
           verseElement.classList.add('horizontal-mode');
           // 横排居中，适合长短句
-          verseElement.innerHTML = poem.content.split('\n').join('<br>');
+          // 检查是否为七言诗，如果是则成对显示
+          if (isSevenCharacterPoem(poem) && poem.content.split('\n').length >= 2) {
+            verseElement.innerHTML = formatSevenCharacterPoem(poem);
+          } else {
+            verseElement.innerHTML = poem.content.split('\n').join('<br>');
+          }
         }
 
         document.getElementById('poemDesc').innerHTML = poem.desc;
@@ -2194,7 +2249,12 @@
         } else {
           verseElement.classList.add('horizontal-mode');
           // 横排居中，适合长短句
-          verseElement.innerHTML = poem.content.split('\n').join('<br>');
+          // 检查是否为七言诗，如果是则成对显示
+          if (isSevenCharacterPoem(poem) && poem.content.split('\n').length >= 2) {
+            verseElement.innerHTML = formatSevenCharacterPoem(poem);
+          } else {
+            verseElement.innerHTML = poem.content.split('\n').join('<br>');
+          }
         }
 
         // Debug: Log the desc content to console
@@ -2733,7 +2793,12 @@
         } else {
           verseElement.classList.add('horizontal-mode');
           // 横排居中，适合长短句
-          verseElement.innerHTML = poem.content.split('\n').join('<br>');
+          // 检查是否为七言诗，如果是则成对显示
+          if (isSevenCharacterPoem(poem) && poem.content.split('\n').length >= 2) {
+            verseElement.innerHTML = formatSevenCharacterPoem(poem);
+          } else {
+            verseElement.innerHTML = poem.content.split('\n').join('<br>');
+          }
         }
 
         document.getElementById('poemDesc').innerHTML = poem.desc;
