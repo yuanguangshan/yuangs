@@ -3194,7 +3194,29 @@ ${verse}
       // Core AI call interface
       async function explainText(text, model) {
           // Assuming the AI service exposes the endpoint at /ai/explain
-          return await requestJSON('POST', '/ai/explain', { text, model });
+          try {
+              return await requestJSON('POST', '/ai/explain', { text, model });
+          } catch (error) {
+              console.error("API请求失败:", error);
+              // 尝试使用CORS代理来绕过跨域限制
+              try {
+                  const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(`${API_PREFIX}/ai/explain`);
+                  const response = await fetch(proxyUrl, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ text, model })
+                  });
+
+                  if (!response.ok) {
+                      throw new Error(`代理请求失败: ${response.status} ${response.statusText}`);
+                  }
+
+                  return await response.json();
+              } catch (proxyError) {
+                  console.error("代理请求也失败:", proxyError);
+                  throw error; // 返回原始错误
+              }
+          }
       }
 
       // Main function to get AI interpretation of the poem
@@ -3216,8 +3238,8 @@ ${verse}
           try {
               const resultData = await explainText(finalText, DEFAULT_MODEL_ID);
 
-              // Assume the API returns data in a structure where the result is in 'data' field and already in Markdown format
-              const markdownResult = resultData.data || resultData.text || resultData;
+              // Handle API response - check for explanation field (actual API response) or fallback to data/text fields
+              const markdownResult = resultData.explanation || resultData.data || resultData.text || resultData;
 
               if (typeof markdownResult !== 'string' || !markdownResult.trim()) {
                    throw new Error(`API返回结果格式不正确，未找到有效的文本内容。Raw: ${toDisplayString(resultData)}`);
