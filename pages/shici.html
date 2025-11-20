@@ -3183,15 +3183,20 @@ ${verse}
               }
 
               // Try to parse JSON response, but handle cases where response is not valid JSON
-              let responseBody;
               try {
                   return await response.json();
               } catch {
-                  // If JSON parsing fails, return the raw text response
+                  // If JSON parsing fails, it might be a plain text error response
                   try {
                       const rawText = await response.text();
-                      // Return an object with the raw text as an error
-                      return { error: "Invalid JSON response", details: rawText, text: rawText };
+                      // Check if the raw text contains meaningful content (not just empty/error)
+                      if (rawText.trim()) {
+                          // Return the plain text as explanation
+                          return { explanation: rawText, text: rawText };
+                      } else {
+                          // If it's empty, return an error object
+                          return { error: "Empty response", details: "Server returned empty response" };
+                      }
                   } catch {
                       // If both JSON and text parsing fail, return a generic error
                       return { error: "Could not parse response", details: "Response body could not be read" };
@@ -3255,7 +3260,8 @@ ${verse}
 
               // Handle API response - check for explanation field (actual API response) or fallback to data/text fields
               // Also check if the response contains an error
-              if (resultData.error && resultData.details) {
+              if (resultData.error && resultData.details && !resultData.explanation) {
+                  // Only throw error if there's no explanation text to display
                   throw new Error(`API服务错误: ${resultData.error}. 详细信息: ${resultData.details}`);
               }
 
