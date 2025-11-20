@@ -3111,12 +3111,8 @@ ${verse}
             type: getPoemType() // You'll need to define this function
           };
 
-          // Encode content for URL
-          const encodedContent = encodeURIComponent(interpretation);
-          const encodedInfo = encodeURIComponent(JSON.stringify(poemInfo));
-
-          // Open new page with interpretation
-          window.open(`shici_interpretation.html?content=${encodedContent}&info=${encodedInfo}`, '_blank');
+          // Show interpretation in modal instead of opening new page
+          showInterpretationModal(interpretation, poemInfo);
 
         } catch (error) {
           console.error('Error getting poem interpretation:', error);
@@ -3251,14 +3247,284 @@ ${verse}
         return typeSealElement ? typeSealElement.textContent : '诗词';
       }
 
+      // Function to display interpretation in modal
+      function showInterpretationModal(interpretation, poemInfo) {
+        // Update modal title with poem info
+        document.getElementById('modalTitle').innerHTML = `《${poemInfo.title}》诗词解读`;
+
+        // Convert markdown to HTML and display content
+        document.getElementById('interpretationContent').innerHTML = markdownToHtml(interpretation);
+
+        // Show the modal
+        document.getElementById('interpretationModal').style.display = 'flex';
+      }
+
+      // Function to close the modal
+      function closeInterpretationModal() {
+        document.getElementById('interpretationModal').style.display = 'none';
+      }
+
+      // Function to copy modal content
+      function copyModalContent() {
+        const contentToCopy = document.getElementById('interpretationContent').innerText;
+
+        navigator.clipboard.writeText(contentToCopy)
+          .then(() => {
+            // Show temporary success message
+            const copyBtn = document.getElementById('copyModalBtn');
+            const originalText = copyBtn.innerHTML;
+            copyBtn.innerHTML = '✓';
+
+            setTimeout(() => {
+              copyBtn.innerHTML = originalText;
+            }, 2000);
+          })
+          .catch(err => {
+            console.error('复制失败:', err);
+            alert('复制失败，请手动选择文本进行复制');
+          });
+      }
+
+      // Function to convert markdown to HTML (simplified version)
+      function markdownToHtml(md) {
+        if (!md) return '';
+
+        // Simple markdown conversion
+        let html = md
+          // Headers
+          .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+          .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+          .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+          // Bold
+          .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+          // Italic
+          .replace(/\*(.*)\*/gim, '<em>$1</em>')
+          // Links
+          .replace(/\[(.*?)\]\((.*?)\)/gim, '<a href="$2">$1</a>')
+          // Code blocks
+          .replace(/```([\s\S]*?)```/gim, '<pre><code>$1</code></pre>')
+          // Inline code
+          .replace(/`(.*?)`/gim, '<code>$1</code>')
+          // Blockquotes
+          .replace(/^> (.*$)/gim, '<blockquote>$1</blockquote>')
+          // Unordered lists
+          .replace(/^\- (.*$)/gim, '<li>$1</li>')
+          // Ordered lists (need to handle numbering)
+          .replace(/^\d+\. (.*$)/gim, '<li>$1</li>')
+          // Paragraphs (replace double newlines)
+          .replace(/\n\n/gim, '</p><p>')
+          .replace(/\n/gim, '<br>');
+
+        // Clean up
+        html = html.replace(/<p><\/p>/gim, '');
+        html = `<p>${html}</p>`;
+
+        // Handle lists - wrap in ul/ol tags
+        html = html.replace(/<p><li>/gim, '<ul><li>')
+                   .replace(/<\/li><\/p>/gim, '</li></ul>')
+                   .replace(/<\/li><li>/gim, '</li><li>');
+
+        // Handle ordered lists
+        html = html.replace(/<p><li>/gim, '<ol><li>')
+                   .replace(/<\/li><\/p>/gim, '</li></ol>');
+
+        return html;
+      }
+
       // Add event listener to the AI interpretation button
       document.addEventListener('DOMContentLoaded', function() {
         const aiInterpretBtn = document.getElementById('ai-interpret-btn');
         if (aiInterpretBtn) {
           aiInterpretBtn.addEventListener('click', getPoemInterpretation);
         }
+
+        // Add event listeners for modal
+        document.getElementById('closeModalBtn').addEventListener('click', closeInterpretationModal);
+        document.getElementById('copyModalBtn').addEventListener('click', copyModalContent);
+
+        // Close modal when clicking on overlay
+        document.getElementById('interpretationModal').addEventListener('click', function(e) {
+          if (e.target === this) {
+            closeInterpretationModal();
+          }
+        });
       });
     </script>
-</body>
 
+    <!-- AI Interpretation Modal -->
+    <div id="interpretationModal" class="modal-overlay" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modalTitle" class="modal-title">诗词解读</h2>
+          <div class="modal-actions">
+            <button id="copyModalBtn" class="copy-modal-btn" title="复制内容">📋</button>
+            <button id="closeModalBtn" class="close-modal-btn" title="关闭">×</button>
+          </div>
+        </div>
+        <div id="interpretationContent" class="interpretation-content"></div>
+      </div>
+    </div>
+
+    <!-- Modal Styles -->
+    <style>
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        backdrop-filter: blur(5px);
+      }
+
+      .modal-content {
+        background: var(--container-bg);
+        border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        width: 90%;
+        max-width: 900px;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px 25px 15px;
+        border-bottom: 1px solid var(--border-color);
+        background: var(--container-bg);
+        border-radius: 20px 20px 0 0;
+      }
+
+      .modal-title {
+        margin: 0;
+        font-size: 1.5rem;
+        color: var(--xhs-pink);
+        font-family: 'Noto Serif SC', serif;
+      }
+
+      .modal-actions {
+        display: flex;
+        gap: 10px;
+      }
+
+      .close-modal-btn, .copy-modal-btn {
+        background: var(--bg-lighter);
+        border: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        font-size: 1.2rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-primary);
+        transition: all 0.3s ease;
+      }
+
+      .close-modal-btn:hover, .copy-modal-btn:hover {
+        background: var(--xhs-pink-lighter);
+        color: white;
+        transform: scale(1.1);
+      }
+
+      .interpretation-content {
+        padding: 25px;
+        overflow-y: auto;
+        max-height: calc(90vh - 150px);
+        line-height: 1.7;
+        font-size: 1.1rem;
+      }
+
+      .interpretation-content h1,
+      .interpretation-content h2,
+      .interpretation-content h3,
+      .interpretation-content h4,
+      .interpretation-content h5,
+      .interpretation-content h6 {
+        margin-top: 1.5em;
+        margin-bottom: 0.8em;
+        color: var(--text-primary);
+        font-family: 'Noto Serif SC', serif;
+      }
+
+      .interpretation-content h1 {
+        font-size: 1.8em;
+        border-bottom: 2px solid var(--xhs-pink-lighter);
+        padding-bottom: 0.3em;
+      }
+
+      .interpretation-content h2 {
+        font-size: 1.6em;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 0.3em;
+      }
+
+      .interpretation-content h3 {
+        font-size: 1.4em;
+      }
+
+      .interpretation-content p {
+        margin-bottom: 1em;
+        text-align: justify;
+      }
+
+      .interpretation-content ul,
+      .interpretation-content ol {
+        margin: 1em 0;
+        padding-left: 1.5em;
+      }
+
+      .interpretation-content li {
+        margin: 0.5em 0;
+      }
+
+      .interpretation-content blockquote {
+        margin: 1.5em 0;
+        padding: 1em 1.5em;
+        border-left: 4px solid var(--xhs-pink-lighter);
+        background-color: var(--xhs-pink-pale);
+        font-style: italic;
+      }
+
+      .interpretation-content code {
+        background-color: var(--bg-light);
+        padding: 0.2em 0.4em;
+        border-radius: 3px;
+        font-family: monospace;
+        font-size: 0.9em;
+      }
+
+      .interpretation-content pre {
+        background-color: var(--bg-light);
+        padding: 1.5em;
+        border-radius: 8px;
+        overflow-x: auto;
+        margin: 1.5em 0;
+      }
+
+      .interpretation-content pre code {
+        background: none;
+        padding: 0;
+      }
+
+      .interpretation-content a {
+        color: #4da6ff;
+        text-decoration: underline;
+      }
+
+      .interpretation-content a:hover {
+        color: #66b3ff;
+      }
+    </style>
+  </body>
 </html>
