@@ -3231,7 +3231,26 @@ ${verse}
                       throw new Error(`代理请求失败: ${response.status} ${response.statusText}`);
                   }
 
-                  return await response.json();
+                  // Try to parse JSON response, but handle cases where response is not valid JSON (from proxy)
+                  try {
+                      return await response.json();
+                  } catch {
+                      // If JSON parsing fails from proxy, it might be a plain text error response
+                      try {
+                          const rawText = await response.text();
+                          // Check if the raw text contains meaningful content (not just empty/error)
+                          if (rawText.trim()) {
+                              // Return the plain text as explanation
+                              return { explanation: rawText, text: rawText };
+                          } else {
+                              // If it's empty, return an error object
+                              throw new Error("代理服务返回空响应");
+                          }
+                      } catch {
+                          // If both JSON and text parsing fail, return the original error
+                          throw error;
+                      }
+                  }
               } catch (proxyError) {
                   console.error("代理请求也失败:", proxyError);
                   throw error; // 返回原始错误
