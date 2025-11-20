@@ -3071,15 +3071,29 @@
 
       // Function to get AI interpretation of the poem
       async function getPoemInterpretation() {
-        const title = document.getElementById('poemTitle').textContent;
-        const author = document.getElementById('poemAuthor').textContent;
-        const verse = document.getElementById('poemVerse').textContent;
-        const desc = document.getElementById('poemDesc').textContent;
+        // 1. 安全获取 DOM 元素内容
+        const getTxt = (id) => document.getElementById(id)?.textContent?.trim() || '';
+
+        const title = getTxt('poemTitle');
+        const author = getTxt('poemAuthor');
+        const verse = getTxt('poemVerse');
+        const desc = getTxt('poemDesc');
+
+        // 简单的校验
+        if (!title || !verse) {
+          showInterpretationModal('**无法获取诗词内容**\n\n请刷新页面重试，或稍后再试。', {
+            title: '错误',
+            author: '',
+            dynasty: '未知',
+            type: '诗词'
+          });
+          return;
+        }
 
         // Show loading state
         const searchBtn = document.getElementById('ai-interpret-btn');
         const originalContent = searchBtn.innerHTML;
-        searchBtn.innerHTML = '🔄';
+        searchBtn.innerHTML = '🔄 解读中...'; // 加上文字提示更友好
         searchBtn.disabled = true;
 
         try {
@@ -3096,6 +3110,7 @@
 诗词内容：
 ${verse}
 
+原注释：${desc}
 
 请以标准Markdown格式返回，确保格式正确，段落清晰。`;
 
@@ -3106,16 +3121,30 @@ ${verse}
           const poemInfo = {
             title: title,
             author: author,
-            dynasty: getDynastyFromSource(), // Get dynasty from source
-            type: getPoemType() // Get poem type
+            // 兼容性处理：确保函数存在
+            dynasty: (typeof getDynastyFromSource === 'function') ? getDynastyFromSource() : '未知朝代',
+            type: (typeof getPoemType === 'function') ? getPoemType() : '古诗'
           };
 
           // Show interpretation in modal instead of opening new page
-          showInterpretationModal(interpretation, poemInfo);
+          if (typeof showInterpretationModal === 'function') {
+            showInterpretationModal(interpretation, poemInfo);
+          } else {
+            console.warn('showInterpretationModal 未定义，无法显示弹窗');
+            console.log('解读结果:', interpretation);
+            // 降级处理：显示一个简单的提示
+            alert('解读完成，请查看控制台输出（因为缺少弹窗函数）。');
+          }
 
         } catch (error) {
           console.error('Error getting poem interpretation:', error);
-          alert('获取诗词解读失败，请稍后重试');
+          // 使用 UI 显示错误而非弹窗
+          showInterpretationModal(`**诗词解读失败**\n\n错误详情：\n\n${error.message || '请检查网络连接'}`, {
+            title: '解读错误',
+            author: '',
+            dynasty: '未知',
+            type: '诗词'
+          });
         } finally {
           // Restore button
           searchBtn.innerHTML = originalContent;
@@ -3212,77 +3241,46 @@ ${verse}
 
       // Core AI call interface
       async function explainText(text, model) {
-          // Assuming the AI service exposes the endpoint at /ai/explain
           try {
+              // 直接请求，依靠服务器配置的 CORS
               return await requestJSON('POST', '/ai/explain', { text, model });
           } catch (error) {
               console.error("API请求失败:", error);
-              // 尝试使用CORS代理来绕过跨域限制
-              try {
-                  const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(`${API_PREFIX}/ai/explain`);
-                  const response = await fetch(proxyUrl, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ text, model })
-                  });
-
-                  if (!response.ok) {
-                      throw new Error(`代理请求失败: ${response.status} ${response.statusText}`);
-                  }
-
-                  // Try to parse JSON response, but handle cases where response is not valid JSON (from proxy)
-                  try {
-                      return await response.json();
-                  } catch {
-                      // If JSON parsing fails from proxy, it might be a plain text error response
-                      try {
-                          const rawText = await response.text();
-                          // Check if the raw text contains meaningful content (not just empty/error)
-                          if (rawText.trim()) {
-                              // Return the plain text as explanation
-                              return { explanation: rawText, text: rawText };
-                          } else {
-                              // If it's empty, return an error object
-                              throw new Error("代理服务返回空响应");
-                          }
-                      } catch {
-                          // If both JSON and text parsing fail, return the original error
-                          throw error;
-                      }
-                  }
-              } catch (proxyError) {
-                  console.error("代理请求也失败:", proxyError);
-                  throw error; // 返回原始错误
-              }
+              // 抛出具体错误给上层处理
+              throw error;
           }
       }
 
       // Main function to get AI interpretation of the poem
       async function getRealPoemInterpretation(prompt) {
-          console.log(`[Poetry AI] 正在使用模型: ${DEFAULT_MODEL_ID} 进行处理...`);
+          console.log(`[Poetry AI] 模型: ${DEFAULT_MODEL_ID}, 字数: ${prompt.length}`);
 
           try {
               const resultData = await explainText(prompt, DEFAULT_MODEL_ID);
 
-              // Handle API response - check for explanation field (actual API response) or fallback to data/text fields
-              // Also check if the response contains an error
-              if (resultData.error && resultData.details && !resultData.explanation) {
-                  // Only throw error if there's no explanation text to display
-                  throw new Error(`API服务错误: ${resultData.error}. 详细信息: ${resultData.details}`);
+              // 健壮性检查：适配不同的返回结构
+              if (resultData.error) {
+                   throw new Error(resultData.details || resultData.error);
               }
 
-              const markdownResult = resultData.explanation || resultData.data || resultData.text || resultData;
+              // 优先获取 explanation，其次 data，最后是 raw text
+              const markdownResult = resultData.explanation || resultData.data || resultData.text;
 
-              if (typeof markdownResult !== 'string' || !markdownResult.trim()) {
-                   throw new Error(`API返回结果格式不正确，未找到有效的文本内容。Raw: ${toDisplayString(resultData)}`);
+              if (!markdownResult || typeof markdownResult !== 'string') {
+                   throw new Error('API 返回了空内容或不支持的格式');
               }
 
               return markdownResult.trim();
 
           } catch (error) {
-              console.error("[Poetry AI] 错误:", error);
-              // Also package error message in Markdown format for display
-              return `**AI 诗词解读失败**\n\n错误详情:\n\`\`\`\n${error.message}\n\`\`\`\n请检查 API 域名 (${API_PREFIX}) 和模型配置是否正确。`;
+              console.error("[Poetry AI] 内部错误:", error);
+              // 返回友好的 Markdown 错误信息，这样前端可以直接渲染出来
+              return `
+### ⚠️ 解读暂时不可用
+**原因**: ${error.message}
+
+请稍后重试，或检查网络连接。
+`;
           }
       }
 
