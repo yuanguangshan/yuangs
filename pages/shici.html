@@ -3181,7 +3181,22 @@ ${verse}
                   }
                   throw new Error(`API请求失败 (HTTP ${response.status}): ${errorData.error?.message || toDisplayString(errorData)}`);
               }
-              return await response.json();
+
+              // Try to parse JSON response, but handle cases where response is not valid JSON
+              let responseBody;
+              try {
+                  return await response.json();
+              } catch {
+                  // If JSON parsing fails, return the raw text response
+                  try {
+                      const rawText = await response.text();
+                      // Return an object with the raw text as an error
+                      return { error: "Invalid JSON response", details: rawText, text: rawText };
+                  } catch {
+                      // If both JSON and text parsing fail, return a generic error
+                      return { error: "Could not parse response", details: "Response body could not be read" };
+                  }
+              }
           } catch (e) {
               clearTimeout(timeoutId);
               if (e.name === 'AbortError') {
@@ -3239,6 +3254,11 @@ ${verse}
               const resultData = await explainText(finalText, DEFAULT_MODEL_ID);
 
               // Handle API response - check for explanation field (actual API response) or fallback to data/text fields
+              // Also check if the response contains an error
+              if (resultData.error && resultData.details) {
+                  throw new Error(`API服务错误: ${resultData.error}. 详细信息: ${resultData.details}`);
+              }
+
               const markdownResult = resultData.explanation || resultData.data || resultData.text || resultData;
 
               if (typeof markdownResult !== 'string' || !markdownResult.trim()) {
