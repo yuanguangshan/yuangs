@@ -2122,7 +2122,7 @@
                 if (cachedInterpretation) {
                     // 如果有缓存，显示 AI 赏析
                     const separator = '<div style="border-top: 1px dashed #ddd; margin: 20px 0;"></div>';
-                    const aiBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 深度赏析</div>';
+                    const aiBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 深度赏析 <span onclick="regenerateAnalysis(event)" style="cursor:pointer; margin-left:10px; font-size:0.8em; opacity:0.8; border-bottom:1px solid white;" title="重新生成解读">🔄 重新生成</span></div>';
                     descElement.innerHTML = poem.desc + separator + aiBadge + markdownToHtml(cachedInterpretation);
                 } else {
                     // 否则显示默认注释
@@ -2409,7 +2409,7 @@
                 if (cachedInterpretation) {
                     // 如果有缓存，显示 AI 赏析
                     const separator = '<div style="border-top: 1px dashed #ddd; margin: 20px 0;"></div>';
-                    const aiBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 深度赏析</div>';
+                    const aiBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 深度赏析 <span onclick="regenerateAnalysis(event)" style="cursor:pointer; margin-left:10px; font-size:0.8em; opacity:0.8; border-bottom:1px solid white;" title="重新生成解读">🔄 重新生成</span></div>';
                     descElement.innerHTML = poem.desc + separator + aiBadge + markdownToHtml(cachedInterpretation);
                 } else {
                     // 否则显示默认注释
@@ -2963,7 +2963,7 @@
                 if (cachedInterpretation) {
                     // 如果有缓存，显示 AI 赏析
                     const separator = '<div style="border-top: 1px dashed #ddd; margin: 20px 0;"></div>';
-                    const aiBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 深度赏析</div>';
+                    const aiBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 深度赏析 <span onclick="regenerateAnalysis(event)" style="cursor:pointer; margin-left:10px; font-size:0.8em; opacity:0.8; border-bottom:1px solid white;" title="重新生成解读">🔄 重新生成</span></div>';
                     descElement.innerHTML = poem.desc + separator + aiBadge + markdownToHtml(cachedInterpretation);
                 } else {
                     // 否则显示默认注释
@@ -3258,6 +3258,43 @@ ${verse}
                 }
             }
 
+            // Helper to regenerate analysis
+            async function regenerateAnalysis(event) {
+                if (event) event.stopPropagation();
+
+                const title = document.getElementById('poemTitle').textContent;
+                const author = document.getElementById('poemAuthor').textContent;
+                const verse = document.getElementById('poemVerse').innerText; // Use innerText to get text content
+                // Note: poemDesc might contain the AI analysis now, so we should try to get the original desc if possible.
+                // But for regeneration, the prompt mainly needs title, author, and verse. 
+                // The 'desc' in prompt is 'Original Annotation', which we might lose if we just read poemDesc.
+                // Ideally we should store the current poem object globally or fetch it again.
+                // For simplicity, we'll try to extract the part before the separator if it exists, or just use what's there.
+                let desc = document.getElementById('poemDesc').innerHTML;
+                if (desc.includes('border-top: 1px dashed #ddd')) {
+                    desc = desc.split('<div style="border-top: 1px dashed #ddd')[0];
+                }
+
+                const descElement = document.getElementById('poemDesc');
+                // Show loading state
+                const separator = '<div style="border-top: 1px dashed #ddd; margin: 20px 0;"></div>';
+                const loadingBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 正在重新思考...</div>';
+                descElement.innerHTML = desc + separator + loadingBadge + '<div class="loading-spinner" style="margin: 20px auto;"></div>';
+
+                try {
+                    // Force refresh = true
+                    const result = await getRealPoemInterpretation(title, author, verse, desc, true);
+
+                    // Update UI
+                    const aiBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 深度赏析 <span onclick="regenerateAnalysis(event)" style="cursor:pointer; margin-left:10px; font-size:0.8em; opacity:0.8; border-bottom:1px solid white;" title="重新生成解读">🔄 重新生成</span></div>';
+                    descElement.innerHTML = desc + separator + aiBadge + markdownToHtml(result);
+
+                } catch (error) {
+                    console.error("Regeneration failed:", error);
+                    descElement.innerHTML = desc + separator + `<div style="color:red;">重新生成失败: ${error.message}</div>`;
+                }
+            }
+
             // Core AI call interface
             async function explainText(text, model) {
                 // Assuming the AI service exposes the endpoint at /ai/explain
@@ -3302,12 +3339,14 @@ ${verse}
             }
 
             // Main function to get AI interpretation of the poem
-            async function getRealPoemInterpretation(title, author, verse, desc) {
-                // 1. Check cache first
-                const cachedInterpretation = getInterpretationFromCache(title, author);
-                if (cachedInterpretation) {
-                    console.log(`[Poetry AI] Found cached interpretation for ${title}`);
-                    return cachedInterpretation;
+            async function getRealPoemInterpretation(title, author, verse, desc, forceRefresh = false) {
+                // 1. Check cache first (unless forced refresh)
+                if (!forceRefresh) {
+                    const cachedInterpretation = getInterpretationFromCache(title, author);
+                    if (cachedInterpretation) {
+                        console.log(`[Poetry AI] Found cached interpretation for ${title}`);
+                        return cachedInterpretation;
+                    }
                 }
 
                 const finalSystemPrompt = PROMPT_TEMPLATES['诗词'] || PROMPT_TEMPLATES[DEFAULT_TEMPLATE_KEY];
