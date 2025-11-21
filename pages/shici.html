@@ -3516,7 +3516,114 @@ ${verse}
                         closeInterpretationModal();
                     }
                 });
+
+                // Add scroll event listener for auto-refresh functionality
+                let isRefreshing = false; // Prevent multiple simultaneous refreshes
+                let scrollDirection = 'down'; // Track scroll direction
+                let lastScrollTop = 0;
+
+                window.addEventListener('scroll', function() {
+                    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+
+                    // Determine scroll direction
+                    if (scrollTop > lastScrollTop) {
+                        scrollDirection = 'down';
+                    } else if (scrollTop < lastScrollTop) {
+                        scrollDirection = 'up';
+                    }
+
+                    // Update last scroll position
+                    lastScrollTop = scrollTop;
+
+                    // Check if user has scrolled to the bottom and is scrolling up (pulling up)
+                    if (scrollDirection === 'up' && scrollTop > 0 &&
+                        (window.scrollY + window.innerHeight) >= document.body.offsetHeight - 50) {
+                        if (!isRefreshing) {
+                            isRefreshing = true;
+
+                            // Add slight delay to avoid triggering during page load animations
+                            setTimeout(async function() {
+                                const waterfallContainer = document.getElementById('waterfallContainer');
+
+                                if (waterfallContainer.classList.contains('active')) {
+                                    // Waterfall mode: add 10 more poems
+                                    await addMorePoemsToWaterfall();
+                                } else {
+                                    // Default mode: refresh single poem
+                                    await loadRandomPoem();
+                                }
+
+                                isRefreshing = false;
+                            }, 100);
+                        }
+                    }
+                });
             });
+
+            // Function to add more poems to waterfall (10 at a time)
+            async function addMorePoemsToWaterfall() {
+                if (!allCombined || allCombined.length === 0) {
+                    await fetchAndCombineAll();
+                }
+
+                const waterfallContent = document.getElementById('waterfallContent');
+
+                // Select 10 random poems to add
+                const randomPoems = getRandomPoems(allCombined, 10);
+
+                randomPoems.forEach((poem, index) => {
+                    const card = document.createElement('div');
+                    card.className = 'waterfall-card';
+                    card.onclick = function () {
+                        showPoemDetail(poem);
+                    };
+
+                    // Analyze layout for the poem
+                    const layoutInfo = analyzePoemLayout(poem);
+
+                    // Generate lines HTML
+                    let linesHtml = '';
+                    layoutInfo.lines.forEach(line => {
+                        if (line) linesHtml += `<div class="poem-line">${line}</div>`;
+                    });
+
+                    // Generate a random color for the background
+                    const backgroundColor = getRandomColor();
+
+                    // Limit title and author length to prevent overflow
+                    let title = layoutInfo.title;
+                    if (title.length > 12) {
+                        title = title.substring(0, 12) + '...';
+                    }
+
+                    let author = layoutInfo.author;
+                    if (author.length > 8) {
+                        author = author.substring(0, 8) + '...';
+                    }
+
+                    // Determine the appropriate seal based on poem type
+                    const sealText = poem.source === 'ci' ? '词' : '诗';
+
+                    card.innerHTML = `
+        <div class="color-block-container">
+          <div class="color-block" style="background-color: ${backgroundColor};">
+             <!-- This class changes based on mode dynamically -->
+             <div class="overlay-text layout-${layoutInfo.mode}">
+               ${linesHtml}
+             </div>
+
+             <!-- Add seal decoration for aesthetic enhancement (with type-specific character) -->
+             <div class="seal-decoration">${sealText}</div>
+          </div>
+        </div>
+        <div class="waterfall-content-section">
+          <h3 class="waterfall-title">${title}</h3>
+          <p class="waterfall-author">${author}</p>
+        </div>
+      `;
+                    waterfallContent.appendChild(card);
+                });
+            }
         </script>
 
         <!-- AI Interpretation Modala -->
