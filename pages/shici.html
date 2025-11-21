@@ -1429,8 +1429,8 @@
 
         /* Add decoration like quotes for horizontal quotes */
         .layout-horizontal-center::before {
-            content: """;
-            font-family: serif;
+            content: "" ";
+ font-family: serif;
             font-size: 4rem;
             position: absolute;
             top: 10px;
@@ -1603,8 +1603,7 @@
                             <div class="poem-meta"
                                 style="margin-bottom: 10px; display: flex; justify-content: center; gap: 10px;">
                                 <!-- 搜索按钮保留 -->
-                                <button id="inlineSearchBtn" class="inline-search-btn"
-                                    title="搜索诗词赏析">🔍</button>
+                                <button id="inlineSearchBtn" class="inline-search-btn" title="搜索诗词赏析">🔍</button>
                                 <button onclick="copyPoemToClipboard()" class="inline-search-btn"
                                     title="复制诗词">📋</button>
                                 <button id="ai-interpret-btn" class="ai-interpret-btn" title="AI解读诗词">
@@ -3229,8 +3228,52 @@ ${verse}
                 return await requestJSON('POST', '/ai/explain', { text, model });
             }
 
+            // Cache configuration for AI interpretations
+            const AI_CACHE_KEY = 'poem_ai_interpretations_v1';
+
+            // Helper to get interpretation from cache
+            function getInterpretationFromCache(title, author) {
+                try {
+                    const cache = localStorage.getItem(AI_CACHE_KEY);
+                    if (!cache) return null;
+
+                    const cacheObj = JSON.parse(cache);
+                    const key = `${title}-${author}`;
+                    return cacheObj[key] || null;
+                } catch (e) {
+                    console.error('Error reading from cache:', e);
+                    return null;
+                }
+            }
+
+            // Helper to save interpretation to cache
+            function saveInterpretationToCache(title, author, content) {
+                try {
+                    const cache = localStorage.getItem(AI_CACHE_KEY);
+                    let cacheObj = {};
+                    if (cache) {
+                        cacheObj = JSON.parse(cache);
+                    }
+
+                    const key = `${title}-${author}`;
+                    cacheObj[key] = content;
+
+                    localStorage.setItem(AI_CACHE_KEY, JSON.stringify(cacheObj));
+                    console.log(`Saved interpretation for ${title} to cache`);
+                } catch (e) {
+                    console.error('Error saving to cache:', e);
+                }
+            }
+
             // Main function to get AI interpretation of the poem
             async function getRealPoemInterpretation(title, author, verse, desc) {
+                // 1. Check cache first
+                const cachedInterpretation = getInterpretationFromCache(title, author);
+                if (cachedInterpretation) {
+                    console.log(`[Poetry AI] Found cached interpretation for ${title}`);
+                    return cachedInterpretation;
+                }
+
                 const finalSystemPrompt = PROMPT_TEMPLATES['诗词'] || PROMPT_TEMPLATES[DEFAULT_TEMPLATE_KEY];
 
                 const textToInterpret = `诗词题目：${title}
@@ -3255,7 +3298,12 @@ ${verse}
                         throw new Error(`API返回结果格式不正确，未找到有效的文本内容。Raw: ${toDisplayString(resultData)}`);
                     }
 
-                    return markdownResult.trim();
+                    const finalResult = markdownResult.trim();
+
+                    // 2. Save to cache on success
+                    saveInterpretationToCache(title, author, finalResult);
+
+                    return finalResult;
 
                 } catch (error) {
                     console.error("[Poetry AI] 错误:", error);
