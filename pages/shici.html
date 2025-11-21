@@ -3521,6 +3521,8 @@ ${verse}
                 let isRefreshing = false; // Prevent multiple simultaneous refreshes
                 let scrollDirection = 'down'; // Track scroll direction
                 let lastScrollTop = 0;
+                let hasReachedBottom = false; // Flag to track if user reached bottom
+                let bottomScrollStart = 0; // Track scroll position when user started pulling up from bottom
 
                 window.addEventListener('scroll', function() {
                     const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
@@ -3532,12 +3534,25 @@ ${verse}
                         scrollDirection = 'up';
                     }
 
+                    // Check if user has reached near the bottom of the page
+                    if ((window.scrollY + window.innerHeight) >= document.body.offsetHeight - 50) {
+                        if (!hasReachedBottom) {
+                            hasReachedBottom = true;
+                            bottomScrollStart = scrollTop; // Record scroll position when first reaching bottom
+                        }
+                    } else {
+                        // Reset when user scrolls away from bottom
+                        if (scrollDirection === 'down' && scrollTop > bottomScrollStart) {
+                            hasReachedBottom = false;
+                        }
+                    }
+
                     // Update last scroll position
                     lastScrollTop = scrollTop;
 
-                    // Check if user has scrolled to the bottom and is scrolling up (pulling up)
-                    if (scrollDirection === 'up' && scrollTop > 0 &&
-                        (window.scrollY + window.innerHeight) >= document.body.offsetHeight - 50) {
+                    // Check if user has scrolled to the bottom, is scrolling up, and has pulled up by at least 100px
+                    if (hasReachedBottom && scrollDirection === 'up' &&
+                        bottomScrollStart - scrollTop >= 100) { // Require 100px upward scroll from bottom
                         if (!isRefreshing) {
                             isRefreshing = true;
 
@@ -3553,6 +3568,8 @@ ${verse}
                                     await loadRandomPoem();
                                 }
 
+                                // Reset flags after successful refresh
+                                hasReachedBottom = false;
                                 isRefreshing = false;
                             }, 100);
                         }
