@@ -3110,13 +3110,20 @@ window.AUTHOR_DATA = [
 
             // Function to get a random poem from cached data
             async function getRandomPoem() {
-                const poems = await fetchAndCachePoems();
-                if (poems.length === 0) {
-                    console.warn("No poems available");
-                    return null;
+                // Use filtered poems if available, otherwise use combined poems and ci
+                if (filteredPoems && filteredPoems.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * filteredPoems.length);
+                    return filteredPoems[randomIndex];
+                } else {
+                    // Use combined poems and ci
+                    const allItems = await fetchAndCombineAll();
+                    if (allItems.length === 0) {
+                        console.warn("No poems or ci available");
+                        return null;
+                    }
+                    const randomIndex = Math.floor(Math.random() * allItems.length);
+                    return allItems[randomIndex];
                 }
-                const randomIndex = Math.floor(Math.random() * poems.length);
-                return poems[randomIndex];
             }
 
             // Function to get a random image URL from various sources with fallbacks
@@ -4216,13 +4223,22 @@ window.AUTHOR_DATA = [
                 const originalLoadRandomPoem = window.loadRandomPoem || loadRandomPoem;
                 window.loadRandomPoem = async function () {
                     // Get a random poem first, then display it with history tracking
-                    const allItems = await fetchAndCombineAll();
-                    if (allItems.length === 0) {
+                    // Respect filtered poems if any author is selected
+                    let itemsToUse;
+                    if (filteredPoems && filteredPoems.length > 0) {
+                        // Use filtered poems if available (author selected)
+                        itemsToUse = filteredPoems;
+                    } else {
+                        // Otherwise use all combined items
+                        itemsToUse = await fetchAndCombineAll();
+                    }
+
+                    if (itemsToUse.length === 0) {
                         console.warn("No poems or ci available");
                         return null;
                     }
-                    const randomIndex = Math.floor(Math.random() * allItems.length);
-                    const poem = allItems[randomIndex];
+                    const randomIndex = Math.floor(Math.random() * itemsToUse.length);
+                    const poem = itemsToUse[randomIndex];
 
                     // Call the original display function
                     displayPoem(poem);
@@ -4703,6 +4719,7 @@ window.AUTHOR_DATA = [
                     generateWaterfallContent();
                 } else {
                     // If in symmetric layout, load a new random poem
+                    // Make sure to respect the currently filtered poems if any author is selected
                     loadRandomPoem();
                 }
             }
