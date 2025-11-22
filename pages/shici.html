@@ -903,6 +903,37 @@
             color: var(--text-primary);
         }
 
+        /* Scroll mode - horizontal scrollable layout */
+        .poem-verse.scroll-mode {
+            writing-mode: horizontal-tb;
+            font-size: 1.6rem;
+            line-height: 2.5;
+            text-align: left;
+            white-space: nowrap;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding: 20px;
+            max-height: 300px;
+            min-width: 800px;
+            font-family: 'Noto Serif SC', 'STSong', 'Songti SC', serif;
+            letter-spacing: 0.2em;
+            color: var(--text-secondary);
+            text-align: justify;
+            margin: 0 auto;
+            display: inline-block;
+            min-height: 200px;
+        }
+
+        .poem-verse.scroll-mode span {
+            display: inline-block;
+            margin-right: 2rem;
+            vertical-align: top;
+        }
+
+        .dark-mode .poem-verse.scroll-mode {
+            color: var(--text-primary);
+        }
+
         /* Couplets for 7-character poems - display two lines together */
         /* 确保这是最新的样式 */
         .couplet-row {
@@ -2327,6 +2358,13 @@
                                 <button class="theme-option" onclick="switchTheme('ocean-blue')">🌊 海洋蓝调</button>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Scroll Mode Toggle -->
+                    <div class="menu-section">
+                        <button class="menu-option" id="scrollModeToggle">
+                            <span>📜</span> 卷轴模式
+                        </button>
                     </div>
 
                     <!-- About Section -->
@@ -4272,6 +4310,9 @@ window.AUTHOR_DATA = [
                     return;
                 }
 
+                // Store the current poem for later use
+                window.currentPoem = poem;
+
                 // 1. 设置基本信息
                 document.getElementById('poemTitle').textContent = poem.title;
                 document.getElementById('poemAuthor').textContent = poem.auth;
@@ -4558,6 +4599,9 @@ window.AUTHOR_DATA = [
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('poemTextContent').style.display = 'none';
                 document.getElementById('poemDescContent').style.display = 'none';
+
+                // Store the current poem for later use
+                window.currentPoem = poem;
 
                 // 1. 设置基本信息
                 document.getElementById('poemTitle').textContent = poem.title;
@@ -5078,6 +5122,56 @@ window.AUTHOR_DATA = [
                     loadFavoritesList();
                 });
 
+                // Get scroll mode toggle button
+                const scrollModeToggle = document.getElementById('scrollModeToggle');
+
+                // Scroll mode functionality
+                let currentDisplayMode = 'normal'; // 'normal', 'vertical', 'scroll'
+
+                function switchDisplayMode() {
+                    const verseElement = document.getElementById('poemVerse');
+                    if (!verseElement || !window.currentPoem) return;
+
+                    // Remove all display mode classes
+                    verseElement.classList.remove('vertical-mode', 'horizontal-mode', 'scroll-mode');
+
+                    if (currentDisplayMode === 'normal') {
+                        // Store original content before switching to scroll mode
+                        window.originalContent = verseElement.innerHTML;
+
+                        // Switch to scroll mode
+                        currentDisplayMode = 'scroll';
+                        verseElement.classList.add('scroll-mode');
+                        // Format content for scroll mode
+                        formatContentForScrollMode(verseElement, window.currentPoem.content);
+                        scrollModeToggle.innerHTML = '<span>📄</span> 普通模式'; // Change button text to exit scroll mode
+                    } else {
+                        // Switch back to normal mode
+                        currentDisplayMode = 'normal';
+                        // Determine which normal mode to use based on poem type
+                        if (isRegularPoem(window.currentPoem) && window.currentPoem.content.split('\n').length >= 2) {
+                            verseElement.classList.add('vertical-mode');
+                            verseElement.innerHTML = formatCoupletPoem(window.currentPoem);
+                        } else {
+                            verseElement.classList.add('vertical-mode'); // Default to vertical mode
+                            verseElement.innerHTML = insertLineBreaksAtPunctuation(window.currentPoem.content);
+                        }
+                        scrollModeToggle.innerHTML = '<span>📜</span> 卷轴模式'; // Change button text back to scroll mode
+                    }
+                }
+
+                function formatContentForScrollMode(verseElement, content) {
+                    // Split content by lines and wrap each line in a span for horizontal scrolling
+                    const lines = content.split('\n').filter(line => line.trim() !== '');
+                    const formattedContent = lines.map(line => `<span>${line.trim()}</span>`).join('');
+                    verseElement.innerHTML = formattedContent;
+                }
+
+                // Add event listener for scroll mode toggle
+                scrollModeToggle.addEventListener('click', function() {
+                    switchDisplayMode();
+                });
+
                 // Show about section
                 aboutBtn.addEventListener('click', function () {
                     historySection.style.display = 'none';
@@ -5572,6 +5666,9 @@ window.AUTHOR_DATA = [
 
             // Show detailed poem view when clicking a card
             function showPoemDetail(poem) {
+                // Store the current poem for later use
+                window.currentPoem = poem;
+
                 // 1. 设置基本信息
                 document.getElementById('poemTitle').textContent = poem.title;
                 document.getElementById('poemAuthor').textContent = poem.auth;
