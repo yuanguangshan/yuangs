@@ -9990,13 +9990,70 @@
                     // Get all poems
                     const allPoems = await fetchAndCombineAll();
 
-                    // Filter poems that have this tag
+                    // Filter poems that have this tag - handle multiple formats including slash/comma-separated and array formats
                     const filteredPoems = allPoems.filter(poem => {
+                        let allTags = [];
+
+                        // Process poem.type field handling multiple formats
                         if (poem.type) {
-                            const tags = poem.type.split(' ');
-                            return tags.includes(tag);
+                            if (Array.isArray(poem.type)) {
+                                // If poem.type is an array, process the first element for comma-separated values
+                                if (poem.type.length > 0 && typeof poem.type[0] === 'string') {
+                                    // Split by commas if commas are present, otherwise by other separators
+                                    if (poem.type[0].includes(',')) {
+                                        allTags = allTags.concat(poem.type[0].split(',').map(t => t.trim()).filter(t => t !== ''));
+                                    } else if (poem.type[0].includes('/')) {
+                                        allTags = allTags.concat(poem.type[0].split('/').map(t => t.trim()).filter(t => t !== ''));
+                                    } else {
+                                        // If no special separators, split by spaces
+                                        allTags = allTags.concat(poem.type[0].split(' ').map(t => t.trim()).filter(t => t !== ''));
+                                    }
+                                }
+                            } else if (typeof poem.type === 'string') {
+                                // If poem.type is a string, check for different separators
+                                if (poem.type.includes('/')) {
+                                    allTags = allTags.concat(poem.type.split('/').map(t => t.trim()).filter(t => t !== ''));
+                                } else if (poem.type.includes(',')) {
+                                    allTags = allTags.concat(poem.type.split(',').map(t => t.trim()).filter(t => t !== ''));
+                                } else {
+                                    // Handle space-separated tags (normal format)
+                                    allTags = allTags.concat(poem.type.split(' ').filter(t => t.trim() !== ''));
+                                }
+                            }
                         }
-                        return false;
+
+                        // Also process poem.tags field if it exists
+                        if (poem.tags) {
+                            if (Array.isArray(poem.tags)) {
+                                // If poem.tags is an array, process each element
+                                poem.tags.forEach(tagItem => {
+                                    if (typeof tagItem === 'string') {
+                                        if (tagItem.includes(',')) {
+                                            // Comma-separated in array element
+                                            allTags = allTags.concat(tagItem.split(',').map(t => t.trim()).filter(t => t !== ''));
+                                        } else if (tagItem.includes('/')) {
+                                            // Slash-separated in array element
+                                            allTags = allTags.concat(tagItem.split('/').map(t => t.trim()).filter(t => t !== ''));
+                                        } else {
+                                            // Single tag in array element
+                                            allTags.push(tagItem.trim());
+                                        }
+                                    }
+                                });
+                            } else if (typeof poem.tags === 'string') {
+                                // If poem.tags is a string, handle different separators
+                                if (poem.tags.includes('/')) {
+                                    allTags = allTags.concat(poem.tags.split('/').map(t => t.trim()).filter(t => t !== ''));
+                                } else if (poem.tags.includes(',')) {
+                                    allTags = allTags.concat(poem.tags.split(',').map(t => t.trim()).filter(t => t !== ''));
+                                } else {
+                                    // Single tag as string
+                                    allTags.push(poem.tags.trim());
+                                }
+                            }
+                        }
+
+                        return allTags.includes(tag);
                     });
 
                     console.log(`Found ${filteredPoems.length} poems with tag "${tag}"`);
@@ -10071,8 +10128,69 @@
 
                         const sealText = poem.source === 'ci' ? '词' : '诗';
 
-                        // Generate tags HTML
-                        const tags = poem.type ? poem.type.split(' ').filter(tag => tag.trim() !== '') : [];
+                        // Generate tags HTML - handle multiple formats including slash/comma-separated and array formats
+                        let allTags = [];
+
+                        // Process poem.type field handling multiple formats
+                        if (poem.type) {
+                            if (Array.isArray(poem.type)) {
+                                // If poem.type is an array, process the first element for comma-separated values
+                                if (poem.type.length > 0 && typeof poem.type[0] === 'string') {
+                                    // Split by commas if commas are present, otherwise by other separators
+                                    if (poem.type[0].includes(',')) {
+                                        allTags = allTags.concat(poem.type[0].split(',').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                    } else if (poem.type[0].includes('/')) {
+                                        allTags = allTags.concat(poem.type[0].split('/').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                    } else {
+                                        // If no special separators, split by spaces
+                                        allTags = allTags.concat(poem.type[0].split(' ').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                    }
+                                }
+                            } else if (typeof poem.type === 'string') {
+                                // If poem.type is a string, check for different separators
+                                if (poem.type.includes('/')) {
+                                    allTags = allTags.concat(poem.type.split('/').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                } else if (poem.type.includes(',')) {
+                                    allTags = allTags.concat(poem.type.split(',').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                } else {
+                                    // Handle space-separated tags (normal format)
+                                    allTags = allTags.concat(poem.type.split(' ').filter(tag => tag.trim() !== ''));
+                                }
+                            }
+                        }
+
+                        // Also process poem.tags field if it exists
+                        if (poem.tags) {
+                            if (Array.isArray(poem.tags)) {
+                                // If poem.tags is an array, process each element
+                                poem.tags.forEach(tagItem => {
+                                    if (typeof tagItem === 'string') {
+                                        if (tagItem.includes(',')) {
+                                            // Comma-separated in array element
+                                            allTags = allTags.concat(tagItem.split(',').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                        } else if (tagItem.includes('/')) {
+                                            // Slash-separated in array element
+                                            allTags = allTags.concat(tagItem.split('/').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                        } else {
+                                            // Single tag in array element
+                                            allTags.push(tagItem.trim());
+                                        }
+                                    }
+                                });
+                            } else if (typeof poem.tags === 'string') {
+                                // If poem.tags is a string, handle different separators
+                                if (poem.tags.includes('/')) {
+                                    allTags = allTags.concat(poem.tags.split('/').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                } else if (poem.tags.includes(',')) {
+                                    allTags = allTags.concat(poem.tags.split(',').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                } else {
+                                    // Single tag as string
+                                    allTags.push(poem.tags.trim());
+                                }
+                            }
+                        }
+
+                        const tags = allTags;
                         const dynastyTags = ['先秦', '汉', '魏晋', '南北朝', '隋', '唐', '五代', '南唐', '宋', '元', '明', '清', '现代'];
                         const typeTags = ['诗经', '楚辞', '乐府', '唐诗', '宋词', '清词', '词', '蒙学'];
 
@@ -10334,8 +10452,69 @@
                         // Determine the appropriate seal based on poem type
                         const sealText = poem.source === 'ci' ? '词' : '诗';
 
-                        // Generate tags HTML
-                        const tags = poem.type ? poem.type.split(' ').filter(tag => tag.trim() !== '') : [];
+                        // Generate tags HTML - handle multiple formats including slash/comma-separated and array formats
+                        let allTags = [];
+
+                        // Process poem.type field handling multiple formats
+                        if (poem.type) {
+                            if (Array.isArray(poem.type)) {
+                                // If poem.type is an array, process the first element for comma-separated values
+                                if (poem.type.length > 0 && typeof poem.type[0] === 'string') {
+                                    // Split by commas if commas are present, otherwise by other separators
+                                    if (poem.type[0].includes(',')) {
+                                        allTags = allTags.concat(poem.type[0].split(',').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                    } else if (poem.type[0].includes('/')) {
+                                        allTags = allTags.concat(poem.type[0].split('/').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                    } else {
+                                        // If no special separators, split by spaces
+                                        allTags = allTags.concat(poem.type[0].split(' ').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                    }
+                                }
+                            } else if (typeof poem.type === 'string') {
+                                // If poem.type is a string, check for different separators
+                                if (poem.type.includes('/')) {
+                                    allTags = allTags.concat(poem.type.split('/').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                } else if (poem.type.includes(',')) {
+                                    allTags = allTags.concat(poem.type.split(',').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                } else {
+                                    // Handle space-separated tags (normal format)
+                                    allTags = allTags.concat(poem.type.split(' ').filter(tag => tag.trim() !== ''));
+                                }
+                            }
+                        }
+
+                        // Also process poem.tags field if it exists
+                        if (poem.tags) {
+                            if (Array.isArray(poem.tags)) {
+                                // If poem.tags is an array, process each element
+                                poem.tags.forEach(tagItem => {
+                                    if (typeof tagItem === 'string') {
+                                        if (tagItem.includes(',')) {
+                                            // Comma-separated in array element
+                                            allTags = allTags.concat(tagItem.split(',').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                        } else if (tagItem.includes('/')) {
+                                            // Slash-separated in array element
+                                            allTags = allTags.concat(tagItem.split('/').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                        } else {
+                                            // Single tag in array element
+                                            allTags.push(tagItem.trim());
+                                        }
+                                    }
+                                });
+                            } else if (typeof poem.tags === 'string') {
+                                // If poem.tags is a string, handle different separators
+                                if (poem.tags.includes('/')) {
+                                    allTags = allTags.concat(poem.tags.split('/').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                } else if (poem.tags.includes(',')) {
+                                    allTags = allTags.concat(poem.tags.split(',').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                } else {
+                                    // Single tag as string
+                                    allTags.push(poem.tags.trim());
+                                }
+                            }
+                        }
+
+                        const tags = allTags;
                         const dynastyTags = ['先秦', '汉', '魏晋', '南北朝', '隋', '唐', '五代', '南唐', '宋', '元', '明', '清', '现代'];
                         const typeTags = ['诗经', '楚辞', '乐府', '唐诗', '宋词', '清词', '词', '蒙学'];
 
@@ -11250,8 +11429,69 @@ ${verse}
                     // Determine the appropriate seal based on poem type
                     const sealText = poem.source === 'ci' ? '词' : '诗';
 
-                    // Generate tags HTML
-                    const tags = poem.type ? poem.type.split(' ').filter(tag => tag.trim() !== '') : [];
+                    // Generate tags HTML - handle multiple formats including slash/comma-separated and array formats
+                    let allTags = [];
+
+                    // Process poem.type field handling multiple formats
+                    if (poem.type) {
+                        if (Array.isArray(poem.type)) {
+                            // If poem.type is an array, process the first element for comma-separated values
+                            if (poem.type.length > 0 && typeof poem.type[0] === 'string') {
+                                // Split by commas if commas are present, otherwise by other separators
+                                if (poem.type[0].includes(',')) {
+                                    allTags = allTags.concat(poem.type[0].split(',').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                } else if (poem.type[0].includes('/')) {
+                                    allTags = allTags.concat(poem.type[0].split('/').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                } else {
+                                    // If no special separators, split by spaces
+                                    allTags = allTags.concat(poem.type[0].split(' ').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                }
+                            }
+                        } else if (typeof poem.type === 'string') {
+                            // If poem.type is a string, check for different separators
+                            if (poem.type.includes('/')) {
+                                allTags = allTags.concat(poem.type.split('/').map(tag => tag.trim()).filter(tag => tag !== ''));
+                            } else if (poem.type.includes(',')) {
+                                allTags = allTags.concat(poem.type.split(',').map(tag => tag.trim()).filter(tag => tag !== ''));
+                            } else {
+                                // Handle space-separated tags (normal format)
+                                allTags = allTags.concat(poem.type.split(' ').filter(tag => tag.trim() !== ''));
+                            }
+                        }
+                    }
+
+                    // Also process poem.tags field if it exists
+                    if (poem.tags) {
+                        if (Array.isArray(poem.tags)) {
+                            // If poem.tags is an array, process each element
+                            poem.tags.forEach(tagItem => {
+                                if (typeof tagItem === 'string') {
+                                    if (tagItem.includes(',')) {
+                                        // Comma-separated in array element
+                                        allTags = allTags.concat(tagItem.split(',').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                    } else if (tagItem.includes('/')) {
+                                        // Slash-separated in array element
+                                        allTags = allTags.concat(tagItem.split('/').map(tag => tag.trim()).filter(tag => tag !== ''));
+                                    } else {
+                                        // Single tag in array element
+                                        allTags.push(tagItem.trim());
+                                    }
+                                }
+                            });
+                        } else if (typeof poem.tags === 'string') {
+                            // If poem.tags is a string, handle different separators
+                            if (poem.tags.includes('/')) {
+                                allTags = allTags.concat(poem.tags.split('/').map(tag => tag.trim()).filter(tag => tag !== ''));
+                            } else if (poem.tags.includes(',')) {
+                                allTags = allTags.concat(poem.tags.split(',').map(tag => tag.trim()).filter(tag => tag !== ''));
+                            } else {
+                                // Single tag as string
+                                allTags.push(poem.tags.trim());
+                            }
+                        }
+                    }
+
+                    const tags = allTags;
                     const dynastyTags = ['先秦', '汉', '魏晋', '南北朝', '隋', '唐', '五代', '南唐', '宋', '元', '明', '清', '现代'];
                     const typeTags = ['诗经', '楚辞', '乐府', '唐诗', '宋词', '清词', '词', '蒙学'];
 
