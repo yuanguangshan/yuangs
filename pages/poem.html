@@ -996,6 +996,63 @@
     let allCombined = null; // Combined poems and ci
     let filteredPoems = null; // Store currently filtered poems
 
+    // Simple IndexedDB Wrapper
+    const SimpleDB = {
+        dbName: 'PoetryDB',
+        storeName: 'cache',
+        version: 1,
+        db: null,
+
+        async open() {
+            if (this.db) return this.db;
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(this.dbName, this.version);
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains(this.storeName)) {
+                        db.createObjectStore(this.storeName);
+                    }
+                };
+                request.onsuccess = (event) => {
+                    this.db = event.target.result;
+                    resolve(this.db);
+                };
+                request.onerror = (event) => reject(event.target.error);
+            });
+        },
+
+        async get(key) {
+            try {
+                await this.open();
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([this.storeName], 'readonly');
+                    const store = transaction.objectStore(this.storeName);
+                    const request = store.get(key);
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            } catch (e) {
+                console.warn("IndexedDB get failed:", e);
+                return null;
+            }
+        },
+
+        async set(key, value) {
+            try {
+                await this.open();
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([this.storeName], 'readwrite');
+                    const store = transaction.objectStore(this.storeName);
+                    const request = store.put(value, key);
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+            } catch (e) {
+                console.warn("IndexedDB set failed:", e);
+            }
+        }
+    };
+
     // Function to fetch and cache Tang poems
     async function fetchAndCachePoems() {
       if (allPoems !== null) {
@@ -1006,17 +1063,21 @@
       const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
       // Check if we have cached data and it's still valid
-      const cachedData = localStorage.getItem(CACHE_KEY);
-      if (cachedData) {
-        const { data, timestamp } = JSON.parse(cachedData);
-        const now = Date.now();
+      try {
+          const cachedData = await SimpleDB.get(CACHE_KEY);
+          if (cachedData) {
+              const { data, timestamp } = cachedData;
+              const now = Date.now();
 
-        if (now - timestamp < CACHE_DURATION) {
-          // Cache is still valid - store in memory for subsequent requests
-          allPoems = data;
-          console.log("Using cached Tang poem data");
-          return allPoems;
-        }
+              if (now - timestamp < CACHE_DURATION) {
+                  // Cache is still valid - store in memory for subsequent requests
+                  allPoems = data;
+                  console.log("Using cached Tang poem data from IndexedDB");
+                  return allPoems;
+              }
+          }
+      } catch (e) {
+          console.warn("Error reading Tang poems from IndexedDB:", e);
       }
 
       // Fetch new data from the XML file
@@ -1065,29 +1126,30 @@
           });
         });
 
-        // Cache the fetched data
-        const cacheData = {
-          data: poems,
-          timestamp: Date.now()
-        };
-        localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
-
-        // Store in memory for subsequent requests
+        // Store in memory for subsequent requests FIRST
         allPoems = poems;
 
-        console.log(`Fetched and cached ${poems.length} Tang poems`);
+        // Try to cache the fetched data
+        try {
+            const cacheData = {
+                data: poems,
+                timestamp: Date.now()
+            };
+            await SimpleDB.set(CACHE_KEY, cacheData);
+            console.log(`Fetched and cached ${poems.length} Tang poems to IndexedDB`);
+        } catch (e) {
+            console.warn("Failed to cache Tang poems to IndexedDB:", e);
+        }
         return allPoems;
       } catch (error) {
         console.error('Error fetching Tang poem data:', error);
 
-        // If fetching failed, try to return cached data even if it's expired
-        if (cachedData) {
-          const { data } = JSON.parse(cachedData);
-          console.warn("Using expired cached Tang poem data due to fetch error");
-          // Store expired data in memory temporarily
-          allPoems = data;
+          // If fetching failed, try to return cached data even if it's expired
+          // Note: We need to re-fetch from DB here if we want to support offline fallback properly
+          // For now, we'll just return empty if fetch fails and no valid cache
+          
+          allPoems = [];
           return allPoems;
-        }
 
         // If no cached data is available, return an empty array
         allPoems = [];
@@ -1105,17 +1167,21 @@
       const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
       // Check if we have cached data and it's still valid
-      const cachedData = localStorage.getItem(CACHE_KEY);
-      if (cachedData) {
-        const { data, timestamp } = JSON.parse(cachedData);
-        const now = Date.now();
+      try {
+          const cachedData = await SimpleDB.get(CACHE_KEY);
+          if (cachedData) {
+              const { data, timestamp } = cachedData;
+              const now = Date.now();
 
-        if (now - timestamp < CACHE_DURATION) {
-          // Cache is still valid - store in memory for subsequent requests
-          allCi = data;
-          console.log("Using cached Song ci data");
-          return allCi;
-        }
+              if (now - timestamp < CACHE_DURATION) {
+                  // Cache is still valid - store in memory for subsequent requests
+                  allCi = data;
+                  console.log("Using cached Song ci data from IndexedDB");
+                  return allCi;
+              }
+          }
+      } catch (e) {
+          console.warn("Error reading Song ci from IndexedDB:", e);
       }
 
       // Fetch new data from the JSON file
@@ -1152,29 +1218,30 @@
           };
         });
 
-        // Cache the fetched data
-        const cacheData = {
-          data: processedCi,
-          timestamp: Date.now()
-        };
-        localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
-
-        // Store in memory for subsequent requests
+        // Store in memory for subsequent requests FIRST
         allCi = processedCi;
 
-        console.log(`Fetched and cached ${processedCi.length} Song ci`);
+        // Try to cache the fetched data
+        try {
+            const cacheData = {
+                data: processedCi,
+                timestamp: Date.now()
+            };
+            await SimpleDB.set(CACHE_KEY, cacheData);
+            console.log(`Fetched and cached ${processedCi.length} Song ci to IndexedDB`);
+        } catch (e) {
+            console.warn("Failed to cache Song ci to IndexedDB:", e);
+        }
         return allCi;
       } catch (error) {
         console.error('Error fetching Song ci data:', error);
 
-        // If fetching failed, try to return cached data even if it's expired
-        if (cachedData) {
-          const { data } = JSON.parse(cachedData);
-          console.warn("Using expired cached Song ci data due to fetch error");
-          // Store expired data in memory temporarily
-          allCi = data;
+          // If fetching failed, try to return cached data even if it's expired
+          // Note: We need to re-fetch from DB here if we want to support offline fallback properly
+          // For now, we'll just return empty if fetch fails and no valid cache
+          
+          allCi = [];
           return allCi;
-        }
 
         // If no cached data is available, return an empty array
         allCi = [];
