@@ -5489,7 +5489,7 @@
                     // We'll add the favorite button later
                 }
 
-                // Function to filter poems by tag
+                // Function to filter poems by tag and show in waterfall layout
                 window.filterByTag = async function (tag) {
                     console.log(`Filtering by tag: ${tag}`);
 
@@ -5538,15 +5538,87 @@
                         setTimeout(() => notification.remove(), 300);
                     }, 3000);
 
-                    // Display a random poem from filtered results
-                    const randomIndex = Math.floor(Math.random() * filteredPoems.length);
-                    displayPoem(filteredPoems[randomIndex]);
+                    // Switch to waterfall layout
+                    const waterfallContainer = document.getElementById('waterfallContainer');
+                    const poemContent = document.querySelector('.poem-content');
 
-                    // Store filtered poems for subsequent random selections
+                    if (!waterfallContainer.classList.contains('active')) {
+                        // Switch to waterfall mode
+                        poemContent.style.display = 'none'; // Hide symmetric container
+                        waterfallContainer.classList.add('active');
+                        document.getElementById('layoutToggle').textContent = '默认布局'; // Update button text
+                    }
+
+                    // Generate waterfall content with filtered poems
+                    const waterfallContent = document.getElementById('waterfallContent');
+                    waterfallContent.innerHTML = ''; // Clear existing content
+
+                    filteredPoems.forEach(poem => {
+                        const card = document.createElement('div');
+                        card.className = 'waterfall-card';
+
+                        const layoutInfo = analyzePoemLayout(poem);
+                        let linesHtml = '';
+                        layoutInfo.lines.forEach(line => {
+                            if (line) linesHtml += `<div class="poem-line">${line}</div>`;
+                        });
+
+                        const backgroundColor = getRandomColor();
+
+                        let title = layoutInfo.title;
+                        if (title.length > 12) {
+                            title = title.substring(0, 12) + '...';
+                        }
+
+                        let author = layoutInfo.author;
+                        if (author.length > 8) {
+                            author = author.substring(0, 8) + '...';
+                        }
+
+                        const sealText = poem.source === 'ci' ? '词' : '诗';
+
+                        // Generate tags HTML
+                        const tags = poem.type ? poem.type.split(' ').filter(tag => tag.trim() !== '') : [];
+                        const dynastyTags = ['先秦', '汉', '魏晋', '南北朝', '隋', '唐', '五代', '南唐', '宋', '元', '明', '清', '现代'];
+                        const typeTags = ['诗经', '楚辞', '乐府', '唐诗', '宋词', '清词', '词', '蒙学'];
+
+                        const tagsHtml = tags.slice(0, 5).map(t => {
+                            let tagClass = 'waterfall-tag';
+                            if (dynastyTags.includes(t)) {
+                                tagClass += ' dynasty';
+                            } else if (typeTags.includes(t) || t.includes('诗') || t.includes('词')) {
+                                tagClass += ' type';
+                            } else {
+                                tagClass += ' theme';
+                            }
+                            return `<span class="${tagClass}">${t}</span>`;
+                        }).join('');
+
+                        card.innerHTML = `
+            <div class="color-block-container">
+              <div class="color-block" style="background-color: ${backgroundColor};">
+                 <div class="overlay-text layout-${layoutInfo.mode}">
+                   ${linesHtml}
+                 </div>
+                 <div class="seal-decoration">${sealText}</div>
+              </div>
+            </div>
+            <div class="waterfall-content-section">
+              <div class="waterfall-tags">${tagsHtml}</div>
+              <h3 class="waterfall-title">${title}</h3>
+              <p class="waterfall-author">${author}</p>
+            </div>
+          `;
+                        card.addEventListener('click', function () {
+                            showPoemDetail(poem);
+                        });
+                        waterfallContent.appendChild(card);
+                    });
+
+                    // Store filtered poems for reference
                     window.filteredPoemsByTag = {
                         tag: tag,
-                        poems: filteredPoems,
-                        currentIndex: randomIndex
+                        poems: filteredPoems
                     };
                 };
 
