@@ -4156,6 +4156,63 @@
                 return palette[Math.floor(Math.random() * palette.length)];
             }
 
+            // Simple IndexedDB Wrapper
+            const SimpleDB = {
+                dbName: 'PoetryDB',
+                storeName: 'cache',
+                version: 1,
+                db: null,
+
+                async open() {
+                    if (this.db) return this.db;
+                    return new Promise((resolve, reject) => {
+                        const request = indexedDB.open(this.dbName, this.version);
+                        request.onupgradeneeded = (event) => {
+                            const db = event.target.result;
+                            if (!db.objectStoreNames.contains(this.storeName)) {
+                                db.createObjectStore(this.storeName);
+                            }
+                        };
+                        request.onsuccess = (event) => {
+                            this.db = event.target.result;
+                            resolve(this.db);
+                        };
+                        request.onerror = (event) => reject(event.target.error);
+                    });
+                },
+
+                async get(key) {
+                    try {
+                        await this.open();
+                        return new Promise((resolve, reject) => {
+                            const transaction = this.db.transaction([this.storeName], 'readonly');
+                            const store = transaction.objectStore(this.storeName);
+                            const request = store.get(key);
+                            request.onsuccess = () => resolve(request.result);
+                            request.onerror = () => reject(request.error);
+                        });
+                    } catch (e) {
+                        console.warn("IndexedDB get failed:", e);
+                        return null;
+                    }
+                },
+
+                async set(key, value) {
+                    try {
+                        await this.open();
+                        return new Promise((resolve, reject) => {
+                            const transaction = this.db.transaction([this.storeName], 'readwrite');
+                            const store = transaction.objectStore(this.storeName);
+                            const request = store.put(value, key);
+                            request.onsuccess = () => resolve();
+                            request.onerror = () => reject(request.error);
+                        });
+                    } catch (e) {
+                        console.warn("IndexedDB set failed:", e);
+                    }
+                }
+            };
+
             // Function to fetch and cache all poetry from unified database
             async function fetchAndCachePoems() {
                 if (allPoems !== null) {
@@ -4166,17 +4223,21 @@
                 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
                 // Check if we have cached data and it's still valid
-                const cachedData = localStorage.getItem(CACHE_KEY);
-                if (cachedData) {
-                    const { data, timestamp } = JSON.parse(cachedData);
-                    const now = Date.now();
+                try {
+                    const cachedData = await SimpleDB.get(CACHE_KEY);
+                    if (cachedData) {
+                        const { data, timestamp } = cachedData; // No need to JSON.parse, IndexedDB stores objects
+                        const now = Date.now();
 
-                    if (now - timestamp < CACHE_DURATION) {
-                        // Cache is still valid - store in memory for subsequent requests
-                        allPoems = data;
-                        console.log("Using cached poetry data");
-                        return allPoems;
+                        if (now - timestamp < CACHE_DURATION) {
+                            // Cache is still valid - store in memory for subsequent requests
+                            allPoems = data;
+                            console.log("Using cached poetry data from IndexedDB");
+                            return allPoems;
+                        }
                     }
+                } catch (e) {
+                    console.warn("Error reading from IndexedDB:", e);
                 }
 
                 try {
@@ -4228,31 +4289,30 @@
                         });
                     });
 
-                    // Cache the fetched data
-                    const cacheData = {
-                        data: poems,
-                        timestamp: Date.now()
-                    };
-                    localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
-
-                    // Store in memory for subsequent requests
+                    // Store in memory for subsequent requests FIRST
                     allPoems = poems;
 
-                    console.log(`Fetched and cached ${poems.length} poems from unified database`);
+                    // Try to cache the fetched data using IndexedDB
+                    try {
+                        const cacheData = {
+                            data: poems,
+                            timestamp: Date.now()
+                        };
+                        // No need to JSON.stringify for IndexedDB
+                        await SimpleDB.set(CACHE_KEY, cacheData);
+                        console.log(`Fetched and cached ${poems.length} poems to IndexedDB`);
+                    } catch (e) {
+                        console.warn("Failed to cache poetry data to IndexedDB:", e);
+                    }
+
                     return allPoems;
                 } catch (error) {
                     console.error('Error fetching poetry data:', error);
 
                     // If fetching failed, try to return cached data even if it's expired
-                    if (cachedData) {
-                        const { data } = JSON.parse(cachedData);
-                        console.warn("Using expired cached poetry data due to fetch error");
-                        // Store expired data in memory temporarily
-                        allPoems = data;
-                        return allPoems;
-                    }
-
-                    // If no cached data is available, return an empty array
+                    // Note: We need to re-fetch from DB here if we want to support offline fallback properly
+                    // For now, we'll just return empty if fetch fails and no valid cache
+                    
                     allPoems = [];
                     return allPoems;
                 }
