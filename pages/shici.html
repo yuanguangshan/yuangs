@@ -2159,9 +2159,20 @@
             text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
         }
 
+
+
+        /* Article mode for long texts */
+        .article-mode {
+            text-align: left !important;
+            text-indent: 2em;
+            max-width: 100%;
+            margin: 0 auto;
+            display: block !important; /* Ensure it behaves like a block */
+        }
+
         /* Add decoration like quotes for horizontal quotes */
         .layout-horizontal-center::before {
-            content: "" ";
+            content: "“";
  font-family: serif;
             font-size: 4rem;
             position: absolute;
@@ -4449,8 +4460,8 @@
 
             // Function to insert line breaks at commas and periods for better layout
             function insertLineBreaksAtPunctuation(content) {
-                // Check if content is long (likely an article)
-                if (content.length > 250) {
+                // Check if content is long (likely an article) - Lowered threshold to 100
+                if (content.length > 100) {
                     // For articles, only break at sentence endings (periods, question marks, exclamation marks)
                     // and preserve existing paragraph breaks
                     
@@ -4461,9 +4472,14 @@
                     
                     let processed = lines.join('\n');
                     
+                    // Fix orphaned quotes: if a line starts with a closing quote, merge it with previous line
+                    // Use Chinese quotes "
+                    processed = processed.replace(/\n(["'])/g, '$1');
+
                     // Add line breaks only after sentence-ending punctuation, keeping quotes with the punctuation
+                    // Use Chinese quotes "
                     processed = processed
-                        .replace(/([。！？!?][”’]?)(?!\n)/g, '$1\n');
+                        .replace(/([。！？!?]["']?)(?!\n)/g, '$1\n');
                         
                     // Convert newlines to <br>
                     processed = processed.replace(/\n/g, '<br>');
@@ -4570,18 +4586,21 @@
                         // 其他长短句（词）继续使用默认排版
                         verseElement.innerHTML = insertLineBreaksAtPunctuation(poem.content);
                         
-                        // Special handling for long articles (> 250 chars)
-                        if (poem.content.length > 250) {
-                            verseElement.style.textAlign = 'left';
-                            verseElement.style.textIndent = '2em'; // Optional: add indentation for better reading
-                            verseElement.style.maxWidth = '100%'; // Ensure it uses full width
-                            verseElement.style.margin = '0 auto'; // Center the container itself
+                        // Special handling for long articles (> 50 chars) or specific genres
+                        // Added '解' and lowered threshold to 50 to catch more cases
+                        const isArticleTitle = /世家|列传|序|记|书|表|论|说|赋|解|文/.test(poem.title);
+                        console.log('Article detection:', {
+                            title: poem.title,
+                            contentLength: poem.content.length,
+                            isArticleTitle: isArticleTitle,
+                            shouldApplyArticleMode: poem.content.length > 50 || isArticleTitle
+                        });
+                        if (poem.content.length > 50 || isArticleTitle) {
+                            verseElement.classList.add('article-mode');
+                            verseElement.classList.remove('horizontal-mode'); // Remove horizontal mode to avoid conflict
+                            console.log('Applied article-mode class');
                         } else {
-                            // Reset styles for shorter poems
-                            verseElement.style.textAlign = '';
-                            verseElement.style.textIndent = '';
-                            verseElement.style.maxWidth = '';
-                            verseElement.style.margin = '';
+                            verseElement.classList.remove('article-mode');
                         }
                     }
                 }
