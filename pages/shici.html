@@ -1285,13 +1285,18 @@
             font-size: 12px;
             font-weight: 500;
             transition: all 0.3s ease;
-            cursor: default;
+            cursor: pointer;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .poem-tag:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .poem-tag:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         /* Different colors for different tag types */
@@ -1344,6 +1349,31 @@
 
         .waterfall-tag.theme {
             background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        }
+
+        /* Notification animations */
+        @keyframes slideDown {
+            from {
+                transform: translateX(-50%) translateY(-20px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+
+            to {
+                transform: translateX(-50%) translateY(-20px);
+                opacity: 0;
+            }
         }
 
         .poem-desc h3 {
@@ -4744,7 +4774,7 @@
                         } else {
                             tagClass += ' theme';
                         }
-                        return `<span class="${tagClass}">${tag}</span>`;
+                        return `<span class="${tagClass}" onclick="filterByTag('${tag}')" title="点击筛选「${tag}」相关诗词">${tag}</span>`;
                     }).join('');
                 } else {
                     tagsElement.innerHTML = '';
@@ -5458,6 +5488,67 @@
                     const isFav = isPoemFavorite(currentPoem);
                     // We'll add the favorite button later
                 }
+
+                // Function to filter poems by tag
+                window.filterByTag = async function (tag) {
+                    console.log(`Filtering by tag: ${tag}`);
+
+                    // Get all poems
+                    const allPoems = await fetchAndCombineAll();
+
+                    // Filter poems that have this tag
+                    const filteredPoems = allPoems.filter(poem => {
+                        if (poem.type) {
+                            const tags = poem.type.split(' ');
+                            return tags.includes(tag);
+                        }
+                        return false;
+                    });
+
+                    console.log(`Found ${filteredPoems.length} poems with tag "${tag}"`);
+
+                    if (filteredPoems.length === 0) {
+                        alert(`没有找到标签为「${tag}」的诗词`);
+                        return;
+                    }
+
+                    // Show a notification
+                    const notification = document.createElement('div');
+                    notification.style.cssText = `
+                        position: fixed;
+                        top: 80px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        padding: 12px 24px;
+                        border-radius: 25px;
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+                        z-index: 10000;
+                        font-size: 14px;
+                        font-weight: 500;
+                        animation: slideDown 0.3s ease;
+                    `;
+                    notification.innerHTML = `🔍 筛选「${tag}」相关诗词 (共 ${filteredPoems.length} 首)`;
+                    document.body.appendChild(notification);
+
+                    // Remove notification after 3 seconds
+                    setTimeout(() => {
+                        notification.style.animation = 'slideUp 0.3s ease';
+                        setTimeout(() => notification.remove(), 300);
+                    }, 3000);
+
+                    // Display a random poem from filtered results
+                    const randomIndex = Math.floor(Math.random() * filteredPoems.length);
+                    displayPoem(filteredPoems[randomIndex]);
+
+                    // Store filtered poems for subsequent random selections
+                    window.filteredPoemsByTag = {
+                        tag: tag,
+                        poems: filteredPoems,
+                        currentIndex: randomIndex
+                    };
+                };
 
                 // Add functionality to store current poem to history when it's displayed
                 // We'll modify the displayPoem function to add to history
