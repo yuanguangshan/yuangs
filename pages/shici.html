@@ -1376,6 +1376,69 @@
             }
         }
 
+        /* Layout toggle button */
+        .layout-toggle-btn {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transition: all 0.3s ease;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .layout-toggle-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .layout-toggle-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Vertical scroll mode */
+        .poem-verse.scroll-mode {
+            writing-mode: vertical-rl;
+            text-orientation: upright;
+            direction: ltr;
+            text-align: left;
+            max-height: 600px;
+            padding: 30px 20px;
+            line-height: 1.8;
+            letter-spacing: 0.1em;
+        }
+
+        .poem-verse.scroll-mode .poem-line {
+            display: inline-block;
+            margin: 0 15px;
+            padding: 0 10px;
+        }
+
+        .poem-verse.scroll-mode.vertical-mode .poem-line {
+            margin: 0 20px;
+        }
+
+        /* Adjust couplet rows for scroll mode */
+        .poem-verse.scroll-mode .couplet-row {
+            display: inline-block;
+            margin: 0 15px;
+        }
+
+        .poem-verse.scroll-mode .couplet-line {
+            display: block;
+            margin: 5px 0;
+        }
+
         .poem-desc h3 {
             color: #333;
             margin-bottom: 10px;
@@ -2388,6 +2451,10 @@
                             <div id="poemVerse" class="poem-verse"></div>
                             <!-- 大印章 (will be updated dynamically) -->
                             <div class="seal-decoration main-seal" id="mainTypeSeal">诗</div>
+                            <!-- Layout toggle button (only shown for poems ≤8 lines) -->
+                            <button id="layoutToggleBtn" class="layout-toggle-btn" style="display: none;" title="切换横竖排">
+                                <span id="layoutToggleIcon">📜</span>
+                            </button>
                         </div>
 
                     </div>
@@ -4912,6 +4979,29 @@
                 }, 300); // Show content after 300ms if image hasn't loaded yet
             }
 
+            // Check if poem is suitable for layout toggle (≤8 lines) - called after displayPoem
+            function updateLayoutToggle(poem) {
+                const lines = poem.content.split(/[，。！？；、]/g).filter(line => line.trim() !== '');
+                const lineCount = lines.length;
+                const toggleBtn = document.getElementById('layoutToggleBtn');
+                const verseElement = document.getElementById('poemVerse');
+                
+                if (lineCount <= 8) {
+                    toggleBtn.style.display = 'flex';
+                    if (!window.currentLayoutMode) window.currentLayoutMode = 'horizontal';
+                    if (window.currentLayoutMode === 'vertical') {
+                        verseElement.classList.add('scroll-mode');
+                        document.getElementById('layoutToggleIcon').textContent = '📄';
+                    } else {
+                        verseElement.classList.remove('scroll-mode');
+                        document.getElementById('layoutToggleIcon').textContent = '📜';
+                    }
+                } else {
+                    toggleBtn.style.display = 'none';
+                    verseElement.classList.remove('scroll-mode');
+                }
+            }
+
             // Function to clear filters
             function clearFilter() {
                 document.getElementById('authorFilter').value = '';
@@ -5630,6 +5720,7 @@
                     // Add to history after poem is displayed
                     setTimeout(() => {
                         addToHistory(poem);
+                        updateLayoutToggle(poem); // Check if toggle button should be shown
                     }, 500); // Small delay to ensure the poem is fully displayed
                 };
 
@@ -5864,6 +5955,27 @@
                         waterfallContent.appendChild(card);
                     });
                 }
+            }
+
+            // Layout toggle function
+            window.togglePoemLayout = function () {
+                const verseElem = document.getElementById('poemVerse');
+                const iconElem = document.getElementById('layoutToggleIcon');
+                if (window.currentLayoutMode === 'horizontal') {
+                    verseElem.classList.add('scroll-mode');
+                    iconElem.textContent = '📄';
+                    window.currentLayoutMode = 'vertical';
+                } else {
+                    verseElem.classList.remove('scroll-mode');
+                    iconElem.textContent = '📜';
+                    window.currentLayoutMode = 'horizontal';
+                }
+            };
+
+            // Add click handler to toggle button
+            if (!window.layoutToggleInitialized) {
+                document.getElementById('layoutToggleBtn').addEventListener('click', togglePoemLayout);
+                window.layoutToggleInitialized = true;
             }
 
             // Function to get a specified number of random poems from an array
