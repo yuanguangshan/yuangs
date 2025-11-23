@@ -10040,11 +10040,14 @@
                 const originalLoadRandomPoem = window.loadRandomPoem || loadRandomPoem;
                 window.loadRandomPoem = async function () {
                     // Get a random poem first, then display it with history tracking
-                    // Respect filtered poems if any author is selected
+                    // Respect filtered poems if any author is selected, or filtered poems by tag
                     let itemsToUse;
                     if (filteredPoems && filteredPoems.length > 0) {
-                        // Use filtered poems if available (author selected)
+                        //优先使用作者筛选
                         itemsToUse = filteredPoems;
+                    } else if (window.filteredPoemsByTag && window.filteredPoemsByTag.poems && window.filteredPoemsByTag.poems.length > 0) {
+                        //其次使用标签筛选
+                        itemsToUse = window.filteredPoemsByTag.poems;
                     } else {
                         // Otherwise use all combined items
                         itemsToUse = await fetchAndCombineAll();
@@ -10183,8 +10186,18 @@
                 if (allCombined && allCombined.length > 0) {
                     waterfallContent.innerHTML = ''; // Clear existing content
 
-                    // Select 12 random poems from allCombined (increased from 10)
-                    const randomPoems = getRandomPoems(allCombined, 12);
+                    // Use filtered poems if available (respect the selected author/filter), otherwise use all combined
+                    let poemsToUse = allCombined;
+                    if (filteredPoems && filteredPoems.length > 0) {
+                        //优先使用作者筛选
+                        poemsToUse = filteredPoems;
+                    } else if (window.filteredPoemsByTag && window.filteredPoemsByTag.poems && window.filteredPoemsByTag.poems.length > 0) {
+                        //其次使用标签筛选
+                        poemsToUse = window.filteredPoemsByTag.poems;
+                    }
+
+                    // Select 12 random poems from the appropriate source (increased from 10)
+                    const randomPoems = getRandomPoems(poemsToUse, 12);
 
                     randomPoems.forEach((poem, index) => {
                         const card = document.createElement('div');
