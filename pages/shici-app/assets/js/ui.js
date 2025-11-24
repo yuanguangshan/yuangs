@@ -242,16 +242,7 @@ function displayPoem(poem) {
             if (layoutToggleBtn) layoutToggleBtn.style.display = 'inline-block'; // 诗词显示切换按钮
         }
     }
-        } else {
-            verseEl.classList.remove('article-mode');
-            
-            if (isRegularPoem(poem) && poem.content.split('\\n').length >= 2) {
-                verseEl.innerHTML = formatCoupletPoem(poem);
-            } else {
-                verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
-            }
-        }
-    }
+
     
     // 标签
     const tagsEl = document.getElementById('poemTags');
