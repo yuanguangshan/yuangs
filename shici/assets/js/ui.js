@@ -25,20 +25,23 @@ let currentTagFilter = null; // Current tag filter for waterfall
 // 初始化UI
 export async function initUI() {
     console.log('Initializing UI...');
-    
+
+    // 加载保存的主题偏好
+    loadSavedTheme();
+
     // 加载诗词数据
     allPoems = await fetchAndCachePoems();
     console.log(`Loaded ${allPoems.length} poems`);
-    
+
     // 初始化作者选择器
     initAuthorSelect();
-    
+
     // 绑定事件监听器
     bindEventListeners();
-    
+
     // 首次加载随机诗词
     await loadRandomPoem();
-    
+
     // 不自动初始化瀑布流，等用户点击切换
     // await renderWaterfall();
 }
@@ -1093,10 +1096,21 @@ function switchTheme(themeName) {
             break;
     }
 
+    // Save the selected theme to localStorage
+    localStorage.setItem('selectedTheme', themeName);
+
     // Close the theme menu
     const themeMenu = document.getElementById('themeMenu');
     if (themeMenu) {
         themeMenu.classList.remove('active');
+    }
+}
+
+// Load saved theme preference from localStorage
+function loadSavedTheme() {
+    const savedTheme = localStorage.getItem('selectedTheme');
+    if (savedTheme) {
+        switchTheme(savedTheme);
     }
 }
 
