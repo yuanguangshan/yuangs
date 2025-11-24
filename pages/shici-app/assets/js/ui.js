@@ -649,8 +649,6 @@ async function renderWaterfall(append = false) {
         waterfallEl.appendChild(card);
     });
 
-    console.log('Waterfall rendered with', randomPoems.length, 'cards');
-
     // Set up scroll listener for infinite loading when not appending (first load)
     if (!append) {
         setupInfiniteScroll();
@@ -680,7 +678,6 @@ function setupInfiniteScroll() {
     window.waterfallScrollHandler = function() {
         // Check if waterfall is active
         if (!waterfallContainer.classList.contains('active')) {
-            console.log('Waterfall not active, removing scroll listener');
             // Remove listener if waterfall is not active
             window.removeEventListener('scroll', window.waterfallScrollHandler, true);
             return;
@@ -694,21 +691,16 @@ function setupInfiniteScroll() {
         // More reliable way to detect when near bottom
         const scrollBottom = scrollTop + windowHeight;
 
-        console.log(`Scroll: ${scrollTop}, Window: ${windowHeight}, Document: ${documentHeight}, Bottom: ${scrollBottom}`);
-
         // Trigger loading when we're within 100px of the bottom
         if (scrollBottom >= documentHeight - 100) {
-            console.log('Near bottom detected');
             // Prevent multiple simultaneous loads
             if (!window.isLoadingMorePoems) {
                 window.isLoadingMorePoems = true;
-                console.log('Loading more poems for infinite scroll...');
 
                 // Add a small delay to avoid triggering multiple times
                 setTimeout(async () => {
                     try {
                         await renderWaterfall(true); // Append more poems
-                        console.log('Additional poems loaded');
                     } catch (error) {
                         console.error('Error loading more poems:', error);
                     } finally {
@@ -721,14 +713,12 @@ function setupInfiniteScroll() {
 
     // Add scroll listener
     window.addEventListener('scroll', window.waterfallScrollHandler, true);
-    console.log('Infinite scroll listener added');
 
     // Additionally, check if we need to load more immediately (if content is short)
     setTimeout(() => {
         const windowHeight = window.innerHeight;
         const documentHeight = document.documentElement.scrollHeight;
         if (windowHeight >= documentHeight) {
-            console.log('Page height is less than window, triggering scroll listener');
             if (window.waterfallScrollHandler) {
                 window.waterfallScrollHandler();
             }
