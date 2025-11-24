@@ -114,6 +114,20 @@ export function isLongPoem(poem) {
     return lines.length > 10;
 }
 
+// 判断是否需要滚动的长诗（不仅根据行数，还要考虑是否会在垂直模式下显示不下）
+export function needsScrollableVerticalMode(poem) {
+    if (!poem || !poem.content) return false;
+
+    // 分割内容为行，计算行数
+    const lines = poem.content.split('\\n').filter(line => line.trim() !== '');
+
+    // For poems with 7-10 lines, it might be too long for regular vertical display
+    if (lines.length >= 7 && lines.length <= 10) return true;
+
+    // Poems with more than 10 lines are handled differently (horizontal mode)
+    return false;
+}
+
 // 处理标签（支持多种格式）
 export function parseTags(tagField) {
     let allTags = [];
