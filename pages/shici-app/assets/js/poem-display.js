@@ -152,11 +152,19 @@ export function generateTagsHTML(poem) {
     
     if (allTags.length === 0) return '';
     
+    // 去重
+    const uniqueTags = [...new Set(allTags)];
+    
     const dynastyTags = ['先秦', '汉', '魏晋', '南北朝', '隋', '唐', '五代', '南唐', '宋', '元', '明', '清', '现代', '近现代'];
     const typeTags = ['诗经', '楚辞', '乐府', '唐诗', '宋词', '清词', '词', '蒙学'];
     
-    return allTags.map(tag => {
+    // 限制显示前5个标签
+    return uniqueTags.slice(0, 5).map(tag => {
         let tagClass = 'poem-tag';
+        // 在瀑布流中可能需要不同的类名，但这里保持通用，CSS可以适配
+        // 注意：原版瀑布流使用的是 waterfall-tag 类，这里为了兼容性，我们可能需要调整
+        // 或者在CSS中确保 poem-tag 在瀑布流中也有正确的样式
+        
         if (dynastyTags.includes(tag)) {
             tagClass += ' dynasty';
         } else if (typeTags.includes(tag)) {
