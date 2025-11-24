@@ -450,13 +450,161 @@ function toggleTheme() {
     }
 }
 
-// --- 新增功能函数 ---
+// --- AI & API Configuration ---
+const API_DOMAIN = 'https://aiproxy.want.biz/';
+const API_PREFIX = API_DOMAIN.replace(/\/+$/, '');
+const DEFAULT_TIMEOUT = 120; // 秒
+const DEFAULT_MODEL_ID = 'gemini-flash-lite-latest';
+const AI_CACHE_KEY = 'poem_ai_interpretations_v1';
 
-// 复制诗词到剪贴板
+const PROMPT_TEMPLATES = {
+    '诗词': '请为以下古诗词提供深度解读和赏析，使用Markdown格式输出，包含以下部分：1. 诗词背景与作者心境 2. 逐句解析（如果诗句较短可合并解析） 3. 艺术手法与修辞特点 4. 主题思想与情感内涵 5. 文学价值与影响'
+};
+const DEFAULT_TEMPLATE_KEY = '诗词';
+
+// --- Helper Functions ---
+
+function toDisplayString(any) {
+    if (any == null) return '';
+    if (typeof any === 'string') return any;
+    try { return JSON.stringify(any, null, 2); } catch { return String(any); }
+}
+
+async function requestJSON(method, path, payload) {
+    const url = `${API_PREFIX}${path.startsWith('/') ? path : `/${path}`}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT * 1000);
+
+    try {
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: payload ? JSON.stringify(payload) : null,
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            let errorData = {};
+            try {
+                errorData = await response.json();
+            } catch {
+                errorData = { message: await response.text() };
+            }
+            throw new Error(`API请求失败 (HTTP ${response.status}): ${errorData.error?.message || toDisplayString(errorData)}`);
+        }
+        return await response.json();
+    } catch (e) {
+        clearTimeout(timeoutId);
+        if (e.name === 'AbortError') {
+            throw new Error(`网络请求超时 (超过 ${DEFAULT_TIMEOUT} 秒)`);
+        }
+        throw new Error(`网络或API错误: ${e.message}`);
+    }
+}
+
+function markdownToHtml(md) {
+    if (!md) return '';
+    let html = md
+        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+        .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+        .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+        .replace(/\*(.*)\*/gim, '<em>$1</em>')
+        .replace(/\[(.*?)\]\((.*?)\)/gim, '<a href="$2">$1</a>')
+        .replace(/```([\s\S]*?)```/gim, '<pre><code>$1</code></pre>')
+        .replace(/`(.*?)`/gim, '<code>$1</code>')
+        .replace(/^> (.*$)/gim, '<blockquote>$1</blockquote>')
+        .replace(/^\- (.*$)/gim, '<li>$1</li>')
+        .replace(/^\d+\. (.*$)/gim, '<li>$1</li>')
+        .replace(/\n\n/gim, '</p><p>')
+        .replace(/\n/gim, '<br>');
+
+    html = html.replace(/<p><\/p>/gim, '');
+    html = `<p>${html}</p>`;
+    html = html.replace(/<p><li>/gim, '<ul><li>')
+        .replace(/<\/li><\/p>/gim, '</li></ul>')
+        .replace(/<\/li><li>/gim, '</li><li>');
+    
+    // Simple fix for ordered lists mixed with unordered logic above
+    // Ideally use a proper markdown parser, but this matches legacy behavior
+    return html;
+}
+
+function getInterpretationFromCache(title, author) {
+    try {
+        const cache = localStorage.getItem(AI_CACHE_KEY);
+        if (!cache) return null;
+        const cacheObj = JSON.parse(cache);
+        const key = `${title}-${author}`;
+        return cacheObj[key] || null;
+    } catch (e) {
+        console.error('Error reading from cache:', e);
+        return null;
+    }
+}
+
+function saveInterpretationToCache(title, author, content) {
+    try {
+        const cache = localStorage.getItem(AI_CACHE_KEY);
+        let cacheObj = {};
+        if (cache) cacheObj = JSON.parse(cache);
+        const key = `${title}-${author}`;
+        cacheObj[key] = content;
+        localStorage.setItem(AI_CACHE_KEY, JSON.stringify(cacheObj));
+    } catch (e) {
+        console.error('Error saving to cache:', e);
+    }
+}
+
+async function explainText(text, model) {
+    return await requestJSON('POST', '/ai/explain', { text, model });
+}
+
+async function getRealPoemInterpretation(title, author, verse, desc, forceRefresh = false) {
+    if (!forceRefresh) {
+        const cached = getInterpretationFromCache(title, author);
+        if (cached) return cached;
+    }
+
+    const finalSystemPrompt = PROMPT_TEMPLATES[DEFAULT_TEMPLATE_KEY];
+    const textToInterpret = `诗词题目：${title}
+作者：${author}
+诗词内容：
+${verse}
+
+原注释：${desc}`;
+
+    const finalText = `${finalSystemPrompt}\n\n---\n\n${textToInterpret.trim()}`;
+
+    try {
+        const resultData = await explainText(finalText, DEFAULT_MODEL_ID);
+        const markdownResult = resultData.explanation || resultData.data || resultData.text || resultData;
+
+        if (typeof markdownResult !== 'string' || !markdownResult.trim()) {
+            throw new Error(`API返回结果格式不正确: ${toDisplayString(resultData)}`);
+        }
+
+        const finalResult = markdownResult.trim();
+        saveInterpretationToCache(title, author, finalResult);
+        return finalResult;
+    } catch (error) {
+        console.error("[Poetry AI] Error:", error);
+        throw error;
+    }
+}
+
+// --- Feature Functions ---
+
+// 复制诗词到剪贴板 (修复换行问题)
 function copyPoemToClipboard() {
     if (!currentPoem) return;
     
-    const text = `${currentPoem.title}\n${currentPoem.auth}\n\n${currentPoem.content}`;
+    // 将内容中的字面量 \n 替换为真正的换行符
+    const content = currentPoem.content.replace(/\\n/g, '\n');
+    const text = `${currentPoem.title}\n${currentPoem.auth}\n\n${content}`;
+    
     navigator.clipboard.writeText(text).then(() => {
         const btn = document.getElementById('copyBtn');
         if (btn) {
@@ -521,7 +669,7 @@ function displaySearchResults(results) {
     if (results.length === 0) {
         list.innerHTML = '<li>未找到相关诗词</li>';
     } else {
-        results.slice(0, 20).forEach(poem => { // 限制显示前20条
+        results.slice(0, 20).forEach(poem => { 
             const li = document.createElement('li');
             li.textContent = `${poem.title} - ${poem.auth}`;
             li.onclick = () => {
@@ -544,16 +692,16 @@ function togglePoemLayout() {
     if (verseElem.classList.contains('vertical-mode')) {
         verseElem.classList.remove('vertical-mode');
         verseElem.classList.add('horizontal-mode');
-        btn.textContent = '📄'; // 切换图标
+        btn.textContent = '📄'; 
     } else {
         verseElem.classList.remove('horizontal-mode');
         verseElem.classList.add('vertical-mode');
-        btn.textContent = '📜'; // 切换图标
+        btn.textContent = '📜'; 
     }
 }
 
-// AI解读占位符
-function showAIInterpretation() {
+// AI解读 (完整实现)
+async function showAIInterpretation() {
     if (!currentPoem) return;
     
     const descContent = document.getElementById('poemDescContent');
@@ -561,22 +709,70 @@ function showAIInterpretation() {
     
     descContent.style.display = 'block';
     
-    // 简单的模拟 AI 响应
-    const loadingHtml = '<div style="padding: 20px; text-align: center;">✨ AI 正在思考中...</div>';
-    const originalDesc = desc.innerHTML;
-    desc.innerHTML = loadingHtml + originalDesc;
+    const separator = '<div style="border-top: 1px dashed #ddd; margin: 20px 0;"></div>';
+    const loadingBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 正在思考...</div>';
     
-    setTimeout(() => {
-        const aiAnalysis = `
-            <div style="margin-bottom: 20px; padding: 15px; background: rgba(139, 92, 246, 0.1); border-radius: 8px; border-left: 4px solid #8b5cf6;">
-                <h4 style="margin-top: 0; color: #8b5cf6;">✨ AI 深度赏析</h4>
-                <p>这是一首关于${currentPoem.title}的诗词。作者${currentPoem.auth}通过精妙的笔触，描绘了...</p>
-                <p>(注：这是AI功能的演示占位符，实际功能需要接入后端API)</p>
-            </div>
-        `;
-        desc.innerHTML = aiAnalysis + originalDesc;
-    }, 1500);
+    // 保留原有注释（如果有）
+    let originalDesc = desc.innerHTML;
+    // 如果已经有AI解读，尝试提取原始注释
+    if (originalDesc.includes('border-top: 1px dashed #ddd')) {
+        originalDesc = originalDesc.split('<div style="border-top: 1px dashed #ddd')[0];
+    }
+    
+    desc.innerHTML = originalDesc + separator + loadingBadge + '<div class="loading-spinner" style="margin: 20px auto;"></div>';
+    
+    try {
+        // 获取诗词内容（处理换行）
+        const verse = currentPoem.content.replace(/\\n/g, '\n');
+        
+        const result = await getRealPoemInterpretation(
+            currentPoem.title, 
+            currentPoem.auth, 
+            verse, 
+            originalDesc
+        );
+        
+        const aiBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 深度赏析 <span onclick="window.regenerateAnalysis()" style="cursor:pointer; margin-left:10px; font-size:0.8em; opacity:0.8; border-bottom:1px solid white;" title="重新生成解读">🔄 重新生成</span></div>';
+        
+        desc.innerHTML = originalDesc + separator + aiBadge + markdownToHtml(result);
+        
+    } catch (error) {
+        desc.innerHTML = originalDesc + separator + `<div style="color:red;">AI解读失败: ${error.message}</div>`;
+    }
 }
+
+// 重新生成分析
+window.regenerateAnalysis = async function() {
+    if (!currentPoem) return;
+    
+    const desc = document.getElementById('poemDesc');
+    let originalDesc = desc.innerHTML;
+    if (originalDesc.includes('border-top: 1px dashed #ddd')) {
+        originalDesc = originalDesc.split('<div style="border-top: 1px dashed #ddd')[0];
+    }
+    
+    const separator = '<div style="border-top: 1px dashed #ddd; margin: 20px 0;"></div>';
+    const loadingBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 正在重新思考...</div>';
+    
+    desc.innerHTML = originalDesc + separator + loadingBadge + '<div class="loading-spinner" style="margin: 20px auto;"></div>';
+    
+    try {
+        const verse = currentPoem.content.replace(/\\n/g, '\n');
+        const result = await getRealPoemInterpretation(
+            currentPoem.title, 
+            currentPoem.auth, 
+            verse, 
+            originalDesc,
+            true // force refresh
+        );
+        
+        const aiBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 深度赏析 <span onclick="window.regenerateAnalysis()" style="cursor:pointer; margin-left:10px; font-size:0.8em; opacity:0.8; border-bottom:1px solid white;" title="重新生成解读">🔄 重新生成</span></div>';
+        
+        desc.innerHTML = originalDesc + separator + aiBadge + markdownToHtml(result);
+    } catch (error) {
+        desc.innerHTML = originalDesc + separator + `<div style="color:red;">重新生成失败: ${error.message}</div>`;
+    }
+};
 
 // 导出函数供 bindEventListeners 使用
 export { 
