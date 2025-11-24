@@ -131,9 +131,9 @@ export function needsScrollableVerticalMode(poem) {
 // 处理标签（支持多种格式）
 export function parseTags(tagField) {
     let allTags = [];
-    
+
     if (!tagField) return allTags;
-    
+
     if (Array.isArray(tagField)) {
         tagField.forEach(tagItem => {
             if (typeof tagItem === 'string') {
@@ -155,44 +155,62 @@ export function parseTags(tagField) {
             allTags = tagField.split(' ').filter(t => t.trim() !== '');
         }
     }
-    
+
     return allTags;
+}
+
+// 为诗词解析所有标签
+export function parseTagsForPoem(poem) {
+    let allTags = [];
+
+    // 处理type字段
+    if (poem.type) {
+        allTags = allTags.concat(parseTags(poem.type));
+    }
+
+    // 处理tags字段
+    if (poem.tags) {
+        allTags = allTags.concat(parseTags(poem.tags));
+    }
+
+    // 去重
+    return [...new Set(allTags)];
 }
 
 // 生成标签HTML
 export function generateTagsHTML(poem) {
     let allTags = [];
-    
+
     // 处理type字段
     if (poem.type) {
         allTags = allTags.concat(parseTags(poem.type));
     }
-    
+
     // 处理tags字段
     if (poem.tags) {
         allTags = allTags.concat(parseTags(poem.tags));
     }
-    
+
     if (allTags.length === 0) return '';
-    
+
     // 去重
     const uniqueTags = [...new Set(allTags)];
-    
+
     const dynastyTags = ['先秦', '汉', '魏晋', '南北朝', '隋', '唐', '五代', '南唐', '宋', '元', '明', '清', '现代', '近现代'];
     const typeTags = ['诗经', '楚辞', '乐府', '唐诗', '宋词', '清词', '词', '蒙学'];
-    
+
     // 限制显示前5个标签
     return uniqueTags.slice(0, 5).map(tag => {
         let tagClass = 'poem-tag';
         // 在瀑布流中可能需要不同的类名，但这里保持通用，CSS可以适配
         // 注意：原版瀑布流使用的是 waterfall-tag 类，这里为了兼容性，我们可能需要调整
         // 或者在CSS中确保 poem-tag 在瀑布流中也有正确的样式
-        
+
         if (dynastyTags.includes(tag)) {
             tagClass += ' dynasty';
         } else if (typeTags.includes(tag)) {
             tagClass += ' type';
         }
-        return `<span class="${tagClass}">${tag}</span>`;
+        return `<span class="${tagClass}" onclick="window.handleTagClick && window.handleTagClick('${tag}')">${tag}</span>`;
     }).join('');
 }

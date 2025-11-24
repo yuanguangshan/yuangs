@@ -11,7 +11,8 @@ import {
     isArticle,
     generateTagsHTML,
     isLongPoem,
-    needsScrollableVerticalMode
+    needsScrollableVerticalMode,
+    parseTagsForPoem
 } from './poem-display.js?v=1.0.1';
 
 // 全局状态
@@ -19,6 +20,7 @@ let currentPoem = null;
 let allPoems = null;
 let filteredPoems = null;
 let currentDisplayMode = 'normal'; // 'normal', 'scroll'
+let currentTagFilter = null; // Current tag filter for waterfall
 
 // 初始化UI
 export async function initUI() {
@@ -85,7 +87,7 @@ function bindEventListeners() {
         refreshBtn.addEventListener('click', async () => {
             const waterfallContainer = document.getElementById('waterfallContainer');
             if (waterfallContainer && waterfallContainer.classList.contains('active')) {
-                await renderWaterfall();
+                await renderWaterfall(false, currentTagFilter);
             } else {
                 await loadRandomPoem();
             }
@@ -98,7 +100,7 @@ function bindEventListeners() {
         floatingRefreshBtn.addEventListener('click', async () => {
             const waterfallContainer = document.getElementById('waterfallContainer');
             if (waterfallContainer && waterfallContainer.classList.contains('active')) {
-                await renderWaterfall();
+                await renderWaterfall(false, currentTagFilter);
             } else {
                 await loadRandomPoem();
             }
@@ -126,7 +128,7 @@ function bindEventListeners() {
                 }
             }
             await loadRandomPoem();
-            await renderWaterfall();
+            await renderWaterfall(false, currentTagFilter);
         });
     }
     
@@ -137,7 +139,7 @@ function bindEventListeners() {
             if (authorSelect) authorSelect.value = '';
             filteredPoems = null;
             await loadRandomPoem();
-            await renderWaterfall();
+            await renderWaterfall(false, currentTagFilter);
         });
     }
     
@@ -656,17 +658,25 @@ function analyzePoemLayout(poem) {
 }
 
 // 渲染瀑布流
-async function renderWaterfall(append = false) {
+async function renderWaterfall(append = false, tagFilter = null) {
     const waterfallEl = document.getElementById('waterfallContent');
     if (!waterfallEl) {
         console.error('waterfallContent element not found!');
         return;
     }
 
-    const poemsToUse = filteredPoems || allPoems;
+    let poemsToUse = filteredPoems || allPoems;
     if (!poemsToUse || poemsToUse.length === 0) {
         console.error('No poems available for waterfall');
         return;
+    }
+
+    // Apply tag filter if specified
+    if (tagFilter) {
+        poemsToUse = poemsToUse.filter(poem => {
+            const allTags = parseTagsForPoem(poem);
+            return allTags.includes(tagFilter);
+        });
     }
 
     // Only clear if not appending
@@ -900,13 +910,16 @@ function toggleLayout() {
         }
 
         layoutToggle.textContent = '瀑布流';
+        // Clear the tag filter when switching back to default view
+        currentTagFilter = null;
     } else {
         // 切换到瀑布流布局
         poemContent.style.display = 'none';
         if (poemDescContent) poemDescContent.style.display = 'none';
         waterfallContainer.classList.add('active');
         layoutToggle.textContent = '默认布局';
-        renderWaterfall(); // 生成瀑布流内容
+        // Use the current tag filter if one exists, otherwise render all poems
+        renderWaterfall(false, currentTagFilter);
     }
 }
 
@@ -948,6 +961,37 @@ function switchTheme(themeName) {
         themeMenu.classList.remove('active');
     }
 }
+
+// Handle tag click - show all poems with this tag in waterfall view
+function handleTagClick(tag) {
+    console.log('Tag clicked:', tag);
+
+    // Set the current tag filter
+    currentTagFilter = tag;
+
+    // Switch to waterfall view if not already in it
+    const poemContent = document.querySelector('.poem-content');
+    const poemDescContent = document.getElementById('poemDescContent');
+    const waterfallContainer = document.getElementById('waterfallContainer');
+    const layoutToggle = document.getElementById('layoutToggle');
+
+    if (!poemContent || !waterfallContainer || !layoutToggle) {
+        console.error('Required elements not found!');
+        return;
+    }
+
+    // Ensure we're in waterfall view
+    poemContent.style.display = 'none';
+    if (poemDescContent) poemDescContent.style.display = 'none';
+    waterfallContainer.classList.add('active');
+    layoutToggle.textContent = '默认布局';
+
+    // Render waterfall with the tag filter
+    renderWaterfall(false, tag);
+}
+
+// Make handleTagClick available globally
+window.handleTagClick = handleTagClick;
 
 // Show author's works
 function showAuthorWorks(authorName, poems) {
