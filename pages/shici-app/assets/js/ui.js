@@ -860,7 +860,7 @@ function setupInfiniteScroll() {
                 // Add a small delay to avoid triggering multiple times
                 setTimeout(async () => {
                     try {
-                        await renderWaterfall(true); // Append more poems
+                        await renderWaterfall(true, currentTagFilter); // Append more poems with current tag filter
                     } catch (error) {
                         console.error('Error loading more poems:', error);
                     } finally {
@@ -917,7 +917,7 @@ function updateWaterfallSentinel() {
 
                 setTimeout(async () => {
                     try {
-                        await renderWaterfall(true); // Append more poems
+                        await renderWaterfall(true, currentTagFilter); // Append more poems with current tag filter
                     } catch (error) {
                         console.error('Error loading more poems:', error);
                     } finally {
