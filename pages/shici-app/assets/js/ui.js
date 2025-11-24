@@ -518,13 +518,19 @@ function displayPoem(poem) {
         descEl.innerHTML = poem.desc || '暂无赏析';
     }
 
-    // 加载诗词配图
-    loadPoemImage();
-
-    // 显示内容
+    // 显示内容 - including image section initially
     document.getElementById('poemTextContent').style.display = 'block';
     document.getElementById('poemDescContent').style.display = 'block';
     document.getElementById('loading').style.display = 'none';
+
+    // Ensure image section is initially visible before attempting to load image
+    const imageSection = document.querySelector('.image-section');
+    if (imageSection) {
+        imageSection.style.display = 'flex';
+    }
+
+    // 加载诗词配图
+    loadPoemImage();
 
     // Add to history and update favorite status
     if (poem) {
@@ -570,13 +576,25 @@ function loadPoemImage() {
 
     // Function to handle the case when all image sources fail
     function handleImageFailure() {
-        console.warn("All image loading attempts failed, displaying content without image");
+        console.warn("All image loading attempts failed, hiding image section");
+
+        // Hide the image section
+        const imageSection = document.querySelector('.image-section');
+        if (imageSection) {
+            imageSection.style.display = 'none';
+        }
     }
 
     // Set up image event handlers
     img.onload = function () {
         // Add loaded image to cache
         addToImageCache(img.src);
+
+        // Ensure the image section is visible when image loads successfully
+        const imageSection = document.querySelector('.image-section');
+        if (imageSection) {
+            imageSection.style.display = 'flex'; // or 'block' depending on the layout
+        }
     };
 
     img.onerror = function () {
@@ -691,7 +709,6 @@ async function renderWaterfall(append = false, tagFilter = null) {
     randomPoems.forEach((poem, index) => {
         const card = document.createElement('div');
         card.className = 'waterfall-card';
-        card.onclick = () => showPoemDetail(poem);
 
         // Analyze layout for the poem (从原版获取的analyzePoemLayout逻辑)
         const layoutInfo = analyzePoemLayout(poem);
