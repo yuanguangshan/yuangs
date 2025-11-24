@@ -18,6 +18,7 @@ import {
 let currentPoem = null;
 let allPoems = null;
 let filteredPoems = null;
+let currentDisplayMode = 'normal'; // 'normal', 'scroll'
 
 // 初始化UI
 export async function initUI() {
@@ -358,7 +359,6 @@ function bindEventListeners() {
 
     // Add the scroll mode toggle functionality
     const scrollModeToggle = document.getElementById('scrollModeToggle');
-    let currentDisplayMode = 'normal'; // 'normal', 'vertical', 'scroll' (for old style)
 
     scrollModeToggle?.addEventListener('click', function () {
         toggleScrollMode();
