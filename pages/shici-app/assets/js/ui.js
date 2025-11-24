@@ -772,13 +772,10 @@ function updateWaterfallSentinel() {
 
 // 切换布局模式
 function toggleLayout() {
-    console.log('toggleLayout called');
     const poemContent = document.querySelector('.poem-content');
     const poemDescContent = document.getElementById('poemDescContent');
     const waterfallContainer = document.getElementById('waterfallContainer');
     const layoutToggle = document.getElementById('layoutToggle');
-
-    console.log('Elements:', { poemContent, poemDescContent, waterfallContainer, layoutToggle });
 
     if (!poemContent || !waterfallContainer || !layoutToggle) {
         console.error('Required elements not found!');
@@ -787,7 +784,6 @@ function toggleLayout() {
 
     if (waterfallContainer.classList.contains('active')) {
         // 切换到默认布局
-        console.log('Switching to default layout');
         poemContent.style.display = 'flex';
         if (poemDescContent) poemDescContent.style.display = 'block';
         waterfallContainer.classList.remove('active');
@@ -801,7 +797,6 @@ function toggleLayout() {
         layoutToggle.textContent = '瀑布流';
     } else {
         // 切换到瀑布流布局
-        console.log('Switching to waterfall layout');
         poemContent.style.display = 'none';
         if (poemDescContent) poemDescContent.style.display = 'none';
         waterfallContainer.classList.add('active');
