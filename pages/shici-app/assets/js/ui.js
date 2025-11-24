@@ -112,8 +112,17 @@ function bindEventListeners() {
             if (selectedAuthor) {
                 filteredPoems = allPoems.filter(p => p.auth === selectedAuthor);
                 console.log(`Filtered ${filteredPoems.length} poems by ${selectedAuthor}`);
+
+                // Show author's works
+                showAuthorWorks(selectedAuthor, filteredPoems);
             } else {
                 filteredPoems = null;
+
+                // Hide author works section
+                const authorWorksSection = document.getElementById('authorWorksSection');
+                if (authorWorksSection) {
+                    authorWorksSection.style.display = 'none';
+                }
             }
             await loadRandomPoem();
             await renderWaterfall();
@@ -143,12 +152,6 @@ function bindEventListeners() {
         layoutToggle.addEventListener('click', toggleLayout);
     }
     
-    // 主题切换
-    const themeToggle = document.getElementById('themeToggle');
-    if (themeToggle) {
-        themeToggle.addEventListener('click', toggleTheme);
-    }
-
     // Theme menu toggle functionality (click outside handling)
     const darkModeToggle = document.getElementById('darkModeToggle');
     if (darkModeToggle) {
@@ -820,10 +823,6 @@ function toggleLayout() {
 // 切换主题
 function toggleTheme() {
     document.body.classList.toggle('dark-mode');
-    const themeToggle = document.getElementById('themeToggle');
-    if (themeToggle) {
-        themeToggle.textContent = document.body.classList.contains('dark-mode') ? '☀️' : '🌙';
-    }
 }
 
 // Theme switching function
@@ -853,20 +852,73 @@ function switchTheme(themeName) {
             break;
     }
 
-    // Update the theme toggle button
-    const themeToggle = document.getElementById('themeToggle');
-    if (themeToggle) {
-        if (document.body.classList.contains('dark-mode')) {
-            themeToggle.textContent = '☀️';
-        } else {
-            themeToggle.textContent = '🌙';
-        }
-    }
-
     // Close the theme menu
     const themeMenu = document.getElementById('themeMenu');
     if (themeMenu) {
         themeMenu.classList.remove('active');
+    }
+}
+
+// Show author's works
+function showAuthorWorks(authorName, poems) {
+    const authorWorksSection = document.getElementById('authorWorksSection');
+    const authorWorksTitle = document.getElementById('authorWorksTitle');
+    const authorWorksList = document.getElementById('authorWorksList');
+
+    if (!authorWorksSection || !authorWorksTitle || !authorWorksList) {
+        return;
+    }
+
+    if (poems && poems.length > 0) {
+        // Set title
+        authorWorksTitle.textContent = `${authorName} 的作品 (${poems.length} 首)`;
+
+        // Clear previous list
+        authorWorksList.innerHTML = '';
+
+        // Create work items (limit to first 20 to avoid too many)
+        const worksToShow = poems.slice(0, 20);
+        worksToShow.forEach(poem => {
+            const workItem = document.createElement('button');
+            workItem.className = 'author-work-item';
+            workItem.textContent = poem.title;
+            workItem.style.cssText = `
+                padding: 8px 16px;
+                border: 1px solid var(--border-color);
+                background: var(--bg-lighter);
+                border-radius: 20px;
+                cursor: pointer;
+                font-size: 0.9rem;
+                transition: all 0.3s ease;
+                white-space: nowrap;
+            `;
+
+            workItem.addEventListener('click', () => {
+                // Display the selected poem
+                currentPoem = poem;
+                displayPoem(poem);
+            });
+
+            workItem.addEventListener('mouseover', () => {
+                workItem.style.background = 'var(--xhs-pink-lighter)';
+                workItem.style.color = 'white';
+                workItem.style.borderColor = 'var(--xhs-pink)';
+            });
+
+            workItem.addEventListener('mouseout', () => {
+                workItem.style.background = 'var(--bg-lighter)';
+                workItem.style.color = '';
+                workItem.style.borderColor = 'var(--border-color)';
+            });
+
+            authorWorksList.appendChild(workItem);
+        });
+
+        // Show the section
+        authorWorksSection.style.display = 'block';
+    } else {
+        // Hide the section if no poems found
+        authorWorksSection.style.display = 'none';
     }
 }
 
