@@ -370,6 +370,7 @@ function bindEventListeners() {
 // Toggle scroll mode functionality
 function toggleScrollMode() {
     const verseElement = document.getElementById('poemVerse');
+    const scrollModeToggle = document.getElementById('scrollModeToggle');
     if (!verseElement || !currentPoem) return;
 
     // Remove all display mode classes
@@ -379,7 +380,12 @@ function toggleScrollMode() {
         // Switch to vertical-scroll mode
         currentDisplayMode = 'scroll';
         verseElement.classList.add('vertical-scroll-mode');
-        
+
+        // Update scroll mode button text
+        if (scrollModeToggle) {
+            scrollModeToggle.innerHTML = '<span>📜</span> 退出卷轴';
+        }
+
         // Create a properly formatted scroll layout that preserves the poem's meaning
         // Split content by lines first (if it has line breaks)
         let contentLines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
@@ -405,6 +411,11 @@ function toggleScrollMode() {
     } else {
         // Switch back to normal mode - use displayPoem to ensure all elements are updated
         currentDisplayMode = 'normal';
+
+        // Update scroll mode button text back to default
+        if (scrollModeToggle) {
+            scrollModeToggle.innerHTML = '<span>📜</span> 卷轴模式';
+        }
 
         // Call displayPoem to ensure title, author, and content are all synchronized
         displayPoem(currentPoem);
