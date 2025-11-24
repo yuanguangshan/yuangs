@@ -371,16 +371,27 @@ function toggleScrollMode() {
     if (!verseElement || !currentPoem) return;
 
     // Remove all display mode classes
-    verseElement.classList.remove('vertical-mode', 'horizontal-mode', 'vertical-scroll-mode');
+    verseElement.classList.remove('vertical-mode', 'horizontal-mode', 'vertical-scroll-mode', 'article-mode');
 
     if (currentDisplayMode === 'normal') {
         // Switch to vertical-scroll mode
         currentDisplayMode = 'scroll';
         verseElement.classList.add('vertical-scroll-mode');
-        // Format content for scroll mode
-        const lines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
-        const formattedContent = lines.map(line => `<span>${line}</span>`).join('');
-        verseElement.innerHTML = formattedContent;
+        
+        // Try to split by the literal \n characters in the data
+        let lines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
+        
+        // If still only 1 line, try splitting by punctuation
+        if (lines.length === 1) {
+            const content = lines[0];
+            lines = content.split(/[。！？]/).filter(line => line.trim() !== '');
+        }
+        
+        // Join lines with spaces, let CSS handle the vertical layout
+        const content = lines.map(line => line.trim()).join('　　');
+        verseElement.textContent = content;
+        
+        console.log('Scroll mode activated, lines:', lines.length);
     } else {
         // Switch back to normal mode
         currentDisplayMode = 'normal';
@@ -404,6 +415,8 @@ function toggleScrollMode() {
             }
             verseElement.innerHTML = processedContent;
         }
+        
+        console.log('Normal mode restored');
     }
 }
 
