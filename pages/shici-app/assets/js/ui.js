@@ -278,48 +278,6 @@ function bindEventListeners() {
         if (aboutSection) aboutSection.style.display = 'block';
     });
 
-    // History functionality
-    const HISTORY_KEY = 'poem_history';
-    const MAX_HISTORY = 50; // Store max 50 history items
-
-    // Add poem to history
-    window.addToHistory = function(poem) {
-        if (!poem || !poem.title || !poem.auth) return;
-
-        const history = getHistoryFromStorage();
-        const newEntry = {
-            title: poem.title,
-            author: poem.auth,
-            source: poem.source || 'poem'
-        };
-
-        // Remove any existing entry with same title and author
-        const filteredHistory = history.filter(item =>
-            !(item.title === newEntry.title && item.author === newEntry.author)
-        );
-
-        // Add new entry to the beginning
-        filteredHistory.unshift(newEntry);
-
-        // Keep only the most recent MAX_HISTORY entries
-        if (filteredHistory.length > MAX_HISTORY) {
-            filteredHistory.splice(MAX_HISTORY);
-        }
-
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(filteredHistory));
-    }
-
-    // Get history from storage
-    function getHistoryFromStorage() {
-        try {
-            const history = localStorage.getItem(HISTORY_KEY);
-            return history ? JSON.parse(history) : [];
-        } catch (e) {
-            console.error('Error reading history from localStorage:', e);
-            return [];
-        }
-    }
-
     // Load and display history list
     function loadHistoryList() {
         const history = getHistoryFromStorage();
@@ -347,7 +305,6 @@ function bindEventListeners() {
             });
         }
     }
-
 
     // Load and display favorites list
     function loadFavoritesList() {
@@ -395,7 +352,6 @@ function bindEventListeners() {
             alert('未找到该诗词');
         }
     }
-
 
     // Add the scroll mode toggle functionality
     const scrollModeToggle = document.getElementById('scrollModeToggle');
