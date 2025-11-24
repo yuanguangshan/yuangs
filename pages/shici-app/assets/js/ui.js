@@ -378,19 +378,20 @@ function toggleScrollMode() {
         currentDisplayMode = 'scroll';
         verseElement.classList.add('vertical-scroll-mode');
         
-        // Try to split by the literal \n characters in the data
+        // Split content into lines
         let lines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
-        
-        // If still only 1 line, try splitting by punctuation
         if (lines.length === 1) {
             const content = lines[0];
             lines = content.split(/[。！？]/).filter(line => line.trim() !== '');
         }
         
-        // Join lines with spaces, let CSS handle the vertical layout
-        const content = lines.map(line => line.trim()).join('　　');
-        verseElement.textContent = content;
+        // Create a column div for each line
+        const formattedContent = lines.map(line => {
+            const clean = line.trim().replace(/[。！？]$/g, '');
+            return `<div class="scroll-column">${clean}</div>`;
+        }).join('');
         
+        verseElement.innerHTML = formattedContent;
         console.log('Scroll mode activated, lines:', lines.length);
     } else {
         // Switch back to normal mode
@@ -403,11 +404,9 @@ function toggleScrollMode() {
             verseElement.classList.add('article-mode');
             verseElement.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content);
         } else {
-            // Process content and count lines
             const processedContent = insertLineBreaksAtPunctuation(currentPoem.content);
             const brCount = (processedContent.match(/<br>/g) || []).length;
             const lineCount = brCount + 1;
-            
             if (lineCount > 6) {
                 verseElement.classList.add('horizontal-mode');
             } else {
@@ -415,7 +414,6 @@ function toggleScrollMode() {
             }
             verseElement.innerHTML = processedContent;
         }
-        
         console.log('Normal mode restored');
     }
 }
