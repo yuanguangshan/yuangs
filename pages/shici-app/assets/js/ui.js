@@ -1,7 +1,7 @@
 // ui.js - UI交互逻辑模块
 // 处理用户交互、DOM操作和事件监听
 
-import { CONFIG, getRandomColor } from './config.js?v=1.0.1';
+import { CONFIG, getRandomColor, getRandomImageUrl, addToImageCache, getRandomCachedImage } from './config.js?v=1.0.1';
 import { AUTHOR_DATA, getDynastyByAuthorName } from './author-data.js?v=1.0.1';
 import { fetchAndCachePoems, getRandomPoem, getRandomPoems } from './data-loader.js?v=1.0.1';
 import {
@@ -516,6 +516,9 @@ function displayPoem(poem) {
         descEl.innerHTML = poem.desc || '暂无赏析';
     }
 
+    // 加载诗词配图
+    loadPoemImage();
+
     // 显示内容
     document.getElementById('poemTextContent').style.display = 'block';
     document.getElementById('poemDescContent').style.display = 'block';
@@ -526,6 +529,83 @@ function displayPoem(poem) {
         window.addToHistory(poem);
         updateFavoriteButton();
     }
+}
+
+// 加载诗词配图
+function loadPoemImage() {
+    const img = document.getElementById('poemImage');
+    if (!img) return;
+
+    let currentFallback = 1;
+    const maxFallbacks = 6; // Primary + 4 fallbacks + 1 local fallback
+    let timeoutId;
+
+    // Function to try loading next fallback image
+    function tryNextFallback() {
+        if (currentFallback < maxFallbacks) {
+            currentFallback++;
+            // Clear previous timeout
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+            // Set a new timeout for this fallback
+            timeoutId = setTimeout(() => {
+                // console.log(`Image loading timeout for fallback ${currentFallback}, trying next...`);
+                if (currentFallback < maxFallbacks) {
+                    tryNextFallback();
+                } else {
+                    // All fallbacks exhausted, handle failure
+                    handleImageFailure();
+                }
+            }, 15000); // 15 seconds timeout for each fallback
+
+            img.src = getRandomImageUrl(currentFallback);
+        } else {
+            // All fallbacks exhausted, handle failure
+            handleImageFailure();
+        }
+    }
+
+    // Function to handle the case when all image sources fail
+    function handleImageFailure() {
+        console.warn("All image loading attempts failed, displaying content without image");
+    }
+
+    // Set up image event handlers
+    img.onload = function () {
+        // Add loaded image to cache
+        addToImageCache(img.src);
+    };
+
+    img.onerror = function () {
+        console.log(`Image loading error for fallback ${currentFallback}, trying next...`);
+        // If we have cached images, try using one as a fallback
+        const cachedImage = getRandomCachedImage();
+        if (cachedImage && currentFallback >= maxFallbacks - 1) { // Only try cached on last attempt
+            // console.log(`Using cached image as final fallback: ${cachedImage}`);
+            img.src = cachedImage;
+            return; // Don't try next fallback, try the cached image instead
+        }
+        // Try next fallback image
+        tryNextFallback();
+    };
+
+    // Set the new image source with primary URL
+    img.src = getRandomImageUrl(currentFallback);
+
+    // Set timeout for primary image
+    timeoutId = setTimeout(() => {
+        console.log(`Image loading timeout for fallback ${currentFallback}, trying next...`);
+        // Try cached image if available before showing content without image
+        const cachedImage = getRandomCachedImage();
+        if (cachedImage) {
+            // console.log(`Using cached image as final fallback due to timeout: ${cachedImage}`);
+            img.src = cachedImage;
+        } else {
+            // Try next fallback
+            tryNextFallback();
+        }
+    }, 5000); // 5 seconds timeout for primary image
 }
 
 // Analyze poem layout (从原版移植)

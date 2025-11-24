@@ -68,3 +68,56 @@ export function getRandomColor() {
     const palette = COLOR_PALETTES[Math.floor(Math.random() * COLOR_PALETTES.length)];
     return palette[Math.floor(Math.random() * palette.length)];
 }
+
+// 图片缓存，存储最近20张图片
+let imageCache = [];
+const MAX_CACHE_SIZE = 20;
+
+// 获取随机图片URL的函数
+export function getRandomImageUrl(fallbackNum = 1) {
+    const timestamp = Date.now();
+    switch (fallbackNum) {
+        case 1:
+            // 主要来源：picsum带随机种子
+            return `https://picsum.photos/seed/${timestamp}/400/300`;
+        case 2:
+            // 备选1：picsum无种子（随机图片）
+            return `https://picsum.photos/400/300?random=${timestamp}`;
+        case 3:
+            // 备选2：Unsplash来源带随机种子
+            return `https://source.unsplash.com/400x300/?nature,random&ts=${timestamp}`;
+        case 4:
+            // 备选3：Pexel来源带随机种子
+            return `https://images.pexels.com/photos/3225517/pexels-photo-3225517.jpeg?auto=compress&cs=tinysrgb&dpr=1&w=400&h=300&ts=${timestamp}`;
+        case 5:
+            // 本地备选：base64编码的占位图片
+            return `data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjY2NjIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzY2NiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkPDpXNpIFBvaWN0cnkgUGxhY2Vob2xkZXI8L3RleHQ+PC9zdmc+`;
+        default:
+            // 最后备选：简单占位符
+            return `https://placehold.co/400x300/cccccc/666666?text=诗词配图`;
+    }
+}
+
+// 将图片添加到缓存
+export function addToImageCache(imgUrl) {
+    // 检查图片是否已在缓存中
+    const existingIndex = imageCache.indexOf(imgUrl);
+    if (existingIndex !== -1) {
+        // 如果已存在，移至最前面
+        imageCache.splice(existingIndex, 1);
+    } else if (imageCache.length >= MAX_CACHE_SIZE) {
+        // 如果缓存已满，移除最旧的项
+        imageCache.pop();
+    }
+    // 添加到缓存开头
+    imageCache.unshift(imgUrl);
+}
+
+// 获取随机缓存图片
+export function getRandomCachedImage() {
+    if (imageCache.length === 0) {
+        return null;
+    }
+    // 从缓存中返回随机图片
+    return imageCache[Math.floor(Math.random() * imageCache.length)];
+}
