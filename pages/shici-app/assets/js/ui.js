@@ -655,6 +655,10 @@ async function renderWaterfall(append = false) {
     if (!append) {
         setupInfiniteScroll();
     }
+
+    // Update sentinel element for intersection observer
+    // Update sentinel both on initial load and when appending to ensure it's at the end
+    updateWaterfallSentinel();
 }
 
 // Setup infinite scroll for waterfall mode
@@ -663,6 +667,7 @@ function setupInfiniteScroll() {
     const waterfallContent = document.getElementById('waterfallContent');
 
     if (!waterfallContainer || !waterfallContent) {
+        console.log('Waterfall elements not found for infinite scroll');
         return;
     }
 
@@ -673,28 +678,42 @@ function setupInfiniteScroll() {
 
     // Create scroll handler
     window.waterfallScrollHandler = function() {
+        // Check if waterfall is active
         if (!waterfallContainer.classList.contains('active')) {
+            console.log('Waterfall not active, removing scroll listener');
             // Remove listener if waterfall is not active
             window.removeEventListener('scroll', window.waterfallScrollHandler, true);
             return;
         }
 
-        // Calculate if we're near the bottom
+        // Calculate if we're near the bottom of the page
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
         const windowHeight = window.innerHeight;
         const documentHeight = document.documentElement.scrollHeight;
 
-        // Trigger loading when we're within 200px of the bottom
-        if (scrollTop + windowHeight >= documentHeight - 200) {
+        // More reliable way to detect when near bottom
+        const scrollBottom = scrollTop + windowHeight;
+
+        console.log(`Scroll: ${scrollTop}, Window: ${windowHeight}, Document: ${documentHeight}, Bottom: ${scrollBottom}`);
+
+        // Trigger loading when we're within 100px of the bottom
+        if (scrollBottom >= documentHeight - 100) {
+            console.log('Near bottom detected');
             // Prevent multiple simultaneous loads
             if (!window.isLoadingMorePoems) {
                 window.isLoadingMorePoems = true;
+                console.log('Loading more poems for infinite scroll...');
 
                 // Add a small delay to avoid triggering multiple times
                 setTimeout(async () => {
-                    console.log('Loading more poems for infinite scroll...');
-                    await renderWaterfall(true); // Append more poems
-                    window.isLoadingMorePoems = false;
+                    try {
+                        await renderWaterfall(true); // Append more poems
+                        console.log('Additional poems loaded');
+                    } catch (error) {
+                        console.error('Error loading more poems:', error);
+                    } finally {
+                        window.isLoadingMorePoems = false;
+                    }
                 }, 300);
             }
         }
@@ -702,6 +721,68 @@ function setupInfiniteScroll() {
 
     // Add scroll listener
     window.addEventListener('scroll', window.waterfallScrollHandler, true);
+    console.log('Infinite scroll listener added');
+
+    // Additionally, check if we need to load more immediately (if content is short)
+    setTimeout(() => {
+        const windowHeight = window.innerHeight;
+        const documentHeight = document.documentElement.scrollHeight;
+        if (windowHeight >= documentHeight) {
+            console.log('Page height is less than window, triggering scroll listener');
+            if (window.waterfallScrollHandler) {
+                window.waterfallScrollHandler();
+            }
+        }
+    }, 500); // Delay to let content render
+}
+
+// Update sentinel element for detecting when user scrolls near bottom
+function updateWaterfallSentinel() {
+    const waterfallEl = document.getElementById('waterfallContent');
+    if (!waterfallEl) return;
+
+    // Remove existing sentinel if it exists
+    const existingSentinel = document.getElementById('waterfall-sentinel');
+    if (existingSentinel) {
+        existingSentinel.remove();
+    }
+
+    // Create sentinel element
+    const sentinel = document.createElement('div');
+    sentinel.id = 'waterfall-sentinel';
+    sentinel.style.height = '10px';
+    sentinel.style.width = '100%';
+    sentinel.textContent = ''; // No visible content
+    waterfallEl.appendChild(sentinel);
+
+    // Set up intersection observer to detect when sentinel comes into view
+    if (window.waterfallObserver) {
+        window.waterfallObserver.disconnect();
+    }
+
+    window.waterfallObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting && !window.isLoadingMorePoems) {
+                console.log('Sentinel intersecting - loading more poems');
+                window.isLoadingMorePoems = true;
+
+                setTimeout(async () => {
+                    try {
+                        await renderWaterfall(true); // Append more poems
+                        console.log('Additional poems loaded via sentinel');
+                    } catch (error) {
+                        console.error('Error loading more poems:', error);
+                    } finally {
+                        window.isLoadingMorePoems = false;
+                    }
+                }, 300);
+            }
+        });
+    }, {
+        rootMargin: '100px' // Trigger 100px before sentinel is visible
+    });
+
+    window.waterfallObserver.observe(sentinel);
 }
 
 // 切换布局模式
@@ -711,20 +792,27 @@ function toggleLayout() {
     const poemDescContent = document.getElementById('poemDescContent');
     const waterfallContainer = document.getElementById('waterfallContainer');
     const layoutToggle = document.getElementById('layoutToggle');
-    
+
     console.log('Elements:', { poemContent, poemDescContent, waterfallContainer, layoutToggle });
-    
+
     if (!poemContent || !waterfallContainer || !layoutToggle) {
         console.error('Required elements not found!');
         return;
     }
-    
+
     if (waterfallContainer.classList.contains('active')) {
         // 切换到默认布局
         console.log('Switching to default layout');
         poemContent.style.display = 'flex';
         if (poemDescContent) poemDescContent.style.display = 'block';
         waterfallContainer.classList.remove('active');
+
+        // Clean up waterfall observers when switching away
+        if (window.waterfallObserver) {
+            window.waterfallObserver.disconnect();
+            window.waterfallObserver = null;
+        }
+
         layoutToggle.textContent = '瀑布流';
     } else {
         // 切换到瀑布流布局
