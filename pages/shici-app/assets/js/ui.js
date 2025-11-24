@@ -392,6 +392,8 @@ function toggleScrollMode() {
         }).join('');
         
         verseElement.innerHTML = formattedContent;
+        // Ensure scroll starts at the leftmost side
+        verseElement.scrollLeft = 0;
         console.log('Scroll mode activated, lines:', lines.length);
     } else {
         // Switch back to normal mode
