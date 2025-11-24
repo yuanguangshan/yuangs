@@ -202,13 +202,12 @@ function bindEventListeners() {
         aiInterpretBtn.addEventListener('click', showAIInterpretation);
     }
     
-    // 详情页布局切换（卷轴模式）
-    const scrollModeToggleBtn = document.getElementById('scrollModeToggleBtn');
-    if (scrollModeToggleBtn) {
-        scrollModeToggleBtn.addEventListener('click', function() {
+    // 详情页布局切换（卷轴模式）- 使用事件委托以处理动态内容
+    document.addEventListener('click', function(e) {
+        if (e.target && e.target.id === 'scrollModeToggleBtn') {
             toggleScrollMode();
-        });
-    }
+        }
+    });
     
     // 收藏按钮
     const favoriteToggleBtn = document.getElementById('favoriteToggleBtn');
