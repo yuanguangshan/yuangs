@@ -457,22 +457,17 @@ function displayPoem(poem) {
             const lines = poem.content.split('\\n').filter(line => line.trim() !== '');
             const lineCount = lines.length;
 
-            // For poems with 6 or more lines, use horizontal layout
-            if (lineCount >= 6) {
-                // Use horizontal layout for poems with 6 or more lines
+            // For poems with more than 6 lines, use horizontal layout
+            if (lineCount > 6) {
+                // Use horizontal layout for poems with more than 6 lines
                 verseEl.classList.add('horizontal-mode');
                 verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
                 if (layoutToggleBtn) {
                     layoutToggleBtn.style.display = 'inline-block'; // 長詩也可以顯示切換佈局按鈕
                     layoutToggleBtn.textContent = '📜'; // For horizontal layout, show the vertical layout icon
                 }
-            } else if (lineCount === 4) {
-                // For 4 lines, use vertical layout with special class for wider spacing
-                verseEl.classList.add('vertical-mode', 'vertical-mode-wider');
-                verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
-                if (layoutToggleBtn) layoutToggleBtn.style.display = 'inline-block'; // 诗词显示切换按钮
             } else {
-                // For poems with fewer than 6 lines (1-5), use default vertical layout
+                // For poems with 6 or fewer lines, use default vertical layout
                 verseEl.classList.add('vertical-mode');
                 verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
                 if (layoutToggleBtn) layoutToggleBtn.style.display = 'inline-block'; // 诗词显示切换按钮
