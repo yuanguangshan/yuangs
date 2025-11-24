@@ -226,20 +226,55 @@ async function renderWaterfall() {
     randomPoems.forEach((poem, index) => {
         const card = document.createElement('div');
         card.className = 'waterfall-card';
-        card.style.animationDelay = `${index * 0.1}s`;
+        card.onclick = () => showPoemDetail(poem);
         
+        // Analyze layout for the poem (从原版获取的analyzePoemLayout逻辑)
+        const layoutInfo = analyzePoemLayout(poem);
+        
+        // Generate lines HTML
+        let linesHtml = '';
+        layoutInfo.lines.forEach(line => {
+            if (line) linesHtml += `<div class="poem-line">${line}</div>`;
+        });
+        
+        // Random background color
+        const backgroundColor = getRandomColor();
+        
+        let title = poem.title;
+        if (title.length > 15) {
+            title = title.substring(0, 15) + '...';
+        }
+        
+        let author = layoutInfo.author;
+        if (author.length > 8) {
+            author = author.substring(0, 8) + '...';
+        }
+        
+        // Determine the appropriate seal based on poem type
         const sealText = poem.source === 'ci' ? '词' : '诗';
-        const color = getRandomColor();
         
+        // Generate tags HTML
         const tagsHTML = generateTagsHTML(poem);
         
+        // 使用原版的HTML结构和类名
         card.innerHTML = `
-            <div class="card-seal" style="background-color: ${color}">${sealText}</div>
-            <h3 class="card-title" style="color: ${color}">${poem.title || '无题'}</h3>
-            <p class="card-author">${getDynastyByAuthorName(poem.auth)} · ${poem.auth || '佚名'}</p>
-            <div class="card-content">${insertLineBreaksAtPunctuation(poem.content).substring(0, 150)}...</div>
-            <div class="card-tags">${tagsHTML}</div>
-        `;
+            <div class="color-block-container">
+              <div class="color-block" style="background-color: ${backgroundColor};">
+                 <!-- This class changes based on mode dynamically -->
+                 <div class="overlay-text layout-${layoutInfo.mode}">
+                   ${linesHtml}
+                 </div>
+
+                 <!-- Add seal decoration for aesthetic enhancement (with type-specific character) -->
+                 <div class="seal-decoration">${sealText}</div>
+              </div>
+            </div>
+            <div class="waterfall-content-section">
+              <div class="waterfall-tags">${tagsHTML}</div>
+              <h3 class="waterfall-title">${title}</h3>
+              <p class="waterfall-author">${author}</p>
+            </div>
+          `;
         
         card.addEventListener('click', () => {
             currentPoem = poem;
@@ -251,11 +286,11 @@ async function renderWaterfall() {
             const layoutToggle = document.getElementById('layoutToggle');
             if (poemContent && waterfallContainer && layoutToggle) {
                 poemContent.style.display = 'flex';
+                const poemDescContent = document.getElementById('poemDescContent');
+                if (poemDescContent) poemDescContent.style.display = 'block';
                 waterfallContainer.classList.remove('active');
                 layoutToggle.textContent = '瀑布流';
             }
-            
-            window.scrollTo({ top: 0, behavior: 'smooth' });
         });
         
         waterfallEl.appendChild(card);
