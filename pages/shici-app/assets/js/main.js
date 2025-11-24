@@ -1,7 +1,9 @@
 // main.js - 应用主入口
 // 初始化应用并协调各模块
 
-import { initUI } from './ui.js';
+import { CONFIG } from './config.js?v=1.0.1';
+import { initUI } from './ui.js?v=1.0.1';
+import { fetchAndCachePoems } from './data-loader.js?v=1.0.1';
 
 // 应用初始化
 async function init() {

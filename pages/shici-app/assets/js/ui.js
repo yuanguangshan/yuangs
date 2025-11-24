@@ -1,16 +1,16 @@
 // ui.js - UI交互逻辑模块
 // 处理用户交互、DOM操作和事件监听
 
-import { CONFIG, getRandomColor } from './config.js';
-import { AUTHOR_DATA, getDynastyByAuthorName } from './author-data.js';
-import { fetchAndCachePoems, getRandomPoem, getRandomPoems } from './data-loader.js';
+import { CONFIG, getRandomColor } from './config.js?v=1.0.1';
+import { AUTHOR_DATA, getDynastyByAuthorName } from './author-data.js?v=1.0.1';
+import { fetchAndCachePoems, getRandomPoem, getRandomPoems } from './data-loader.js?v=1.0.1';
 import { 
     insertLineBreaksAtPunctuation, 
     isRegularPoem, 
     formatCoupletPoem, 
     isArticle, 
     generateTagsHTML 
-} from './poem-display.js';
+} from './poem-display.js?v=1.0.1';
 
 // 全局状态
 let currentPoem = null;
@@ -250,7 +250,7 @@ function analyzePoemLayout(poem) {
 
 // 渲染瀑布流
 async function renderWaterfall() {
-    console.log('renderWaterfall called');
+    console.log('renderWaterfall called - v20251124-2010'); // Version timestamp
     const waterfallEl = document.getElementById('waterfallContent');
     console.log('waterfallContent element:', waterfallEl);
     if (!waterfallEl) {
@@ -269,6 +269,7 @@ async function renderWaterfall() {
     
     const randomPoems = getRandomPoems(poemsToUse, CONFIG.WATERFALL_COUNT);
     console.log('Generated random poems:', randomPoems.length);
+    console.log('Random poems content:', randomPoems.map(p => `${p.title} - ${p.auth}`)); // Log titles and authors
     
     randomPoems.forEach((poem, index) => {
         const card = document.createElement('div');
