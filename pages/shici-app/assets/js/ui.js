@@ -203,7 +203,7 @@ function displayPoem(poem) {
 
 // Analyze poem layout (从原版移植)
 function analyzePoemLayout(poem) {
-    const content = poem.content.replace(/\s+/g, ''); // Remove whitespace
+    const content = poem.content.replace(/\\n/g, '').replace(/\s+/g, ''); // Remove literal \n and whitespace
     const sentences = content.split(/[。！？!?]/).filter(s => s.trim() !== '');
 
     // 1. Check if it's a 5-character or 7-character regulated verse (整齐的格律)
