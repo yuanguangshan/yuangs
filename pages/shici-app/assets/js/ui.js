@@ -438,6 +438,10 @@ function displayPoem(poem) {
     if (authorEl) {
         const dynasty = getDynastyByAuthorName(poem.auth);
         authorEl.textContent = `${dynasty} · ${poem.auth || '佚名'}`;
+        
+        // 添加点击事件显示作者信息
+        authorEl.style.cursor = 'pointer';
+        authorEl.onclick = () => showAuthorInfo(poem.auth);
     }
 
     // 内容
@@ -862,46 +866,32 @@ function showAuthorWorks(authorName, poems) {
         return;
     }
 
+    // 如果没有传入poems参数，自动筛选
+    if (!poems && allPoems) {
+        poems = allPoems.filter(p => p.auth === authorName);
+    }
+
     if (poems && poems.length > 0) {
-        // Set title
-        authorWorksTitle.textContent = `${authorName} 的作品 (${poems.length} 首)`;
+        // Set title with dynasty
+        const dynasty = getDynastyByAuthorName(authorName);
+        authorWorksTitle.textContent = `${dynasty} · ${authorName} 的作品 (${poems.length} 首)`;
 
         // Clear previous list
         authorWorksList.innerHTML = '';
 
-        // Create work items (limit to first 20 to avoid too many)
-        const worksToShow = poems.slice(0, 20);
+        // Create work items (limit to first 50 to avoid too many)
+        const worksToShow = poems.slice(0, 50);
         worksToShow.forEach(poem => {
             const workItem = document.createElement('button');
             workItem.className = 'author-work-item';
             workItem.textContent = poem.title;
-            workItem.style.cssText = `
-                padding: 8px 16px;
-                border: 1px solid var(--border-color);
-                background: var(--bg-lighter);
-                border-radius: 20px;
-                cursor: pointer;
-                font-size: 0.9rem;
-                transition: all 0.3s ease;
-                white-space: nowrap;
-            `;
 
             workItem.addEventListener('click', () => {
                 // Display the selected poem
                 currentPoem = poem;
                 displayPoem(poem);
-            });
-
-            workItem.addEventListener('mouseover', () => {
-                workItem.style.background = 'var(--xhs-pink-lighter)';
-                workItem.style.color = 'white';
-                workItem.style.borderColor = 'var(--xhs-pink)';
-            });
-
-            workItem.addEventListener('mouseout', () => {
-                workItem.style.background = 'var(--bg-lighter)';
-                workItem.style.color = '';
-                workItem.style.borderColor = 'var(--border-color)';
+                // 滚动到诗词显示区域
+                document.querySelector('.poem-content')?.scrollIntoView({ behavior: 'smooth' });
             });
 
             authorWorksList.appendChild(workItem);
@@ -909,6 +899,9 @@ function showAuthorWorks(authorName, poems) {
 
         // Show the section
         authorWorksSection.style.display = 'block';
+        
+        // 滚动到作者作品区域
+        authorWorksSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } else {
         // Hide the section if no poems found
         authorWorksSection.style.display = 'none';
@@ -1476,6 +1469,131 @@ window.regenerateAnalysis = async function() {
         desc.innerHTML = originalDesc + separator + `<div style="color:red;">重新生成失败: ${error.message}</div>`;
     }
 };
+
+// 显示作者信息
+function showAuthorInfo(authorName) {
+    if (!authorName) return;
+    
+    // 从 AUTHOR_DATA 中查找作者信息
+    const authorInfo = AUTHOR_DATA.find(a => a.name === authorName);
+    
+    if (!authorInfo) {
+        alert(`未找到作者"${authorName}"的详细信息`);
+        return;
+    }
+    
+    // 创建模态框
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+        backdrop-filter: blur(5px);
+    `;
+    
+    const modalContent = document.createElement('div');
+    modalContent.style.cssText = `
+        background: var(--container-bg);
+        border-radius: 20px;
+        max-width: 600px;
+        max-height: 80vh;
+        overflow-y: auto;
+        padding: 30px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        position: relative;
+    `;
+    
+    // 构建内容
+    let html = `
+        <div style="text-align: center; margin-bottom: 20px;">
+            <h2 style="color: var(--xhs-pink); margin: 0 0 10px 0; font-family: 'Noto Serif SC', serif;">
+                ${authorInfo.name}
+            </h2>
+            <div style="color: var(--text-secondary); font-size: 0.9rem;">
+                ${authorInfo.dynasty} · ${authorInfo.life_span}
+            </div>
+            ${authorInfo.titles ? `<div style="margin-top: 10px;">
+                ${authorInfo.titles.map(t => `<span style="display: inline-block; background: var(--xhs-pink-lighter); color: var(--xhs-pink); padding: 3px 10px; border-radius: 12px; margin: 3px; font-size: 0.85rem;">${t}</span>`).join('')}
+            </div>` : ''}
+        </div>
+        
+        ${authorInfo.bio ? `
+        <div style="margin-bottom: 20px;">
+            <h3 style="color: var(--xhs-pink); font-size: 1.1rem; margin-bottom: 10px;">📖 生平简介</h3>
+            <p style="line-height: 1.8; color: var(--text-primary); text-indent: 2em;">${authorInfo.bio}</p>
+        </div>
+        ` : ''}
+        
+        ${authorInfo.achievements ? `
+        <div style="margin-bottom: 20px;">
+            <h3 style="color: var(--xhs-pink); font-size: 1.1rem; margin-bottom: 10px;">🏆 文学成就</h3>
+            <p style="line-height: 1.8; color: var(--text-primary); text-indent: 2em;">${authorInfo.achievements}</p>
+        </div>
+        ` : ''}
+        
+        ${authorInfo.style ? `
+        <div style="margin-bottom: 20px;">
+            <h3 style="color: var(--xhs-pink); font-size: 1.1rem; margin-bottom: 10px;">🎨 创作风格</h3>
+            <p style="line-height: 1.8; color: var(--text-primary); text-indent: 2em;">${authorInfo.style}</p>
+        </div>
+        ` : ''}
+        
+        ${authorInfo.works && authorInfo.works.length > 0 ? `
+        <div style="margin-bottom: 20px;">
+            <h3 style="color: var(--xhs-pink); font-size: 1.1rem; margin-bottom: 10px;">📝 代表作品</h3>
+            ${authorInfo.works.map(work => `
+                <div style="margin-bottom: 12px; padding: 10px; background: var(--bg-lighter); border-radius: 10px;">
+                    <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 5px;">《${work.title}》</div>
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; font-style: italic;">${work.line}</div>
+                </div>
+            `).join('')}
+        </div>
+        ` : ''}
+        
+        <button id="closeAuthorInfo" style="
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, var(--xhs-pink), var(--xhs-pink-light));
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        ">关闭</button>
+    `;
+    
+    modalContent.innerHTML = html;
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+    
+    // 关闭按钮事件
+    const closeBtn = document.getElementById('closeAuthorInfo');
+    const closeModal = () => {
+        document.body.removeChild(modal);
+    };
+    
+    closeBtn.onclick = closeModal;
+    modal.onclick = (e) => {
+        if (e.target === modal) closeModal();
+    };
+    
+    // ESC键关闭
+    const handleEsc = (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+            document.removeEventListener('keydown', handleEsc);
+        }
+    };
+    document.addEventListener('keydown', handleEsc);
+}
 
 // 导出函数供 bindEventListeners 使用
 export { 
