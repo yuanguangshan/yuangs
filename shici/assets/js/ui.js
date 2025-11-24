@@ -394,8 +394,8 @@ function toggleScrollMode() {
         }).join('');
         
         verseElement.innerHTML = formattedContent;
-        // Ensure scroll starts at the leftmost side
-        verseElement.scrollLeft = 0;
+        // Ensure scroll starts at the rightmost side for RTL scroll mode
+        verseElement.scrollLeft = verseElement.scrollWidth - verseElement.clientWidth;
         console.log('Scroll mode activated, lines:', lines.length);
     } else {
         // Switch back to normal mode
