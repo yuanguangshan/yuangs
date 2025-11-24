@@ -1,0 +1,307 @@
+// ui.js - UI交互逻辑模块
+// 处理用户交互、DOM操作和事件监听
+
+import { CONFIG, getRandomColor } from './config.js';
+import { AUTHOR_DATA, getDynastyByAuthorName } from './author-data.js';
+import { fetchAndCachePoems, getRandomPoem, getRandomPoems } from './data-loader.js';
+import { 
+    insertLineBreaksAtPunctuation, 
+    isRegularPoem, 
+    formatCoupletPoem, 
+    isArticle, 
+    generateTagsHTML 
+} from './poem-display.js';
+
+// 全局状态
+let currentPoem = null;
+let allPoems = null;
+let filteredPoems = null;
+
+// 初始化UI
+export async function initUI() {
+    console.log('Initializing UI...');
+    
+    // 加载诗词数据
+    allPoems = await fetchAndCachePoems();
+    console.log(`Loaded ${allPoems.length} poems`);
+    
+    // 初始化作者选择器
+    initAuthorSelect();
+    
+    // 绑定事件监听器
+    bindEventListeners();
+    
+    // 首次加载随机诗词
+    await loadRandomPoem();
+    
+    // 不自动初始化瀑布流，等用户点击切换
+    // await renderWaterfall();
+}
+
+// 初始化作者选择器
+function initAuthorSelect() {
+    const select = document.getElementById('authorSelect');
+    if (!select || !AUTHOR_DATA) return;
+    
+    // 按朝代分组
+    const dynastyGroups = {};
+    AUTHOR_DATA.forEach(author => {
+        const dynasty = author.dynasty || '未知';
+        if (!dynastyGroups[dynasty]) {
+            dynastyGroups[dynasty] = [];
+        }
+        dynastyGroups[dynasty].push(author);
+    });
+    
+    // 朝代顺序
+    const dynastyOrder = ['先秦', '汉', '魏晋', '南北朝', '隋', '唐', '五代', '宋', '元', '明', '清', '近现代', '未知'];
+    
+    dynastyOrder.forEach(dynasty => {
+        if (dynastyGroups[dynasty]) {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = dynasty;
+            
+            dynastyGroups[dynasty].forEach(author => {
+                const option = document.createElement('option');
+                option.value = author.name;
+                option.textContent = `${author.name} (${author.titles?.[0] || ''})`;
+                optgroup.appendChild(option);
+            });
+            
+            select.appendChild(optgroup);
+        }
+    });
+}
+
+// 绑定事件监听器
+function bindEventListeners() {
+    // 刷新按钮
+    const refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', async () => {
+            const waterfallContainer = document.getElementById('waterfallContainer');
+            if (waterfallContainer && waterfallContainer.classList.contains('active')) {
+                // 瀑布流模式，刷新瀑布流
+                await renderWaterfall();
+            } else {
+                // 默认模式，刷新诗词
+                await loadRandomPoem();
+            }
+        });
+    }
+    
+    // 作者选择
+    const authorSelect = document.getElementById('authorSelect');
+    if (authorSelect) {
+        authorSelect.addEventListener('change', async (e) => {
+            const selectedAuthor = e.target.value;
+            if (selectedAuthor) {
+                filteredPoems = allPoems.filter(p => p.auth === selectedAuthor);
+                console.log(`Filtered ${filteredPoems.length} poems by ${selectedAuthor}`);
+            } else {
+                filteredPoems = null;
+            }
+            await loadRandomPoem();
+            await renderWaterfall();
+        });
+    }
+    
+    // 清除作者筛选
+    const clearAuthor = document.getElementById('clearAuthor');
+    if (clearAuthor) {
+        clearAuthor.addEventListener('click', async () => {
+            if (authorSelect) authorSelect.value = '';
+            filteredPoems = null;
+            await loadRandomPoem();
+            await renderWaterfall();
+        });
+    }
+    
+    // 布局切换
+    const layoutToggle = document.getElementById('layoutToggle');
+    if (layoutToggle) {
+        layoutToggle.addEventListener('click', toggleLayout);
+    }
+    
+    // 主题切换
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+        themeToggle.addEventListener('click', toggleTheme);
+    }
+}
+
+// 加载随机诗词
+export async function loadRandomPoem() {
+    const poemsToUse = filteredPoems || allPoems;
+    if (!poemsToUse || poemsToUse.length === 0) {
+        console.error('No poems available');
+        return;
+    }
+    
+    currentPoem = getRandomPoem(poemsToUse);
+    if (!currentPoem) return;
+    
+    // 显示诗词
+    displayPoem(currentPoem);
+}
+
+// 显示诗词
+function displayPoem(poem) {
+    if (!poem) return;
+    
+    // 标题
+    const titleEl = document.getElementById('poemTitle');
+    if (titleEl) {
+        titleEl.textContent = poem.title || '无题';
+        titleEl.style.color = getRandomColor();
+    }
+    
+    // 作者
+    const authorEl = document.getElementById('poemAuthor');
+    if (authorEl) {
+        const dynasty = getDynastyByAuthorName(poem.auth);
+        authorEl.textContent = `${dynasty} · ${poem.auth || '佚名'}`;
+    }
+    
+    // 内容
+    const verseEl = document.getElementById('poemVerse');
+    if (verseEl) {
+        // 判断是否为文章
+        const isArticleContent = isArticle(poem);
+        
+        if (isArticleContent) {
+            verseEl.classList.add('article-mode');
+            verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
+        } else {
+            verseEl.classList.remove('article-mode');
+            
+            if (isRegularPoem(poem) && poem.content.split('\\n').length >= 2) {
+                verseEl.innerHTML = formatCoupletPoem(poem);
+            } else {
+                verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
+            }
+        }
+    }
+    
+    // 标签
+    const tagsEl = document.getElementById('poemTags');
+    if (tagsEl) {
+        tagsEl.innerHTML = generateTagsHTML(poem);
+    }
+    
+    // 赏析
+    const descEl = document.getElementById('poemDesc');
+    if (descEl) {
+        descEl.innerHTML = poem.desc || '暂无赏析';
+    }
+    
+    // 显示内容
+    document.getElementById('poemTextContent').style.display = 'block';
+    document.getElementById('poemDescContent').style.display = 'block';
+    document.getElementById('loading').style.display = 'none';
+}
+
+// 渲染瀑布流
+async function renderWaterfall() {
+    console.log('renderWaterfall called');
+    const waterfallEl = document.getElementById('waterfallContent');
+    console.log('waterfallContent element:', waterfallEl);
+    if (!waterfallEl) {
+        console.error('waterfallContent element not found!');
+        return;
+    }
+    
+    const poemsToUse = filteredPoems || allPoems;
+    console.log('Poems to use:', poemsToUse ? poemsToUse.length : 'null');
+    if (!poemsToUse || poemsToUse.length === 0) {
+        console.error('No poems available for waterfall');
+        return;
+    }
+    
+    waterfallEl.innerHTML = '';
+    
+    const randomPoems = getRandomPoems(poemsToUse, CONFIG.WATERFALL_COUNT);
+    console.log('Generated random poems:', randomPoems.length);
+    
+    randomPoems.forEach((poem, index) => {
+        const card = document.createElement('div');
+        card.className = 'waterfall-card';
+        card.style.animationDelay = `${index * 0.1}s`;
+        
+        const sealText = poem.source === 'ci' ? '词' : '诗';
+        const color = getRandomColor();
+        
+        const tagsHTML = generateTagsHTML(poem);
+        
+        card.innerHTML = `
+            <div class="card-seal" style="background-color: ${color}">${sealText}</div>
+            <h3 class="card-title" style="color: ${color}">${poem.title || '无题'}</h3>
+            <p class="card-author">${getDynastyByAuthorName(poem.auth)} · ${poem.auth || '佚名'}</p>
+            <div class="card-content">${insertLineBreaksAtPunctuation(poem.content).substring(0, 150)}...</div>
+            <div class="card-tags">${tagsHTML}</div>
+        `;
+        
+        card.addEventListener('click', () => {
+            currentPoem = poem;
+            displayPoem(poem);
+            
+            // 切换回默认布局
+            const poemContent = document.querySelector('.poem-content');
+            const waterfallContainer = document.getElementById('waterfallContainer');
+            const layoutToggle = document.getElementById('layoutToggle');
+            if (poemContent && waterfallContainer && layoutToggle) {
+                poemContent.style.display = 'flex';
+                waterfallContainer.classList.remove('active');
+                layoutToggle.textContent = '瀑布流';
+            }
+            
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        
+        waterfallEl.appendChild(card);
+    });
+    
+    console.log('Waterfall rendered with', randomPoems.length, 'cards');
+}
+
+// 切换布局模式
+function toggleLayout() {
+    console.log('toggleLayout called');
+    const poemContent = document.querySelector('.poem-content');
+    const poemDescContent = document.getElementById('poemDescContent');
+    const waterfallContainer = document.getElementById('waterfallContainer');
+    const layoutToggle = document.getElementById('layoutToggle');
+    
+    console.log('Elements:', { poemContent, poemDescContent, waterfallContainer, layoutToggle });
+    
+    if (!poemContent || !waterfallContainer || !layoutToggle) {
+        console.error('Required elements not found!');
+        return;
+    }
+    
+    if (waterfallContainer.classList.contains('active')) {
+        // 切换到默认布局
+        console.log('Switching to default layout');
+        poemContent.style.display = 'flex';
+        if (poemDescContent) poemDescContent.style.display = 'block';
+        waterfallContainer.classList.remove('active');
+        layoutToggle.textContent = '瀑布流';
+    } else {
+        // 切换到瀑布流布局
+        console.log('Switching to waterfall layout');
+        poemContent.style.display = 'none';
+        if (poemDescContent) poemDescContent.style.display = 'none';
+        waterfallContainer.classList.add('active');
+        layoutToggle.textContent = '默认布局';
+        renderWaterfall(); // 生成瀑布流内容
+    }
+}
+
+// 切换主题
+function toggleTheme() {
+    document.body.classList.toggle('dark-mode');
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+        themeToggle.textContent = document.body.classList.contains('dark-mode') ? '☀️' : '🌙';
+    }
+}
