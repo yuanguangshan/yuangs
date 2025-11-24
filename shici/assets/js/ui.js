@@ -381,28 +381,27 @@ function toggleScrollMode() {
         verseElement.classList.add('vertical-scroll-mode');
         
         // Create a properly formatted scroll layout that preserves the poem's meaning
-        // For a traditional scroll, we'll break the content into characters to be displayed in columns
+        // Split content by lines first (if it has line breaks)
+        let contentLines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
 
-        // Clean the content and extract all characters
-        let cleanContent = currentPoem.content.replace(/\\n/g, ''); // Remove line breaks
-        const allChars = [];
-
-        // Add each character to the array (including punctuation)
-        for (let char of cleanContent) {
-            if (char.trim() !== '') { // Don't add whitespace-only characters
-                allChars.push(char);
-            }
+        // If no line breaks, split by sentence punctuation to create meaningful segments
+        if (contentLines.length === 1) {
+            const content = contentLines[0];
+            // Split by Chinese punctuation but keep the punctuation with the text
+            contentLines = content.match(/[^。！？]+[。！？]?/g) || [content];
+            contentLines = contentLines.filter(line => line.trim() !== '');
         }
 
-        // Create column divs for each character
-        const formattedContent = allChars.map(char => {
-            return `<div class="scroll-column">${char}</div>`;
+        // Create column divs for each meaningful line/sentence
+        const formattedContent = contentLines.map(line => {
+            const cleanLine = line.trim().replace(/[。！？]$/g, ''); // Remove ending punctuation for cleaner look
+            return `<div class="scroll-column">${cleanLine}</div>`;
         }).join('');
 
         verseElement.innerHTML = formattedContent;
         // Ensure scroll starts at the rightmost side for RTL scroll mode
         verseElement.scrollLeft = verseElement.scrollWidth - verseElement.clientWidth;
-        console.log('Scroll mode activated, characters:', allChars.length);
+        console.log('Scroll mode activated, lines:', contentLines.length);
     } else {
         // Switch back to normal mode - use displayPoem to ensure all elements are updated
         currentDisplayMode = 'normal';
@@ -442,20 +441,21 @@ function displayPoem(poem) {
         // We're in scroll mode, update scroll content
         verseEl.className = 'poem-verse vertical-scroll-mode'; // Reset classes and add scroll mode
 
-        // Clean the content and extract all characters
-        let cleanContent = poem.content.replace(/\\n/g, ''); // Remove line breaks
-        const allChars = [];
+        // Split content by lines first (if it has line breaks)
+        let contentLines = poem.content.split('\\n').filter(line => line.trim() !== '');
 
-        // Add each character to the array (including punctuation)
-        for (let char of cleanContent) {
-            if (char.trim() !== '') { // Don't add whitespace-only characters
-                allChars.push(char);
-            }
+        // If no line breaks, split by sentence punctuation to create meaningful segments
+        if (contentLines.length === 1) {
+            const content = contentLines[0];
+            // Split by Chinese punctuation but keep the punctuation with the text
+            contentLines = content.match(/[^。！？]+[。！？]?/g) || [content];
+            contentLines = contentLines.filter(line => line.trim() !== '');
         }
 
-        // Create column divs for each character
-        const formattedContent = allChars.map(char => {
-            return `<div class="scroll-column">${char}</div>`;
+        // Create column divs for each meaningful line/sentence
+        const formattedContent = contentLines.map(line => {
+            const cleanLine = line.trim().replace(/[。！？]$/g, ''); // Remove ending punctuation for cleaner look
+            return `<div class="scroll-column">${cleanLine}</div>`;
         }).join('');
 
         verseEl.innerHTML = formattedContent;
