@@ -380,23 +380,29 @@ function toggleScrollMode() {
         currentDisplayMode = 'scroll';
         verseElement.classList.add('vertical-scroll-mode');
         
-        // Split content into lines
-        let lines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
-        if (lines.length === 1) {
-            const content = lines[0];
-            lines = content.split(/[。！？]/).filter(line => line.trim() !== '');
+        // Create a properly formatted scroll layout that preserves the poem's meaning
+        // For a traditional scroll, we'll break the content into characters to be displayed in columns
+
+        // Clean the content and extract all characters
+        let cleanContent = currentPoem.content.replace(/\\n/g, ''); // Remove line breaks
+        const allChars = [];
+
+        // Add each character to the array (including punctuation)
+        for (let char of cleanContent) {
+            if (char.trim() !== '') { // Don't add whitespace-only characters
+                allChars.push(char);
+            }
         }
-        
-        // Create a column div for each line
-        const formattedContent = lines.map(line => {
-            const clean = line.trim().replace(/[。！？]$/g, '');
-            return `<div class="scroll-column">${clean}</div>`;
+
+        // Create column divs for each character
+        const formattedContent = allChars.map(char => {
+            return `<div class="scroll-column">${char}</div>`;
         }).join('');
-        
+
         verseElement.innerHTML = formattedContent;
         // Ensure scroll starts at the rightmost side for RTL scroll mode
         verseElement.scrollLeft = verseElement.scrollWidth - verseElement.clientWidth;
-        console.log('Scroll mode activated, lines:', lines.length);
+        console.log('Scroll mode activated, characters:', allChars.length);
     } else {
         // Switch back to normal mode
         currentDisplayMode = 'normal';
