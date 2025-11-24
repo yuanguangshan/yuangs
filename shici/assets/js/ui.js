@@ -435,8 +435,30 @@ function displayPoem(poem) {
     // Update the current poem
     currentPoem = poem;
 
-    // If we're currently in scroll mode, update scroll mode content instead of default layout
+    // Update title and author regardless of display mode
+    // 标题
+    const titleEl = document.getElementById('poemTitle');
+    if (titleEl) {
+        titleEl.textContent = poem.title || '无题';
+        titleEl.style.color = getRandomColor();
+    }
+
+    // 作者
+    const authorEl = document.getElementById('poemAuthor');
+    if (authorEl) {
+        const dynasty = getDynastyByAuthorName(poem.auth);
+        authorEl.textContent = `${dynasty} · ${poem.auth || '佚名'}`;
+
+        // 添加点击事件显示作者信息
+        authorEl.style.cursor = 'pointer';
+        authorEl.onclick = () => showAuthorInfo(poem.auth);
+    }
+
+    // 内容
     const verseEl = document.getElementById('poemVerse');
+    const layoutToggleBtn = document.getElementById('layoutToggleBtn');
+
+    // If we're currently in scroll mode, update scroll mode content instead of default layout
     if (currentDisplayMode === 'scroll' && verseEl && verseEl.classList.contains('vertical-scroll-mode')) {
         // We're in scroll mode, update scroll content
         verseEl.className = 'poem-verse vertical-scroll-mode'; // Reset classes and add scroll mode
@@ -462,27 +484,6 @@ function displayPoem(poem) {
         // Ensure scroll starts at the rightmost side for RTL scroll mode
         verseEl.scrollLeft = verseEl.scrollWidth - verseEl.clientWidth;
     } else {
-        // 标题
-        const titleEl = document.getElementById('poemTitle');
-        if (titleEl) {
-            titleEl.textContent = poem.title || '无题';
-            titleEl.style.color = getRandomColor();
-        }
-
-        // 作者
-        const authorEl = document.getElementById('poemAuthor');
-        if (authorEl) {
-            const dynasty = getDynastyByAuthorName(poem.auth);
-            authorEl.textContent = `${dynasty} · ${poem.auth || '佚名'}`;
-
-            // 添加点击事件显示作者信息
-            authorEl.style.cursor = 'pointer';
-            authorEl.onclick = () => showAuthorInfo(poem.auth);
-        }
-
-        // 内容
-        const layoutToggleBtn = document.getElementById('layoutToggleBtn');
-
         if (verseEl) {
             // 判断是否为文章
             const isArticleContent = isArticle(poem);
