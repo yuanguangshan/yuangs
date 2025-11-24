@@ -404,26 +404,12 @@ function toggleScrollMode() {
         verseElement.scrollLeft = verseElement.scrollWidth - verseElement.clientWidth;
         console.log('Scroll mode activated, characters:', allChars.length);
     } else {
-        // Switch back to normal mode
+        // Switch back to normal mode - use displayPoem to ensure all elements are updated
         currentDisplayMode = 'normal';
-        
-        // Use the same logic as displayPoem
-        const isArticleContent = isArticle(currentPoem);
-        
-        if (isArticleContent) {
-            verseElement.classList.add('article-mode');
-            verseElement.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content);
-        } else {
-            const processedContent = insertLineBreaksAtPunctuation(currentPoem.content);
-            const brCount = (processedContent.match(/<br>/g) || []).length;
-            const lineCount = brCount + 1;
-            if (lineCount > 6) {
-                verseElement.classList.add('horizontal-mode');
-            } else {
-                verseElement.classList.add('vertical-mode');
-            }
-            verseElement.innerHTML = processedContent;
-        }
+
+        // Call displayPoem to ensure title, author, and content are all synchronized
+        displayPoem(currentPoem);
+
         console.log('Normal mode restored');
     }
 }
@@ -447,70 +433,98 @@ export async function loadRandomPoem() {
 function displayPoem(poem) {
     if (!poem) return;
 
-    // 标题
-    const titleEl = document.getElementById('poemTitle');
-    if (titleEl) {
-        titleEl.textContent = poem.title || '无题';
-        titleEl.style.color = getRandomColor();
-    }
+    // Update the current poem
+    currentPoem = poem;
 
-    // 作者
-    const authorEl = document.getElementById('poemAuthor');
-    if (authorEl) {
-        const dynasty = getDynastyByAuthorName(poem.auth);
-        authorEl.textContent = `${dynasty} · ${poem.auth || '佚名'}`;
-        
-        // 添加点击事件显示作者信息
-        authorEl.style.cursor = 'pointer';
-        authorEl.onclick = () => showAuthorInfo(poem.auth);
-    }
-
-    // 内容
+    // If we're currently in scroll mode, update scroll mode content instead of default layout
     const verseEl = document.getElementById('poemVerse');
-    const layoutToggleBtn = document.getElementById('layoutToggleBtn');
+    if (currentDisplayMode === 'scroll' && verseEl && verseEl.classList.contains('vertical-scroll-mode')) {
+        // We're in scroll mode, update scroll content
+        verseEl.className = 'poem-verse vertical-scroll-mode'; // Reset classes and add scroll mode
 
-    if (verseEl) {
-        // 判断是否为文章
-        const isArticleContent = isArticle(poem);
-        // 判断是否为长诗（超过10行）
-        const isLongVerse = isLongPoem(poem);
+        // Clean the content and extract all characters
+        let cleanContent = poem.content.replace(/\\n/g, ''); // Remove line breaks
+        const allChars = [];
 
-        // 重置类名 to ensure clean state
-        verseEl.className = 'poem-verse';
+        // Add each character to the array (including punctuation)
+        for (let char of cleanContent) {
+            if (char.trim() !== '') { // Don't add whitespace-only characters
+                allChars.push(char);
+            }
+        }
 
-        if (isArticleContent) {
-            // Set article mode directly
-            verseEl.classList.add('article-mode');
-            verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
-            if (layoutToggleBtn) layoutToggleBtn.style.display = 'none'; // 文章不显示切换按钮
-        } else {
-            // 先处理内容，获取实际显示的HTML
-            const processedContent = insertLineBreaksAtPunctuation(poem.content);
-            
-            // 统计实际显示的行数（<br>标签数量 + 1）
-            const brCount = (processedContent.match(/<br>/g) || []).length;
-            const lineCount = brCount + 1;
-            
-            // console.log('Poem:', poem.title, 'Line count:', lineCount, 'BR count:', brCount);
+        // Create column divs for each character
+        const formattedContent = allChars.map(char => {
+            return `<div class="scroll-column">${char}</div>`;
+        }).join('');
 
-            // For poems with more than 6 lines, use horizontal layout
-            if (lineCount > 6) {
-                // Use horizontal layout for poems with more than 6 lines
-                verseEl.classList.add('horizontal-mode');
-                verseEl.innerHTML = processedContent;
-                if (layoutToggleBtn) {
-                    layoutToggleBtn.style.display = 'inline-block';
-                    layoutToggleBtn.textContent = '📜'; // For horizontal layout, show the vertical layout icon
-                }
+        verseEl.innerHTML = formattedContent;
+        // Ensure scroll starts at the rightmost side for RTL scroll mode
+        verseEl.scrollLeft = verseEl.scrollWidth - verseEl.clientWidth;
+    } else {
+        // 标题
+        const titleEl = document.getElementById('poemTitle');
+        if (titleEl) {
+            titleEl.textContent = poem.title || '无题';
+            titleEl.style.color = getRandomColor();
+        }
+
+        // 作者
+        const authorEl = document.getElementById('poemAuthor');
+        if (authorEl) {
+            const dynasty = getDynastyByAuthorName(poem.auth);
+            authorEl.textContent = `${dynasty} · ${poem.auth || '佚名'}`;
+
+            // 添加点击事件显示作者信息
+            authorEl.style.cursor = 'pointer';
+            authorEl.onclick = () => showAuthorInfo(poem.auth);
+        }
+
+        // 内容
+        const layoutToggleBtn = document.getElementById('layoutToggleBtn');
+
+        if (verseEl) {
+            // 判断是否为文章
+            const isArticleContent = isArticle(poem);
+            // 判断是否为长诗（超过10行）
+            const isLongVerse = isLongPoem(poem);
+
+            // 重置类名 to ensure clean state
+            verseEl.className = 'poem-verse';
+
+            if (isArticleContent) {
+                // Set article mode directly
+                verseEl.classList.add('article-mode');
+                verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
+                if (layoutToggleBtn) layoutToggleBtn.style.display = 'none'; // 文章不显示切换按钮
             } else {
-                // For poems with 6 or fewer lines, use default vertical layout
-                verseEl.classList.add('vertical-mode');
-                verseEl.innerHTML = processedContent;
-                if (layoutToggleBtn) layoutToggleBtn.style.display = 'inline-block';
+                // 先处理内容，获取实际显示的HTML
+                const processedContent = insertLineBreaksAtPunctuation(poem.content);
+
+                // 统计实际显示的行数（<br>标签数量 + 1）
+                const brCount = (processedContent.match(/<br>/g) || []).length;
+                const lineCount = brCount + 1;
+
+                // console.log('Poem:', poem.title, 'Line count:', lineCount, 'BR count:', brCount);
+
+                // For poems with more than 6 lines, use horizontal layout
+                if (lineCount > 6) {
+                    // Use horizontal layout for poems with more than 6 lines
+                    verseEl.classList.add('horizontal-mode');
+                    verseEl.innerHTML = processedContent;
+                    if (layoutToggleBtn) {
+                        layoutToggleBtn.style.display = 'inline-block';
+                        layoutToggleBtn.textContent = '📜'; // For horizontal layout, show the vertical layout icon
+                    }
+                } else {
+                    // For poems with 6 or fewer lines, use default vertical layout
+                    verseEl.classList.add('vertical-mode');
+                    verseEl.innerHTML = processedContent;
+                    if (layoutToggleBtn) layoutToggleBtn.style.display = 'inline-block';
+                }
             }
         }
     }
-
 
     // 标签
     const tagsEl = document.getElementById('poemTags');
