@@ -384,19 +384,25 @@ function toggleScrollMode() {
     } else {
         // Switch back to normal mode
         currentDisplayMode = 'normal';
-        // Determine which normal mode to use based on poem type
+        
+        // Use the same logic as displayPoem
         const isArticleContent = isArticle(currentPoem);
-        const isLongVerse = isLongPoem(currentPoem);
-
+        
         if (isArticleContent) {
             verseElement.classList.add('article-mode');
             verseElement.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content);
-        } else if (isLongVerse) {
-            verseElement.classList.add('horizontal-mode');
-            verseElement.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content);
         } else {
-            verseElement.classList.add('vertical-mode');
-            verseElement.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content);
+            // Process content and count lines
+            const processedContent = insertLineBreaksAtPunctuation(currentPoem.content);
+            const brCount = (processedContent.match(/<br>/g) || []).length;
+            const lineCount = brCount + 1;
+            
+            if (lineCount > 6) {
+                verseElement.classList.add('horizontal-mode');
+            } else {
+                verseElement.classList.add('vertical-mode');
+            }
+            verseElement.innerHTML = processedContent;
         }
     }
 }
