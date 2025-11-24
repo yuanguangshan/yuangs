@@ -74,6 +74,7 @@ function initAuthorSelect() {
 }
 
 // 绑定事件监听器
+
 function bindEventListeners() {
     // 刷新按钮
     const refreshBtn = document.getElementById('refreshBtn');
@@ -81,10 +82,21 @@ function bindEventListeners() {
         refreshBtn.addEventListener('click', async () => {
             const waterfallContainer = document.getElementById('waterfallContainer');
             if (waterfallContainer && waterfallContainer.classList.contains('active')) {
-                // 瀑布流模式，刷新瀑布流
                 await renderWaterfall();
             } else {
-                // 默认模式，刷新诗词
+                await loadRandomPoem();
+            }
+        });
+    }
+    
+    // 浮动刷新按钮
+    const floatingRefreshBtn = document.getElementById('floatingRefreshBtn');
+    if (floatingRefreshBtn) {
+        floatingRefreshBtn.addEventListener('click', async () => {
+            const waterfallContainer = document.getElementById('waterfallContainer');
+            if (waterfallContainer && waterfallContainer.classList.contains('active')) {
+                await renderWaterfall();
+            } else {
                 await loadRandomPoem();
             }
         });
@@ -117,7 +129,13 @@ function bindEventListeners() {
         });
     }
     
-    // 布局切换
+    // 搜索切换
+    const searchToggle = document.getElementById('searchToggle');
+    if (searchToggle) {
+        searchToggle.addEventListener('click', window.toggleSearch);
+    }
+    
+    // 布局切换（瀑布流）
     const layoutToggle = document.getElementById('layoutToggle');
     if (layoutToggle) {
         layoutToggle.addEventListener('click', toggleLayout);
@@ -127,6 +145,45 @@ function bindEventListeners() {
     const themeToggle = document.getElementById('themeToggle');
     if (themeToggle) {
         themeToggle.addEventListener('click', toggleTheme);
+    }
+    
+    // --- 详情页功能按钮 ---
+    
+    // 复制按钮
+    const copyBtn = document.getElementById('copyBtn');
+    if (copyBtn) {
+        copyBtn.addEventListener('click', copyPoemToClipboard);
+    }
+    
+    // 搜索按钮（跳转）
+    const inlineSearchBtn = document.getElementById('inlineSearchBtn');
+    if (inlineSearchBtn) {
+        inlineSearchBtn.addEventListener('click', () => {
+            if (!currentPoem) return;
+            const query = `${currentPoem.title} ${currentPoem.auth} 赏析`;
+            window.open(`https://www.baidu.com/s?wd=${encodeURIComponent(query)}`, '_blank');
+        });
+    }
+    
+    // AI解读按钮
+    const aiInterpretBtn = document.getElementById('aiInterpretBtn');
+    if (aiInterpretBtn) {
+        aiInterpretBtn.addEventListener('click', showAIInterpretation);
+    }
+    
+    // 详情页布局切换（横竖排）
+    const layoutToggleBtn = document.getElementById('layoutToggleBtn');
+    if (layoutToggleBtn) {
+        layoutToggleBtn.addEventListener('click', togglePoemLayout);
+    }
+    
+    // 收藏按钮
+    const favoriteToggleBtn = document.getElementById('favoriteToggleBtn');
+    if (favoriteToggleBtn) {
+        favoriteToggleBtn.addEventListener('click', function() {
+            this.textContent = this.textContent === '♡' ? '♥' : '♡';
+            this.style.color = this.textContent === '♥' ? 'red' : '';
+        });
     }
 }
 
@@ -165,13 +222,26 @@ function displayPoem(poem) {
     
     // 内容
     const verseEl = document.getElementById('poemVerse');
+    const layoutToggleBtn = document.getElementById('layoutToggleBtn');
+    
     if (verseEl) {
         // 判断是否为文章
         const isArticleContent = isArticle(poem);
         
+        // 重置类名
+        verseEl.className = 'poem-verse';
+        
         if (isArticleContent) {
             verseEl.classList.add('article-mode');
             verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
+            if (layoutToggleBtn) layoutToggleBtn.style.display = 'none'; // 文章不显示切换按钮
+        } else {
+            // 默认竖排
+            verseEl.classList.add('vertical-mode');
+            verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
+            if (layoutToggleBtn) layoutToggleBtn.style.display = 'inline-block'; // 诗词显示切换按钮
+        }
+    }
         } else {
             verseEl.classList.remove('article-mode');
             
@@ -388,3 +458,138 @@ function toggleTheme() {
         themeToggle.textContent = document.body.classList.contains('dark-mode') ? '☀️' : '🌙';
     }
 }
+
+// --- 新增功能函数 ---
+
+// 复制诗词到剪贴板
+function copyPoemToClipboard() {
+    if (!currentPoem) return;
+    
+    const text = `${currentPoem.title}\n${currentPoem.auth}\n\n${currentPoem.content}`;
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('copyBtn');
+        if (btn) {
+            const originalText = btn.textContent;
+            btn.textContent = '✅';
+            setTimeout(() => {
+                btn.textContent = originalText;
+            }, 2000);
+        }
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+        alert('复制失败，请手动复制');
+    });
+}
+
+// 切换搜索框显示
+window.toggleSearch = function() {
+    const searchSection = document.getElementById('searchSection');
+    if (searchSection.style.display === 'none') {
+        searchSection.style.display = 'flex';
+        document.getElementById('searchInput').focus();
+    } else {
+        searchSection.style.display = 'none';
+        document.getElementById('searchResults').style.display = 'none';
+    }
+};
+
+// 隐藏搜索框
+window.hideSearch = function() {
+    document.getElementById('searchSection').style.display = 'none';
+    document.getElementById('searchResults').style.display = 'none';
+};
+
+// 执行搜索
+window.performSearch = function() {
+    const query = document.getElementById('searchInput').value.trim();
+    if (!query) return;
+    
+    const poemsToSearch = allPoems || [];
+    const results = poemsToSearch.filter(poem => 
+        (poem.title && poem.title.includes(query)) || 
+        (poem.content && poem.content.includes(query)) || 
+        (poem.auth && poem.auth.includes(query))
+    );
+    
+    displaySearchResults(results);
+};
+
+// 处理搜索框回车事件
+window.handleSearchKeyPress = function(event) {
+    if (event.key === 'Enter') {
+        performSearch();
+    }
+};
+
+// 显示搜索结果
+function displaySearchResults(results) {
+    const resultsContainer = document.getElementById('searchResults');
+    const list = document.getElementById('searchResultsList');
+    list.innerHTML = '';
+    
+    if (results.length === 0) {
+        list.innerHTML = '<li>未找到相关诗词</li>';
+    } else {
+        results.slice(0, 20).forEach(poem => { // 限制显示前20条
+            const li = document.createElement('li');
+            li.textContent = `${poem.title} - ${poem.auth}`;
+            li.onclick = () => {
+                currentPoem = poem;
+                displayPoem(poem);
+                hideSearch();
+            };
+            list.appendChild(li);
+        });
+    }
+    
+    resultsContainer.style.display = 'block';
+}
+
+// 切换详情页布局（横/竖排）
+function togglePoemLayout() {
+    const verseElem = document.getElementById('poemVerse');
+    const btn = document.getElementById('layoutToggleBtn');
+    
+    if (verseElem.classList.contains('vertical-mode')) {
+        verseElem.classList.remove('vertical-mode');
+        verseElem.classList.add('horizontal-mode');
+        btn.textContent = '📄'; // 切换图标
+    } else {
+        verseElem.classList.remove('horizontal-mode');
+        verseElem.classList.add('vertical-mode');
+        btn.textContent = '📜'; // 切换图标
+    }
+}
+
+// AI解读占位符
+function showAIInterpretation() {
+    if (!currentPoem) return;
+    
+    const descContent = document.getElementById('poemDescContent');
+    const desc = document.getElementById('poemDesc');
+    
+    descContent.style.display = 'block';
+    
+    // 简单的模拟 AI 响应
+    const loadingHtml = '<div style="padding: 20px; text-align: center;">✨ AI 正在思考中...</div>';
+    const originalDesc = desc.innerHTML;
+    desc.innerHTML = loadingHtml + originalDesc;
+    
+    setTimeout(() => {
+        const aiAnalysis = `
+            <div style="margin-bottom: 20px; padding: 15px; background: rgba(139, 92, 246, 0.1); border-radius: 8px; border-left: 4px solid #8b5cf6;">
+                <h4 style="margin-top: 0; color: #8b5cf6;">✨ AI 深度赏析</h4>
+                <p>这是一首关于${currentPoem.title}的诗词。作者${currentPoem.auth}通过精妙的笔触，描绘了...</p>
+                <p>(注：这是AI功能的演示占位符，实际功能需要接入后端API)</p>
+            </div>
+        `;
+        desc.innerHTML = aiAnalysis + originalDesc;
+    }, 1500);
+}
+
+// 导出函数供 bindEventListeners 使用
+export { 
+    copyPoemToClipboard, 
+    togglePoemLayout, 
+    showAIInterpretation 
+};
