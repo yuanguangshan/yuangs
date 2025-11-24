@@ -551,7 +551,7 @@ function analyzePoemLayout(poem) {
 }
 
 // 渲染瀑布流
-async function renderWaterfall() {
+async function renderWaterfall(append = false) {
     console.log('renderWaterfall called - v20251124-2010'); // Version timestamp
     const waterfallEl = document.getElementById('waterfallContent');
     console.log('waterfallContent element:', waterfallEl);
@@ -559,53 +559,56 @@ async function renderWaterfall() {
         console.error('waterfallContent element not found!');
         return;
     }
-    
+
     const poemsToUse = filteredPoems || allPoems;
     console.log('Poems to use:', poemsToUse ? poemsToUse.length : 'null');
     if (!poemsToUse || poemsToUse.length === 0) {
         console.error('No poems available for waterfall');
         return;
     }
-    
-    waterfallEl.innerHTML = '';
-    
+
+    // Only clear if not appending
+    if (!append) {
+        waterfallEl.innerHTML = '';
+    }
+
     const randomPoems = getRandomPoems(poemsToUse, CONFIG.WATERFALL_COUNT);
     console.log('Generated random poems:', randomPoems.length);
     console.log('Random poems content:', randomPoems.map(p => `${p.title} - ${p.auth}`)); // Log titles and authors
-    
+
     randomPoems.forEach((poem, index) => {
         const card = document.createElement('div');
         card.className = 'waterfall-card';
         card.onclick = () => showPoemDetail(poem);
-        
+
         // Analyze layout for the poem (从原版获取的analyzePoemLayout逻辑)
         const layoutInfo = analyzePoemLayout(poem);
-        
+
         // Generate lines HTML
         let linesHtml = '';
         layoutInfo.lines.forEach(line => {
             if (line) linesHtml += `<div class="poem-line">${line}</div>`;
         });
-        
+
         // Random background color
         const backgroundColor = getRandomColor();
-        
+
         let title = poem.title;
         if (title.length > 15) {
             title = title.substring(0, 15) + '...';
         }
-        
+
         let author = layoutInfo.author;
         if (author.length > 8) {
             author = author.substring(0, 8) + '...';
         }
-        
+
         // Determine the appropriate seal based on poem type
         const sealText = poem.source === 'ci' ? '词' : '诗';
-        
+
         // Generate tags HTML
         const tagsHTML = generateTagsHTML(poem);
-        
+
         // 使用原版的HTML结构和类名
         card.innerHTML = `
             <div class="color-block-container">
@@ -625,11 +628,11 @@ async function renderWaterfall() {
               <p class="waterfall-author">${author}</p>
             </div>
           `;
-        
+
         card.addEventListener('click', () => {
             currentPoem = poem;
             displayPoem(poem);
-            
+
             // 切换回默认布局
             const poemContent = document.querySelector('.poem-content');
             const waterfallContainer = document.getElementById('waterfallContainer');
@@ -642,11 +645,63 @@ async function renderWaterfall() {
                 layoutToggle.textContent = '瀑布流';
             }
         });
-        
+
         waterfallEl.appendChild(card);
     });
-    
+
     console.log('Waterfall rendered with', randomPoems.length, 'cards');
+
+    // Set up scroll listener for infinite loading when not appending (first load)
+    if (!append) {
+        setupInfiniteScroll();
+    }
+}
+
+// Setup infinite scroll for waterfall mode
+function setupInfiniteScroll() {
+    const waterfallContainer = document.getElementById('waterfallContainer');
+    const waterfallContent = document.getElementById('waterfallContent');
+
+    if (!waterfallContainer || !waterfallContent) {
+        return;
+    }
+
+    // Remove existing scroll listener to prevent duplicates
+    if (window.waterfallScrollHandler) {
+        window.removeEventListener('scroll', window.waterfallScrollHandler, true);
+    }
+
+    // Create scroll handler
+    window.waterfallScrollHandler = function() {
+        if (!waterfallContainer.classList.contains('active')) {
+            // Remove listener if waterfall is not active
+            window.removeEventListener('scroll', window.waterfallScrollHandler, true);
+            return;
+        }
+
+        // Calculate if we're near the bottom
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const windowHeight = window.innerHeight;
+        const documentHeight = document.documentElement.scrollHeight;
+
+        // Trigger loading when we're within 200px of the bottom
+        if (scrollTop + windowHeight >= documentHeight - 200) {
+            // Prevent multiple simultaneous loads
+            if (!window.isLoadingMorePoems) {
+                window.isLoadingMorePoems = true;
+
+                // Add a small delay to avoid triggering multiple times
+                setTimeout(async () => {
+                    console.log('Loading more poems for infinite scroll...');
+                    await renderWaterfall(true); // Append more poems
+                    window.isLoadingMorePoems = false;
+                }, 300);
+            }
+        }
+    };
+
+    // Add scroll listener
+    window.addEventListener('scroll', window.waterfallScrollHandler, true);
 }
 
 // 切换布局模式
