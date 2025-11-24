@@ -693,14 +693,38 @@ async function renderWaterfall(append = false, tagFilter = null) {
     if (tagFilter) {
         console.log(`Applying tag filter: ${tagFilter}`);
         const originalCount = poemsToUse.length;
-        poemsToUse = poemsToUse.filter(poem => {
-            const allTags = parseTagsForPoem(poem);
-            const hasTag = allTags.includes(tagFilter);
-            if (hasTag) {
-                console.log(`Poem "${poem.title}" by ${poem.auth} has tag: ${tagFilter}`);
-            }
-            return hasTag;
-        });
+
+        // Check if the tag is a dynasty-related tag
+        const dynastyTags = ['先秦', '汉', '魏晋', '南北朝', '隋', '唐', '五代', '南唐', '宋', '元', '明', '清', '现代', '近现代', '五代十国'];
+        const isDynastyTag = dynastyTags.includes(tagFilter);
+
+        if (isDynastyTag) {
+            // For dynasty tags, filter based on author's dynasty
+            poemsToUse = poemsToUse.filter(poem => {
+                // Get author's dynasty from author data
+                const authorDynasty = getDynastyByAuthorName(poem.auth);
+                const isMatch = authorDynasty === tagFilter ||
+                               (tagFilter === '五代' && authorDynasty === '南唐') || // Special case
+                               (tagFilter === '五代十国' && authorDynasty === '五代') || // Special case
+                               (tagFilter === '五代十国' && authorDynasty === '南唐'); // Special case
+
+                if (isMatch) {
+                    console.log(`Poem "${poem.title}" by ${poem.auth} (dynasty: ${authorDynasty}) matches dynasty tag: ${tagFilter}`);
+                }
+                return isMatch;
+            });
+        } else {
+            // For non-dynasty tags, use normal tag matching
+            poemsToUse = poemsToUse.filter(poem => {
+                const allTags = parseTagsForPoem(poem);
+                const hasTag = allTags.includes(tagFilter);
+                if (hasTag) {
+                    console.log(`Poem "${poem.title}" by ${poem.auth} has tag: ${tagFilter}`);
+                }
+                return hasTag;
+            });
+        }
+
         console.log(`Filtered from ${originalCount} to ${poemsToUse.length} poems`);
     }
 
