@@ -14,7 +14,7 @@ export const CONFIG = {
     CACHE_DURATION: 7 * 24 * 60 * 60 * 1000, // 7天
     
     // 文章判断阈值
-    ARTICLE_LENGTH_THRESHOLD: 200,
+    ARTICLE_LENGTH_THRESHOLD: 260,
     ARTICLE_TITLE_REGEX: /世家|列传|序|记|书|表|论|说|赋|解|文/,
     
     // 显示配置
