@@ -552,16 +552,13 @@ function analyzePoemLayout(poem) {
 
 // 渲染瀑布流
 async function renderWaterfall(append = false) {
-    console.log('renderWaterfall called - v20251124-2010'); // Version timestamp
     const waterfallEl = document.getElementById('waterfallContent');
-    console.log('waterfallContent element:', waterfallEl);
     if (!waterfallEl) {
         console.error('waterfallContent element not found!');
         return;
     }
 
     const poemsToUse = filteredPoems || allPoems;
-    console.log('Poems to use:', poemsToUse ? poemsToUse.length : 'null');
     if (!poemsToUse || poemsToUse.length === 0) {
         console.error('No poems available for waterfall');
         return;
@@ -753,13 +750,11 @@ function updateWaterfallSentinel() {
     window.waterfallObserver = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting && !window.isLoadingMorePoems) {
-                console.log('Sentinel intersecting - loading more poems');
                 window.isLoadingMorePoems = true;
 
                 setTimeout(async () => {
                     try {
                         await renderWaterfall(true); // Append more poems
-                        console.log('Additional poems loaded via sentinel');
                     } catch (error) {
                         console.error('Error loading more poems:', error);
                     } finally {
