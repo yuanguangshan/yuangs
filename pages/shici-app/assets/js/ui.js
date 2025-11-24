@@ -691,10 +691,17 @@ async function renderWaterfall(append = false, tagFilter = null) {
 
     // Apply tag filter if specified
     if (tagFilter) {
+        console.log(`Applying tag filter: ${tagFilter}`);
+        const originalCount = poemsToUse.length;
         poemsToUse = poemsToUse.filter(poem => {
             const allTags = parseTagsForPoem(poem);
-            return allTags.includes(tagFilter);
+            const hasTag = allTags.includes(tagFilter);
+            if (hasTag) {
+                console.log(`Poem "${poem.title}" by ${poem.auth} has tag: ${tagFilter}`);
+            }
+            return hasTag;
         });
+        console.log(`Filtered from ${originalCount} to ${poemsToUse.length} poems`);
     }
 
     // Only clear if not appending

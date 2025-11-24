@@ -165,16 +165,23 @@ export function parseTagsForPoem(poem) {
 
     // 处理type字段
     if (poem.type) {
-        allTags = allTags.concat(parseTags(poem.type));
+        const typeTags = parseTags(poem.type);
+        allTags = allTags.concat(typeTags);
     }
 
     // 处理tags字段
     if (poem.tags) {
-        allTags = allTags.concat(parseTags(poem.tags));
+        const tagTags = parseTags(poem.tags);
+        allTags = allTags.concat(tagTags);
     }
 
     // 去重
-    return [...new Set(allTags)];
+    const uniqueTags = [...new Set(allTags)];
+
+    // Debug logging
+    // console.log(`Parsed tags for "${poem.title || poem.rhythmic || 'Unknown'}":`, uniqueTags);
+
+    return uniqueTags;
 }
 
 // 生成标签HTML
