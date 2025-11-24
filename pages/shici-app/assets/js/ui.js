@@ -4,12 +4,13 @@
 import { CONFIG, getRandomColor } from './config.js?v=1.0.1';
 import { AUTHOR_DATA, getDynastyByAuthorName } from './author-data.js?v=1.0.1';
 import { fetchAndCachePoems, getRandomPoem, getRandomPoems } from './data-loader.js?v=1.0.1';
-import { 
-    insertLineBreaksAtPunctuation, 
-    isRegularPoem, 
-    formatCoupletPoem, 
-    isArticle, 
-    generateTagsHTML 
+import {
+    insertLineBreaksAtPunctuation,
+    isRegularPoem,
+    formatCoupletPoem,
+    isArticle,
+    generateTagsHTML,
+    isLongPoem
 } from './poem-display.js?v=1.0.1';
 
 // 全局状态
@@ -205,57 +206,69 @@ export async function loadRandomPoem() {
 // 显示诗词
 function displayPoem(poem) {
     if (!poem) return;
-    
+
     // 标题
     const titleEl = document.getElementById('poemTitle');
     if (titleEl) {
         titleEl.textContent = poem.title || '无题';
         titleEl.style.color = getRandomColor();
     }
-    
+
     // 作者
     const authorEl = document.getElementById('poemAuthor');
     if (authorEl) {
         const dynasty = getDynastyByAuthorName(poem.auth);
         authorEl.textContent = `${dynasty} · ${poem.auth || '佚名'}`;
     }
-    
+
     // 内容
     const verseEl = document.getElementById('poemVerse');
     const layoutToggleBtn = document.getElementById('layoutToggleBtn');
-    
+
     if (verseEl) {
         // 判断是否为文章
         const isArticleContent = isArticle(poem);
-        
+        // 判断是否为长诗（超过10行）
+        const isLongVerse = isLongPoem(poem);
+
         // 重置类名
         verseEl.className = 'poem-verse';
-        
+
         if (isArticleContent) {
             verseEl.classList.add('article-mode');
             verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
             if (layoutToggleBtn) layoutToggleBtn.style.display = 'none'; // 文章不显示切换按钮
+        } else if (isLongVerse) {
+            // 长诗（超过10行）强制使用水平布局
+            verseEl.classList.remove('vertical-mode'); // Ensure vertical class is removed
+            verseEl.classList.add('horizontal-mode');
+            verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
+            if (layoutToggleBtn) {
+                layoutToggleBtn.style.display = 'inline-block'; // 长诗也可以显示切换布局按钮
+                layoutToggleBtn.textContent = '📜'; // For horizontal layout, show the vertical layout icon
+            }
         } else {
             // 默认竖排
+            verseEl.classList.remove('horizontal-mode'); // Ensure horizontal class is removed
             verseEl.classList.add('vertical-mode');
             verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
             if (layoutToggleBtn) layoutToggleBtn.style.display = 'inline-block'; // 诗词显示切换按钮
         }
     }
 
-    
+
     // 标签
     const tagsEl = document.getElementById('poemTags');
     if (tagsEl) {
         tagsEl.innerHTML = generateTagsHTML(poem);
     }
-    
+
     // 赏析
     const descEl = document.getElementById('poemDesc');
     if (descEl) {
         descEl.innerHTML = poem.desc || '暂无赏析';
     }
-    
+
     // 显示内容
     document.getElementById('poemTextContent').style.display = 'block';
     document.getElementById('poemDescContent').style.display = 'block';
@@ -688,15 +701,26 @@ function displaySearchResults(results) {
 function togglePoemLayout() {
     const verseElem = document.getElementById('poemVerse');
     const btn = document.getElementById('layoutToggleBtn');
-    
-    if (verseElem.classList.contains('vertical-mode')) {
+
+    // 检查当前诗是否为长诗（超过10行）
+    const isLongVerse = isLongPoem(currentPoem);
+
+    if (isLongVerse) {
+        // 对于长诗，始终强制为横向布局，即使用户点击切换按钮
         verseElem.classList.remove('vertical-mode');
         verseElem.classList.add('horizontal-mode');
-        btn.textContent = '📄'; 
+        btn.textContent = '📜'; // 显示可以切换到竖排的图标，但切换操作无效
     } else {
-        verseElem.classList.remove('horizontal-mode');
-        verseElem.classList.add('vertical-mode');
-        btn.textContent = '📜'; 
+        // 对于短诗，允许正常切换
+        if (verseElem.classList.contains('vertical-mode')) {
+            verseElem.classList.remove('vertical-mode');
+            verseElem.classList.add('horizontal-mode');
+            btn.textContent = '📜';
+        } else {
+            verseElem.classList.remove('horizontal-mode');
+            verseElem.classList.add('vertical-mode');
+            btn.textContent = '📄';
+        }
     }
 }
 

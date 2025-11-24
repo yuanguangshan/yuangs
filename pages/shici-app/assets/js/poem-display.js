@@ -91,18 +91,27 @@ export function formatCoupletPoem(poem) {
 // 判断是否为文章
 export function isArticle(poem) {
     if (!poem) return false;
-    
+
     // 条件1：内容长度超过阈值
     if (poem.content && poem.content.length > CONFIG.ARTICLE_LENGTH_THRESHOLD) {
         return true;
     }
-    
+
     // 条件2：标题包含文章关键词
     if (poem.title && CONFIG.ARTICLE_TITLE_REGEX.test(poem.title)) {
         return true;
     }
-    
+
     return false;
+}
+
+// 判断是否为长诗（超过10行）
+export function isLongPoem(poem) {
+    if (!poem || !poem.content) return false;
+
+    // 分割内容为行，计算行数
+    const lines = poem.content.split('\\n').filter(line => line.trim() !== '');
+    return lines.length > 10;
 }
 
 // 处理标签（支持多种格式）
