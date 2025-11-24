@@ -444,10 +444,11 @@ function displayPoem(poem) {
         // 判断是否为长诗（超过10行）
         const isLongVerse = isLongPoem(poem);
 
-        // 重置类名
+        // 重置类名 to ensure clean state
         verseEl.className = 'poem-verse';
 
         if (isArticleContent) {
+            // Set article mode directly
             verseEl.classList.add('article-mode');
             verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
             if (layoutToggleBtn) layoutToggleBtn.style.display = 'none'; // 文章不显示切换按钮
@@ -459,22 +460,19 @@ function displayPoem(poem) {
             // For poems with 6 or more lines, use horizontal layout
             if (lineCount >= 6) {
                 // Use horizontal layout for poems with 6 or more lines
-                verseEl.classList.remove('vertical-mode', 'vertical-scroll-mode', 'vertical-mode-wider'); // Ensure vertical classes are removed
                 verseEl.classList.add('horizontal-mode');
                 verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
                 if (layoutToggleBtn) {
-                    layoutToggleBtn.style.display = 'inline-block'; // 长诗也可以显示切换布局按钮
+                    layoutToggleBtn.style.display = 'inline-block'; // 長詩也可以顯示切換佈局按鈕
                     layoutToggleBtn.textContent = '📜'; // For horizontal layout, show the vertical layout icon
                 }
             } else if (lineCount === 4) {
                 // For 4 lines, use vertical layout with special class for wider spacing
-                verseEl.classList.remove('horizontal-mode', 'vertical-scroll-mode', 'vertical-mode'); // Remove all other classes
                 verseEl.classList.add('vertical-mode', 'vertical-mode-wider');
                 verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
                 if (layoutToggleBtn) layoutToggleBtn.style.display = 'inline-block'; // 诗词显示切换按钮
             } else {
                 // For poems with fewer than 6 lines (1-5), use default vertical layout
-                verseEl.classList.remove('horizontal-mode', 'vertical-scroll-mode', 'vertical-mode-wider'); // Ensure other classes are removed
                 verseEl.classList.add('vertical-mode');
                 verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
                 if (layoutToggleBtn) layoutToggleBtn.style.display = 'inline-block'; // 诗词显示切换按钮
