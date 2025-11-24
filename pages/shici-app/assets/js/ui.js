@@ -148,6 +148,29 @@ function bindEventListeners() {
     if (themeToggle) {
         themeToggle.addEventListener('click', toggleTheme);
     }
+
+    // Theme menu toggle functionality (click outside handling)
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    if (darkModeToggle) {
+        darkModeToggle.addEventListener('click', function (e) {
+            e.stopPropagation(); // Prevent menu from closing when clicking theme button
+            const themeMenu = document.getElementById('themeMenu');
+            if (themeMenu) {
+                themeMenu.classList.toggle('active');
+            }
+        });
+    }
+
+    // Close theme menu when clicking outside
+    document.addEventListener('click', function (e) {
+        const themeMenu = document.getElementById('themeMenu');
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        if (themeMenu && darkModeToggle) {
+            if (!themeMenu.contains(e.target) && !darkModeToggle.contains(e.target)) {
+                themeMenu.classList.remove('active');
+            }
+        }
+    });
     
     // --- 详情页功能按钮 ---
     
@@ -183,9 +206,239 @@ function bindEventListeners() {
     const favoriteToggleBtn = document.getElementById('favoriteToggleBtn');
     if (favoriteToggleBtn) {
         favoriteToggleBtn.addEventListener('click', function() {
-            this.textContent = this.textContent === '♡' ? '♥' : '♡';
-            this.style.color = this.textContent === '♥' ? 'red' : '';
+            if (currentPoem) {
+                window.toggleFavorite(currentPoem);
+                updateFavoriteButton();
+            }
         });
+    }
+
+    // Menu functionality
+    const menuToggle = document.getElementById('menuToggle');
+    const menuOverlay = document.getElementById('menuOverlay');
+    const closeMenuBtn = document.getElementById('closeMenuBtn');
+    const historyBtn = document.getElementById('historyBtn');
+    const favoritesBtn = document.getElementById('favoritesBtn');
+    const aboutBtn = document.getElementById('aboutBtn');
+    const historySection = document.getElementById('historySection');
+    const favoritesSection = document.getElementById('favoritesSection');
+    const aboutSection = document.getElementById('aboutSection');
+    const historyList = document.getElementById('historyList');
+    const favoritesList = document.getElementById('favoritesList');
+
+    // Toggle menu
+    menuToggle?.addEventListener('click', function () {
+        menuOverlay.classList.add('active');
+    });
+
+    // Close menu
+    closeMenuBtn?.addEventListener('click', function () {
+        menuOverlay.classList.remove('active');
+        // Hide sections when closing
+        if (historySection) historySection.style.display = 'none';
+        if (favoritesSection) favoritesSection.style.display = 'none';
+        if (aboutSection) aboutSection.style.display = 'none';
+    });
+
+    // Close menu when clicking on overlay
+    menuOverlay?.addEventListener('click', function (e) {
+        if (e.target === menuOverlay) {
+            menuOverlay.classList.remove('active');
+            // Hide sections when closing
+            if (historySection) historySection.style.display = 'none';
+            if (favoritesSection) favoritesSection.style.display = 'none';
+            if (aboutSection) aboutSection.style.display = 'none';
+        }
+    });
+
+    // Show history section
+    historyBtn?.addEventListener('click', function () {
+        if (favoritesSection) favoritesSection.style.display = 'none';
+        if (aboutSection) aboutSection.style.display = 'none';
+        if (historySection) {
+            historySection.style.display = 'block';
+            loadHistoryList();
+        }
+    });
+
+    // Show favorites section
+    favoritesBtn?.addEventListener('click', function () {
+        if (historySection) historySection.style.display = 'none';
+        if (aboutSection) aboutSection.style.display = 'none';
+        if (favoritesSection) {
+            favoritesSection.style.display = 'block';
+            loadFavoritesList();
+        }
+    });
+
+    // Show about section
+    aboutBtn?.addEventListener('click', function () {
+        if (historySection) historySection.style.display = 'none';
+        if (favoritesSection) favoritesSection.style.display = 'none';
+        if (aboutSection) aboutSection.style.display = 'block';
+    });
+
+    // History functionality
+    const HISTORY_KEY = 'poem_history';
+    const MAX_HISTORY = 50; // Store max 50 history items
+
+    // Add poem to history
+    window.addToHistory = function(poem) {
+        if (!poem || !poem.title || !poem.auth) return;
+
+        const history = getHistoryFromStorage();
+        const newEntry = {
+            title: poem.title,
+            author: poem.auth,
+            source: poem.source || 'poem'
+        };
+
+        // Remove any existing entry with same title and author
+        const filteredHistory = history.filter(item =>
+            !(item.title === newEntry.title && item.author === newEntry.author)
+        );
+
+        // Add new entry to the beginning
+        filteredHistory.unshift(newEntry);
+
+        // Keep only the most recent MAX_HISTORY entries
+        if (filteredHistory.length > MAX_HISTORY) {
+            filteredHistory.splice(MAX_HISTORY);
+        }
+
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(filteredHistory));
+    }
+
+    // Get history from storage
+    function getHistoryFromStorage() {
+        try {
+            const history = localStorage.getItem(HISTORY_KEY);
+            return history ? JSON.parse(history) : [];
+        } catch (e) {
+            console.error('Error reading history from localStorage:', e);
+            return [];
+        }
+    }
+
+    // Load and display history list
+    function loadHistoryList() {
+        const history = getHistoryFromStorage();
+        if (historyList) {
+            historyList.innerHTML = '';
+
+            if (history.length === 0) {
+                historyList.innerHTML = '<p style="padding: 10px; text-align: center; color: var(--text-tertiary);">暂无历史记录</p>';
+                return;
+            }
+
+            history.forEach((item, index) => {
+                const historyItem = document.createElement('div');
+                historyItem.className = 'history-item';
+                historyItem.innerHTML = `
+                    <div class="title">${item.title}</div>
+                    <div class="author">${item.author}</div>
+                `;
+                historyItem.addEventListener('click', function () {
+                    searchAndDisplayPoem(item.title, item.author);
+                    if (menuOverlay) menuOverlay.classList.remove('active');
+                    if (historySection) historySection.style.display = 'none';
+                });
+                historyList.appendChild(historyItem);
+            });
+        }
+    }
+
+
+    // Load and display favorites list
+    function loadFavoritesList() {
+        const favorites = getFavoritesFromStorage();
+        if (favoritesList) {
+            favoritesList.innerHTML = '';
+
+            if (favorites.length === 0) {
+                favoritesList.innerHTML = '<p style="padding: 10px; text-align: center; color: var(--text-tertiary);">暂无收藏</p>';
+                return;
+            }
+
+            favorites.forEach((item, index) => {
+                const favoriteItem = document.createElement('div');
+                favoriteItem.className = 'favorite-item';
+                favoriteItem.innerHTML = `
+                    <div class="title">${item.title}</div>
+                    <div class="author">${item.author}</div>
+                `;
+                favoriteItem.addEventListener('click', function () {
+                    searchAndDisplayPoem(item.title, item.author);
+                    if (menuOverlay) menuOverlay.classList.remove('active');
+                    if (favoritesSection) favoritesSection.style.display = 'none';
+                });
+                favoritesList.appendChild(favoriteItem);
+            });
+        }
+    }
+
+    // Function to search and display a specific poem by title and author
+    async function searchAndDisplayPoem(title, author) {
+        // Fetch all poems if not already loaded
+        if (!allPoems) {
+            allPoems = await fetchAndCachePoems();
+        }
+
+        // Find the poem in the data
+        const poem = allPoems.find(p =>
+            p.title === title && p.auth === author
+        );
+
+        if (poem) {
+            displayPoem(poem);
+        } else {
+            alert('未找到该诗词');
+        }
+    }
+
+
+    // Add the scroll mode toggle functionality
+    const scrollModeToggle = document.getElementById('scrollModeToggle');
+    let currentDisplayMode = 'normal'; // 'normal', 'vertical', 'scroll' (for old style)
+
+    scrollModeToggle?.addEventListener('click', function () {
+        toggleScrollMode();
+    });
+}
+
+// Toggle scroll mode functionality
+function toggleScrollMode() {
+    const verseElement = document.getElementById('poemVerse');
+    if (!verseElement || !currentPoem) return;
+
+    // Remove all display mode classes
+    verseElement.classList.remove('vertical-mode', 'horizontal-mode', 'vertical-scroll-mode');
+
+    if (currentDisplayMode === 'normal') {
+        // Switch to vertical-scroll mode
+        currentDisplayMode = 'scroll';
+        verseElement.classList.add('vertical-scroll-mode');
+        // Format content for scroll mode
+        const lines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
+        const formattedContent = lines.map(line => `<span>${line}</span>`).join('');
+        verseElement.innerHTML = formattedContent;
+    } else {
+        // Switch back to normal mode
+        currentDisplayMode = 'normal';
+        // Determine which normal mode to use based on poem type
+        const isArticleContent = isArticle(currentPoem);
+        const isLongVerse = isLongPoem(currentPoem);
+
+        if (isArticleContent) {
+            verseElement.classList.add('article-mode');
+            verseElement.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content);
+        } else if (isLongVerse) {
+            verseElement.classList.add('horizontal-mode');
+            verseElement.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content);
+        } else {
+            verseElement.classList.add('vertical-mode');
+            verseElement.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content);
+        }
     }
 }
 
@@ -286,6 +539,12 @@ function displayPoem(poem) {
     document.getElementById('poemTextContent').style.display = 'block';
     document.getElementById('poemDescContent').style.display = 'block';
     document.getElementById('loading').style.display = 'none';
+
+    // Add to history and update favorite status
+    if (poem) {
+        window.addToHistory(poem);
+        updateFavoriteButton();
+    }
 }
 
 // Analyze poem layout (从原版移植)
@@ -473,6 +732,250 @@ function toggleTheme() {
     const themeToggle = document.getElementById('themeToggle');
     if (themeToggle) {
         themeToggle.textContent = document.body.classList.contains('dark-mode') ? '☀️' : '🌙';
+    }
+}
+
+// Theme switching function
+function switchTheme(themeName) {
+    // Remove all theme classes
+    document.body.classList.remove('dark-mode', 'classic-paper-theme', 'modern-minimal-theme', 'nature-green-theme', 'ocean-blue-theme');
+
+    // Apply the selected theme
+    switch(themeName) {
+        case 'light':
+            // Just remove all theme classes to get default light theme
+            break;
+        case 'dark':
+            document.body.classList.add('dark-mode');
+            break;
+        case 'classic-paper':
+            document.body.classList.add('classic-paper-theme');
+            break;
+        case 'modern-minimal':
+            document.body.classList.add('modern-minimal-theme');
+            break;
+        case 'nature-green':
+            document.body.classList.add('nature-green-theme');
+            break;
+        case 'ocean-blue':
+            document.body.classList.add('ocean-blue-theme');
+            break;
+    }
+
+    // Update the theme toggle button
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+        if (document.body.classList.contains('dark-mode')) {
+            themeToggle.textContent = '☀️';
+        } else {
+            themeToggle.textContent = '🌙';
+        }
+    }
+
+    // Close the theme menu
+    const themeMenu = document.getElementById('themeMenu');
+    if (themeMenu) {
+        themeMenu.classList.remove('active');
+    }
+}
+
+// Favorites functionality
+const FAVORITES_KEY = 'poem_favorites';
+const MAX_FAVORITES = 100; // Store max 100 favorite items
+
+// Toggle favorite status
+window.toggleFavorite = function(poem) {
+    if (!poem || !poem.title || !poem.auth) return;
+
+    const isFavorite = isPoemFavorite(poem);
+    const favorites = getFavoritesFromStorage();
+    const favoriteEntry = {
+        title: poem.title,
+        author: poem.auth,
+        source: poem.source || 'poem'
+    };
+
+    if (isFavorite) {
+        // Remove from favorites
+        const filteredFavorites = favorites.filter(item =>
+            !(item.title === favoriteEntry.title && item.author === favoriteEntry.author)
+        );
+        localStorage.setItem(FAVORITES_KEY, JSON.stringify(filteredFavorites));
+    } else {
+        // Add to favorites
+        // Remove any existing entry first to avoid duplicates
+        const filteredFavorites = favorites.filter(item =>
+            !(item.title === favoriteEntry.title && item.author === favoriteEntry.author)
+        );
+
+        // Add new entry to the beginning
+        filteredFavorites.unshift(favoriteEntry);
+
+        // Keep only MAX_FAVORITES entries
+        if (filteredFavorites.length > MAX_FAVORITES) {
+            filteredFavorites.splice(MAX_FAVORITES);
+        }
+
+        localStorage.setItem(FAVORITES_KEY, JSON.stringify(filteredFavorites));
+    }
+}
+
+// Check if a poem is in favorites
+function isPoemFavorite(poem) {
+    if (!poem || !poem.title || !poem.auth) return false;
+
+    const favorites = getFavoritesFromStorage();
+    return favorites.some(item =>
+        item.title === poem.title && item.author === poem.auth
+    );
+}
+
+// Get favorites from storage
+function getFavoritesFromStorage() {
+    try {
+        const favorites = localStorage.getItem(FAVORITES_KEY);
+        return favorites ? JSON.parse(favorites) : [];
+    } catch (e) {
+        console.error('Error reading favorites from localStorage:', e);
+        return [];
+    }
+}
+
+// Update favorite button display
+function updateFavoriteButton() {
+    if (!currentPoem) return;
+
+    const isFav = isPoemFavorite(currentPoem);
+    const favoriteToggleBtn = document.getElementById('favoriteToggleBtn');
+    if (favoriteToggleBtn) {
+        favoriteToggleBtn.textContent = isFav ? '♥' : '♡';
+        favoriteToggleBtn.style.color = isFav ? 'red' : '';
+    }
+}
+
+// Also make it available globally for the HTML onclick attributes
+window.switchTheme = switchTheme;
+
+// History functionality
+const HISTORY_KEY = 'poem_history';
+const MAX_HISTORY = 50; // Store max 50 history items
+
+// Add poem to history
+window.addToHistory = function(poem) {
+    if (!poem || !poem.title || !poem.auth) return;
+
+    const history = getHistoryFromStorage();
+    const newEntry = {
+        title: poem.title,
+        author: poem.auth,
+        source: poem.source || 'poem'
+    };
+
+    // Remove any existing entry with same title and author
+    const filteredHistory = history.filter(item =>
+        !(item.title === newEntry.title && item.author === newEntry.author)
+    );
+
+    // Add new entry to the beginning
+    filteredHistory.unshift(newEntry);
+
+    // Keep only the most recent MAX_HISTORY entries
+    if (filteredHistory.length > MAX_HISTORY) {
+        filteredHistory.splice(MAX_HISTORY);
+    }
+
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(filteredHistory));
+}
+
+// Get history from storage
+function getHistoryFromStorage() {
+    try {
+        const history = localStorage.getItem(HISTORY_KEY);
+        return history ? JSON.parse(history) : [];
+    } catch (e) {
+        console.error('Error reading history from localStorage:', e);
+        return [];
+    }
+}
+
+// Load and display history list
+function loadHistoryList() {
+    const history = getHistoryFromStorage();
+    const historyList = document.getElementById('historyList');
+    if (historyList) {
+        historyList.innerHTML = '';
+
+        if (history.length === 0) {
+            historyList.innerHTML = '<p style="padding: 10px; text-align: center; color: var(--text-tertiary);">暂无历史记录</p>';
+            return;
+        }
+
+        history.forEach((item, index) => {
+            const historyItem = document.createElement('div');
+            historyItem.className = 'history-item';
+            historyItem.innerHTML = `
+                <div class="title">${item.title}</div>
+                <div class="author">${item.author}</div>
+            `;
+            historyItem.addEventListener('click', function () {
+                searchAndDisplayPoem(item.title, item.author);
+                const menuOverlay = document.getElementById('menuOverlay');
+                const historySection = document.getElementById('historySection');
+                if (menuOverlay) menuOverlay.classList.remove('active');
+                if (historySection) historySection.style.display = 'none';
+            });
+            historyList.appendChild(historyItem);
+        });
+    }
+}
+
+// Load and display favorites list
+function loadFavoritesList() {
+    const favorites = getFavoritesFromStorage();
+    const favoritesList = document.getElementById('favoritesList');
+    if (favoritesList) {
+        favoritesList.innerHTML = '';
+
+        if (favorites.length === 0) {
+            favoritesList.innerHTML = '<p style="padding: 10px; text-align: center; color: var(--text-tertiary);">暂无收藏</p>';
+            return;
+        }
+
+        favorites.forEach((item, index) => {
+            const favoriteItem = document.createElement('div');
+            favoriteItem.className = 'favorite-item';
+            favoriteItem.innerHTML = `
+                <div class="title">${item.title}</div>
+                <div class="author">${item.author}</div>
+            `;
+            favoriteItem.addEventListener('click', function () {
+                searchAndDisplayPoem(item.title, item.author);
+                const menuOverlay = document.getElementById('menuOverlay');
+                const favoritesSection = document.getElementById('favoritesSection');
+                if (menuOverlay) menuOverlay.classList.remove('active');
+                if (favoritesSection) favoritesSection.style.display = 'none';
+            });
+            favoritesList.appendChild(favoriteItem);
+        });
+    }
+}
+
+// Function to search and display a specific poem by title and author
+async function searchAndDisplayPoem(title, author) {
+    // Fetch all poems if not already loaded
+    if (!allPoems) {
+        allPoems = await fetchAndCachePoems();
+    }
+
+    // Find the poem in the data
+    const poem = allPoems.find(p =>
+        p.title === title && p.auth === author
+    );
+
+    if (poem) {
+        displayPoem(poem);
+    } else {
+        alert('未找到该诗词');
     }
 }
 
