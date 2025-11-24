@@ -202,10 +202,24 @@ function bindEventListeners() {
         aiInterpretBtn.addEventListener('click', showAIInterpretation);
     }
     
-    // 详情页布局切换（卷轴模式）- 使用事件委托以处理动态内容
+    // 布局切换按钮 - 根据当前状态决定是切换横竖排还是切换卷轴模式
     document.addEventListener('click', function(e) {
-        if (e.target && e.target.id === 'scrollModeToggleBtn') {
-            toggleScrollMode();
+        if (e.target && e.target.id === 'layoutToggleBtn') {
+            // 检查当前内容行数，如果少于6行则保持横竖排切换功能，否则切换卷轴模式
+            if (currentPoem) {
+                const lines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
+                const lineCount = lines.length;
+                if (lineCount <= 6) {
+                    // 短诗，继续使用横竖排切换
+                    togglePoemLayout();
+                } else {
+                    // 长诗或文章，切换卷轴模式
+                    toggleScrollMode();
+                }
+            } else {
+                // 如果没有当前诗，尝试切换卷轴模式
+                toggleScrollMode();
+            }
         }
     });
     
@@ -372,7 +386,7 @@ function bindEventListeners() {
 function toggleScrollMode() {
     const verseElement = document.getElementById('poemVerse');
     const scrollModeToggle = document.getElementById('scrollModeToggle');
-    const scrollModeToggleBtn = document.getElementById('scrollModeToggleBtn');
+    const layoutToggleBtn = document.getElementById('layoutToggleBtn');
     if (!verseElement || !currentPoem) return;
 
     // Remove all display mode classes
@@ -388,10 +402,10 @@ function toggleScrollMode() {
             scrollModeToggle.innerHTML = '<span>📜</span> 退出卷轴';
         }
 
-        // Update header scroll mode button text
-        if (scrollModeToggleBtn) {
-            scrollModeToggleBtn.textContent = '📄'; // 退出卷轴模式图标
-            scrollModeToggleBtn.title = '退出卷轴模式';
+        // Update header layout toggle button text
+        if (layoutToggleBtn) {
+            layoutToggleBtn.textContent = '📄'; // 退出卷轴模式图标
+            layoutToggleBtn.title = '退出卷轴模式';
         }
 
         // Create a properly formatted scroll layout that preserves the poem's meaning
@@ -425,10 +439,18 @@ function toggleScrollMode() {
             scrollModeToggle.innerHTML = '<span>📜</span> 卷轴模式';
         }
 
-        // Update header scroll mode button text back to default
-        if (scrollModeToggleBtn) {
-            scrollModeToggleBtn.textContent = '📜'; // 卷轴模式图标
-            scrollModeToggleBtn.title = '切换卷轴模式';
+        // Update header layout toggle button text back to default
+        if (layoutToggleBtn) {
+            // Update button text based on poem length
+            const lines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
+            const lineCount = lines.length;
+            if (lineCount <= 6) {
+                layoutToggleBtn.textContent = '🔄'; // Layout toggle icon for short poems
+                layoutToggleBtn.title = '切换竖排/横排';
+            } else {
+                layoutToggleBtn.textContent = '📜'; // Scroll mode icon for long poems/articles
+                layoutToggleBtn.title = '切换卷轴模式';
+            }
         }
 
         // Call displayPoem to ensure title, author, and content are all synchronized
@@ -481,7 +503,7 @@ function displayPoem(poem) {
 
     // 内容
     const verseEl = document.getElementById('poemVerse');
-    const scrollModeToggleBtn = document.getElementById('scrollModeToggleBtn');
+    const layoutToggleBtn = document.getElementById('layoutToggleBtn');
 
     // If we're currently in scroll mode, update scroll mode content instead of default layout
     if (currentDisplayMode === 'scroll' && verseEl && verseEl.classList.contains('vertical-scroll-mode')) {
@@ -506,10 +528,10 @@ function displayPoem(poem) {
         }).join('');
 
         verseEl.innerHTML = formattedContent;
-        // Update scroll mode button text for header button
-        if (scrollModeToggleBtn) {
-            scrollModeToggleBtn.textContent = '📄'; // 退出卷轴模式图标
-            scrollModeToggleBtn.title = '退出卷轴模式';
+        // Update layout toggle button text for header button
+        if (layoutToggleBtn) {
+            layoutToggleBtn.textContent = '📄'; // 退出卷轴模式图标
+            layoutToggleBtn.title = '退出卷轴模式';
         }
         // Ensure scroll starts at the rightmost side for RTL scroll mode
         verseEl.scrollLeft = verseEl.scrollWidth - verseEl.clientWidth;
@@ -527,10 +549,18 @@ function displayPoem(poem) {
                 // Set article mode directly
                 verseEl.classList.add('article-mode');
                 verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
-                if (scrollModeToggleBtn) {
-                    scrollModeToggleBtn.style.display = 'inline-block'; // Show scroll mode toggle button
-                    scrollModeToggleBtn.textContent = '📜'; // 卷轴模式图标
-                    scrollModeToggleBtn.title = '切换卷轴模式';
+                if (layoutToggleBtn) {
+                    layoutToggleBtn.style.display = 'inline-block'; // Show layout toggle button
+                    // Update button text based on poem length
+                    const lines = poem.content.split('\\n').filter(line => line.trim() !== '');
+                    const lineCount = lines.length;
+                    if (lineCount <= 6) {
+                        layoutToggleBtn.textContent = '🔄'; // Layout toggle icon for short poems
+                        layoutToggleBtn.title = '切换竖排/横排';
+                    } else {
+                        layoutToggleBtn.textContent = '📜'; // Scroll mode icon for long poems/articles
+                        layoutToggleBtn.title = '切换卷轴模式';
+                    }
                 }
             } else {
                 // 先处理内容，获取实际显示的HTML
@@ -540,26 +570,26 @@ function displayPoem(poem) {
                 const brCount = (processedContent.match(/<br>/g) || []).length;
                 const lineCount = brCount + 1;
 
-                // console.log('Poem:', poem.title, 'Line count:', lineCount, 'BR count:', brCount);
+                // console.log('Poem:', poem.title, 'Line count:', lineCount, 'BR count:', brCount)
 
                 // For poems with more than 6 lines, use horizontal layout
                 if (lineCount > 6) {
                     // Use horizontal layout for poems with more than 6 lines
                     verseEl.classList.add('horizontal-mode');
                     verseEl.innerHTML = processedContent;
-                    if (scrollModeToggleBtn) {
-                        scrollModeToggleBtn.style.display = 'inline-block';
-                        scrollModeToggleBtn.textContent = '📜'; // 卷轴 mode icon
-                        scrollModeToggleBtn.title = '切换卷轴模式';
+                    if (layoutToggleBtn) {
+                        layoutToggleBtn.style.display = 'inline-block';
+                        layoutToggleBtn.textContent = '📜'; // Scroll mode icon for long poems
+                        layoutToggleBtn.title = '切换卷轴模式';
                     }
                 } else {
                     // For poems with 6 or fewer lines, use default vertical layout
                     verseEl.classList.add('vertical-mode');
                     verseEl.innerHTML = processedContent;
-                    if (scrollModeToggleBtn) {
-                        scrollModeToggleBtn.style.display = 'inline-block';
-                        scrollModeToggleBtn.textContent = '📜'; // 卷轴 mode icon
-                        scrollModeToggleBtn.title = '切换卷轴模式';
+                    if (layoutToggleBtn) {
+                        layoutToggleBtn.style.display = 'inline-block';
+                        layoutToggleBtn.textContent = '🔄'; // Layout toggle icon for short poems
+                        layoutToggleBtn.title = '切换竖排/横排';
                     }
                 }
             }
@@ -1587,11 +1617,67 @@ function displaySearchResults(results) {
     resultsContainer.style.display = 'block';
 }
 
-// 切换详情页布局（循环切换：竖排 -> 横排 -> 竖排...）- 已停用，使用卷轴模式切换
+// 切换详情页布局（循环切换：竖排 -> 横排 -> 竖排...）
 function togglePoemLayout() {
-    // 此功能已停用，现在使用卷轴模式切换功能
-    // 如果被调用，转而使用scrollModeToggleBtn来切换卷轴模式
-    toggleScrollMode();
+    const verseElem = document.getElementById('poemVerse');
+    const btn = document.getElementById('layoutToggleBtn');
+
+    if (verseElem.classList.contains('vertical-mode') || verseElem.classList.contains('vertical-mode-wider')) {
+        // 从竖排（包括宽间距模式）切换到横排
+        verseElem.classList.remove('vertical-mode', 'vertical-mode-wider');
+        verseElem.classList.add('horizontal-mode');
+        verseElem.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content); // Update content for horizontal mode
+        if (btn) {
+            btn.textContent = '🔄'; // Changed to show revert icon
+            btn.title = '切换竖排/横排';
+        }
+    } else if (verseElem.classList.contains('horizontal-mode')) {
+        // 从横排切换回竖排 (check original line count to decide which vertical mode to use)
+        verseElem.classList.remove('horizontal-mode');
+        // Determine which vertical mode to use based on current poem
+        const lines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
+        const lineCount = lines.length;
+        if (lineCount < 6) {
+            if (lineCount === 4) {
+                // For 4 lines, use vertical layout with special class for wider spacing
+                verseElem.classList.add('vertical-mode-wider');
+            } else {
+                // For other counts under 6, use default vertical mode
+                verseElem.classList.add('vertical-mode');
+            }
+            verseElem.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content); // Revert to normal formatting
+        } else {
+            // If the poem has 6 or more lines, keep horizontal mode
+            verseElem.classList.add('horizontal-mode');
+            verseElem.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content); // Make sure content is formatted for horizontal mode
+        }
+        if (btn) {
+            btn.textContent = '🔄';
+            btn.title = '切换竖排/横排';
+        }
+    } else {
+        // Default to appropriate mode based on line count for first time
+        const lines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
+        const lineCount = lines.length;
+
+        verseElem.classList.remove('horizontal-mode', 'vertical-scroll-mode', 'vertical-mode-wider');
+
+        if (lineCount < 6) {
+            if (lineCount === 4) {
+                verseElem.classList.add('vertical-mode-wider');
+            } else {
+                verseElem.classList.add('vertical-mode');
+            }
+            verseElem.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content);
+        } else {
+            verseElem.classList.add('horizontal-mode');
+            verseElem.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content);
+        }
+        if (btn) {
+            btn.textContent = '🔄';
+            btn.title = '切换竖排/横排';
+        }
+    }
 }
 
 // AI解读 (完整实现)
