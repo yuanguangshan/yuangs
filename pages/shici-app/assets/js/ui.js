@@ -453,24 +453,29 @@ function displayPoem(poem) {
             verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
             if (layoutToggleBtn) layoutToggleBtn.style.display = 'none'; // 文章不显示切换按钮
         } else {
-            // 分割内容为行，计算行数
-            const lines = poem.content.split('\\n').filter(line => line.trim() !== '');
-            const lineCount = lines.length;
+            // 先处理内容，获取实际显示的HTML
+            const processedContent = insertLineBreaksAtPunctuation(poem.content);
+            
+            // 统计实际显示的行数（<br>标签数量 + 1）
+            const brCount = (processedContent.match(/<br>/g) || []).length;
+            const lineCount = brCount + 1;
+            
+            // console.log('Poem:', poem.title, 'Line count:', lineCount, 'BR count:', brCount);
 
             // For poems with more than 6 lines, use horizontal layout
             if (lineCount > 6) {
                 // Use horizontal layout for poems with more than 6 lines
                 verseEl.classList.add('horizontal-mode');
-                verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
+                verseEl.innerHTML = processedContent;
                 if (layoutToggleBtn) {
-                    layoutToggleBtn.style.display = 'inline-block'; // 長詩也可以顯示切換佈局按鈕
+                    layoutToggleBtn.style.display = 'inline-block';
                     layoutToggleBtn.textContent = '📜'; // For horizontal layout, show the vertical layout icon
                 }
             } else {
                 // For poems with 6 or fewer lines, use default vertical layout
                 verseEl.classList.add('vertical-mode');
-                verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
-                if (layoutToggleBtn) layoutToggleBtn.style.display = 'inline-block'; // 诗词显示切换按钮
+                verseEl.innerHTML = processedContent;
+                if (layoutToggleBtn) layoutToggleBtn.style.display = 'inline-block';
             }
         }
     }
