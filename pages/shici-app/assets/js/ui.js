@@ -201,6 +201,53 @@ function displayPoem(poem) {
     document.getElementById('loading').style.display = 'none';
 }
 
+// Analyze poem layout (从原版移植)
+function analyzePoemLayout(poem) {
+    const content = poem.content.replace(/\s+/g, ''); // Remove whitespace
+    const sentences = content.split(/[。！？!?]/).filter(s => s.trim() !== '');
+
+    // 1. Check if it's a 5-character or 7-character regulated verse (整齐的格律)
+    // Simple check: see if the first line length is 5 or 7
+    const firstLineLen = sentences[0] ? sentences[0].replace(/[，,]/g, '').length : 0;
+    const isRegular = (firstLineLen === 5 || firstLineLen === 7) &&
+        sentences.every(s => {
+            const cleanLen = s.replace(/[，,]/g, '').length;
+            // 一句可能是5/7字，或者是一联10/14字
+            return cleanLen === firstLineLen * 2 || cleanLen === firstLineLen;
+        });
+
+    let displayLines = [];
+    let layoutMode = 'vertical'; // default mode
+
+    if (isRegular && firstLineLen === 5 || firstLineLen === 7) {
+        // Mode 1: Vertical layout for regular 5/7-character poems
+        displayLines = sentences.slice(0, 4).map(s => {
+            const parts = s.split(/[，,]/);
+            return parts.join('');
+        });
+        layoutMode = 'vertical';
+    } else {
+        // Mode 2: For ci/irregular poems, horizontal center layout
+        // Display first two clauses from first two sentences (simplified)
+        if (sentences.length >= 2) {
+            displayLines = [sentences[0].split(/[，,]/)[0] || '', sentences[0].split(/[，,]/)[1] || ''];
+        } else if (sentences.length === 1) {
+            const parts = sentences[0].split(/[，,]/);
+            displayLines = [parts[0] || '', parts[1] || ''];
+        } else {
+            displayLines = ['诗词内容', '诗词内容'];
+        }
+        layoutMode = 'horizontal-center';
+    }
+
+    return {
+        lines: displayLines,
+        mode: layoutMode,
+        title: poem.title,
+        author: poem.auth
+    };
+}
+
 // 渲染瀑布流
 async function renderWaterfall() {
     console.log('renderWaterfall called');
