@@ -232,13 +232,14 @@ function bindEventListeners() {
                 // 如果没有换行，按句号等标点符号分割
                 if (contentLines.length === 1) {
                     const content = contentLines[0];
-                    contentLines = content.match(/[^。！？]+[。！？]?/g) || [content];
+                    // 修改正则表达式，确保标点符号在句子末尾而不是开头
+                    contentLines = content.match(/[^。！？]+[。！？]/g) || [content];
                     contentLines = contentLines.filter(line => line.trim() !== '');
                 }
 
                 // 创建列 div 元素用于显示
                 const formattedContent = contentLines.map(line => {
-                    const cleanLine = line.trim().replace(/[。！？]$/g, ''); // 去除结尾标点
+                    const cleanLine = line.trim();
                     return `<div class="scroll-column">${cleanLine}</div>`;
                 }).join('');
 
