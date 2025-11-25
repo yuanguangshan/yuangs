@@ -323,7 +323,17 @@ export function formatPoemWithLineBreaks(content, poem) {
       return renderLinesToHTML(lines);
     }
 
-    // 无行或行数不理想，则按句末切句
+    // 【新增】优先尝试按逗号和句末标点切分（针对绝句）
+    // 这样可以将"独在异乡为异客，每逢佳节倍思亲。遥知兄弟登高处，遍插茱萸少一人。"
+    // 拆分成四句显示
+    const halfSentences = normalized.split(/[，。！？,.!?]/).filter(s => s.trim() !== "");
+    if (halfSentences.length === 4) {
+      return renderLinesToHTML(halfSentences);
+    } else if (halfSentences.length === 8) {
+      return renderLinesToHTML(mergeEveryTwo(halfSentences));
+    }
+
+    // 按句末切句
     const sentences = splitBySentenceEnds(normalized);
     if (sentences.length === 4) {
       return renderLinesToHTML(sentences);
