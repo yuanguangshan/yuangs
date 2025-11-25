@@ -92,16 +92,36 @@ export function formatCoupletPoem(poem) {
 export function isArticle(poem) {
     if (!poem) return false;
 
-    // 条件1：内容长度超过阈值
+    // 获取所有标签
+    const allTags = parseTagsForPoem(poem);
+    const tagString = allTags.join(' ');
+
+    // 1. 如果tag 有 古文观止判断为文章
+    if (tagString.includes('古文观止')) {
+        return true;
+    }
+
+    // 2. 如果有唐诗或宋词标签，则为非文章
+    if (tagString.includes('唐诗') || tagString.includes('宋词')) {
+        return false;
+    }
+
+    // 3. 如果标签是诗经，为非文章
+    if (tagString.includes('诗经')) {
+        return false;
+    }
+
+    // 4. 如果文章字数大于600字，判断为文章
     if (poem.content && poem.content.length > CONFIG.ARTICLE_LENGTH_THRESHOLD) {
         return true;
     }
 
-    // 条件2：标题包含文章关键词
-    if (poem.title && CONFIG.ARTICLE_TITLE_REGEX.test(poem.title)) {
-        return true;
+    // 5. 小于80字，判断为非文章
+    if (poem.content && poem.content.length < 80) {
+        return false;
     }
 
+    // 6. 其他情况，优先判断为非文章
     return false;
 }
 
