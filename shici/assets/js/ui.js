@@ -12,7 +12,8 @@ import {
     generateTagsHTML,
     isLongPoem,
     needsScrollableVerticalMode,
-    parseTagsForPoem
+    parseTagsForPoem,
+    insertLineBreaksAtPunctuation
 } from './poem-display.js?v=1.0.1';
 
 // 全局状态
@@ -205,44 +206,74 @@ function bindEventListeners() {
         aiInterpretBtn.addEventListener('click', showAIInterpretation);
     }
     
-    // 布局切换按钮 - 根据当前显示模式决定是切换横竖排还是切换卷轴模式
+    // 布局切换按钮 - 实现横版、竖版、卷轴三种模式轮换切换
     document.addEventListener('click', function(e) {
         if (e.target && e.target.id === 'layoutToggleBtn') {
             const verseElement = document.getElementById('poemVerse');
             if (!verseElement || !currentPoem) return;
 
-            // 检查当前显示模式
+            // 确定当前显示模式
             const isScrollMode = verseElement.classList.contains('vertical-scroll-mode');
             const isHorizontalMode = verseElement.classList.contains('horizontal-mode');
-            const isArticleMode = verseElement.classList.contains('article-mode');
-            const isVerticalMode = verseElement.classList.contains('vertical-mode');
+            // 将原来的 article-mode 和 vertical-mode 都视为竖版模式
+            const isVerticalMode = verseElement.classList.contains('vertical-mode') ||
+                                  verseElement.classList.contains('article-mode');
 
-            if (isScrollMode) {
-                // 如果当前是卷轴模式，切换到横向模式而不是调用 displayPoem
-                // 因为 displayPoem 会根据内容类型重新设置为 article-mode
-                // 同时更新 currentDisplayMode 状态
+            // 移除所有模式类
+            verseElement.classList.remove('vertical-mode', 'horizontal-mode', 'vertical-scroll-mode', 'article-mode');
 
-                // 切换到横向模式
-                verseElement.className = 'poem-verse horizontal-mode';
-                verseElement.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem);
+            if (isHorizontalMode) {
+                // 横版 → 竖版
+                verseElement.classList.add('vertical-mode');
+                verseElement.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content);
 
-                // 更新全局模式状态
                 currentDisplayMode = 'normal';
 
                 if (layoutToggleBtn) {
                     layoutToggleBtn.textContent = '📜'; // 切换到卷轴模式
                     layoutToggleBtn.title = '切换卷轴模式';
                 }
-            } else {
-                // 非卷轴模式下，检查内容长度决定行为
-                const lines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
-                const lineCount = lines.length;
-                if (lineCount <= 6) {
-                    // 短诗，使用横竖排切换
-                    togglePoemLayout();
-                } else {
-                    // 长诗或文章，切换到卷轴模式
-                    toggleScrollMode();
+            } else if (isVerticalMode) {
+                // 竖版 → 卷轴
+                verseElement.classList.add('vertical-scroll-mode');
+
+                // Create a properly formatted scroll layout that preserves the poem's meaning
+                let contentLines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
+
+                // If no line breaks, split by sentence punctuation to create meaningful segments
+                if (contentLines.length === 1) {
+                    const content = contentLines[0];
+                    contentLines = content.match(/[^。！？]+[。！？]?/g) || [content];
+                    contentLines = contentLines.filter(line => line.trim() !== '');
+                }
+
+                // Create column divs for each meaningful line/sentence
+                const formattedContent = contentLines.map(line => {
+                    const cleanLine = line.trim().replace(/[。！？]$/g, ''); // Remove ending punctuation for cleaner look
+                    return `<div class="scroll-column">${cleanLine}</div>`;
+                }).join('');
+
+                verseElement.innerHTML = formattedContent;
+
+                currentDisplayMode = 'scroll';
+
+                if (layoutToggleBtn) {
+                    layoutToggleBtn.textContent = '📄'; // 退出卷轴模式
+                    layoutToggleBtn.title = '退出卷轴模式';
+                }
+
+                // Ensure scroll starts at the rightmost side for RTL scroll mode
+                verseElement.scrollLeft = verseElement.scrollWidth - verseElement.clientWidth;
+            } else if (isScrollMode) {
+                // 卷轴 → 横版
+                verseElement.classList.add('horizontal-mode');
+                verseElement.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem);
+
+                currentDisplayMode = 'normal';
+
+                if (layoutToggleBtn) {
+                    layoutToggleBtn.textContent = '🔄'; // 切换竖版模式
+                    layoutToggleBtn.title = '切换竖版模式';
                 }
             }
         }
@@ -558,81 +589,23 @@ function displayPoem(poem) {
         verseEl.scrollLeft = verseEl.scrollWidth - verseEl.clientWidth;
     } else {
         if (verseEl) {
-            // 判断是否为文章
-            const isArticleContent = isArticle(poem);
-            // 判断是否为长诗（超过10行）
-            const isLongVerse = isLongPoem(poem);
-
             // 重置类名 to ensure clean state
             verseEl.className = 'poem-verse';
 
-            if (isArticleContent) {
-                // Set article mode directly
-                verseEl.classList.add('article-mode');
-                verseEl.innerHTML = formatPoemWithLineBreaks(poem.content, poem);
-                if (layoutToggleBtn) {
-                    layoutToggleBtn.style.display = 'inline-block'; // Show layout toggle button
-                    // Update button text based on poem length
-                    const lines = poem.content.split('\\n').filter(line => line.trim() !== '');
-                    const lineCount = lines.length;
-                    if (lineCount <= 6) {
-                        layoutToggleBtn.textContent = '🔄'; // Layout toggle icon for short poems
-                        layoutToggleBtn.title = '切换竖排/横排';
-                    } else {
-                        layoutToggleBtn.textContent = '📜'; // Scroll mode icon for long poems/articles
-                        layoutToggleBtn.title = '切换卷轴模式';
-                    }
-                }
-            } else {
-                // 先处理内容，获取实际显示的HTML
-                const processedContent = formatPoemWithLineBreaks(poem.content, poem);
-
-                // 统计实际显示的行数（<br>标签数量 + 1）
-                const brCount = (processedContent.match(/<br>/g) || []).length;
-                const lineCount = brCount + 1;
-
-                // console.log('Poem:', poem.title, 'Line count:', lineCount, 'BR count:', brCount)
-
-                // For poems with more than 6 lines, use horizontal layout
-                if (lineCount > 6) {
-                    // Use horizontal layout for poems with more than 6 lines
-                    verseEl.classList.add('horizontal-mode');
-                    verseEl.innerHTML = processedContent;
-                    if (layoutToggleBtn) {
-                        layoutToggleBtn.style.display = 'inline-block';
-                        layoutToggleBtn.textContent = '📜'; // Scroll mode icon for long poems
-                        layoutToggleBtn.title = '切换卷轴模式';
-                    }
+            // 所有内容都使用竖版显示（以标点符号分割，支持滚动），不再区分文章模式
+            verseEl.classList.add('vertical-mode');
+            verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
+            if (layoutToggleBtn) {
+                layoutToggleBtn.style.display = 'inline-block'; // Show layout toggle button
+                // Update button text based on poem length
+                const lines = poem.content.split('\\n').filter(line => line.trim() !== '');
+                const lineCount = lines.length;
+                if (lineCount <= 6) {
+                    layoutToggleBtn.textContent = '🔄'; // 切换到横版模式
+                    layoutToggleBtn.title = '切换横版模式';
                 } else {
-                    // For poems with 6 or fewer lines, create individual column-like elements for each line
-                    // to match the scroll mode style (each line as its own vertical element)
-
-                    // First, process content to get the individual lines
-                    let contentLines = poem.content.split('\\n').filter(line => line.trim() !== '');
-
-                    // If no line breaks, split by punctuation to create meaningful segments
-                    if (contentLines.length === 1) {
-                        const content = contentLines[0];
-                        contentLines = content.match(/[^。！？]+[。！？]?/g) || [content];
-                        contentLines = contentLines.filter(line => line.trim() !== '');
-                    }
-
-                    // Create individual line elements for each line to match scroll mode structure
-                    const lineElements = contentLines.map((line, index) => {
-                        const cleanLine = line.trim().replace(/[。！？]$/g, '');
-                        return `<div class="vertical-line-element" data-line-index="${index}">${cleanLine}</div>`;
-                    }).join('');
-
-                    // Use the individual line elements directly and add the vertical-mode-with-columns class to the main container
-                    verseEl.innerHTML = lineElements;
-                    verseEl.classList.add('vertical-mode-with-columns');
-                    // This will make each line behave like a column in scroll mode
-
-                    if (layoutToggleBtn) {
-                        layoutToggleBtn.style.display = 'inline-block';
-                        layoutToggleBtn.textContent = '🔄'; // Layout toggle icon for short poems
-                        layoutToggleBtn.title = '切换竖排/横排';
-                    }
+                    layoutToggleBtn.textContent = '📜'; // 切换到卷轴模式
+                    layoutToggleBtn.title = '切换卷轴模式';
                 }
             }
         }
