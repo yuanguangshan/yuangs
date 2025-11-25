@@ -1,41 +1,44 @@
 // poem-display.js - 诗词显示逻辑模块（简化与稳健化版，含"\\n"转真实换行修复）
 // 处理诗词的格式化和渲染
 
-import { CONFIG } from './config.js';
+import { CONFIG } from "./config.js";
 
 /* =========================
    标点常量与工具函数
    ========================= */
-const SENTENCE_END = /[。！？!?]/;              // 句末标点（单次）
-const HALF_PAUSE = /[，,、；;]/;               // 半句停顿（逗号/顿号/分号）
+const SENTENCE_END = /[。！？!?]/; // 句末标点（单次）
+const HALF_PAUSE = /[，,、；;]/; // 半句停顿（逗号/顿号/分号）
 const PUNCT_GLOBAL = /[，。！？、；：,.!?;:]/g;
 const QUOTES_BRACKETS_GLOBAL = /["""‘’'（）\(\)《》〈〉【】\[\]『』「」]/g;
 
 function normalizeContent(content) {
-  if (!content) return '';
+  if (!content) return "";
   // 关键修复：把字面量 "\r\n" 和 "\n" 还原为真实换行
   // 避免页面出现可见的 '\n'
   content = content
-    .replace(/\\r\\n/g, '\n')
-    .replace(/\\n/g, '\n')
-    .replace(/\\r/g, '\n');
+    .replace(/\\r\\n/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\n");
 
   // 统一实际换行为 \n
-  let s = content.replace(/\r\n?/g, '\n');
+  let s = content.replace(/\r\n?/g, "\n");
 
   // 去除每行首尾空白并丢弃空行
-  const lines = s.split('\n').map(l => l.trim()).filter(l => l !== '');
-  return lines.join('\n');
+  const lines = s
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l !== "");
+  return lines.join("\n");
 }
 
 function stripPunctAndQuotes(s) {
-  return s.replace(PUNCT_GLOBAL, '').replace(QUOTES_BRACKETS_GLOBAL, '').trim();
+  return s.replace(PUNCT_GLOBAL, "").replace(QUOTES_BRACKETS_GLOBAL, "").trim();
 }
 
 function splitBySentenceEnds(content) {
   // 将句末引号/右括号等并入句尾
   const result = [];
-  let buf = '';
+  let buf = "";
   for (let i = 0; i < content.length; i++) {
     const ch = content[i];
     buf += ch;
@@ -46,7 +49,7 @@ function splitBySentenceEnds(content) {
         j++;
       }
       result.push(buf.trim());
-      buf = '';
+      buf = "";
       i = j - 1;
     }
   }
@@ -57,13 +60,13 @@ function splitBySentenceEnds(content) {
 function splitHalfByCommaOrPause(sentence) {
   // 按半句停顿切分；保留停顿标点在片段末尾
   const parts = [];
-  let buf = '';
+  let buf = "";
   for (let i = 0; i < sentence.length; i++) {
     const ch = sentence[i];
     buf += ch;
     if (HALF_PAUSE.test(ch)) {
       parts.push(buf.trim());
-      buf = '';
+      buf = "";
     }
   }
   if (buf.trim()) parts.push(buf.trim());
@@ -73,17 +76,20 @@ function splitHalfByCommaOrPause(sentence) {
 function mergeEveryTwo(lines) {
   const out = [];
   for (let i = 0; i < lines.length; i += 2) {
-    out.push(lines[i] + (lines[i + 1] || ''));
+    out.push(lines[i] + (lines[i + 1] || ""));
   }
   return out;
 }
 
 function renderLinesToHTML(lines) {
-  const joined = lines.join('\n');
+  const joined = lines.join("\n");
   let html = joined
-    .replace(/\n/g, '<br>')
-    .replace(/(<br>\s*){3,}/g, '<br><div class="poem-paragraph-break"></div><br>')
-    .replace(/(<br>\s*){2}/g, '<br><br>');
+    .replace(/\n/g, "<br>")
+    .replace(
+      /(<br>\s*){3,}/g,
+      '<br><div class="poem-paragraph-break"></div><br>'
+    )
+    .replace(/(<br>\s*){2}/g, "<br><br>");
   return html;
 }
 
@@ -95,12 +101,15 @@ export function isRegularPoemWithPunctuation(content) {
   if (!content) return false;
 
   const normalized = normalizeContent(content);
-  const lines = normalized.split('\n').filter(l => l !== '');
+  const lines = normalized.split("\n").filter((l) => l !== "");
   if (lines.length >= 2) {
     // 基于行：所有行去标点与引号后长度一致且为 5 或 7
-    const cleanLens = lines.map(l => stripPunctAndQuotes(l).length);
+    const cleanLens = lines.map((l) => stripPunctAndQuotes(l).length);
     const uniqueLens = [...new Set(cleanLens)];
-    if (uniqueLens.length === 1 && (uniqueLens[0] === 5 || uniqueLens[0] === 7)) {
+    if (
+      uniqueLens.length === 1 &&
+      (uniqueLens[0] === 5 || uniqueLens[0] === 7)
+    ) {
       return true;
     }
     return false;
@@ -113,8 +122,10 @@ export function isRegularPoemWithPunctuation(content) {
   let ok = 0;
   for (const sen of sentences) {
     const halves = splitHalfByCommaOrPause(sen);
-    const lengths = halves.map(h => stripPunctAndQuotes(h).length).filter(n => n > 0);
-    if (lengths.length > 0 && lengths.every(n => n === 5 || n === 7)) ok++;
+    const lengths = halves
+      .map((h) => stripPunctAndQuotes(h).length)
+      .filter((n) => n > 0);
+    if (lengths.length > 0 && lengths.every((n) => n === 5 || n === 7)) ok++;
   }
   return ok / sentences.length >= 0.8;
 }
@@ -122,12 +133,12 @@ export function isRegularPoemWithPunctuation(content) {
 export function isRegularPoem(poem) {
   if (!poem || !poem.content) return false;
   const normalized = normalizeContent(poem.content);
-  const lines = normalized.split('\n').filter(l => l !== '');
+  const lines = normalized.split("\n").filter((l) => l !== "");
   if (lines.length < 2) return false;
 
-  const cleanLens = lines.map(l => stripPunctAndQuotes(l).length);
-  const all5 = cleanLens.every(n => n === 5);
-  const all7 = cleanLens.every(n => n === 7);
+  const cleanLens = lines.map((l) => stripPunctAndQuotes(l).length);
+  const all5 = cleanLens.every((n) => n === 5);
+  const all7 = cleanLens.every((n) => n === 7);
   return all5 || all7;
 }
 
@@ -135,49 +146,137 @@ export function isRegularPoem(poem) {
    文章/长诗判定与滚动需求
    ========================= */
 
-export function isArticle(poem) {
+// 计算数组的标准差
+function calculateStandardDeviation(arr) {
+  if (arr.length === 0) return 0;
+  const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+  const variance =
+    arr.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / arr.length;
+  return Math.sqrt(variance);
+}
+
+// 检测是否为规整诗词句式 (5言或7言为主)
+function hasRegularPoemPattern(lengths) {
+  if (lengths.length === 0) return false;
+  const count5or7 = lengths.filter((len) => len === 5 || len === 7).length;
+  return count5or7 / lengths.length > 0.7; // 70%以上是5或7言
+}
+
+/**
+ * 高级文章判断函数 - 使用多维度评分机制
+ * @param {Object} poem - 诗词对象
+ * @returns {boolean} - 是否为文章
+ */
+export function isArticleAdvanced(poem) {
   if (!poem) return false;
 
+  let score = 0; // 基准分0，>10为文章，<-10为诗词
+  const weights = {
+    tag: 40,
+    sentence: 30,
+    structure: 20,
+    length: 10,
+  };
+
+  // === 1. 标签特征分析 (40%) ===
   const allTags = parseTagsForPoem(poem);
-  const tagString = allTags.join(' ');
+  const tagString = allTags.join(" ");
 
-  // 1. 古文观止 => 文章
-  if (tagString.includes('古文观止')) return true;
-
-  // 2. 唐诗/宋词 => 非文章
-  if (tagString.includes('唐诗') || tagString.includes('宋词')) return false;
-
-  // 3. 诗经 => 非文章
-  if (tagString.includes('诗经')) return false;
-
-  // 4. 统计每句字数离散度
-  if (poem.content) {
-    const sentences = poem.content.split(/[，。！？,.!?、；：]/).filter(s => s.trim() !== '');
-    const lengths = sentences.map(s => s.trim().length);
-    const unique = new Set(lengths);
-    if (unique.size > 6) return true;
-    if (unique.size < 3) return false;
+  if (
+    tagString.includes("古文观止") ||
+    tagString.includes("散文") ||
+    tagString.includes("赋")
+  ) {
+    score += weights.tag;
+  } else if (
+    tagString.includes("唐诗") ||
+    tagString.includes("宋词") ||
+    tagString.includes("诗经")
+  ) {
+    score -= weights.tag;
   }
 
-  // 5. 字数阈值
-  if (poem.content && poem.content.length > CONFIG.ARTICLE_LENGTH_THRESHOLD) return true;
+  // === 2. 句式特征分析 (30%) ===
+  if (poem.content) {
+    const sentences = poem.content
+      .split(/[，。！？,.!?、；：]/)
+      .filter((s) => s.trim() !== "");
+    const lengths = sentences
+      .map((s) => s.trim().length)
+      .filter((len) => len > 0);
 
-  // 6. 很短 => 非文章
-  if (poem.content && poem.content.length < 80) return false;
+    if (lengths.length > 0) {
+      // 2.1 句长离散度
+      const stdDev = calculateStandardDeviation(lengths);
+      if (stdDev > 8) {
+        score += weights.sentence * 0.6; // 高离散度 -> 文章
+      } else if (stdDev < 3) {
+        score -= weights.sentence * 0.6; // 低离散度 -> 诗词
+      }
 
-  // 7. 默认非文章
-  return false;
+      // 2.2 规整诗词模式检测
+      if (hasRegularPoemPattern(lengths)) {
+        score -= weights.sentence * 0.4; // 规整句式 -> 诗词
+      }
+    }
+  }
+
+  // === 3. 结构特征分析 (20%) ===
+  if (poem.content) {
+    const normalized = normalizeContent(poem.content);
+    const lines = normalized.split("\n").filter((l) => l !== "");
+
+    // 3.1 段落分析 (通过连续换行判断)
+    const paragraphs = poem.content
+      .split(/\n\s*\n/)
+      .filter((p) => p.trim() !== "");
+    if (paragraphs.length > 3) {
+      score += weights.structure * 0.5; // 多段落 -> 文章
+    }
+
+    // 3.2 规整性检测
+    if (isRegularPoemWithPunctuation(poem.content)) {
+      score -= weights.structure * 0.5; // 规整诗 -> 诗词
+    }
+  }
+
+  // === 4. 长度特征分析 (10%) ===
+  if (poem.content) {
+    const contentLength = poem.content.length;
+    if (contentLength > 500) {
+      score += weights.length; // 超长 -> 文章
+    } else if (contentLength < 80) {
+      score -= weights.length; // 极短 -> 诗词
+    }
+  }
+
+  // === 最终判断 ===
+  return score > 10; // 阈值可调整
+}
+
+/**
+ * 原有的简化版文章判断函数 - 现在调用高级版本
+ * 保留此函数以保持向后兼容性
+ * @param {Object} poem - 诗词对象
+ * @returns {boolean} - 是否为文章
+ */
+export function isArticle(poem) {
+  return isArticleAdvanced(poem);
 }
 
 export function isLongPoem(poem) {
   if (!poem || !poem.content) return false;
-  const lines = normalizeContent(poem.content).split('\n').filter(l => l !== '');
+  const lines = normalizeContent(poem.content)
+    .split("\n")
+    .filter((l) => l !== "");
   return lines.length > 10;
 }
 
 export function needsScrollableVerticalMode(poem) {
   if (!poem || !poem.content) return false;
-  const lines = normalizeContent(poem.content).split('\n').filter(l => l !== '');
+  const lines = normalizeContent(poem.content)
+    .split("\n")
+    .filter((l) => l !== "");
   if (lines.length >= 7 && lines.length <= 10) return true;
   return false;
 }
@@ -189,7 +288,7 @@ export function needsScrollableVerticalMode(poem) {
 // 兼容接口：插入标点符号后的换行（文章 vs 短诗）
 export function insertLineBreaksAtPunctuation(content) {
   const normalized = normalizeContent(content);
-  if (!normalized) return '';
+  if (!normalized) return "";
 
   // 文章模式：只在句末断句
   if (normalized.length > CONFIG.ARTICLE_LENGTH_THRESHOLD) {
@@ -215,7 +314,7 @@ export function formatPoemWithLineBreaks(content, poem) {
   // 若是规整诗（五言/七言）优先采用 4/8 规则
   if (isRegularPoemWithPunctuation(normalized)) {
     // 先按行
-    let lines = normalized.split('\n').filter(l => l !== '');
+    let lines = normalized.split("\n").filter((l) => l !== "");
     if (lines.length === 4) {
       return renderLinesToHTML(lines);
     } else if (lines.length === 8) {
@@ -257,15 +356,17 @@ export function formatPoemWithLineBreaks(content, poem) {
    ========================= */
 
 export function formatCoupletPoem(poem) {
-  const lines = normalizeContent(poem.content || '').split('\n').filter(l => l !== '');
-  let html = '';
+  const lines = normalizeContent(poem.content || "")
+    .split("\n")
+    .filter((l) => l !== "");
+  let html = "";
   for (let i = 0; i < lines.length; i += 2) {
     html += '<div class="couplet-row">';
     html += `<div class="couplet-line">${lines[i]}</div>`;
     if (i + 1 < lines.length) {
       html += `<div class="couplet-line">${lines[i + 1]}</div>`;
     }
-    html += '</div>';
+    html += "</div>";
   }
   return html;
 }
@@ -279,25 +380,44 @@ export function parseTags(tagField) {
   if (!tagField) return allTags;
 
   if (Array.isArray(tagField)) {
-    tagField.forEach(tagItem => {
-      if (typeof tagItem === 'string') {
-        if (tagItem.includes(',')) {
-          allTags = allTags.concat(tagItem.split(',').map(t => t.trim()).filter(Boolean));
-        } else if (tagItem.includes('/')) {
-          allTags = allTags.concat(tagItem.split('/').map(t => t.trim()).filter(Boolean));
+    tagField.forEach((tagItem) => {
+      if (typeof tagItem === "string") {
+        if (tagItem.includes(",")) {
+          allTags = allTags.concat(
+            tagItem
+              .split(",")
+              .map((t) => t.trim())
+              .filter(Boolean)
+          );
+        } else if (tagItem.includes("/")) {
+          allTags = allTags.concat(
+            tagItem
+              .split("/")
+              .map((t) => t.trim())
+              .filter(Boolean)
+          );
         } else {
           const trimmed = tagItem.trim();
           if (trimmed) allTags.push(trimmed);
         }
       }
     });
-  } else if (typeof tagField === 'string') {
-    if (tagField.includes('/')) {
-      allTags = tagField.split('/').map(t => t.trim()).filter(Boolean);
-    } else if (tagField.includes(',')) {
-      allTags = tagField.split(',').map(t => t.trim()).filter(Boolean);
+  } else if (typeof tagField === "string") {
+    if (tagField.includes("/")) {
+      allTags = tagField
+        .split("/")
+        .map((t) => t.trim())
+        .filter(Boolean);
+    } else if (tagField.includes(",")) {
+      allTags = tagField
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
     } else {
-      allTags = tagField.split(' ').map(t => t.trim()).filter(Boolean);
+      allTags = tagField
+        .split(" ")
+        .map((t) => t.trim())
+        .filter(Boolean);
     }
   }
 
@@ -316,20 +436,50 @@ export function generateTagsHTML(poem) {
   let allTags = [];
   if (poem?.type) allTags = allTags.concat(parseTags(poem.type));
   if (poem?.tags) allTags = allTags.concat(parseTags(poem.tags));
-  if (allTags.length === 0) return '';
+  if (allTags.length === 0) return "";
 
   const uniqueTags = [...new Set(allTags)];
-  const dynastyTags = ['先秦', '汉', '魏晋', '南北朝', '隋', '唐', '五代', '南唐', '宋', '元', '明', '清', '现代', '近现代'];
-  const typeTags = ['诗经', '楚辞', '乐府', '唐诗', '宋词', '清词', '词', '蒙学'];
+  const dynastyTags = [
+    "先秦",
+    "汉",
+    "魏晋",
+    "南北朝",
+    "隋",
+    "唐",
+    "五代",
+    "南唐",
+    "宋",
+    "元",
+    "明",
+    "清",
+    "现代",
+    "近现代",
+  ];
+  const typeTags = [
+    "诗经",
+    "楚辞",
+    "乐府",
+    "唐诗",
+    "宋词",
+    "清词",
+    "词",
+    "蒙学",
+  ];
 
-  return uniqueTags.slice(0, 5).map(tag => {
-    let tagClass = 'poem-tag';
-    if (dynastyTags.includes(tag)) {
-      tagClass += ' dynasty';
-    } else if (typeTags.includes(tag)) {
-      tagClass += ' type';
-    }
-    const safeTag = tag.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return `<span class="${tagClass}" onclick="window.handleTagClick && window.handleTagClick('${safeTag}')">${safeTag}</span>`;
-  }).join('');
+  return uniqueTags
+    .slice(0, 5)
+    .map((tag) => {
+      let tagClass = "poem-tag";
+      if (dynastyTags.includes(tag)) {
+        tagClass += " dynasty";
+      } else if (typeTags.includes(tag)) {
+        tagClass += " type";
+      }
+      const safeTag = tag
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      return `<span class="${tagClass}" onclick="window.handleTagClick && window.handleTagClick('${safeTag}')">${safeTag}</span>`;
+    })
+    .join("");
 }
