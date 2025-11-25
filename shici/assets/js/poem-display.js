@@ -479,6 +479,12 @@ export function generateTagsHTML(poem) {
   if (allTags.length === 0) return "";
 
   const uniqueTags = [...new Set(allTags)];
+  
+  // 如果是文章，自动添加"古文"标签
+  if (isArticle(poem) && !uniqueTags.includes("古文")) {
+    uniqueTags.unshift("古文");
+  }
+
   const dynastyTags = [
     "先秦",
     "汉",
@@ -504,6 +510,7 @@ export function generateTagsHTML(poem) {
     "清词",
     "词",
     "蒙学",
+    "古文",
   ];
 
   return uniqueTags
