@@ -218,9 +218,17 @@ function bindEventListeners() {
             const isVerticalMode = verseElement.classList.contains('vertical-mode');
 
             if (isScrollMode) {
-                // 如果当前是卷轴模式，退出卷轴模式，恢复到默认显示模式
-                // 调用 displayPoem 重新设置默认模式
-                displayPoem(currentPoem);
+                // 如果当前是卷轴模式，切换到横向模式而不是调用 displayPoem
+                // 因为 displayPoem 会根据内容类型重新设置为 article-mode
+
+                // 切换到横向模式
+                verseElement.className = 'poem-verse horizontal-mode';
+                verseElement.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content);
+
+                if (layoutToggleBtn) {
+                    layoutToggleBtn.textContent = '📜'; // 切换到卷轴模式
+                    layoutToggleBtn.title = '切换卷轴模式';
+                }
             } else {
                 // 非卷轴模式下，检查内容长度决定行为
                 const lines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
