@@ -63,37 +63,144 @@ export function insertLineBreaksAtPunctuation(content) {
 export function formatPoemWithLineBreaks(content, poem) {
     // 如果是格律诗（五言或七言），按新规则处理
     if (isRegularPoemWithPunctuation(content)) {
-        // 按标点符号分割
-        const punctuatedLines = content.split(/([。！？!?])/g);
-        let sentenceLines = [];
+        // 先按换行分割（因为有的诗是多行的）
+        const lines = content.split('\n').filter(line => line.trim() !== '');
 
-        for (let i = 0; i < punctuatedLines.length; i += 2) {
-            const sentence = punctuatedLines[i];
-            const punctuation = punctuatedLines[i + 1] || '';
-
-            if (sentence.trim()) {
-                sentenceLines.push(sentence.trim() + punctuation);
-            }
-        }
-
-        // 根据规则决定如何显示
-        if (sentenceLines.length === 4) {
-            // 如果是4句，直接返回
-            return sentenceLines.join('<br>');
-        } else if (sentenceLines.length === 8) {
-            // 如果是8句，每2句合成1句显示（变成4句）
+        // 如果已经是按行分割的，则直接计算行数
+        if (lines.length === 4) {
+            return lines.join('<br>');
+        } else if (lines.length === 8) {
+            // 如果是8行，每2行合成1行显示（变成4行）
             let result = [];
-            for (let i = 0; i < sentenceLines.length; i += 2) {
-                result.push(sentenceLines[i] + (sentenceLines[i + 1] || ''));
+            for (let i = 0; i < lines.length; i += 2) {
+                result.push(lines[i] + (lines[i + 1] || ''));
             }
             return result.join('<br>');
-        } else if (sentenceLines.length > 8) {
-            // 如果多于8句，以方便对齐的方式断句
-            // 这里可以根据需要进一步优化，目前按标点符号分割显示
-            return sentenceLines.join('<br>');
+        } else if (lines.length > 8) {
+            // 如果多于8行，按原样显示
+            return lines.join('<br>');
         } else {
-            // 其他情况继续使用原有逻辑
-            return insertLineBreaksAtPunctuation(content);
+            // 对于古典格律诗，处理特殊的古典诗词结构
+            // 专门处理像 "君自故乡来，应知故乡事。来日绮窗前，寒梅著花未？" 这样的结构
+
+            // 按照逗号和句末标点来识别古典诗歌的节奏单元
+            // 有时需要更智能地识别节奏模式
+            let parts = [];
+            let currentIndex = 0;
+
+            while (currentIndex < content.length) {
+                let part = '';
+                let charCount = 0;
+
+                // 从当前位置开始构建一个节奏单元
+                while (currentIndex < content.length) {
+                    const char = content[currentIndex];
+                    part += char;
+                    currentIndex++;
+
+                    // 如果是标点符号，不计入字符计数
+                    if (!/[，。！？,.!?]/.test(char)) {
+                        charCount++;
+                    }
+
+                    // 当达到5或7个字符且遇到逗号或句末标点时，可能是一个节奏单元
+                    if ((charCount === 5 || charCount === 7) && /[，,]/.test(char)) {
+                        // 如果是逗号，这可能是半个句子，继续寻找句末标点
+                        continue;
+                    } else if (/[。！？!?]/.test(char)) {
+                        // 遇到句末标点，一个完整的节奏单元结束
+                        parts.push(part.trim());
+                        break;
+                    }
+                }
+            }
+
+            // 检查按古典节奏分割后的部分数量
+            if (parts.length === 4) {
+                return parts.join('<br>');
+            } else if (parts.length === 8) {
+                // 如果是8句，每2句合成1句显示（变成4句）
+                let result = [];
+                for (let i = 0; i < parts.length; i += 2) {
+                    result.push(parts[i] + (parts[i + 1] || ''));
+                }
+                return result.join('<br>');
+            } else if (parts.length > 8) {
+                // 如果多于8句，按古典节奏分割显示
+                return parts.join('<br>');
+            } else {
+                // 如果古典节奏分割未能得到理想结果，尝试按句末标点分割
+                const sentenceParts = [];
+                let currentSentence = '';
+
+                for (let i = 0; i < content.length; i++) {
+                    const char = content[i];
+                    currentSentence += char;
+
+                    if (/[。！？!?]/.test(char)) {
+                        sentenceParts.push(currentSentence.trim());
+                        currentSentence = '';
+                    }
+                }
+
+                if (currentSentence.trim()) {
+                    sentenceParts.push(currentSentence.trim());
+                }
+
+                // 再次检查按句末标点分割的结果
+                if (sentenceParts.length === 4) {
+                    return sentenceParts.join('<br>');
+                } else if (sentenceParts.length === 8) {
+                    let result = [];
+                    for (let i = 0; i < sentenceParts.length; i += 2) {
+                        result.push(sentenceParts[i] + (sentenceParts[i + 1] || ''));
+                    }
+                    return result.join('<br>');
+                } else {
+                    // 最后尝试使用一种更精确的古典诗歌解析方法
+                    // 有时古典诗歌是"5字+逗号，5字+句末标点。"的模式
+                    const refinedParts = [];
+                    let tempPart = '';
+                    let charCountSinceLastPunct = 0;
+
+                    for (let i = 0; i < content.length; i++) {
+                        const char = content[i];
+
+                        if (/[，。！？,.!?]/.test(char)) {
+                            // 遇到标点，添加到当前部分
+                            tempPart += char;
+
+                            if (/[。！？!?]/.test(char)) {
+                                // 句末標點，結束一個單元
+                                refinedParts.push(tempPart.trim());
+                                tempPart = '';
+                                charCountSinceLastPunct = 0;
+                            } else if (/[，,]/.test(char) && charCountSinceLastPunct === 5) {
+                                // 逗號且前面正好5个字，作为一个单元
+                                refinedParts.push(tempPart.trim());
+                                tempPart = '';
+                                charCountSinceLastPunct = 0;
+                            }
+                        } else {
+                            // 非標點字符，添加到当前部分并计数
+                            tempPart += char;
+                            charCountSinceLastPunct++;
+                        }
+                    }
+
+                    // 添加最後剩餘部分
+                    if (tempPart.trim()) {
+                        refinedParts.push(tempPart.trim());
+                    }
+
+                    if (refinedParts.length === 4) {
+                        return refinedParts.join('<br>');
+                    } else {
+                        // 其他情况继续使用原有逻辑
+                        return insertLineBreaksAtPunctuation(content);
+                    }
+                }
+            }
         }
     }
 
@@ -107,7 +214,32 @@ export function isRegularPoemWithPunctuation(content) {
 
     // 按换行符分割内容
     const lines = content.split('\\n').filter(line => line.trim() !== '');
-    if (lines.length < 2) return false;
+
+    if (lines.length < 2) {
+        // 如果没有换行符，尝试按标点符号分割来检测是否为规则诗
+        // 将内容按句号、感叹号、问号分割
+        const sentenceParts = content.split(/[。！？!?]/g).filter(part => part.trim() !== '');
+
+        // 过滤掉空部分
+        const nonEmptyParts = sentenceParts.filter(part => part.trim() !== '');
+
+        if (nonEmptyParts.length === 0) return false;
+
+        // 检查每个部分（去除逗号等标点后）是否都符合5字或7字
+        for (const part of nonEmptyParts) {
+            // 如果每个部分还包含逗号，再按逗号分割
+            const subParts = part.split(/[，,]/g).filter(sub => sub.trim() !== '');
+
+            for (const subPart of subParts) {
+                const cleanPart = subPart.replace(/[，。！？,.!?]/g, '').trim();
+                if (cleanPart.length !== 0 && cleanPart.length !== 5 && cleanPart.length !== 7) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
 
     // 检查每行（去除标点后）是否都是5字或7字
     for (const line of lines) {
