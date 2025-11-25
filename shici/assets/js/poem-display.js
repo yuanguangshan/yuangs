@@ -11,27 +11,27 @@ export function insertLineBreaksAtPunctuation(content) {
         const lines = content.split('\\n')
             .map(line => line.trim())
             .filter(line => line !== '');
-        
+
         let processed = lines.join('\\n');
-        
+
         // Step 1: 在句末标点+引号后换行
         processed = processed
             .replace(/([。！？!?]["']+)(?!\\n)/g, '$1\\n');
-        
+
         // Step 2: 修复孤立的左引号
         processed = processed.replace(/\\n+([""])/g, '\\n$1');
-        
+
         // Step 3: 修复孤立的右引号
         processed = processed.replace(/\\n+(["'])/g, '$1\\n');
-            
+
         // 转换为<br>
         processed = processed.replace(/\\n/g, '<br>');
-        
+
         // 处理段落分隔
         processed = processed
             .replace(/(<br>\\s*){3,}/g, '<br><div class="poem-paragraph-break"></div><br>')
             .replace(/(<br>\\s*){2}/g, '<br><br>');
-            
+
         return processed;
     }
 
@@ -57,6 +57,67 @@ export function insertLineBreaksAtPunctuation(content) {
         .replace(/(<br>\\s*){2}/g, '<br>');
 
     return processed;
+}
+
+// 根据规则断句诗歌，优先断为4句
+export function formatPoemWithLineBreaks(content, poem) {
+    // 如果是格律诗（五言或七言），按新规则处理
+    if (isRegularPoemWithPunctuation(content)) {
+        // 按标点符号分割
+        const punctuatedLines = content.split(/([。！？!?])/g);
+        let sentenceLines = [];
+
+        for (let i = 0; i < punctuatedLines.length; i += 2) {
+            const sentence = punctuatedLines[i];
+            const punctuation = punctuatedLines[i + 1] || '';
+
+            if (sentence.trim()) {
+                sentenceLines.push(sentence.trim() + punctuation);
+            }
+        }
+
+        // 根据规则决定如何显示
+        if (sentenceLines.length === 4) {
+            // 如果是4句，直接返回
+            return sentenceLines.join('<br>');
+        } else if (sentenceLines.length === 8) {
+            // 如果是8句，每2句合成1句显示（变成4句）
+            let result = [];
+            for (let i = 0; i < sentenceLines.length; i += 2) {
+                result.push(sentenceLines[i] + (sentenceLines[i + 1] || ''));
+            }
+            return result.join('<br>');
+        } else if (sentenceLines.length > 8) {
+            // 如果多于8句，以方便对齐的方式断句
+            // 这里可以根据需要进一步优化，目前按标点符号分割显示
+            return sentenceLines.join('<br>');
+        } else {
+            // 其他情况继续使用原有逻辑
+            return insertLineBreaksAtPunctuation(content);
+        }
+    }
+
+    // 非格律诗继续使用原有逻辑
+    return insertLineBreaksAtPunctuation(content);
+}
+
+// 判断是否为带标点的格律诗
+export function isRegularPoemWithPunctuation(content) {
+    if (!content) return false;
+
+    // 按换行符分割内容
+    const lines = content.split('\\n').filter(line => line.trim() !== '');
+    if (lines.length < 2) return false;
+
+    // 检查每行（去除标点后）是否都是5字或7字
+    for (const line of lines) {
+        const cleanLine = line.replace(/[，。！？,.!?]/g, '').trim();
+        if (cleanLine.length !== 5 && cleanLine.length !== 7) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 // 判断是否为格律诗（五言或七言）

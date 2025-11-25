@@ -5,7 +5,7 @@ import { CONFIG, getRandomColor, getRandomImageUrl, addToImageCache, getRandomCa
 import { AUTHOR_DATA, getDynastyByAuthorName } from './author-data.js?v=1.0.1';
 import { fetchAndCachePoems, getRandomPoem, getRandomPoems } from './data-loader.js?v=1.0.1';
 import {
-    insertLineBreaksAtPunctuation,
+    formatPoemWithLineBreaks,
     isRegularPoem,
     formatCoupletPoem,
     isArticle,
@@ -551,7 +551,7 @@ function displayPoem(poem) {
             if (isArticleContent) {
                 // Set article mode directly
                 verseEl.classList.add('article-mode');
-                verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
+                verseEl.innerHTML = formatPoemWithLineBreaks(poem.content, poem);
                 if (layoutToggleBtn) {
                     layoutToggleBtn.style.display = 'inline-block'; // Show layout toggle button
                     // Update button text based on poem length
@@ -567,7 +567,7 @@ function displayPoem(poem) {
                 }
             } else {
                 // 先处理内容，获取实际显示的HTML
-                const processedContent = insertLineBreaksAtPunctuation(poem.content);
+                const processedContent = formatPoemWithLineBreaks(poem.content, poem);
 
                 // 统计实际显示的行数（<br>标签数量 + 1）
                 const brCount = (processedContent.match(/<br>/g) || []).length;
@@ -1640,7 +1640,7 @@ function togglePoemLayout() {
         // 从竖排（包括宽间距模式）切换到横排
         verseElem.classList.remove('vertical-mode', 'vertical-mode-wider');
         verseElem.classList.add('horizontal-mode');
-        verseElem.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content); // Update content for horizontal mode
+        verseElem.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem); // Update content for horizontal mode
         if (btn) {
             btn.textContent = '🔄'; // Changed to show revert icon
             btn.title = '切换竖排/横排';
@@ -1659,11 +1659,11 @@ function togglePoemLayout() {
                 // For other counts under 6, use default vertical mode
                 verseElem.classList.add('vertical-mode');
             }
-            verseElem.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content); // Revert to normal formatting
+            verseElem.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem); // Revert to normal formatting
         } else {
             // If the poem has 6 or more lines, keep horizontal mode
             verseElem.classList.add('horizontal-mode');
-            verseElem.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content); // Make sure content is formatted for horizontal mode
+            verseElem.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem); // Make sure content is formatted for horizontal mode
         }
         if (btn) {
             btn.textContent = '🔄';
@@ -1682,10 +1682,10 @@ function togglePoemLayout() {
             } else {
                 verseElem.classList.add('vertical-mode');
             }
-            verseElem.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content);
+            verseElem.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem);
         } else {
             verseElem.classList.add('horizontal-mode');
-            verseElem.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content);
+            verseElem.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem);
         }
         if (btn) {
             btn.textContent = '🔄';
