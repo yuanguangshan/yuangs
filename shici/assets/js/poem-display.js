@@ -63,8 +63,10 @@ export function insertLineBreaksAtPunctuation(content) {
 export function formatPoemWithLineBreaks(content, poem) {
     // 如果是格律诗（五言或七言），按新规则处理
     if (isRegularPoemWithPunctuation(content)) {
-        // 先按换行分割（因为有的诗是多行的）
-        const lines = content.split('\n').filter(line => line.trim() !== '');
+        // 先按换行分割（因为有的诗是多行的），同时处理Windows换行符(\r\n)和回车符(\r)
+        let rawLines = content.split(/\r?\n/);  // 正确处理 \n, \r\n, \r
+        const lines = rawLines.map(line => line.replace(/\r/g, '').trim()) // 进一步清理\r和空白
+            .filter(line => line !== '');
 
         // 如果已经是按行分割的，则直接计算行数
         if (lines.length === 4) {
@@ -279,8 +281,10 @@ export function formatPoemWithLineBreaks(content, poem) {
 export function isRegularPoemWithPunctuation(content) {
     if (!content) return false;
 
-    // 按换行符分割内容
-    const lines = content.split('\\n').filter(line => line.trim() !== '');
+    // 按换行符分割内容，同时处理Windows换行符(\r\n)和回车符(\r)
+    let rawLines = content.split(/\r?\n/);  // 正确处理 \n, \r\n, \r
+    const lines = rawLines.map(line => line.replace(/\r/g, '').trim()) // 进一步清理\r和空白
+        .filter(line => line !== '');
 
     if (lines.length < 2) {
         // 如果没有换行符，尝试按标点符号分割来检测是否为规则诗
