@@ -1908,7 +1908,7 @@ function showAuthorInfo(authorName) {
     document.addEventListener('keydown', handleEsc);
 }
 
-// 导出函数供 bindEventListeners 使用
+// 导出函数供 bindEventListeners 使用。
 export { 
     copyPoemToClipboard, 
     togglePoemLayout, 
