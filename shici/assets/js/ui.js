@@ -20,7 +20,7 @@ import {
 let currentPoem = null;
 let allPoems = null;
 let filteredPoems = null;
-let currentDisplayMode = 'normal'; // 'normal', 'scroll'
+let currentDisplayMode = 'vertical'; // 'horizontal', 'vertical', 'scroll'
 let currentTagFilter = null; // Current tag filter for waterfall
 
 // 初始化UI
@@ -29,6 +29,9 @@ export async function initUI() {
 
     // 加载保存的主题偏好
     loadSavedTheme();
+    
+    // 加载保存的布局模式偏好
+    loadSavedLayoutMode();
 
     // 加载诗词数据
     allPoems = await fetchAndCachePoems();
@@ -245,7 +248,8 @@ function bindEventListeners() {
 
                 verseElement.innerHTML = formattedContent;
 
-                currentDisplayMode = 'normal';
+                currentDisplayMode = 'vertical';
+                saveLayoutMode('vertical'); // 保存竖版模式偏好
 
                 if (layoutToggleBtn) {
                     layoutToggleBtn.textContent = '📜'; // 切换到卷轴模式
@@ -279,6 +283,7 @@ function bindEventListeners() {
                 verseElement.innerHTML = formattedContent;
 
                 currentDisplayMode = 'scroll';
+                saveLayoutMode('scroll'); // 保存卷轴模式偏好
 
                 if (layoutToggleBtn) {
                     layoutToggleBtn.textContent = '📄'; // 退出卷轴模式
@@ -292,7 +297,8 @@ function bindEventListeners() {
                 verseElement.classList.add('horizontal-mode');
                 verseElement.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem);
 
-                currentDisplayMode = 'normal';
+                currentDisplayMode = 'horizontal';
+                saveLayoutMode('horizontal'); // 保存横版模式偏好
 
                 if (layoutToggleBtn) {
                     layoutToggleBtn.textContent = '🔄'; // 切换竖版模式
@@ -485,7 +491,8 @@ function toggleScrollMode() {
         verseElement.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem);
 
         // Update display mode state
-        currentDisplayMode = 'normal';
+        currentDisplayMode = 'horizontal';
+        saveLayoutMode('horizontal'); // 保存横版模式偏好
 
         // Update button text
         if (scrollModeToggle) {
@@ -502,6 +509,7 @@ function toggleScrollMode() {
 
         // Update display mode state
         currentDisplayMode = 'scroll';
+        saveLayoutMode('scroll'); // 保存卷轴模式偏好
 
         // Update button text
         if (scrollModeToggle) {
@@ -582,45 +590,58 @@ function displayPoem(poem) {
     const verseEl = document.getElementById('poemVerse');
     const layoutToggleBtn = document.getElementById('layoutToggleBtn');
 
-    // If we're currently in scroll mode, update scroll mode content instead of default layout
-    if (currentDisplayMode === 'scroll' && verseEl && verseEl.classList.contains('vertical-scroll-mode')) {
-        // We're in scroll mode, update scroll content
-        verseEl.className = 'poem-verse vertical-scroll-mode'; // Reset classes and add scroll mode
+    if (verseEl) {
+        // 重置类名 to ensure clean state
+        verseEl.className = 'poem-verse';
 
-        // Split content by lines first (if it has line breaks)
-        let contentLines = poem.content.split('\\n').filter(line => line.trim() !== '');
+        // 根据保存的布局模式应用相应的显示方式
+        if (currentDisplayMode === 'scroll') {
+            // 卷轴模式
+            verseEl.classList.add('vertical-scroll-mode');
 
-        // If no line breaks, split by sentence punctuation to create meaningful segments
-        if (contentLines.length === 1) {
-            const content = contentLines[0];
-            // Split by Chinese punctuation but keep the punctuation with the text
-            contentLines = content.match(/[^。！？]+[。！？]?/g) || [content];
-            contentLines = contentLines.filter(line => line.trim() !== '');
-        }
+            // Split content by lines first (if it has line breaks)
+            let contentLines = poem.content.split('\\n').filter(line => line.trim() !== '');
 
-        // Create column divs for each meaningful line/sentence
-        const formattedContent = contentLines.map(line => {
-            const cleanLine = line.trim().replace(/[。！？]$/g, ''); // Remove ending punctuation for cleaner look
-            return `<div class="scroll-column">${cleanLine}</div>`;
-        }).join('');
+            // If no line breaks, split by sentence punctuation to create meaningful segments
+            if (contentLines.length === 1) {
+                const content = contentLines[0];
+                contentLines = content.match(/[^。！？]+[。！？]?/g) || [content];
+                contentLines = contentLines.filter(line => line.trim() !== '');
+            }
 
-        verseEl.innerHTML = formattedContent;
-        // Update layout toggle button text for header button
-        if (layoutToggleBtn) {
-            layoutToggleBtn.textContent = '📄'; // 退出卷轴模式图标
-            layoutToggleBtn.title = '退出卷轴模式';
-        }
-        // Ensure scroll starts at the rightmost side for RTL scroll mode
-        verseEl.scrollLeft = verseElement.scrollWidth - verseElement.clientWidth;
-    } else {
-        if (verseEl) {
-            // 重置类名 to ensure clean state
-            verseEl.className = 'poem-verse';
+            // Create column divs for each meaningful line/sentence
+            const formattedContent = contentLines.map(line => {
+                const cleanLine = line.trim().replace(/[。！？]$/g, ''); // Remove ending punctuation for cleaner look
+                return `<div class="scroll-column">${cleanLine}</div>`;
+            }).join('');
 
-            // 所有内容都使用竖版显示（以标点符号分割，类似卷轴的水平滚动），不再区分文章模式
+            verseEl.innerHTML = formattedContent;
+            
+            if (layoutToggleBtn) {
+                layoutToggleBtn.textContent = '📄'; // 退出卷轴模式图标
+                layoutToggleBtn.title = '退出卷轴模式';
+                layoutToggleBtn.style.display = 'inline-block';
+            }
+            
+            // Ensure scroll starts at the rightmost side for RTL scroll mode
+            setTimeout(() => {
+                verseEl.scrollLeft = verseEl.scrollWidth - verseEl.clientWidth;
+            }, 10);
+        } else if (currentDisplayMode === 'horizontal') {
+            // 横版模式
+            verseEl.classList.add('horizontal-mode');
+            verseEl.innerHTML = formatPoemWithLineBreaks(poem.content, poem);
+            
+            if (layoutToggleBtn) {
+                layoutToggleBtn.textContent = '🔄'; // 切换竖版模式
+                layoutToggleBtn.title = '切换竖版模式';
+                layoutToggleBtn.style.display = 'inline-block';
+            }
+        } else {
+            // 竖版模式（默认）
             verseEl.classList.add('vertical-mode');
 
-            // 将内容按标点符号分割成多个部分，为水平滚动模式准备（类似卷轴模式）
+            // 将内容按标点符号分割成多个部分
             let contentLines = poem.content.split('\\n').filter(line => line.trim() !== '');
 
             // 如果没有换行，按句号等标点符号分割
@@ -637,19 +658,17 @@ function displayPoem(poem) {
             }).join('');
 
             verseEl.innerHTML = formattedContent;
+            
             if (layoutToggleBtn) {
-                layoutToggleBtn.style.display = 'inline-block'; // Show layout toggle button
-                // Update button text based on poem length
-                const lines = poem.content.split('\\n').filter(line => line.trim() !== '');
-                const lineCount = lines.length;
-                if (lineCount <= 6) {
-                    layoutToggleBtn.textContent = '🔄'; // 切换到横版模式
-                    layoutToggleBtn.title = '切换横版模式';
-                } else {
-                    layoutToggleBtn.textContent = '📜'; // 切换到卷轴模式
-                    layoutToggleBtn.title = '切换卷轴模式';
-                }
+                layoutToggleBtn.textContent = '📜'; // 切换到卷轴模式
+                layoutToggleBtn.title = '切换卷轴模式';
+                layoutToggleBtn.style.display = 'inline-block';
             }
+            
+            // 确保滚动到最右侧
+            setTimeout(() => {
+                verseEl.scrollLeft = verseEl.scrollWidth - verseEl.clientWidth;
+            }, 10);
         }
     }
 
@@ -1168,6 +1187,29 @@ function loadSavedTheme() {
     }
 }
 
+// Save layout mode preference to localStorage
+function saveLayoutMode(mode) {
+    try {
+        localStorage.setItem(LAYOUT_MODE_KEY, mode);
+        console.log('Layout mode saved:', mode);
+    } catch (e) {
+        console.error('Error saving layout mode:', e);
+    }
+}
+
+// Load saved layout mode preference from localStorage
+function loadSavedLayoutMode() {
+    try {
+        const savedMode = localStorage.getItem(LAYOUT_MODE_KEY);
+        if (savedMode) {
+            currentDisplayMode = savedMode;
+            console.log('Loaded saved layout mode:', savedMode);
+        }
+    } catch (e) {
+        console.error('Error loading layout mode:', e);
+    }
+}
+
 // Handle tag click - show all poems with this tag in waterfall view
 function handleTagClick(tag) {
     console.log('Tag clicked:', tag);
@@ -1250,6 +1292,9 @@ function showAuthorWorks(authorName, poems) {
         authorWorksSection.style.display = 'none';
     }
 }
+
+// Layout mode preference
+const LAYOUT_MODE_KEY = 'poem_layout_mode';
 
 // Favorites functionality
 const FAVORITES_KEY = 'poem_favorites';
