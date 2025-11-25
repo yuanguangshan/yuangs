@@ -1656,7 +1656,17 @@ function displaySearchResults(results) {
 
 // 切换详情页布局（循环切换：竖排 -> 横排 -> 竖排...）
 function togglePoemLayout() {
+    if (!currentPoem) {
+        console.error('currentPoem is not defined');
+        return;
+    }
+
     const verseElem = document.getElementById('poemVerse');
+    if (!verseElem) {
+        console.error('poemVerse element not found');
+        return;
+    }
+
     const btn = document.getElementById('layoutToggleBtn');
 
     // Check if current content uses individual line elements (new vertical layout) or has horizontal mode class
