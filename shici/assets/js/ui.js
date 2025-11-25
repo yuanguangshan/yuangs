@@ -374,7 +374,9 @@ function bindEventListeners() {
     aboutBtn?.addEventListener('click', function () {
         if (historySection) historySection.style.display = 'none';
         if (favoritesSection) favoritesSection.style.display = 'none';
-        if (aboutSection) aboutSection.style.display = 'block';
+        if (aboutSection) {
+            aboutSection.style.display = 'block';
+        }
     });
 
     // Load and display history list
@@ -608,7 +610,7 @@ function displayPoem(poem) {
             layoutToggleBtn.title = '退出卷轴模式';
         }
         // Ensure scroll starts at the rightmost side for RTL scroll mode
-        verseEl.scrollLeft = verseEl.scrollWidth - verseEl.clientWidth;
+        verseEl.scrollLeft = verseElement.scrollWidth - verseElement.clientWidth;
     } else {
         if (verseEl) {
             // 重置类名 to ensure clean state
