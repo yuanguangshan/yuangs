@@ -220,10 +220,14 @@ function bindEventListeners() {
             if (isScrollMode) {
                 // 如果当前是卷轴模式，切换到横向模式而不是调用 displayPoem
                 // 因为 displayPoem 会根据内容类型重新设置为 article-mode
+                // 同时更新 currentDisplayMode 状态
 
                 // 切换到横向模式
                 verseElement.className = 'poem-verse horizontal-mode';
-                verseElement.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content);
+                verseElement.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem);
+
+                // 更新全局模式状态
+                currentDisplayMode = 'normal';
 
                 if (layoutToggleBtn) {
                     layoutToggleBtn.textContent = '📜'; // 切换到卷轴模式
@@ -422,7 +426,10 @@ function toggleScrollMode() {
     if (isScrollMode) {
         // Currently in scroll mode, switch to horizontal mode
         verseElement.classList.add('horizontal-mode');
-        verseElement.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content);
+        verseElement.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem);
+
+        // Update display mode state
+        currentDisplayMode = 'normal';
 
         // Update button text
         if (scrollModeToggle) {
@@ -436,6 +443,9 @@ function toggleScrollMode() {
     } else {
         // Currently in any other mode (article, vertical, or horizontal), switch to scroll mode
         verseElement.classList.add('vertical-scroll-mode');
+
+        // Update display mode state
+        currentDisplayMode = 'scroll';
 
         // Update button text
         if (scrollModeToggle) {
