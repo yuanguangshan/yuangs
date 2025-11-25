@@ -158,7 +158,7 @@ export function formatPoemWithLineBreaks(content, poem) {
                     return result.join('<br>');
                 } else {
                     // 最后尝试使用一种更精确的古典诗歌解析方法
-                    // 有时古典诗歌是"5字+逗号，5字+句末标点。"的模式
+                    // 处理五言（5字+逗号）和七言（7字+逗号）的节奏模式
                     const refinedParts = [];
                     let tempPart = '';
                     let charCountSinceLastPunct = 0;
@@ -175,8 +175,9 @@ export function formatPoemWithLineBreaks(content, poem) {
                                 refinedParts.push(tempPart.trim());
                                 tempPart = '';
                                 charCountSinceLastPunct = 0;
-                            } else if (/[，,]/.test(char) && charCountSinceLastPunct === 5) {
-                                // 逗號且前面正好5个字，作为一个单元
+                            } else if (/[，,]/.test(char) && (charCountSinceLastPunct === 5 || charCountSinceLastPunct === 7)) {
+                                // 逗號且前面正好5个字或7个字，作为一个单元
+                                // 这适用于五言诗（5字+逗号）和七言诗（7字+逗号）
                                 refinedParts.push(tempPart.trim());
                                 tempPart = '';
                                 charCountSinceLastPunct = 0;
