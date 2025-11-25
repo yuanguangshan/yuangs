@@ -261,178 +261,32 @@ export function isArticleAdvanced(poem) {
  * @returns {boolean} - 是否为文章
  */
 export function isArticle(poem) {
-  retu    }
-  }
-
-  // === 4. 长度特征分析 (10%) ===
-  if (poem.content) {
-    const contentLength = poem.content.length;
-    if (contentLength > 500) {
-      score += weights.length; // 超长 -> 文章
-    } else if (contentLength < 80) {
-      score -= weights.length; // 极短 -> 诗词
-    }
-  }
->>>>>>>-main
-4. 长度特征分    }
-  }
-
-  // === 4. 长度特征分析 (10%) ===
-  if (poem.content) {
-    const contentLength = poem.content.length;
-    if (contentLength > 500) {
-      score += weights.length; // 超长 -> 文章
-    } else if (contentLength < 80) {
-      score -= weights.length; // 极短 -> 诗词
-    }
-  }
->>>>>>>+origin/main
-malizeContent(content);
-  if (!normalized) return "";
-
-  // 文章模式：只在句末断句
-  if (normalized.length > CONFIG.ARTICLE_LENGTH_THRESHOLD) {
-    const sentences = splitBySentenceEnds(normalized);
-    return renderLinesToHTML(sentences);
-  }
-
-  // 短诗模式：句末断句 + 逗号半句
-  const sentences = splitBySentenceEnds(normalized);
-  const parts = [];
-  for (const sen of sentences) {
-    const halves = splitHalfByCommaOrPause(sen);
-    parts.push(...halves);
-  }
-
-  return renderLinesToHTML(parts);
+  return isArticleAdvanced(poem);
 }
 
-// 根据规则断句诗歌，优先断为 4 句
-export function formatPoemWithLineBreaks(content, poem) {
-  const normalized = normalizeContent(content);
+// 判断是否为长诗
+export function isLongPoem(poem) {
+  if (!poem || !poem.content) return false;
+  const lines = normalizeContent(poem.content)
+    .split("\n")
+    .filter((l) => l !== "");
+  return lines.length > 10;
+}
 
-  // 若是规整诗（五言/七言）优先采用 4/8 规则
-  if (isRegularPoemWithPunctuation(normalized)) {
-    // 先按行
-    let lines = normalized.split("\n").filter((l) => }
+export function needsScrollableVerticalMode(poem) {
+  if (!poem || !poem.content) return false;
+  const lines = normalizeContent(poem.content)
+    .split("\n")
+    .filter((l) => l !== "");
+  if (lines.length >= 7 && lines.length <= 10) return true;
+  return false;
+}
 
 /* =========================
    断句与格式化
    ========================= */
 
 // 兼容接口：插入标点符号后的换行（文章 vs 短诗）
-export function insertLineBreaksAtPunctuation(content) {
-  const normalized = normalizeContent(content);
-  if (!normalized) return "";
-
-  // 文章模式：只在句末断句
-  if (normalized.length > CONFIG.ARTICLE_LENGTH_THRESHOLD) {
-    const sentences = splitBySentenceEnds(normalized);
-    return renderLinesToHTML(sentences);
-  }
-
-  // 短诗模式：句末断句 + 逗号半句
-  const sentences = splitBySentenceEnds(normalized);
-  const parts = [];
-  for (const sen of sentences) {
-    const halves = splitHalfByCommaOrPause(sen);
-    parts.push(...halves);
-  }
-
-  return renderLinesToHTML(parts);
-}
-
-// 根据规则断句诗歌，优先断为 4 句
-export function formatPoemWithLineBreaks(content, poem) {
-  const normalized = normalizeContent(content);
-
-  // 若是规整诗（五言/七言）优先采用 4/8 规则
-  if (isRegularPoemWithPunctuation(normalized)) {
-    // 先按行
-    let lines = normalized.split("\n").filter((l) => l !== "");
-    if (lines.length === 4) {
-      return renderLinesToHTML(lines);
-    } else if (lines.length === 8) {
-      return renderLinesToHTML(mergeEveryTwo(lines));
-    } else if (lines.length > 8) {
-      return renderLinesToHTML(lines);
->>>>>>>-main
-ces.leng}
-
-/* =========================
-   断句与格式化
-   ========================= */
-
-// 兼容接口：插入标点符号后的换行（文章 vs 短诗）
-function renderArticleToHTML(content) {
-  const lines = content.split("\n");
-  let html = '<div class="article-content">';
-  for (const line of lines) {
-    if (line.trim()) {
-      html += `<p>${line.trim()}</p>`;
->>>>>>>+origin/main
-L(sentences);
-    }
-
-    // 再尝试按半句靠近 4/8
-    con    // 【新增】优先尝试按逗号和句末标点切分（针对绝句）
-    // 这样可以将"独在异乡为异客，每逢佳节倍思亲。遥知兄弟登高处，遍插茱萸少一人。"
-    // 拆分成四句显示
-    // 修复：使用捕获组保留标点符号，防止标点丢失
-    const rawParts = normalized.split(/([，。！？,.!?])/);
-    const halfSentences = [];
-    
-    for (let i = 0; i < rawParts.length; i++) {
-      const part = rawParts[i].trim();
-      if (!part) continue;
-      
-      // 如果是标点符号，且前一个元素存在，则追加到前一个元素
-      if (/^[，。！？,.!?]$/.test(part)) {
-        if (halfSentences.length > 0) {
-          halfSentences[halfSentences.length - 1] += part;
-        }
-      } else {
-        // 否则作为新的一句
-        halfSentences.push(part);
-      }
-    }
-
-    if (halfSentences.length === 4) {
-      return renderLinesToHTML(halfSentences);
-    } else if (halfSentences.length === 8) {
-      return renderLinesToHTML(mergeEveryTwo(halfSentences));
-    }
-
-    // 按句末切句
-    const sentences = splitBySentenceEnds(normalized);
-    if (sentences.length === 4) {
-      return renderLinesToHTML(sentences);
-    } else if (sentences.length === 8) {
-      return renderLinesToHTML(mergeEveryTwo(sentences));
-    } else if (sentences.length > 8) {
-      return renderLinesToHTML(sentences);
-    }
-
-    // 再尝试按半句靠近 4/8
-    const halves = sentences.flatMap(splitHalfByCommaOrPause);
-    if (halves.length === 4) {
-      return renderLinesToHTML(halves);
-    } else if (halves.length === 8) {
-      return renderLinesToHTML(mergeEveryTwo(halves));
-    } else if (halves.length > 8) {
-      return renderLinesToHTML(halves);
-    }
-
-    // 否则回退到通用
-    return insertLineBreaksAtPunctuation(normalized);
-  }
-
-  // 非规整诗：使用通用逻辑
-  return insertLineBreaksAtPunctuation(normalized);
-}
-
->>>>>>>-main
- if (hal// 兼容接口：插入标点符号后的换行（文章 vs 短诗）
 export function insertLineBreaksAtPunctuation(content) {
   const normalized = normalizeContent(content);
   if (!normalized) return "";
@@ -451,6 +305,19 @@ export function insertLineBreaksAtPunctuation(content) {
   }
 
   return renderLinesToHTML(parts);
+}
+
+// 兼容接口：插入标点符号后的换行（文章 vs 短诗）
+function renderArticleToHTML(content) {
+  const lines = content.split("\n");
+  let html = '<div class="article-content">';
+  for (const line of lines) {
+    if (line.trim()) {
+      html += `<p>${line.trim()}</p>`;
+    }
+  }
+  html += '</div>';
+  return html;
 }
 
 // 根据规则断句诗歌，优先断为 4 句
@@ -525,9 +392,23 @@ export function formatPoemWithLineBreaks(content, poem) {
   return insertLineBreaksAtPunctuation(normalized);
 }
 
->>>>>>>+origin/main
- unique = [...new Set(allTags)];
-  return unique;
+export function parseTagsForPoem(poem) {
+  let allTags = [];
+  if (poem?.type) allTags = allTags.concat(parseTags(poem.type));
+  if (poem?.tags) allTags = allTags.concat(parseTags(poem.tags));
+  return allTags;
+}
+
+function parseTags(tagSource) {
+  if (!tagSource) return [];
+  if (Array.isArray(tagSource)) {
+    // 如果已经是数组，展开并处理每个元素
+    return tagSource.flatMap(item => 
+      typeof item === 'string' ? item.split(/[\/,，]/) : []
+    ).map(tag => tag.trim()).filter(tag => tag);
+  }
+  // 如果是字符串，按分隔符分割
+  return tagSource.split(/[\/,，]/).map(tag => tag.trim()).filter(tag => tag);
 }
 
 export function generateTagsHTML(poem) {
