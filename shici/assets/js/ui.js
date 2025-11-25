@@ -605,9 +605,9 @@ function displayPoem(poem) {
                         return `<div class="vertical-line-element" data-line-index="${index}">${cleanLine}</div>`;
                     }).join('');
 
-                    // Use the individual line elements instead of a single vertical block
+                    // Use the individual line elements directly and add the vertical-mode-with-columns class to the main container
                     verseEl.innerHTML = lineElements;
-                    // Don't add vertical-mode class since we're using individual elements with vertical-line-element class
+                    verseEl.classList.add('vertical-mode-with-columns');
                     // This will make each line behave like a column in scroll mode
 
                     if (layoutToggleBtn) {
@@ -1660,9 +1660,9 @@ function togglePoemLayout() {
     // Check if current content uses individual line elements (new vertical layout) or has horizontal mode class
     const hasLineElements = verseElem.querySelector('.vertical-line-element') !== null;
 
-    if (hasLineElements || verseElem.classList.contains('vertical-mode') || verseElem.classList.contains('vertical-mode-wider')) {
+    if (hasLineElements || verseElem.classList.contains('vertical-mode') || verseElem.classList.contains('vertical-mode-wider') || verseElem.classList.contains('vertical-mode-with-columns')) {
         // Switch from vertical layout (individual elements or old vertical classes) to horizontal
-        verseElem.classList.remove('vertical-mode', 'vertical-mode-wider');
+        verseElem.classList.remove('vertical-mode', 'vertical-mode-wider', 'vertical-mode-with-columns');
         verseElem.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem);
         verseElem.classList.add('horizontal-mode');
         if (btn) {
@@ -1694,7 +1694,9 @@ function togglePoemLayout() {
                 return `<div class="vertical-line-element" data-line-index="${index}">${cleanLine}</div>`;
             }).join('');
 
+            // Use the individual line elements directly and add the vertical-mode-with-columns class to the main container
             verseElem.innerHTML = lineElements;
+            verseElem.classList.add('vertical-mode-with-columns');
         } else {
             // For poems with 6 or more lines, keep horizontal mode
             verseElem.classList.add('horizontal-mode');
