@@ -273,6 +273,26 @@ export function isLongPoem(poem) {
   return lines.length > 10;
 }
 
+/* =========================
+   对联布局
+   ========================= */
+
+export function formatCoupletPoem(poem) {
+  const lines = normalizeContent(poem.content || "")
+    .split("\n")
+    .filter((l) => l !== "");
+  let html = "";
+  for (let i = 0; i < lines.length; i += 2) {
+    html += '<div class="couplet-row">';
+    html += `<div class="couplet-line">${lines[i]}</div>`;
+    if (i + 1 < lines.length) {
+      html += `<div class="couplet-line">${lines[i + 1]}</div>`;
+    }
+    html += "</div>";
+  }
+  return html;
+}
+
 export function needsScrollableVerticalMode(poem) {
   if (!poem || !poem.content) return false;
   const lines = normalizeContent(poem.content)
