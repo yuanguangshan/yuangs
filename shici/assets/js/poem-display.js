@@ -286,14 +286,26 @@ export function needsScrollableVerticalMode(poem) {
    ========================= */
 
 // 兼容接口：插入标点符号后的换行（文章 vs 短诗）
+function renderArticleToHTML(content) {
+  const lines = content.split("\n");
+  let html = '<div class="article-content">';
+  for (const line of lines) {
+    if (line.trim()) {
+      html += `<p>${line.trim()}</p>`;
+    }
+  }
+  html += '</div>';
+  return html;
+}
+
+// 兼容接口：插入标点符号后的换行（文章 vs 短诗）
 export function insertLineBreaksAtPunctuation(content) {
   const normalized = normalizeContent(content);
   if (!normalized) return "";
 
-  // 文章模式：只在句末断句
+  // 文章模式：保持原有段落结构，使用 P 标签包裹
   if (normalized.length > CONFIG.ARTICLE_LENGTH_THRESHOLD) {
-    const sentences = splitBySentenceEnds(normalized);
-    return renderLinesToHTML(sentences);
+    return renderArticleToHTML(normalized);
   }
 
   // 短诗模式：句末断句 + 逗号半句
