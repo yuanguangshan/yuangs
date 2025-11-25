@@ -225,7 +225,24 @@ function bindEventListeners() {
             if (isHorizontalMode) {
                 // 横版 → 竖版
                 verseElement.classList.add('vertical-mode');
-                verseElement.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content);
+
+                // 将内容按标点符号分割成多个部分，为水平滚动模式准备（类似卷轴模式）
+                let contentLines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
+
+                // 如果没有换行，按句号等标点符号分割
+                if (contentLines.length === 1) {
+                    const content = contentLines[0];
+                    contentLines = content.match(/[^。！？]+[。！？]?/g) || [content];
+                    contentLines = contentLines.filter(line => line.trim() !== '');
+                }
+
+                // 创建列 div 元素用于显示
+                const formattedContent = contentLines.map(line => {
+                    const cleanLine = line.trim().replace(/[。！？]$/g, ''); // 去除结尾标点
+                    return `<div class="scroll-column">${cleanLine}</div>`;
+                }).join('');
+
+                verseElement.innerHTML = formattedContent;
 
                 currentDisplayMode = 'normal';
 
@@ -233,6 +250,11 @@ function bindEventListeners() {
                     layoutToggleBtn.textContent = '📜'; // 切换到卷轴模式
                     layoutToggleBtn.title = '切换卷轴模式';
                 }
+
+                // 确保滚动到最右侧（类似于卷轴模式的初始状态）
+                setTimeout(() => {
+                    verseElement.scrollLeft = verseElement.scrollWidth - verseElement.clientWidth;
+                }, 10);
             } else if (isVerticalMode) {
                 // 竖版 → 卷轴
                 verseElement.classList.add('vertical-scroll-mode');
@@ -592,9 +614,26 @@ function displayPoem(poem) {
             // 重置类名 to ensure clean state
             verseEl.className = 'poem-verse';
 
-            // 所有内容都使用竖版显示（以标点符号分割，支持滚动），不再区分文章模式
+            // 所有内容都使用竖版显示（以标点符号分割，类似卷轴的水平滚动），不再区分文章模式
             verseEl.classList.add('vertical-mode');
-            verseEl.innerHTML = insertLineBreaksAtPunctuation(poem.content);
+
+            // 将内容按标点符号分割成多个部分，为水平滚动模式准备（类似卷轴模式）
+            let contentLines = poem.content.split('\\n').filter(line => line.trim() !== '');
+
+            // 如果没有换行，按句号等标点符号分割
+            if (contentLines.length === 1) {
+                const content = contentLines[0];
+                contentLines = content.match(/[^。！？]+[。！？]?/g) || [content];
+                contentLines = contentLines.filter(line => line.trim() !== '');
+            }
+
+            // 创建列 div 元素用于显示
+            const formattedContent = contentLines.map(line => {
+                const cleanLine = line.trim().replace(/[。！？]$/g, ''); // 去除结尾标点
+                return `<div class="scroll-column">${cleanLine}</div>`;
+            }).join('');
+
+            verseEl.innerHTML = formattedContent;
             if (layoutToggleBtn) {
                 layoutToggleBtn.style.display = 'inline-block'; // Show layout toggle button
                 // Update button text based on poem length
