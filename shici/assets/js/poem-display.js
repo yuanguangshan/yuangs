@@ -69,6 +69,37 @@ export function formatPoemWithLineBreaks(content, poem) {
         // 如果已经是按行分割的，则直接计算行数
         if (lines.length === 4) {
             return lines.join('<br>');
+        } else if (lines.length === 2) {
+            // 如果是2行，但每行包含两个5/7字短语（对联式存储），展开为4行
+            // 例如： "床前明月光，疑是地上霜。\n举头望明月，低头思故乡。"
+            let expandedLines = [];
+            for (const line of lines) {
+                // 按句子结束标点分割（逗号不算句子结束）
+                const sentenceParts = line.split(/([，,])/g);
+                let currentSentence = '';
+                for (let j = 0; j < sentenceParts.length; j++) {
+                    currentSentence += sentenceParts[j];
+                    if (/[，,]$/.test(currentSentence)) {
+                        // 检查当前部分是否是标准的5/7字格式
+                        const cleanCurrent = currentSentence.replace(/[，。！？,.!?]/g, '');
+                        if (cleanCurrent.length === 5 || cleanCurrent.length === 7) {
+                            expandedLines.push(currentSentence);
+                            currentSentence = '';
+                        }
+                    } else if (/[。！？!?]$/.test(currentSentence)) {
+                        // 遇到句末标点，结束此部分
+                        expandedLines.push(currentSentence);
+                        currentSentence = '';
+                    }
+                }
+                if (currentSentence.trim()) {
+                    expandedLines.push(currentSentence);
+                }
+            }
+            // 如果成功展开为4行，使用展开后的结果
+            if (expandedLines.length === 4) {
+                return expandedLines.join('<br>');
+            }
         } else if (lines.length === 8) {
             // 如果是8行，每2行合成1行显示（变成4行）
             let result = [];
@@ -243,9 +274,27 @@ export function isRegularPoemWithPunctuation(content) {
     }
 
     // 检查每行（去除标点后）是否都是5字或7字
+    // 同时要支持"对联式"存储：每行包含两个5/7字短语（如：两句一行）
     for (const line of lines) {
         const cleanLine = line.replace(/[，。！？,.!?]/g, '').trim();
-        if (cleanLine.length !== 5 && cleanLine.length !== 7) {
+        // 检查单行是否为5/7字（标准格式）或10/14字（两句一行格式）
+        if (cleanLine.length === 5 || cleanLine.length === 7) {
+            // 标准格式：每行一句
+            continue;
+        } else if (cleanLine.length === 10 || cleanLine.length === 14) {
+            // "对联式"格式：每行两句
+            // 检查是否能等分为两个5/7字部分
+            const halfLength = cleanLine.length / 2;
+            const firstHalf = cleanLine.substring(0, halfLength);
+            const secondHalf = cleanLine.substring(halfLength);
+
+            if ((firstHalf.length === 5 || firstHalf.length === 7) &&
+                (secondHalf.length === 5 || secondHalf.length === 7)) {
+                continue;
+            } else {
+                return false;
+            }
+        } else {
             return false;
         }
     }
