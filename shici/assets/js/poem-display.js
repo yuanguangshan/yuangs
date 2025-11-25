@@ -149,6 +149,41 @@ export function formatPoemWithLineBreaks(content, poem) {
             // 检查按古典节奏分割后的部分数量
             if (parts.length === 4) {
                 return parts.join('<br>');
+            } else if (parts.length === 2) {
+                // 如果解析为2部分（通常是绝句被合并了），按逗号拆分为4行
+                let expandedParts = [];
+                parts.forEach(part => {
+                    // 按逗号分割，但保留逗号
+                    const subParts = part.split(/([，,])/g);
+                    let currentSub = '';
+
+                    for (let j = 0; j < subParts.length; j++) {
+                        currentSub += subParts[j];
+
+                        if (/[，,]$/.test(currentSub)) {
+                            // 检查是否达到标准长度（5或7字，不包括标点）
+                            const cleanCurrent = currentSub.replace(/[，。！？,.!?]/g, '');
+                            if (cleanCurrent.length === 5 || cleanCurrent.length === 7) {
+                                expandedParts.push(currentSub);
+                                currentSub = '';
+                            }
+                        } else if (/[。！？!?]$/.test(currentSub)) {
+                            // 遇到句末标点，结束当前部分
+                            expandedParts.push(currentSub);
+                            currentSub = '';
+                        }
+                    }
+
+                    if (currentSub.trim()) {
+                        expandedParts.push(currentSub);
+                    }
+                });
+
+                if (expandedParts.length === 4) {
+                    return expandedParts.join('<br>');
+                }
+                // 如果拆分失败，使用原结果
+                return parts.join('<br>');
             } else if (parts.length === 8) {
                 // 如果是8句，每2句合成1句显示（变成4句）
                 let result = [];
