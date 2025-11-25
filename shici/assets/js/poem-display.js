@@ -44,7 +44,7 @@ export function insertLineBreaksAtPunctuation(content) {
 
     // 在逗号和问号后添加换行
     processed = processed
-        // .replace(/([，,])(?!\\n)/g, '$1\\n')
+        .replace(/([，,])(?!\\n)/g, '$1\\n')
         .replace(/([.。])(?!\\n)/g, '$1\\n')
         .replace(/([？?])(?!\\n)/g, '$1\\n');
 
