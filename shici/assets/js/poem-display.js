@@ -111,17 +111,39 @@ export function isArticle(poem) {
         return false;
     }
 
-    // 4. 如果文章字数大于600字，判断为文章
+    // 4. 全局判断条件：文章按逗号，句号，问号，叹号等分割后统计每句的字数
+    if (poem.content) {
+        // Split by punctuation
+        const sentences = poem.content.split(/[，。！？,.!?、；：]/).filter(s => s.trim() !== '');
+        
+        // Calculate length of each segment
+        const lengths = sentences.map(s => s.trim().length);
+        
+        // Count unique sentence lengths
+        const uniqueLengths = new Set(lengths);
+        
+        // 如果数组的不同的值的数据量大于6，判断为文章
+        if (uniqueLengths.size > 6) {
+            return true;
+        }
+        
+        // 小于3判断为非文章
+        if (uniqueLengths.size < 3) {
+            return false;
+        }
+    }
+
+    // 5. 如果文章字数大于600字，判断为文章
     if (poem.content && poem.content.length > CONFIG.ARTICLE_LENGTH_THRESHOLD) {
         return true;
     }
 
-    // 5. 小于80字，判断为非文章
+    // 6. 小于80字，判断为非文章
     if (poem.content && poem.content.length < 80) {
         return false;
     }
 
-    // 6. 其他情况，优先判断为非文章
+    // 7. 其他情况，优先判断为非文章
     return false;
 }
 
