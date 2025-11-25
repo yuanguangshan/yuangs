@@ -586,9 +586,30 @@ function displayPoem(poem) {
                         layoutToggleBtn.title = '切换卷轴模式';
                     }
                 } else {
-                    // For poems with 6 or fewer lines, use default vertical layout
-                    verseEl.classList.add('vertical-mode');
-                    verseEl.innerHTML = processedContent;
+                    // For poems with 6 or fewer lines, create individual column-like elements for each line
+                    // to match the scroll mode style (each line as its own vertical element)
+
+                    // First, process content to get the individual lines
+                    let contentLines = poem.content.split('\\n').filter(line => line.trim() !== '');
+
+                    // If no line breaks, split by punctuation to create meaningful segments
+                    if (contentLines.length === 1) {
+                        const content = contentLines[0];
+                        contentLines = content.match(/[^。！？]+[。！？]?/g) || [content];
+                        contentLines = contentLines.filter(line => line.trim() !== '');
+                    }
+
+                    // Create individual line elements for each line to match scroll mode structure
+                    const lineElements = contentLines.map((line, index) => {
+                        const cleanLine = line.trim().replace(/[。！？]$/g, '');
+                        return `<div class="vertical-line-element" data-line-index="${index}">${cleanLine}</div>`;
+                    }).join('');
+
+                    // Use the individual line elements instead of a single vertical block
+                    verseEl.innerHTML = lineElements;
+                    // Don't add vertical-mode class since we're using individual elements with vertical-line-element class
+                    // This will make each line behave like a column in scroll mode
+
                     if (layoutToggleBtn) {
                         layoutToggleBtn.style.display = 'inline-block';
                         layoutToggleBtn.textContent = '🔄'; // Layout toggle icon for short poems
@@ -1636,54 +1657,46 @@ function togglePoemLayout() {
     const verseElem = document.getElementById('poemVerse');
     const btn = document.getElementById('layoutToggleBtn');
 
-    if (verseElem.classList.contains('vertical-mode') || verseElem.classList.contains('vertical-mode-wider')) {
-        // 从竖排（包括宽间距模式）切换到横排
+    // Check if current content uses individual line elements (new vertical layout) or has horizontal mode class
+    const hasLineElements = verseElem.querySelector('.vertical-line-element') !== null;
+
+    if (hasLineElements || verseElem.classList.contains('vertical-mode') || verseElem.classList.contains('vertical-mode-wider')) {
+        // Switch from vertical layout (individual elements or old vertical classes) to horizontal
         verseElem.classList.remove('vertical-mode', 'vertical-mode-wider');
+        verseElem.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem);
         verseElem.classList.add('horizontal-mode');
-        verseElem.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem); // Update content for horizontal mode
-        if (btn) {
-            btn.textContent = '🔄'; // Changed to show revert icon
-            btn.title = '切换竖排/横排';
-        }
-    } else if (verseElem.classList.contains('horizontal-mode')) {
-        // 从横排切换回竖排 (check original line count to decide which vertical mode to use)
-        verseElem.classList.remove('horizontal-mode');
-        // Determine which vertical mode to use based on current poem
-        const lines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
-        const lineCount = lines.length;
-        if (lineCount < 6) {
-            if (lineCount === 4) {
-                // For 4 lines, use vertical layout with special class for wider spacing
-                verseElem.classList.add('vertical-mode-wider');
-            } else {
-                // For other counts under 6, use default vertical mode
-                verseElem.classList.add('vertical-mode');
-            }
-            verseElem.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem); // Revert to normal formatting
-        } else {
-            // If the poem has 6 or more lines, keep horizontal mode
-            verseElem.classList.add('horizontal-mode');
-            verseElem.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem); // Make sure content is formatted for horizontal mode
-        }
         if (btn) {
             btn.textContent = '🔄';
             btn.title = '切换竖排/横排';
         }
-    } else {
-        // Default to appropriate mode based on line count for first time
+    } else if (verseElem.classList.contains('horizontal-mode')) {
+        // Switch from horizontal to vertical (individual line elements)
+        verseElem.classList.remove('horizontal-mode');
+
+        // Determine which vertical layout to use based on current poem
         const lines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
         const lineCount = lines.length;
 
-        verseElem.classList.remove('horizontal-mode', 'vertical-scroll-mode', 'vertical-mode-wider');
-
         if (lineCount < 6) {
-            if (lineCount === 4) {
-                verseElem.classList.add('vertical-mode-wider');
-            } else {
-                verseElem.classList.add('vertical-mode');
+            // For poems with less than 6 lines, create individual line elements to match scroll mode style
+            let contentLines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
+
+            // If no line breaks, split by punctuation to create meaningful segments
+            if (contentLines.length === 1) {
+                const content = contentLines[0];
+                contentLines = content.match(/[^。！？]+[。！？]?/g) || [content];
+                contentLines = contentLines.filter(line => line.trim() !== '');
             }
-            verseElem.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem);
+
+            // Create individual line elements for each line to match scroll mode structure
+            const lineElements = contentLines.map((line, index) => {
+                const cleanLine = line.trim().replace(/[。！？]$/g, '');
+                return `<div class="vertical-line-element" data-line-index="${index}">${cleanLine}</div>`;
+            }).join('');
+
+            verseElem.innerHTML = lineElements;
         } else {
+            // For poems with 6 or more lines, keep horizontal mode
             verseElem.classList.add('horizontal-mode');
             verseElem.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem);
         }
