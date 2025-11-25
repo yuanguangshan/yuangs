@@ -202,23 +202,33 @@ function bindEventListeners() {
         aiInterpretBtn.addEventListener('click', showAIInterpretation);
     }
     
-    // 布局切换按钮 - 根据当前状态决定是切换横竖排还是切换卷轴模式
+    // 布局切换按钮 - 根据当前显示模式决定是切换横竖排还是切换卷轴模式
     document.addEventListener('click', function(e) {
         if (e.target && e.target.id === 'layoutToggleBtn') {
-            // 检查当前内容行数，如果少于6行则保持横竖排切换功能，否则切换卷轴模式
-            if (currentPoem) {
+            const verseElement = document.getElementById('poemVerse');
+            if (!verseElement || !currentPoem) return;
+
+            // 检查当前显示模式
+            const isScrollMode = verseElement.classList.contains('vertical-scroll-mode');
+            const isHorizontalMode = verseElement.classList.contains('horizontal-mode');
+            const isArticleMode = verseElement.classList.contains('article-mode');
+            const isVerticalMode = verseElement.classList.contains('vertical-mode');
+
+            if (isScrollMode) {
+                // 如果当前是卷轴模式，退出卷轴模式，恢复到默认显示模式
+                // 调用 displayPoem 重新设置默认模式
+                displayPoem(currentPoem);
+            } else {
+                // 非卷轴模式下，检查内容长度决定行为
                 const lines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
                 const lineCount = lines.length;
                 if (lineCount <= 6) {
-                    // 短诗，继续使用横竖排切换
+                    // 短诗，使用横竖排切换
                     togglePoemLayout();
                 } else {
-                    // 长诗或文章，切换卷轴模式
+                    // 长诗或文章，切换到卷轴模式
                     toggleScrollMode();
                 }
-            } else {
-                // 如果没有当前诗，尝试切换卷轴模式
-                toggleScrollMode();
             }
         }
     });
@@ -382,29 +392,46 @@ function bindEventListeners() {
     });
 }
 
-// Toggle scroll mode functionality
+// Toggle scroll mode functionality - now supports cycling between horizontal and scroll modes
 function toggleScrollMode() {
     const verseElement = document.getElementById('poemVerse');
     const scrollModeToggle = document.getElementById('scrollModeToggle');
     const layoutToggleBtn = document.getElementById('layoutToggleBtn');
     if (!verseElement || !currentPoem) return;
 
+    // Determine current state by checking which class is active
+    const isScrollMode = verseElement.classList.contains('vertical-scroll-mode');
+    const isHorizontalMode = verseElement.classList.contains('horizontal-mode');
+    const isArticleMode = verseElement.classList.contains('article-mode');
+    const isVerticalMode = verseElement.classList.contains('vertical-mode');
+
     // Remove all display mode classes
     verseElement.classList.remove('vertical-mode', 'horizontal-mode', 'vertical-scroll-mode', 'article-mode');
 
-    if (currentDisplayMode === 'normal') {
-        // Switch to vertical-scroll mode
-        currentDisplayMode = 'scroll';
+    if (isScrollMode) {
+        // Currently in scroll mode, switch to horizontal mode
+        verseElement.classList.add('horizontal-mode');
+        verseElement.innerHTML = insertLineBreaksAtPunctuation(currentPoem.content);
+
+        // Update button text
+        if (scrollModeToggle) {
+            scrollModeToggle.innerHTML = '<span>📜</span> 卷轴模式';
+        }
+        if (layoutToggleBtn) {
+            layoutToggleBtn.textContent = '📜'; // Switch to scroll mode icon
+            layoutToggleBtn.title = '切换卷轴模式';
+        }
+        console.log('Switched from scroll to horizontal mode');
+    } else {
+        // Currently in any other mode (article, vertical, or horizontal), switch to scroll mode
         verseElement.classList.add('vertical-scroll-mode');
 
-        // Update scroll mode button text
+        // Update button text
         if (scrollModeToggle) {
             scrollModeToggle.innerHTML = '<span>📜</span> 退出卷轴';
         }
-
-        // Update header layout toggle button text
         if (layoutToggleBtn) {
-            layoutToggleBtn.textContent = '📄'; // 退出卷轴模式图标
+            layoutToggleBtn.textContent = '📄'; // Exit scroll mode icon
             layoutToggleBtn.title = '退出卷轴模式';
         }
 
@@ -430,33 +457,6 @@ function toggleScrollMode() {
         // Ensure scroll starts at the rightmost side for RTL scroll mode
         verseElement.scrollLeft = verseElement.scrollWidth - verseElement.clientWidth;
         console.log('Scroll mode activated, lines:', contentLines.length);
-    } else {
-        // Switch back to normal mode - use displayPoem to ensure all elements are updated
-        currentDisplayMode = 'normal';
-
-        // Update scroll mode button text back to default
-        if (scrollModeToggle) {
-            scrollModeToggle.innerHTML = '<span>📜</span> 卷轴模式';
-        }
-
-        // Update header layout toggle button text back to default
-        if (layoutToggleBtn) {
-            // Update button text based on poem length
-            const lines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
-            const lineCount = lines.length;
-            if (lineCount <= 6) {
-                layoutToggleBtn.textContent = '🔄'; // Layout toggle icon for short poems
-                layoutToggleBtn.title = '切换竖排/横排';
-            } else {
-                layoutToggleBtn.textContent = '📜'; // Scroll mode icon for long poems/articles
-                layoutToggleBtn.title = '切换卷轴模式';
-            }
-        }
-
-        // Call displayPoem to ensure title, author, and content are all synchronized
-        displayPoem(currentPoem);
-
-        console.log('Normal mode restored');
     }
 }
 
@@ -1575,14 +1575,16 @@ window.hideSearch = function() {
 window.performSearch = function() {
     const query = document.getElementById('searchInput').value.trim();
     if (!query) return;
-    
+
     const poemsToSearch = allPoems || [];
-    const results = poemsToSearch.filter(poem => 
-        (poem.title && poem.title.includes(query)) || 
-        (poem.content && poem.content.includes(query)) || 
-        (poem.auth && poem.auth.includes(query))
+    const queryLower = query.toLowerCase();
+    const results = poemsToSearch.filter(poem =>
+        (poem.title && poem.title.toLowerCase().includes(queryLower)) ||
+        (poem.content && poem.content.includes(query)) ||
+        (poem.auth && poem.auth.includes(query)) ||
+        (poem.tags && poem.tags.some(tag => tag.toLowerCase().includes(queryLower)))
     );
-    
+
     displaySearchResults(results);
 };
 
