@@ -9,7 +9,7 @@ let allPoems = null;
 // SimpleDB - IndexedDB封装
 const SimpleDB = {
     dbName: CONFIG.DB_NAME,
-    storeName: 'cache',  // 使用'cache'而不是CONFIG.STORE_NAME
+    storeName: CONFIG.STORE_NAME,
     version: CONFIG.DB_VERSION,
     db: null,
 
