@@ -421,14 +421,48 @@ export function parseTagsForPoem(poem) {
 
 function parseTags(tagSource) {
   if (!tagSource) return [];
-  if (Array.isArray(tagSource)) {
-    // 如果已经是数组，展开并处理每个元素
-    return tagSource.flatMap(item => 
-      typeof item === 'string' ? item.split(/[\/,，]/) : []
-    ).map(tag => tag.trim()).filter(tag => tag);
+
+  // Known Chinese poetry tags to help with separation
+  const knownTags = [
+    "诗经", "楚辞", "乐府", "唐诗", "宋词", "清词", "词", "蒙学", "古文",
+    "先秦", "汉", "魏晋", "南北朝", "隋", "唐", "五代", "南唐", "宋", "元", "明", "清", "现代", "近现代", "五代十国",
+    "九歌", "九章", "论语", "儒家",
+    "边塞", "田园", "送别", "思乡", "爱国", "山水", "爱情", "闺怨", "悼亡", "咏物", "咏史", "题画", "酬赠", "羁旅", "写景", "咏怀", "哲理", "宫怨", "讽刺", "记梦", "悼亡", "题画", "怀古", "咏史诗", "田园诗", "边塞诗", "山水诗", "爱情诗", "送别诗", "思乡诗", "哲理诗"
+  ];
+
+  // Create a regex pattern from the known tags (sort by length descending to match longer tags first)
+  const sortedTags = [...knownTags].sort((a, b) => b.length - a.length);
+  const tagPattern = sortedTags.map(tag => tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const combinedRegex = new RegExp(`(${tagPattern})`, 'g');
+
+  function separateConcatenatedTags(tagString) {
+    // If it contains any known tags concatenated together, split them
+    const matches = tagString.match(combinedRegex);
+    if (matches && matches.length > 1) {
+      // Multiple known tags were found concatenated together, separate them
+      return matches;
+    }
+    return [tagString]; // Return as single item if no separation needed
   }
-  // 如果是字符串，按分隔符分割
-  return tagSource.split(/[\/,，]/).map(tag => tag.trim()).filter(tag => tag);
+
+  if (Array.isArray(tagSource)) {
+    // If already an array, process each element
+    const result = tagSource.flatMap(item => {
+      if (typeof item === 'string') {
+        // First split by separators
+        const separatedByDelimiters = item.split(/[\/,，]/);
+        // Then check each part for concatenated tags
+        return separatedByDelimiters.flatMap(part => separateConcatenatedTags(part.trim())).filter(tag => tag);
+      }
+      return [];
+    });
+    return result;
+  }
+
+  // If it's a string, first split by delimiters, then check for concatenated tags
+  const parts = tagSource.split(/[\/,，]/);
+  const result = parts.flatMap(part => separateConcatenatedTags(part.trim())).filter(tag => tag);
+  return result;
 }
 
 export function generateTagsHTML(poem) {
