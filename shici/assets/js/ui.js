@@ -711,11 +711,25 @@ function displayPoem(poem) {
     const descEl = document.getElementById('poemDesc');
     if (descEl) {
         descEl.innerHTML = poem.desc || '暂无赏析';
+
+        // Check for cached AI interpretation and display it if available
+        const cachedAIInterpretation = getInterpretationFromCache(poem.title, poem.auth);
+        if (cachedAIInterpretation) {
+            const originalDesc = poem.desc || '暂无赏析';
+            const separator = '<div style="border-top: 1px dashed #ddd; margin: 20px 0;"></div>';
+            const aiBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 深度赏析 <span onclick="window.regenerateAnalysis()" style="cursor:pointer; margin-left:10px; font-size:0.8em; opacity:0.8; border-bottom:1px solid white;" title="重新生成解读">🔄 重新生成</span></div>';
+
+            descEl.innerHTML = originalDesc + separator + aiBadge + markdownToHtml(cachedAIInterpretation);
+        }
     }
 
     // 显示内容 - including image section initially
     document.getElementById('poemTextContent').style.display = 'block';
-    document.getElementById('poemDescContent').style.display = 'block';
+    // Only show poemDescContent if there's content to show (either original desc or cached AI interpretation)
+    const descContent = document.getElementById('poemDescContent');
+    if (descContent) {
+        descContent.style.display = 'block';
+    }
     document.getElementById('loading').style.display = 'none';
 
     // Ensure image section is initially visible before attempting to load image
