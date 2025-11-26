@@ -1533,7 +1533,7 @@ const DEFAULT_MODEL_ID = 'gemini-flash-lite-latest';
 const AI_CACHE_KEY = 'poem_ai_interpretations_v1';
 
 const PROMPT_TEMPLATES = {
-    '诗词': '请为以下古诗词提供深度解读和赏析，使用Markdown格式输出，包含以下部分：1. 诗词背景与作者心境 2. 逐句解析（如果诗句较短可合并解析） 3. 艺术手法与修辞特点 4. 主题思想与情感内涵 5. 文学价值与影响'
+    '诗词': '请为以下古诗词提供深度解读和赏析，使用Markdown格式输出，包含以下部分：1. 诗词背景与作者心境 2. 逐句解析（如果诗句较短可合并解析） 3. 艺术手法与修辞特点 4. 主题思想与情感内涵 5. 文学价值与影响 6.作者生平与经历'
 };
 const DEFAULT_TEMPLATE_KEY = '诗词';
 
