@@ -54,7 +54,18 @@ export async function initUI() {
 function initAuthorSelect() {
     const select = document.getElementById('authorSelect');
     if (!select || !AUTHOR_DATA) return;
-    
+
+    // Calculate author work counts
+    const authorWorkCounts = {};
+    if (allPoems) {
+        allPoems.forEach(poem => {
+            const author = poem.auth;
+            if (author) {
+                authorWorkCounts[author] = (authorWorkCounts[author] || 0) + 1;
+            }
+        });
+    }
+
     // Helper to normalize dynasty names
     function normalizeDynasty(dynasty) {
         if (!dynasty) return '未知';
@@ -75,28 +86,29 @@ function initAuthorSelect() {
     AUTHOR_DATA.forEach(author => {
         const rawDynasty = author.dynasty || '未知';
         const dynasty = normalizeDynasty(rawDynasty);
-        
+
         if (!dynastyGroups[dynasty]) {
             dynastyGroups[dynasty] = [];
         }
         dynastyGroups[dynasty].push(author);
     });
-    
+
     // 朝代顺序
     const dynastyOrder = ['先秦', '汉', '魏晋', '南北朝', '隋', '唐', '五代', '宋', '元', '明', '清', '近现代', '未知'];
-    
+
     dynastyOrder.forEach(dynasty => {
         if (dynastyGroups[dynasty]) {
             const optgroup = document.createElement('optgroup');
             optgroup.label = dynasty;
-            
+
             dynastyGroups[dynasty].forEach(author => {
                 const option = document.createElement('option');
                 option.value = author.name;
-                option.textContent = `${author.name} (${author.titles?.[0] || ''})`;
+                const workCount = authorWorkCounts[author.name] || 0;
+                option.textContent = `${author.name} (${author.titles?.[0] || ''}) [${workCount}首]`;
                 optgroup.appendChild(option);
             });
-            
+
             select.appendChild(optgroup);
         }
     });
