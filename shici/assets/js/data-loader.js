@@ -102,7 +102,9 @@ export async function fetchAndCachePoems() {
             const title = item.rhythmic || '';
             const auth = item.author || '';
             const content = Array.isArray(item.paragraphs) ? item.paragraphs.join('\\n') : (item.paragraphs || '');
-            const type = Array.isArray(item.tags) ? item.tags.join(' ') : (item.tags || '');
+            // Avoid creating a type string that is just a concatenation of tags, 
+            // as this causes duplicate tags in display (one combined, multiple individual)
+            const type = Array.isArray(item.tags) ? '' : (item.tags || '');
             const tags = item.tags || [];
             const desc = item.desc || '';
 
