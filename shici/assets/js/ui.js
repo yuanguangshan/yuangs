@@ -55,10 +55,27 @@ function initAuthorSelect() {
     const select = document.getElementById('authorSelect');
     if (!select || !AUTHOR_DATA) return;
     
+    // Helper to normalize dynasty names
+    function normalizeDynasty(dynasty) {
+        if (!dynasty) return '未知';
+        if (['春秋', '战国', '战国末期', '春秋末期', '秦'].includes(dynasty)) return '先秦';
+        if (['西汉', '东汉', '东汉末年'].includes(dynasty)) return '汉';
+        if (['三国', '三国·魏', '晋', '西晋', '东晋'].includes(dynasty)) return '魏晋';
+        if (['北魏', '南朝·宋', '南朝·梁', '南朝·齐'].includes(dynasty)) return '南北朝';
+        if (['五代十国·南唐'].includes(dynasty)) return '五代';
+        if (['宋末元初'].includes(dynasty)) return '宋';
+        if (['金末元初'].includes(dynasty)) return '元';
+        if (['明末清初'].includes(dynasty)) return '清';
+        if (['历代'].includes(dynasty)) return '未知';
+        return dynasty;
+    }
+
     // 按朝代分组
     const dynastyGroups = {};
     AUTHOR_DATA.forEach(author => {
-        const dynasty = author.dynasty || '未知';
+        const rawDynasty = author.dynasty || '未知';
+        const dynasty = normalizeDynasty(rawDynasty);
+        
         if (!dynastyGroups[dynasty]) {
             dynastyGroups[dynasty] = [];
         }
