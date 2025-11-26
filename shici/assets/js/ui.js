@@ -1543,7 +1543,9 @@ async function searchAndDisplayPoem(title, author) {
 const API_DOMAIN = 'https://aiproxy.want.biz/';
 const API_PREFIX = API_DOMAIN.replace(/\/+$/, '');
 const DEFAULT_TIMEOUT = 120; // 秒
-const DEFAULT_MODEL_ID = 'gemini-flash-lite-latest';
+//const DEFAULT_MODEL_ID = 'gemini-flash-lite-latest';
+const DEFAULT_MODEL_ID = 'gemini-pro-latest';
+
 const AI_CACHE_KEY = 'poem_ai_interpretations_v1';
 
 const PROMPT_TEMPLATES = {
