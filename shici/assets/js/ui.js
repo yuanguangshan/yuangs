@@ -264,8 +264,12 @@ function bindEventListeners() {
                 // 如果没有换行，按句号等标点符号分割
                 if (contentLines.length === 1) {
                     const content = contentLines[0];
-                    // 修改正则表达式，确保标点符号在句子末尾而不是开头
-                    contentLines = content.match(/[^。！？;；:：,，、]+[。！？;；:：,，、]?/g) || [content];
+                    // 优先按句号等完整句子分割，并保留标点
+                    contentLines = content.match(/[^。！？]+[。！？]|[^；;]+[；;]?|[^：:]+[：:]?|[^，,、]+[，,、]?/g) || [content];
+                    // 如果上面的模式没有成功分割，则使用更全面的正则表达式
+                    if(contentLines.length === 1 && contentLines[0] === content) {
+                        contentLines = content.match(/[^。！？;；:：,，、]+[。！？;；:：,，、]?/g) || [content];
+                    }
                     contentLines = contentLines.filter(line => line.trim() !== '');
                 }
 
@@ -299,13 +303,18 @@ function bindEventListeners() {
                 // If no line breaks, split by sentence punctuation to create meaningful segments
                 if (contentLines.length === 1) {
                     const content = contentLines[0];
-                    contentLines = content.match(/[^。！？;；:：,，、]+[。！？;；:：,，、]?/g) || [content];
+                    // 优先按句号等完整句子分割，并保留标点
+                    contentLines = content.match(/[^。！？]+[。！？]|[^；;]+[；;]?|[^：:]+[：:]?|[^，,、]+[，,、]?/g) || [content];
+                    // 如果上面的模式没有成功分割，则使用更全面的正则表达式
+                    if(contentLines.length === 1 && contentLines[0] === content) {
+                        contentLines = content.match(/[^。！？;；:：,，、]+[。！？;；:：,，、]?/g) || [content];
+                    }
                     contentLines = contentLines.filter(line => line.trim() !== '');
                 }
 
                 // Create column divs for each meaningful line/sentence
                 const formattedContent = contentLines.map(line => {
-                    const cleanLine = line.trim().replace(/[。！？]$/g, ''); // Remove ending punctuation for cleaner look
+                    const cleanLine = line.trim(); // Keep punctuation for proper display
                     return `<div class="scroll-column">${cleanLine}</div>`;
                 }).join('');
 
@@ -556,8 +565,12 @@ function toggleScrollMode() {
         // If no line breaks, split by sentence punctuation to create meaningful segments
         if (contentLines.length === 1) {
             const content = contentLines[0];
-            // Split by Chinese punctuation but keep the punctuation with the text
-            contentLines = content.match(/[^。！？;；:：,，、]+[。！？;；:：,，、]?/g) || [content];
+            // 优先按句号等完整句子分割，并保留标点
+            contentLines = content.match(/[^。！？]+[。！？]|[^；;]+[；;]?|[^：:]+[：:]?|[^，,、]+[，,、]?/g) || [content];
+            // 如果上面的模式没有成功分割，则使用更全面的正则表达式
+            if(contentLines.length === 1 && contentLines[0] === content) {
+                contentLines = content.match(/[^。！？;；:：,，、]+[。！？;；:：,，、]?/g) || [content];
+            }
             contentLines = contentLines.filter(line => line.trim() !== '');
         }
 
@@ -634,7 +647,12 @@ function displayPoem(poem) {
             // If no line breaks, split by sentence punctuation to create meaningful segments
             if (contentLines.length === 1) {
                 const content = contentLines[0];
-                contentLines = content.match(/[^。！？;；:：,，、]+[。！？;；:：,，、]?/g) || [content];
+                // 优先按句号等完整句子分割，并保留标点
+                contentLines = content.match(/[^。！？]+[。！？]|[^；;]+[；;]?|[^：:]+[：:]?|[^，,、]+[，,、]?/g) || [content];
+                // 如果上面的模式没有成功分割，则使用更全面的正则表达式
+                if(contentLines.length === 1 && contentLines[0] === content) {
+                    contentLines = content.match(/[^。！？;；:：,，、]+[。！？;；:：,，、]?/g) || [content];
+                }
                 contentLines = contentLines.filter(line => line.trim() !== '');
             }
 
@@ -676,7 +694,12 @@ function displayPoem(poem) {
             // 如果没有换行，按句号等标点符号分割
             if (contentLines.length === 1) {
                 const content = contentLines[0];
-                contentLines = content.match(/[^。！？;；:：,，、]+[。！？;；:：,，、]?/g) || [content];
+                // 优先按句号等完整句子分割，并保留标点
+                contentLines = content.match(/[^。！？]+[。！？]|[^；;]+[；;]?|[^：:]+[：:]?|[^，,、]+[，,、]?/g) || [content];
+                // 如果上面的模式没有成功分割，则使用更全面的正则表达式
+                if(contentLines.length === 1 && contentLines[0] === content) {
+                    contentLines = content.match(/[^。！？;；:：,，、]+[。！？;；:：,，、]?/g) || [content];
+                }
                 contentLines = contentLines.filter(line => line.trim() !== '');
             }
 
@@ -1816,7 +1839,12 @@ function togglePoemLayout() {
         // If no line breaks, split by punctuation to create meaningful segments
         if (contentLines.length === 1) {
             const content = contentLines[0];
-            contentLines = content.match(/[^。！？;；:：,，、]+[。！？;；:：,，、]?/g) || [content];
+            // 优先按句号等完整句子分割，并保留标点
+            contentLines = content.match(/[^。！？]+[。！？]|[^；;]+[；;]?|[^：:]+[：:]?|[^，,、]+[，,、]?/g) || [content];
+            // 如果上面的模式没有成功分割，则使用更全面的正则表达式
+            if(contentLines.length === 1 && contentLines[0] === content) {
+                contentLines = content.match(/[^。！？;；:：,，、]+[。！？;；:：,，、]?/g) || [content];
+            }
             contentLines = contentLines.filter(line => line.trim() !== '');
         }
 
