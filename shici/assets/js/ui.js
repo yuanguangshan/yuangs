@@ -81,7 +81,7 @@ function splitLongLines(lines, maxLength = 21) {
         if (!trimmed) return '';
         
         // 检查是否以标点符号结尾（句号、叹号、问号）
-        const punctuationMatch = trimmed.match(/([，。！？]+)$/);
+        const punctuationMatch = trimmed.match(/([，。！？；、：]+)$/);
         
         if (punctuationMatch) {
             const punctuation = punctuationMatch[1];
