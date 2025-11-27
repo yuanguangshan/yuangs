@@ -58,8 +58,20 @@ function splitLongLines(lines, maxLength = 18) {
         } else {
             let current = line;
             while (current.length > maxLength) {
-                result.push(current.slice(0, maxLength));
-                current = current.slice(maxLength);
+                let chunk = current.slice(0, maxLength);
+                let remainder = current.slice(maxLength);
+
+                // Check if the chunk ends with punctuation
+                const punctuationMatch = chunk.match(/([。！？，；、：,.!?;:])$/);
+                if (punctuationMatch && remainder) {
+                    // Move the punctuation to the beginning of the remainder
+                    const punctuation = punctuationMatch[1];
+                    chunk = chunk.slice(0, -punctuation.length);
+                    remainder = punctuation + remainder;
+                }
+
+                result.push(chunk);
+                current = remainder;
             }
             if (current.length > 0) {
                 result.push(current);
