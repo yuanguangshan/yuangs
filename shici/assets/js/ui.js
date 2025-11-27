@@ -29,7 +29,7 @@ function movePunctuationToStart(text) {
     if (!trimmed) return '';
     
     // 检查是否以标点符号结尾（包含所有常见中文标点）
-    const punctuationMatch = trimmed.match(/([。！？;；:：,，、《》〈〉「」『』""''（）]+)$/);
+    const punctuationMatch = trimmed.match(/([。！？]+)$/);
     
     if (punctuationMatch) {
         const punctuation = punctuationMatch[1];
@@ -43,10 +43,30 @@ function movePunctuationToStart(text) {
 function splitContentWithPunctuationFirst(content) {
     // 先按标点符号分割，保留标点符号在每段的后面
     // 包含常见中文标点
-    const segments = content.match(/[^。！？;；:：,，、《》〈〉「」『』""''（）]+[。！？;；:：,，、《》〈〉「」『』""''（）]?/g) || [content];
+    const segments = content.match(/[^。！？]+[。！？]?/g) || [content];
     
     // 对每一段，将标点符号移到前面
     return segments.map(movePunctuationToStart).filter(line => line.trim() !== '');
+}
+
+// 辅助函数：将超过指定长度的行切分
+function splitLongLines(lines, maxLength = 23) {
+    const result = [];
+    for (const line of lines) {
+        if (line.length <= maxLength) {
+            result.push(line);
+        } else {
+            let current = line;
+            while (current.length > maxLength) {
+                result.push(current.slice(0, maxLength));
+                current = current.slice(maxLength);
+            }
+            if (current.length > 0) {
+                result.push(current);
+            }
+        }
+    }
+    return result;
 }
 
 // 初始化UI
@@ -296,6 +316,9 @@ function bindEventListeners() {
                     // 多行内容，对每一行处理标点符号
                     contentLines = contentLines.map(movePunctuationToStart);
                 }
+                
+                // 限制每列最大字数
+                contentLines = splitLongLines(contentLines);
 
                 // 创建列 div 元素用于显示
                 const formattedContent = contentLines.map(line => {
@@ -333,6 +356,9 @@ function bindEventListeners() {
                     // Multi-line content, process punctuation for each line
                     contentLines = contentLines.map(movePunctuationToStart);
                 }
+                
+                // Limit max characters per column
+                contentLines = splitLongLines(contentLines);
 
                 // Create column divs for each meaningful line/sentence
                 const formattedContent = contentLines.map(line => {
@@ -593,6 +619,9 @@ function toggleScrollMode() {
             // Multi-line content, process punctuation for each line
             contentLines = contentLines.map(movePunctuationToStart);
         }
+        
+        // Limit max characters per column
+        contentLines = splitLongLines(contentLines);
 
         // Create column divs for each meaningful line/sentence
         const formattedContent = contentLines.map(line => {
@@ -673,6 +702,9 @@ function displayPoem(poem) {
                 // Multi-line content, process punctuation for each line
                 contentLines = contentLines.map(movePunctuationToStart);
             }
+            
+            // Limit max characters per column
+            contentLines = splitLongLines(contentLines);
 
             // Create column divs for each meaningful line/sentence
             const formattedContent = contentLines.map(line => {
@@ -718,6 +750,9 @@ function displayPoem(poem) {
                 // 多行内容，对每一行处理标点符号
                 contentLines = contentLines.map(movePunctuationToStart);
             }
+            
+            // 限制每列最大字数
+            contentLines = splitLongLines(contentLines);
 
             // 创建列 div 元素用于显示
             const formattedContent = contentLines.map(line => {
@@ -1861,6 +1896,9 @@ function togglePoemLayout() {
             // Multi-line content, process punctuation for each line
             contentLines = contentLines.map(movePunctuationToStart);
         }
+        
+        // Limit max characters per column
+        contentLines = splitLongLines(contentLines);
 
         // Create individual line elements for each line to match scroll mode structure
         const lineElements = contentLines.map((line, index) => {
