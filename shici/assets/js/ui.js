@@ -50,7 +50,7 @@ function splitContentWithPunctuationFirst(content) {
 }
 
 // 辅助函数：将超过指定长度的行切分
-function splitLongLines(lines, maxLength = 23) {
+function splitLongLines(lines, maxLength = 18) {
     const result = [];
     for (const line of lines) {
         if (line.length <= maxLength) {
