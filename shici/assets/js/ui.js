@@ -126,10 +126,6 @@ export async function initUI() {
 
     // 首次加载随机诗词
     await loadRandomPoem();
-    
-    // 暴露 AI 解释函数到全局作用域，供 JSBox 等外部调用
-    window.showAIInterpretation = showAIInterpretation;
-    console.log('showAIInterpretation 函数已暴露到全局作用域');
 }
 
 // 初始化作者选择器
@@ -1546,5 +1542,39 @@ function showAuthorInfo(authorName) {
     };
     document.addEventListener('keydown', handleEsc);
 }
+
+// --- 统一暴露全局函数 ---
+// 这样在 JSBox 或其他外部脚本中可以直接调用这些函数，无需每次手动修改
+Object.assign(window, {
+    // 核心功能
+    loadRandomPoem,
+    renderWaterfall,
+    displayPoem,
+    
+    // AI 相关
+    showAIInterpretation,
+    regenerateAnalysis,
+    
+    // 布局与显示
+    toggleScrollMode,
+    togglePoemLayout,
+    switchTheme,
+    showAuthorInfo,
+    showAuthorWorks,
+    
+    // 交互操作
+    copyPoemToClipboard,
+    toggleFavorite,
+    addToHistory,
+    handleTagClick,
+    
+    // 搜索相关
+    toggleSearch,
+    performSearch,
+    hideSearch,
+    handleSearchKeyPress
+});
+
+console.log('Poetry App: All interactive functions have been exposed to global scope.');
 
 export { copyPoemToClipboard, togglePoemLayout, showAIInterpretation };
