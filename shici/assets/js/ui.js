@@ -1,9 +1,9 @@
 // ui.js - UI交互逻辑模块
 // 处理用户交互、DOM操作和事件监听
 
-import { CONFIG, getRandomColor, getRandomImageUrl, addToImageCache, getRandomCachedImage } from './config.js?v=1.0.1';
-import { AUTHOR_DATA, getDynastyByAuthorName } from './author-data.js?v=1.0.1';
-import { fetchAndCachePoems, getRandomPoem, getRandomPoems } from './data-loader.js?v=1.0.1';
+import { CONFIG, getRandomColor, getRandomImageUrl, addToImageCache, getRandomCachedImage } from './config.js?v=1.0.2';
+import { AUTHOR_DATA, getDynastyByAuthorName } from './author-data.js?v=1.0.2';
+import { fetchAndCachePoems, getRandomPoem, getRandomPoems } from './data-loader.js?v=1.0.2';
 import {
     formatPoemWithLineBreaks,
     isRegularPoem,
@@ -14,7 +14,7 @@ import {
     needsScrollableVerticalMode,
     parseTagsForPoem,
     insertLineBreaksAtPunctuation
-} from './poem-display.js?v=1.0.1';
+} from './poem-display.js?v=1.0.2';
 
 // 全局状态
 let currentPoem = null;
@@ -23,63 +23,86 @@ let filteredPoems = null;
 let currentDisplayMode = 'vertical'; // 'horizontal', 'vertical', 'scroll'
 let currentTagFilter = null; // Current tag filter for waterfall
 
-// 辅助函数：将字符串末尾的标点移到开头
-function movePunctuationToStart(text) {
-    const trimmed = text.trim();
-    if (!trimmed) return '';
-    
-    // 检查是否以标点符号结尾（包含所有常见中文标点）
-    const punctuationMatch = trimmed.match(/([。！？]+)$/);
-    
-    if (punctuationMatch) {
-        const punctuation = punctuationMatch[1];
-        const textWithoutPunctuation = trimmed.slice(0, -punctuation.length);
-        return punctuation + textWithoutPunctuation;
-    }
-    return trimmed;
-}
+// --- 辅助函数区域 ---
 
-// 辅助函数：按标点符号分割内容，并将每段内的标点符号放在前面
-function splitContentWithPunctuationFirst(content) {
-    // 先按标点符号分割，保留标点符号在每段的后面
-    // 包含常见中文标点
-    const segments = content.match(/[^。！？]+[。！？]?/g) || [content];
-    
-    // 对每一段，将标点符号移到前面
-    return segments.map(movePunctuationToStart).filter(line => line.trim() !== '');
-}
-
-// 辅助函数：将超过指定长度的行切分
+// 【优化】将超过指定长度的行切分
+// 逻辑：如果切分点遇到标点符号，允许溢出（避头点原则），而不是强行移到下一行行首
 function splitLongLines(lines, maxLength = 21) {
     const result = [];
+    // 定义"避头点"：不应该出现在行首的标点符号
+    const avoidLineStartRegex = /[。！？，；、：,.!?;:”’»›\)\]\}~～」』]/;
+
     for (const line of lines) {
+        // 如果当前行本身未超过长度，直接保留
         if (line.length <= maxLength) {
             result.push(line);
-        } else {
-            let current = line;
-            while (current.length > maxLength) {
-                let chunk = current.slice(0, maxLength);
-                let remainder = current.slice(maxLength);
+            continue;
+        }
 
-                // Check if the chunk ends with punctuation
-                const punctuationMatch = chunk.match(/([。！？，；、：,.!?;:])$/);
-                if (punctuationMatch && remainder) {
-                    // Move the punctuation to the beginning of the remainder
-                    const punctuation = punctuationMatch[1];
-                    chunk = chunk.slice(0, -punctuation.length);
-                    remainder = punctuation + remainder;
-                }
+        let current = line;
+        while (current.length > 0) {
+            // 1. 默认截取位置
+            let cutIndex = maxLength;
 
-                result.push(chunk);
-                current = remainder;
-            }
-            if (current.length > 0) {
+            // 如果剩余内容已经小于等于最大长度，直接作为最后一段
+            if (current.length <= maxLength) {
                 result.push(current);
+                break;
             }
+
+            // 2. 排版优化：检查截取点之后的字符
+            // 如果截取点后的第一个字符是"避头点"（如逗号），则不能在这里切分
+            // 我们需要把切分点向后移，把标点包含在当前行里
+            if (cutIndex < current.length && avoidLineStartRegex.test(current[cutIndex])) {
+                // 向后延伸，直到不是避头点，或者超过硬性限制（允许溢出3个字符）
+                let overflowLimit = 3; 
+                while (
+                    cutIndex < current.length && 
+                    avoidLineStartRegex.test(current[cutIndex]) && 
+                    overflowLimit > 0
+                ) {
+                    cutIndex++;
+                    overflowLimit--;
+                }
+            }
+
+            // 3. 生成分段
+            let chunk = current.slice(0, cutIndex);
+            let remainder = current.slice(cutIndex);
+
+            result.push(chunk);
+            current = remainder;
         }
     }
-    return result;
+
+    // 返回之前，将每行末尾的标点移到行首
+    return result.map(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return '';
+        
+        // 检查是否以标点符号结尾（句号、叹号、问号）
+        const punctuationMatch = trimmed.match(/([，。！？]+)$/);
+        
+        if (punctuationMatch) {
+            const punctuation = punctuationMatch[1];
+            const textWithoutPunctuation = trimmed.slice(0, -punctuation.length);
+            return punctuation + textWithoutPunctuation;
+        }
+        return trimmed;
+    });
 }
+
+// 辅助函数：处理文章内容，按句子切分，但保留标点在句尾
+function splitArticleContent(content) {
+    // 将文章按句号、叹号、问号切分，但保留标点符号
+    // 替换逻辑：在标点后加换行符，然后split
+    return content
+        .replace(/([。！？])/g, '$1\n')
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+}
+
 
 // 初始化UI
 export async function initUI() {
@@ -103,9 +126,6 @@ export async function initUI() {
 
     // 首次加载随机诗词
     await loadRandomPoem();
-
-    // 不自动初始化瀑布流，等用户点击切换
-    // await renderWaterfall();
 }
 
 // 初始化作者选择器
@@ -173,7 +193,6 @@ function initAuthorSelect() {
 }
 
 // 绑定事件监听器
-
 function bindEventListeners() {
     // 刷新按钮
     const refreshBtn = document.getElementById('refreshBtn');
@@ -249,11 +268,11 @@ function bindEventListeners() {
         layoutToggle.addEventListener('click', toggleLayout);
     }
     
-    // Theme menu toggle functionality (click outside handling)
+    // Theme menu toggle functionality
     const darkModeToggle = document.getElementById('darkModeToggle');
     if (darkModeToggle) {
         darkModeToggle.addEventListener('click', function (e) {
-            e.stopPropagation(); // Prevent menu from closing when clicking theme button
+            e.stopPropagation(); 
             const themeMenu = document.getElementById('themeMenu');
             if (themeMenu) {
                 themeMenu.classList.toggle('active');
@@ -305,101 +324,83 @@ function bindEventListeners() {
             // 确定当前显示模式
             const isScrollMode = verseElement.classList.contains('vertical-scroll-mode');
             const isHorizontalMode = verseElement.classList.contains('horizontal-mode');
-            // 将原来的 article-mode 和 vertical-mode 都视为竖版模式
             const isVerticalMode = verseElement.classList.contains('vertical-mode') ||
                                   verseElement.classList.contains('article-mode');
 
             // 移除所有模式类
             verseElement.classList.remove('vertical-mode', 'horizontal-mode', 'vertical-scroll-mode', 'article-mode');
 
+            // --- 准备数据逻辑（通用）---
+            let contentLines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
+            if (contentLines.length === 1) {
+                // 如果是长文没有换行，按句子切分
+                contentLines = splitArticleContent(contentLines[0]);
+            }
+            // 【修正】不再将标点移到开头，保持自然顺序
+            contentLines = contentLines.map(line => line.trim());
+
             if (isHorizontalMode) {
                 // 横版 → 竖版
                 verseElement.classList.add('vertical-mode');
 
-                // 将内容按标点符号分割成多个部分，为水平滚动模式准备（类似卷轴模式）
-                let contentLines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
+                // 限制每列最大字数，使用优化后的避头点逻辑
+                const formattedLines = splitLongLines(contentLines);
 
-                // 如果没有换行，按标点符号分割
-                if (contentLines.length === 1) {
-                    const content = contentLines[0];
-                    // 使用辅助函数分割，标点符号在前面
-                    contentLines = splitContentWithPunctuationFirst(content);
-                } else {
-                    // 多行内容，对每一行处理标点符号
-                    contentLines = contentLines.map(movePunctuationToStart);
-                }
-                
-                // 限制每列最大字数
-                contentLines = splitLongLines(contentLines);
-
-                // 创建列 div 元素用于显示
-                const formattedContent = contentLines.map(line => {
-                    const cleanLine = line.trim();
-                    return `<div class="scroll-column">${cleanLine}</div>`;
+                // 创建列 div 元素
+                const formattedContent = formattedLines.map(line => {
+                    return `<div class="scroll-column">${line}</div>`;
                 }).join('');
 
                 verseElement.innerHTML = formattedContent;
 
                 currentDisplayMode = 'vertical';
-                saveLayoutMode('vertical'); // 保存竖版模式偏好
+                saveLayoutMode('vertical'); 
 
                 if (layoutToggleBtn) {
-                    layoutToggleBtn.textContent = '📜'; // 切换到卷轴模式
+                    layoutToggleBtn.textContent = '📜'; // 切换到卷轴模式图标
                     layoutToggleBtn.title = '切换卷轴模式';
                 }
 
-                // 确保滚动到最右侧（类似于卷轴模式的初始状态）
+                // 确保滚动到最右侧
                 setTimeout(() => {
                     verseElement.scrollLeft = verseElement.scrollWidth - verseElement.clientWidth;
                 }, 10);
+
             } else if (isVerticalMode) {
                 // 竖版 → 卷轴
                 verseElement.classList.add('vertical-scroll-mode');
 
-                // Create a properly formatted scroll layout that preserves the poem's meaning
-                let contentLines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
+                // 限制每列最大字数
+                const formattedLines = splitLongLines(contentLines);
 
-                // If no line breaks, split by sentence punctuation to create meaningful segments
-                if (contentLines.length === 1) {
-                    const content = contentLines[0];
-                    // 使用辅助函数分割，标点符号在前面
-                    contentLines = splitContentWithPunctuationFirst(content);
-                } else {
-                    // Multi-line content, process punctuation for each line
-                    contentLines = contentLines.map(movePunctuationToStart);
-                }
-                
-                // Limit max characters per column
-                contentLines = splitLongLines(contentLines);
-
-                // Create column divs for each meaningful line/sentence
-                const formattedContent = contentLines.map(line => {
-                    const cleanLine = line.trim(); // Keep punctuation for proper display
-                    return `<div class="scroll-column">${cleanLine}</div>`;
+                // 创建列 div 元素
+                const formattedContent = formattedLines.map(line => {
+                    return `<div class="scroll-column">${line}</div>`;
                 }).join('');
 
                 verseElement.innerHTML = formattedContent;
 
                 currentDisplayMode = 'scroll';
-                saveLayoutMode('scroll'); // 保存卷轴模式偏好
+                saveLayoutMode('scroll');
 
                 if (layoutToggleBtn) {
-                    layoutToggleBtn.textContent = '📄'; // 退出卷轴模式
+                    layoutToggleBtn.textContent = '📄'; // 退出卷轴模式图标
                     layoutToggleBtn.title = '退出卷轴模式';
                 }
 
-                // Ensure scroll starts at the rightmost side for RTL scroll mode
+                // 确保滚动到最右侧
                 verseElement.scrollLeft = verseElement.scrollWidth - verseElement.clientWidth;
+
             } else if (isScrollMode) {
                 // 卷轴 → 横版
                 verseElement.classList.add('horizontal-mode');
                 verseElement.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem);
 
                 currentDisplayMode = 'horizontal';
-                saveLayoutMode('horizontal'); // 保存横版模式偏好
+                saveLayoutMode('horizontal');
 
                 if (layoutToggleBtn) {
-                    layoutToggleBtn.textContent = '🔄'; // 切换竖版模式
+                    layoutToggleBtn.textContent = '🔄'; // 切换竖版模式图标
                     layoutToggleBtn.title = '切换竖版模式';
                 }
             }
@@ -438,7 +439,6 @@ function bindEventListeners() {
     // Close menu
     closeMenuBtn?.addEventListener('click', function () {
         menuOverlay.classList.remove('active');
-        // Hide sections when closing
         if (historySection) historySection.style.display = 'none';
         if (favoritesSection) favoritesSection.style.display = 'none';
         if (aboutSection) aboutSection.style.display = 'none';
@@ -448,7 +448,6 @@ function bindEventListeners() {
     menuOverlay?.addEventListener('click', function (e) {
         if (e.target === menuOverlay) {
             menuOverlay.classList.remove('active');
-            // Hide sections when closing
             if (historySection) historySection.style.display = 'none';
             if (favoritesSection) favoritesSection.style.display = 'none';
             if (aboutSection) aboutSection.style.display = 'none';
@@ -483,168 +482,69 @@ function bindEventListeners() {
             aboutSection.style.display = 'block';
         }
     });
-
-    // Load and display history list
-    function loadHistoryList() {
-        const history = getHistoryFromStorage();
-        if (historyList) {
-            historyList.innerHTML = '';
-
-            if (history.length === 0) {
-                historyList.innerHTML = '<p style="padding: 10px; text-align: center; color: var(--text-tertiary);">暂无历史记录</p>';
-                return;
-            }
-
-            history.forEach((item, index) => {
-                const historyItem = document.createElement('div');
-                historyItem.className = 'history-item';
-                historyItem.innerHTML = `
-                    <div class="title">${item.title}</div>
-                    <div class="author">${item.author}</div>
-                `;
-                historyItem.addEventListener('click', function () {
-                    searchAndDisplayPoem(item.title, item.author);
-                    if (menuOverlay) menuOverlay.classList.remove('active');
-                    if (historySection) historySection.style.display = 'none';
-                });
-                historyList.appendChild(historyItem);
-            });
-        }
-    }
-
-    // Load and display favorites list
-    function loadFavoritesList() {
-        const favorites = getFavoritesFromStorage();
-        if (favoritesList) {
-            favoritesList.innerHTML = '';
-
-            if (favorites.length === 0) {
-                favoritesList.innerHTML = '<p style="padding: 10px; text-align: center; color: var(--text-tertiary);">暂无收藏</p>';
-                return;
-            }
-
-            favorites.forEach((item, index) => {
-                const favoriteItem = document.createElement('div');
-                favoriteItem.className = 'favorite-item';
-                favoriteItem.innerHTML = `
-                    <div class="title">${item.title}</div>
-                    <div class="author">${item.author}</div>
-                `;
-                favoriteItem.addEventListener('click', function () {
-                    searchAndDisplayPoem(item.title, item.author);
-                    if (menuOverlay) menuOverlay.classList.remove('active');
-                    if (favoritesSection) favoritesSection.style.display = 'none';
-                });
-                favoritesList.appendChild(favoriteItem);
-            });
-        }
-    }
-
-    // Function to search and display a specific poem by title and author
-    async function searchAndDisplayPoem(title, author) {
-        // Fetch all poems if not already loaded
-        if (!allPoems) {
-            allPoems = await fetchAndCachePoems();
-        }
-
-        // Find the poem in the data
-        const poem = allPoems.find(p =>
-            p.title === title && p.auth === author
-        );
-
-        if (poem) {
-            displayPoem(poem);
-        } else {
-            alert('未找到该诗词');
-        }
-    }
-
+    
     // Add the scroll mode toggle functionality
     const scrollModeToggle = document.getElementById('scrollModeToggle');
-
     scrollModeToggle?.addEventListener('click', function () {
         toggleScrollMode();
     });
 }
 
-// Toggle scroll mode functionality - now supports cycling between horizontal and scroll modes
+// Toggle scroll mode functionality
 function toggleScrollMode() {
     const verseElement = document.getElementById('poemVerse');
     const scrollModeToggle = document.getElementById('scrollModeToggle');
     const layoutToggleBtn = document.getElementById('layoutToggleBtn');
     if (!verseElement || !currentPoem) return;
 
-    // Determine current state by checking which class is active
     const isScrollMode = verseElement.classList.contains('vertical-scroll-mode');
-    const isHorizontalMode = verseElement.classList.contains('horizontal-mode');
-    const isArticleMode = verseElement.classList.contains('article-mode');
-    const isVerticalMode = verseElement.classList.contains('vertical-mode');
 
     // Remove all display mode classes
     verseElement.classList.remove('vertical-mode', 'horizontal-mode', 'vertical-scroll-mode', 'article-mode');
 
     if (isScrollMode) {
-        // Currently in scroll mode, switch to horizontal mode
+        // Switch to horizontal mode
         verseElement.classList.add('horizontal-mode');
         verseElement.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem);
 
-        // Update display mode state
         currentDisplayMode = 'horizontal';
-        saveLayoutMode('horizontal'); // 保存横版模式偏好
+        saveLayoutMode('horizontal');
 
-        // Update button text
-        if (scrollModeToggle) {
-            scrollModeToggle.innerHTML = '<span>📜</span> 卷轴模式';
-        }
+        if (scrollModeToggle) scrollModeToggle.innerHTML = '<span>📜</span> 卷轴模式';
         if (layoutToggleBtn) {
-            layoutToggleBtn.textContent = '📜'; // Switch to scroll mode icon
+            layoutToggleBtn.textContent = '📜';
             layoutToggleBtn.title = '切换卷轴模式';
         }
-        console.log('Switched from scroll to horizontal mode');
     } else {
-        // Currently in any other mode (article, vertical, or horizontal), switch to scroll mode
+        // Switch to scroll mode
         verseElement.classList.add('vertical-scroll-mode');
 
-        // Update display mode state
         currentDisplayMode = 'scroll';
-        saveLayoutMode('scroll'); // 保存卷轴模式偏好
+        saveLayoutMode('scroll');
 
-        // Update button text
-        if (scrollModeToggle) {
-            scrollModeToggle.innerHTML = '<span>📜</span> 退出卷轴';
-        }
+        if (scrollModeToggle) scrollModeToggle.innerHTML = '<span>📜</span> 退出卷轴';
         if (layoutToggleBtn) {
-            layoutToggleBtn.textContent = '📄'; // Exit scroll mode icon
+            layoutToggleBtn.textContent = '📄';
             layoutToggleBtn.title = '退出卷轴模式';
         }
 
-        // Create a properly formatted scroll layout that preserves the poem's meaning
-        // Split content by lines first (if it has line breaks)
+        // Data Preparation
         let contentLines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
-
-        // If no line breaks, split by sentence punctuation to create meaningful segments
         if (contentLines.length === 1) {
-            const content = contentLines[0];
-            // 使用辅助函数分割，标点符号在前面
-            contentLines = splitContentWithPunctuationFirst(content);
-        } else {
-            // Multi-line content, process punctuation for each line
-            contentLines = contentLines.map(movePunctuationToStart);
+            contentLines = splitArticleContent(contentLines[0]);
         }
+        // 【修正】保持自然顺序
+        contentLines = contentLines.map(line => line.trim());
         
         // Limit max characters per column
         contentLines = splitLongLines(contentLines);
 
-        // Create column divs for each meaningful line/sentence
         const formattedContent = contentLines.map(line => {
-            const cleanLine = line.trim(); // Keep punctuation for proper display
-            return `<div class="scroll-column">${cleanLine}</div>`;
+            return `<div class="scroll-column">${line}</div>`;
         }).join('');
 
         verseElement.innerHTML = formattedContent;
-        // Ensure scroll starts at the rightmost side for RTL scroll mode
         verseElement.scrollLeft = verseElement.scrollWidth - verseElement.clientWidth;
-        console.log('Scroll mode activated, lines:', contentLines.length);
     }
 }
 
@@ -670,7 +570,6 @@ function displayPoem(poem) {
     // Update the current poem
     currentPoem = poem;
 
-    // Update title and author regardless of display mode
     // 标题
     const titleEl = document.getElementById('poemTitle');
     if (titleEl) {
@@ -683,8 +582,6 @@ function displayPoem(poem) {
     if (authorEl) {
         const dynasty = getDynastyByAuthorName(poem.auth);
         authorEl.textContent = `${dynasty} · ${poem.auth || '佚名'}`;
-
-        // 添加点击事件显示作者信息
         authorEl.style.cursor = 'pointer';
         authorEl.onclick = () => showAuthorInfo(poem.auth);
     }
@@ -694,93 +591,60 @@ function displayPoem(poem) {
     const layoutToggleBtn = document.getElementById('layoutToggleBtn');
 
     if (verseEl) {
-        // 重置类名 to ensure clean state
+        // 重置类名
         verseEl.className = 'poem-verse';
 
-        // 根据保存的布局模式应用相应的显示方式
+        // 准备数据（通用）
+        let contentLines = poem.content.split('\\n').filter(line => line.trim() !== '');
+        // 如果是文章且只有一行，按句子切分
+        if (contentLines.length === 1 && contentLines[0].length > 30) { 
+            contentLines = splitArticleContent(contentLines[0]);
+        }
+        // 统一 Trim
+        contentLines = contentLines.map(line => line.trim());
+
         if (currentDisplayMode === 'scroll') {
             // 卷轴模式
             verseEl.classList.add('vertical-scroll-mode');
-
-            // Split content by lines first (if it has line breaks)
-            let contentLines = poem.content.split('\\n').filter(line => line.trim() !== '');
-
-            // If no line breaks, split by sentence punctuation to create meaningful segments
-            if (contentLines.length === 1) {
-                const content = contentLines[0];
-                // 使用辅助函数分割，标点符号在前面
-                contentLines = splitContentWithPunctuationFirst(content);
-            } else {
-                // Multi-line content, process punctuation for each line
-                contentLines = contentLines.map(movePunctuationToStart);
-            }
+            const formattedLines = splitLongLines(contentLines);
             
-            // Limit max characters per column
-            contentLines = splitLongLines(contentLines);
-
-            // Create column divs for each meaningful line/sentence
-            const formattedContent = contentLines.map(line => {
-                const cleanLine = line.trim(); // Keep punctuation for proper display
-                return `<div class="scroll-column">${cleanLine}</div>`;
+            verseEl.innerHTML = formattedLines.map(line => {
+                return `<div class="scroll-column">${line}</div>`;
             }).join('');
-
-            verseEl.innerHTML = formattedContent;
             
             if (layoutToggleBtn) {
-                layoutToggleBtn.textContent = '📄'; // 退出卷轴模式图标
+                layoutToggleBtn.textContent = '📄';
                 layoutToggleBtn.title = '退出卷轴模式';
                 layoutToggleBtn.style.display = 'inline-block';
             }
-            
-            // Ensure scroll starts at the rightmost side for RTL scroll mode
             setTimeout(() => {
                 verseEl.scrollLeft = verseEl.scrollWidth - verseEl.clientWidth;
             }, 10);
+
         } else if (currentDisplayMode === 'horizontal') {
             // 横版模式
             verseEl.classList.add('horizontal-mode');
             verseEl.innerHTML = formatPoemWithLineBreaks(poem.content, poem);
             
             if (layoutToggleBtn) {
-                layoutToggleBtn.textContent = '🔄'; // 切换竖版模式
+                layoutToggleBtn.textContent = '🔄';
                 layoutToggleBtn.title = '切换竖版模式';
                 layoutToggleBtn.style.display = 'inline-block';
             }
         } else {
             // 竖版模式（默认）
             verseEl.classList.add('vertical-mode');
+            const formattedLines = splitLongLines(contentLines);
 
-            // 将内容按标点符号分割成多个部分
-            let contentLines = poem.content.split('\\n').filter(line => line.trim() !== '');
-
-            // 如果没有换行，按标点符号分割
-            if (contentLines.length === 1) {
-                const content = contentLines[0];
-                // 使用辅助函数分割，标点符号在前面
-                contentLines = splitContentWithPunctuationFirst(content);
-            } else {
-                // 多行内容，对每一行处理标点符号
-                contentLines = contentLines.map(movePunctuationToStart);
-            }
-            
-            // 限制每列最大字数
-            contentLines = splitLongLines(contentLines);
-
-            // 创建列 div 元素用于显示
-            const formattedContent = contentLines.map(line => {
-                const cleanLine = line.trim(); // 保留标点符号
-                return `<div class="scroll-column">${cleanLine}</div>`;
+            verseEl.innerHTML = formattedLines.map(line => {
+                return `<div class="scroll-column">${line}</div>`;
             }).join('');
-
-            verseEl.innerHTML = formattedContent;
             
             if (layoutToggleBtn) {
-                layoutToggleBtn.textContent = '📜'; // 切换到卷轴模式
+                layoutToggleBtn.textContent = '📜';
                 layoutToggleBtn.title = '切换卷轴模式';
                 layoutToggleBtn.style.display = 'inline-block';
             }
-            
-            // 确保滚动到最右侧
             setTimeout(() => {
                 verseEl.scrollLeft = verseEl.scrollWidth - verseEl.clientWidth;
             }, 10);
@@ -798,7 +662,7 @@ function displayPoem(poem) {
     if (descEl) {
         descEl.innerHTML = poem.desc || '暂无赏析';
 
-        // Check for cached AI interpretation and display it if available
+        // 检查缓存的 AI 解读
         const cachedAIInterpretation = getInterpretationFromCache(poem.title, poem.auth);
         if (cachedAIInterpretation) {
             const originalDesc = poem.desc || '暂无赏析';
@@ -809,16 +673,14 @@ function displayPoem(poem) {
         }
     }
 
-    // 显示内容 - including image section initially
+    // 显示内容区域
     document.getElementById('poemTextContent').style.display = 'block';
-    // Only show poemDescContent if there's content to show (either original desc or cached AI interpretation)
     const descContent = document.getElementById('poemDescContent');
     if (descContent) {
         descContent.style.display = 'block';
     }
     document.getElementById('loading').style.display = 'none';
 
-    // Ensure image section is initially visible before attempting to load image
     const imageSection = document.querySelector('.image-section');
     if (imageSection) {
         imageSection.style.display = 'flex';
@@ -827,7 +689,7 @@ function displayPoem(poem) {
     // 加载诗词配图
     loadPoemImage();
 
-    // Add to history and update favorite status
+    // 添加到历史和更新收藏状态
     if (poem) {
         window.addToHistory(poem);
         updateFavoriteButton();
@@ -840,117 +702,89 @@ function loadPoemImage() {
     if (!img) return;
 
     let currentFallback = 1;
-    const maxFallbacks = 6; // Primary + 4 fallbacks + 1 local fallback
+    const maxFallbacks = 6; 
     let timeoutId;
 
-    // Function to try loading next fallback image
     function tryNextFallback() {
         if (currentFallback < maxFallbacks) {
             currentFallback++;
-            // Clear previous timeout
-            if (timeoutId) {
-                clearTimeout(timeoutId);
-            }
-            // Set a new timeout for this fallback
+            if (timeoutId) clearTimeout(timeoutId);
+            
             timeoutId = setTimeout(() => {
-                // console.log(`Image loading timeout for fallback ${currentFallback}, trying next...`);
                 if (currentFallback < maxFallbacks) {
                     tryNextFallback();
                 } else {
-                    // All fallbacks exhausted, handle failure
                     handleImageFailure();
                 }
-            }, 15000); // 15 seconds timeout for each fallback
+            }, 15000); 
 
             img.src = getRandomImageUrl(currentFallback);
         } else {
-            // All fallbacks exhausted, handle failure
             handleImageFailure();
         }
     }
 
-    // Function to handle the case when all image sources fail
     function handleImageFailure() {
         console.warn("All image loading attempts failed, hiding image section");
-
-        // Hide the image section
         const imageSection = document.querySelector('.image-section');
         if (imageSection) {
             imageSection.style.display = 'none';
         }
     }
 
-    // Set up image event handlers
     img.onload = function () {
-        // Add loaded image to cache
         addToImageCache(img.src);
-
-        // Ensure the image section is visible when image loads successfully
         const imageSection = document.querySelector('.image-section');
         if (imageSection) {
-            imageSection.style.display = 'flex'; // or 'block' depending on the layout
+            imageSection.style.display = 'flex';
         }
     };
 
     img.onerror = function () {
         console.log(`Image loading error for fallback ${currentFallback}, trying next...`);
-        // If we have cached images, try using one as a fallback
         const cachedImage = getRandomCachedImage();
-        if (cachedImage && currentFallback >= maxFallbacks - 1) { // Only try cached on last attempt
-            // console.log(`Using cached image as final fallback: ${cachedImage}`);
+        if (cachedImage && currentFallback >= maxFallbacks - 1) { 
             img.src = cachedImage;
-            return; // Don't try next fallback, try the cached image instead
+            return; 
         }
-        // Try next fallback image
         tryNextFallback();
     };
 
-    // Set the new image source with primary URL
     img.src = getRandomImageUrl(currentFallback);
 
-    // Set timeout for primary image
     timeoutId = setTimeout(() => {
         console.log(`Image loading timeout for fallback ${currentFallback}, trying next...`);
-        // Try cached image if available before showing content without image
         const cachedImage = getRandomCachedImage();
         if (cachedImage) {
-            // console.log(`Using cached image as final fallback due to timeout: ${cachedImage}`);
             img.src = cachedImage;
         } else {
-            // Try next fallback
             tryNextFallback();
         }
-    }, 5000); // 5 seconds timeout for primary image
+    }, 5000); 
 }
 
-// Analyze poem layout (从原版移植)
+// Analyze poem layout (for Waterfall)
 function analyzePoemLayout(poem) {
-    const content = poem.content.replace(/\\n/g, '').replace(/\s+/g, ''); // Remove literal \n and whitespace
+    const content = poem.content.replace(/\\n/g, '').replace(/\s+/g, ''); 
     const sentences = content.split(/[。！？!?]/).filter(s => s.trim() !== '');
 
-    // 1. Check if it's a 5-character or 7-character regulated verse (整齐的格律)
-    // Simple check: see if the first line length is 5 or 7
     const firstLineLen = sentences[0] ? sentences[0].replace(/[，,]/g, '').length : 0;
     const isRegular = (firstLineLen === 5 || firstLineLen === 7) &&
         sentences.every(s => {
             const cleanLen = s.replace(/[，,]/g, '').length;
-            // 一句可能是5/7字，或者是一联10/14字
             return cleanLen === firstLineLen * 2 || cleanLen === firstLineLen;
         });
 
     let displayLines = [];
-    let layoutMode = 'vertical'; // default mode
+    let layoutMode = 'vertical'; 
 
     if (isRegular && firstLineLen === 5 || firstLineLen === 7) {
-        // Mode 1: Vertical layout for regular 5/7-character poems
         displayLines = sentences.slice(0, 4).map(s => {
             const parts = s.split(/[，,]/);
             return parts.join('');
         });
         layoutMode = 'vertical';
     } else {
-        // Mode 2: For ci/irregular poems, horizontal center layout
-        // Display first two clauses from first two sentences (simplified)
         if (sentences.length >= 2) {
             displayLines = [sentences[0].split(/[，,]/)[0] || '', sentences[0].split(/[，,]/)[1] || ''];
         } else if (sentences.length === 1) {
@@ -973,107 +807,60 @@ function analyzePoemLayout(poem) {
 // 渲染瀑布流
 async function renderWaterfall(append = false, tagFilter = null) {
     const waterfallEl = document.getElementById('waterfallContent');
-    if (!waterfallEl) {
-        console.error('waterfallContent element not found!');
-        return;
-    }
+    if (!waterfallEl) return;
 
     let poemsToUse = filteredPoems || allPoems;
-    if (!poemsToUse || poemsToUse.length === 0) {
-        console.error('No poems available for waterfall');
-        return;
-    }
+    if (!poemsToUse || poemsToUse.length === 0) return;
 
-    // Apply tag filter if specified
+    // Apply tag filter
     if (tagFilter) {
-        console.log(`Applying tag filter: ${tagFilter}`);
-        const originalCount = poemsToUse.length;
-
-        // Check if the tag is a dynasty-related tag
         const dynastyTags = ['先秦', '汉', '魏晋', '南北朝', '隋', '唐', '五代', '南唐', '宋', '元', '明', '清', '现代', '近现代', '五代十国'];
         const isDynastyTag = dynastyTags.includes(tagFilter);
 
         if (isDynastyTag) {
-            // For dynasty tags, filter based on author's dynasty
             poemsToUse = poemsToUse.filter(poem => {
-                // Get author's dynasty from author data
                 const authorDynasty = getDynastyByAuthorName(poem.auth);
-                const isMatch = authorDynasty === tagFilter ||
-                               (tagFilter === '五代' && authorDynasty === '南唐') || // Special case
-                               (tagFilter === '五代十国' && authorDynasty === '五代') || // Special case
-                               (tagFilter === '五代十国' && authorDynasty === '南唐'); // Special case
-
-                if (isMatch) {
-                    console.log(`Poem "${poem.title}" by ${poem.auth} (dynasty: ${authorDynasty}) matches dynasty tag: ${tagFilter}`);
-                }
-                return isMatch;
+                return authorDynasty === tagFilter ||
+                       (tagFilter === '五代' && authorDynasty === '南唐') || 
+                       (tagFilter === '五代十国' && authorDynasty === '五代') || 
+                       (tagFilter === '五代十国' && authorDynasty === '南唐'); 
             });
         } else {
-            // For non-dynasty tags, use normal tag matching
             poemsToUse = poemsToUse.filter(poem => {
                 const allTags = parseTagsForPoem(poem);
-                const hasTag = allTags.includes(tagFilter);
-                if (hasTag) {
-                    console.log(`Poem "${poem.title}" by ${poem.auth} has tag: ${tagFilter}`);
-                }
-                return hasTag;
+                return allTags.includes(tagFilter);
             });
         }
-
-        console.log(`Filtered from ${originalCount} to ${poemsToUse.length} poems`);
     }
 
-    // Only clear if not appending
     if (!append) {
         waterfallEl.innerHTML = '';
     }
 
     const randomPoems = getRandomPoems(poemsToUse, CONFIG.WATERFALL_COUNT);
-    console.log('Generated random poems:', randomPoems.length);
-    console.log('Random poems content:', randomPoems.map(p => `${p.title} - ${p.auth}`)); // Log titles and authors
 
     randomPoems.forEach((poem, index) => {
         const card = document.createElement('div');
         card.className = 'waterfall-card';
-
-        // Analyze layout for the poem (从原版获取的analyzePoemLayout逻辑)
         const layoutInfo = analyzePoemLayout(poem);
 
-        // Generate lines HTML
         let linesHtml = '';
         layoutInfo.lines.forEach(line => {
             if (line) linesHtml += `<div class="poem-line">${line}</div>`;
         });
 
-        // Random background color
         const backgroundColor = getRandomColor();
-
-        let title = poem.title;
-        if (title.length > 15) {
-            title = title.substring(0, 15) + '...';
-        }
-
-        let author = layoutInfo.author;
-        if (author.length > 8) {
-            author = author.substring(0, 8) + '...';
-        }
-
-        // Determine the appropriate seal based on poem type
+        let title = poem.title.length > 15 ? poem.title.substring(0, 15) + '...' : poem.title;
+        let author = layoutInfo.author.length > 8 ? layoutInfo.author.substring(0, 8) + '...' : layoutInfo.author;
         const sealText = poem.source === 'ci' ? '词' : '诗';
-
-        // Generate tags HTML
         const tagsHTML = generateTagsHTML(poem);
 
-        // 使用原版的HTML结构和类名
         card.innerHTML = `
             <div class="color-block-container">
               <div class="color-block" style="background-color: ${backgroundColor};">
-                 <!-- This class changes based on mode dynamically -->
                  <div class="overlay-text layout-${layoutInfo.mode}">
                    ${linesHtml}
                  </div>
-
-                 <!-- Add seal decoration for aesthetic enhancement (with type-specific character) -->
                  <div class="seal-decoration">${sealText}</div>
               </div>
             </div>
@@ -1087,8 +874,6 @@ async function renderWaterfall(append = false, tagFilter = null) {
         card.addEventListener('click', () => {
             currentPoem = poem;
             displayPoem(poem);
-
-            // 切换回默认布局
             const poemContent = document.querySelector('.poem-content');
             const waterfallContainer = document.getElementById('waterfallContainer');
             const layoutToggle = document.getElementById('layoutToggle');
@@ -1104,58 +889,38 @@ async function renderWaterfall(append = false, tagFilter = null) {
         waterfallEl.appendChild(card);
     });
 
-    // Set up scroll listener for infinite loading when not appending (first load)
     if (!append) {
         setupInfiniteScroll();
     }
-
-    // Update sentinel element for intersection observer
-    // Update sentinel both on initial load and when appending to ensure it's at the end
     updateWaterfallSentinel();
 }
 
 // Setup infinite scroll for waterfall mode
 function setupInfiniteScroll() {
     const waterfallContainer = document.getElementById('waterfallContainer');
-    const waterfallContent = document.getElementById('waterfallContent');
+    if (!waterfallContainer) return;
 
-    if (!waterfallContainer || !waterfallContent) {
-        console.log('Waterfall elements not found for infinite scroll');
-        return;
-    }
-
-    // Remove existing scroll listener to prevent duplicates
     if (window.waterfallScrollHandler) {
         window.removeEventListener('scroll', window.waterfallScrollHandler, true);
     }
 
-    // Create scroll handler
     window.waterfallScrollHandler = function() {
-        // Check if waterfall is active
         if (!waterfallContainer.classList.contains('active')) {
-            // Remove listener if waterfall is not active
             window.removeEventListener('scroll', window.waterfallScrollHandler, true);
             return;
         }
 
-        // Calculate if we're near the bottom of the page
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
         const windowHeight = window.innerHeight;
         const documentHeight = document.documentElement.scrollHeight;
-
-        // More reliable way to detect when near bottom
         const scrollBottom = scrollTop + windowHeight;
 
-        // Trigger loading when we're within 100px of the bottom
         if (scrollBottom >= documentHeight - 100) {
-            // Prevent multiple simultaneous loads
             if (!window.isLoadingMorePoems) {
                 window.isLoadingMorePoems = true;
-
-                // Add a small delay to avoid triggering multiple times
                 setTimeout(async () => {
                     try {
-                        await renderWaterfall(true, currentTagFilter); // Append more poems with current tag filter
+                        await renderWaterfall(true, currentTagFilter); 
                     } catch (error) {
                         console.error('Error loading more poems:', error);
                     } finally {
@@ -1166,41 +931,31 @@ function setupInfiniteScroll() {
         }
     };
 
-    // Add scroll listener
     window.addEventListener('scroll', window.waterfallScrollHandler, true);
 
-    // Additionally, check if we need to load more immediately (if content is short)
     setTimeout(() => {
         const windowHeight = window.innerHeight;
         const documentHeight = document.documentElement.scrollHeight;
-        if (windowHeight >= documentHeight) {
-            if (window.waterfallScrollHandler) {
-                window.waterfallScrollHandler();
-            }
+        if (windowHeight >= documentHeight && window.waterfallScrollHandler) {
+            window.waterfallScrollHandler();
         }
-    }, 500); // Delay to let content render
+    }, 500); 
 }
 
-// Update sentinel element for detecting when user scrolls near bottom
+// Update sentinel element 
 function updateWaterfallSentinel() {
     const waterfallEl = document.getElementById('waterfallContent');
     if (!waterfallEl) return;
 
-    // Remove existing sentinel if it exists
     const existingSentinel = document.getElementById('waterfall-sentinel');
-    if (existingSentinel) {
-        existingSentinel.remove();
-    }
+    if (existingSentinel) existingSentinel.remove();
 
-    // Create sentinel element
     const sentinel = document.createElement('div');
     sentinel.id = 'waterfall-sentinel';
     sentinel.style.height = '10px';
     sentinel.style.width = '100%';
-    sentinel.textContent = ''; // No visible content
     waterfallEl.appendChild(sentinel);
 
-    // Set up intersection observer to detect when sentinel comes into view
     if (window.waterfallObserver) {
         window.waterfallObserver.disconnect();
     }
@@ -1209,10 +964,9 @@ function updateWaterfallSentinel() {
         entries.forEach(entry => {
             if (entry.isIntersecting && !window.isLoadingMorePoems) {
                 window.isLoadingMorePoems = true;
-
                 setTimeout(async () => {
                     try {
-                        await renderWaterfall(true, currentTagFilter); // Append more poems with current tag filter
+                        await renderWaterfall(true, currentTagFilter); 
                     } catch (error) {
                         console.error('Error loading more poems:', error);
                     } finally {
@@ -1222,7 +976,7 @@ function updateWaterfallSentinel() {
             }
         });
     }, {
-        rootMargin: '100px' // Trigger 100px before sentinel is visible
+        rootMargin: '100px' 
     });
 
     window.waterfallObserver.observe(sentinel);
@@ -1235,52 +989,34 @@ function toggleLayout() {
     const waterfallContainer = document.getElementById('waterfallContainer');
     const layoutToggle = document.getElementById('layoutToggle');
 
-    if (!poemContent || !waterfallContainer || !layoutToggle) {
-        console.error('Required elements not found!');
-        return;
-    }
+    if (!poemContent || !waterfallContainer || !layoutToggle) return;
 
     if (waterfallContainer.classList.contains('active')) {
-        // 切换到默认布局
         poemContent.style.display = 'flex';
         if (poemDescContent) poemDescContent.style.display = 'block';
         waterfallContainer.classList.remove('active');
 
-        // Clean up waterfall observers when switching away
         if (window.waterfallObserver) {
             window.waterfallObserver.disconnect();
             window.waterfallObserver = null;
         }
 
         layoutToggle.textContent = '瀑布流';
-        // Clear the tag filter when switching back to default view
         currentTagFilter = null;
     } else {
-        // 切换到瀑布流布局
         poemContent.style.display = 'none';
         if (poemDescContent) poemDescContent.style.display = 'none';
         waterfallContainer.classList.add('active');
         layoutToggle.textContent = '默认布局';
-        // Use the current tag filter if one exists, otherwise render all poems
         renderWaterfall(false, currentTagFilter);
     }
 }
 
-// 切换主题
-function toggleTheme() {
-    document.body.classList.toggle('dark-mode');
-}
-
 // Theme switching function
 function switchTheme(themeName) {
-    // Remove all theme classes
     document.body.classList.remove('dark-mode', 'classic-paper-theme', 'modern-minimal-theme', 'nature-green-theme', 'ocean-blue-theme');
 
-    // Apply the selected theme
     switch(themeName) {
-        case 'light':
-            // Just remove all theme classes to get default light theme
-            break;
         case 'dark':
             document.body.classList.add('dark-mode');
             break;
@@ -1298,17 +1034,11 @@ function switchTheme(themeName) {
             break;
     }
 
-    // Save the selected theme to localStorage
     localStorage.setItem('selectedTheme', themeName);
-
-    // Close the theme menu
     const themeMenu = document.getElementById('themeMenu');
-    if (themeMenu) {
-        themeMenu.classList.remove('active');
-    }
+    if (themeMenu) themeMenu.classList.remove('active');
 }
 
-// Load saved theme preference from localStorage
 function loadSavedTheme() {
     const savedTheme = localStorage.getItem('selectedTheme');
     if (savedTheme) {
@@ -1316,58 +1046,34 @@ function loadSavedTheme() {
     }
 }
 
-// Save layout mode preference to localStorage
+// Save layout mode preference
+const LAYOUT_MODE_KEY = 'poem_layout_mode';
 function saveLayoutMode(mode) {
-    try {
-        localStorage.setItem(LAYOUT_MODE_KEY, mode);
-        console.log('Layout mode saved:', mode);
-    } catch (e) {
-        console.error('Error saving layout mode:', e);
-    }
+    localStorage.setItem(LAYOUT_MODE_KEY, mode);
 }
-
-// Load saved layout mode preference from localStorage
 function loadSavedLayoutMode() {
-    try {
-        const savedMode = localStorage.getItem(LAYOUT_MODE_KEY);
-        if (savedMode) {
-            currentDisplayMode = savedMode;
-            console.log('Loaded saved layout mode:', savedMode);
-        }
-    } catch (e) {
-        console.error('Error loading layout mode:', e);
+    const savedMode = localStorage.getItem(LAYOUT_MODE_KEY);
+    if (savedMode) {
+        currentDisplayMode = savedMode;
     }
 }
 
-// Handle tag click - show all poems with this tag in waterfall view
+// Handle tag click 
 function handleTagClick(tag) {
-    console.log('Tag clicked:', tag);
-
-    // Set the current tag filter
     currentTagFilter = tag;
-
-    // Switch to waterfall view if not already in it
     const poemContent = document.querySelector('.poem-content');
     const poemDescContent = document.getElementById('poemDescContent');
     const waterfallContainer = document.getElementById('waterfallContainer');
     const layoutToggle = document.getElementById('layoutToggle');
 
-    if (!poemContent || !waterfallContainer || !layoutToggle) {
-        console.error('Required elements not found!');
-        return;
-    }
+    if (!poemContent || !waterfallContainer || !layoutToggle) return;
 
-    // Ensure we're in waterfall view
     poemContent.style.display = 'none';
     if (poemDescContent) poemDescContent.style.display = 'none';
     waterfallContainer.classList.add('active');
     layoutToggle.textContent = '默认布局';
-
-    // Render waterfall with the tag filter
     renderWaterfall(false, tag);
 }
-
-// Make handleTagClick available globally
 window.handleTagClick = handleTagClick;
 
 // Show author's works
@@ -1376,60 +1082,41 @@ function showAuthorWorks(authorName, poems) {
     const authorWorksTitle = document.getElementById('authorWorksTitle');
     const authorWorksList = document.getElementById('authorWorksList');
 
-    if (!authorWorksSection || !authorWorksTitle || !authorWorksList) {
-        return;
-    }
+    if (!authorWorksSection || !authorWorksTitle || !authorWorksList) return;
 
-    // 如果没有传入poems参数，自动筛选
     if (!poems && allPoems) {
         poems = allPoems.filter(p => p.auth === authorName);
     }
 
     if (poems && poems.length > 0) {
-        // Set title with dynasty
         const dynasty = getDynastyByAuthorName(authorName);
         authorWorksTitle.textContent = `${dynasty} · ${authorName} 的作品 (${poems.length} 首)`;
-
-        // Clear previous list
         authorWorksList.innerHTML = '';
 
-        // Create work items (limit to first 50 to avoid too many)
         const worksToShow = poems.slice(0, 50);
         worksToShow.forEach(poem => {
             const workItem = document.createElement('button');
             workItem.className = 'author-work-item';
             workItem.textContent = poem.title;
-
             workItem.addEventListener('click', () => {
-                // Display the selected poem
                 currentPoem = poem;
                 displayPoem(poem);
-                // 滚动到诗词显示区域
                 document.querySelector('.poem-content')?.scrollIntoView({ behavior: 'smooth' });
             });
-
             authorWorksList.appendChild(workItem);
         });
 
-        // Show the section
         authorWorksSection.style.display = 'block';
-        
-        // 滚动到作者作品区域
         authorWorksSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } else {
-        // Hide the section if no poems found
         authorWorksSection.style.display = 'none';
     }
 }
 
-// Layout mode preference
-const LAYOUT_MODE_KEY = 'poem_layout_mode';
-
 // Favorites functionality
 const FAVORITES_KEY = 'poem_favorites';
-const MAX_FAVORITES = 100; // Store max 100 favorite items
+const MAX_FAVORITES = 100;
 
-// Toggle favorite status
 window.toggleFavorite = function(poem) {
     if (!poem || !poem.title || !poem.auth) return;
 
@@ -1442,55 +1129,39 @@ window.toggleFavorite = function(poem) {
     };
 
     if (isFavorite) {
-        // Remove from favorites
         const filteredFavorites = favorites.filter(item =>
             !(item.title === favoriteEntry.title && item.author === favoriteEntry.author)
         );
         localStorage.setItem(FAVORITES_KEY, JSON.stringify(filteredFavorites));
     } else {
-        // Add to favorites
-        // Remove any existing entry first to avoid duplicates
         const filteredFavorites = favorites.filter(item =>
             !(item.title === favoriteEntry.title && item.author === favoriteEntry.author)
         );
-
-        // Add new entry to the beginning
         filteredFavorites.unshift(favoriteEntry);
-
-        // Keep only MAX_FAVORITES entries
         if (filteredFavorites.length > MAX_FAVORITES) {
             filteredFavorites.splice(MAX_FAVORITES);
         }
-
         localStorage.setItem(FAVORITES_KEY, JSON.stringify(filteredFavorites));
     }
 }
 
-// Check if a poem is in favorites
 function isPoemFavorite(poem) {
     if (!poem || !poem.title || !poem.auth) return false;
-
     const favorites = getFavoritesFromStorage();
-    return favorites.some(item =>
-        item.title === poem.title && item.author === poem.auth
-    );
+    return favorites.some(item => item.title === poem.title && item.author === poem.auth);
 }
 
-// Get favorites from storage
 function getFavoritesFromStorage() {
     try {
         const favorites = localStorage.getItem(FAVORITES_KEY);
         return favorites ? JSON.parse(favorites) : [];
     } catch (e) {
-        console.error('Error reading favorites from localStorage:', e);
         return [];
     }
 }
 
-// Update favorite button display
 function updateFavoriteButton() {
     if (!currentPoem) return;
-
     const isFav = isPoemFavorite(currentPoem);
     const favoriteToggleBtn = document.getElementById('favoriteToggleBtn');
     if (favoriteToggleBtn) {
@@ -1498,71 +1169,52 @@ function updateFavoriteButton() {
         favoriteToggleBtn.style.color = isFav ? 'red' : '';
     }
 }
-
-// Also make it available globally for the HTML onclick attributes
 window.switchTheme = switchTheme;
 
 // History functionality
 const HISTORY_KEY = 'poem_history';
-const MAX_HISTORY = 50; // Store max 50 history items
+const MAX_HISTORY = 50;
 
-// Add poem to history
 window.addToHistory = function(poem) {
     if (!poem || !poem.title || !poem.auth) return;
-
     const history = getHistoryFromStorage();
     const newEntry = {
         title: poem.title,
         author: poem.auth,
         source: poem.source || 'poem'
     };
-
-    // Remove any existing entry with same title and author
     const filteredHistory = history.filter(item =>
         !(item.title === newEntry.title && item.author === newEntry.author)
     );
-
-    // Add new entry to the beginning
     filteredHistory.unshift(newEntry);
-
-    // Keep only the most recent MAX_HISTORY entries
     if (filteredHistory.length > MAX_HISTORY) {
         filteredHistory.splice(MAX_HISTORY);
     }
-
     localStorage.setItem(HISTORY_KEY, JSON.stringify(filteredHistory));
 }
 
-// Get history from storage
 function getHistoryFromStorage() {
     try {
         const history = localStorage.getItem(HISTORY_KEY);
         return history ? JSON.parse(history) : [];
     } catch (e) {
-        console.error('Error reading history from localStorage:', e);
         return [];
     }
 }
 
-// Load and display history list
 function loadHistoryList() {
     const history = getHistoryFromStorage();
     const historyList = document.getElementById('historyList');
     if (historyList) {
         historyList.innerHTML = '';
-
         if (history.length === 0) {
             historyList.innerHTML = '<p style="padding: 10px; text-align: center; color: var(--text-tertiary);">暂无历史记录</p>';
             return;
         }
-
-        history.forEach((item, index) => {
+        history.forEach(item => {
             const historyItem = document.createElement('div');
             historyItem.className = 'history-item';
-            historyItem.innerHTML = `
-                <div class="title">${item.title}</div>
-                <div class="author">${item.author}</div>
-            `;
+            historyItem.innerHTML = `<div class="title">${item.title}</div><div class="author">${item.author}</div>`;
             historyItem.addEventListener('click', function () {
                 searchAndDisplayPoem(item.title, item.author);
                 const menuOverlay = document.getElementById('menuOverlay');
@@ -1575,25 +1227,19 @@ function loadHistoryList() {
     }
 }
 
-// Load and display favorites list
 function loadFavoritesList() {
     const favorites = getFavoritesFromStorage();
     const favoritesList = document.getElementById('favoritesList');
     if (favoritesList) {
         favoritesList.innerHTML = '';
-
         if (favorites.length === 0) {
             favoritesList.innerHTML = '<p style="padding: 10px; text-align: center; color: var(--text-tertiary);">暂无收藏</p>';
             return;
         }
-
-        favorites.forEach((item, index) => {
+        favorites.forEach(item => {
             const favoriteItem = document.createElement('div');
             favoriteItem.className = 'favorite-item';
-            favoriteItem.innerHTML = `
-                <div class="title">${item.title}</div>
-                <div class="author">${item.author}</div>
-            `;
+            favoriteItem.innerHTML = `<div class="title">${item.title}</div><div class="author">${item.author}</div>`;
             favoriteItem.addEventListener('click', function () {
                 searchAndDisplayPoem(item.title, item.author);
                 const menuOverlay = document.getElementById('menuOverlay');
@@ -1606,18 +1252,9 @@ function loadFavoritesList() {
     }
 }
 
-// Function to search and display a specific poem by title and author
 async function searchAndDisplayPoem(title, author) {
-    // Fetch all poems if not already loaded
-    if (!allPoems) {
-        allPoems = await fetchAndCachePoems();
-    }
-
-    // Find the poem in the data
-    const poem = allPoems.find(p =>
-        p.title === title && p.auth === author
-    );
-
+    if (!allPoems) allPoems = await fetchAndCachePoems();
+    const poem = allPoems.find(p => p.title === title && p.auth === author);
     if (poem) {
         displayPoem(poem);
     } else {
@@ -1628,18 +1265,13 @@ async function searchAndDisplayPoem(title, author) {
 // --- AI & API Configuration ---
 const API_DOMAIN = 'https://aiproxy.want.biz/';
 const API_PREFIX = API_DOMAIN.replace(/\/+$/, '');
-const DEFAULT_TIMEOUT = 120; // 秒
-//const DEFAULT_MODEL_ID = 'gemini-flash-lite-latest';
+const DEFAULT_TIMEOUT = 120;
 const DEFAULT_MODEL_ID = 'gemini-pro-latest';
-
 const AI_CACHE_KEY = 'poem_ai_interpretations_v1';
-
 const PROMPT_TEMPLATES = {
     '诗词': '请为以下古诗词提供深度解读和赏析，使用Markdown格式输出，包含以下部分：1. 诗词背景与作者心境 2. 逐句解析（如果诗句较短可合并解析） 3. 艺术手法与修辞特点 4. 主题思想与情感内涵 5. 文学价值与影响 6.作者生平与经历'
 };
 const DEFAULT_TEMPLATE_KEY = '诗词';
-
-// --- Helper Functions ---
 
 function toDisplayString(any) {
     if (any == null) return '';
@@ -1659,24 +1291,16 @@ async function requestJSON(method, path, payload) {
             body: payload ? JSON.stringify(payload) : null,
             signal: controller.signal
         });
-
         clearTimeout(timeoutId);
-
         if (!response.ok) {
             let errorData = {};
-            try {
-                errorData = await response.json();
-            } catch {
-                errorData = { message: await response.text() };
-            }
-            throw new Error(`API请求失败 (HTTP ${response.status}): ${errorData.error?.message || toDisplayString(errorData)}`);
+            try { errorData = await response.json(); } catch { errorData = { message: await response.text() }; }
+            throw new Error(`API请求失败: ${errorData.error?.message || toDisplayString(errorData)}`);
         }
         return await response.json();
     } catch (e) {
         clearTimeout(timeoutId);
-        if (e.name === 'AbortError') {
-            throw new Error(`网络请求超时 (超过 ${DEFAULT_TIMEOUT} 秒)`);
-        }
+        if (e.name === 'AbortError') throw new Error('网络请求超时');
         throw new Error(`网络或API错误: ${e.message}`);
     }
 }
@@ -1697,15 +1321,8 @@ function markdownToHtml(md) {
         .replace(/^\d+\. (.*$)/gim, '<li>$1</li>')
         .replace(/\n\n/gim, '</p><p>')
         .replace(/\n/gim, '<br>');
-
     html = html.replace(/<p><\/p>/gim, '');
     html = `<p>${html}</p>`;
-    html = html.replace(/<p><li>/gim, '<ul><li>')
-        .replace(/<\/li><\/p>/gim, '</li></ul>')
-        .replace(/<\/li><li>/gim, '</li><li>');
-    
-    // Simple fix for ordered lists mixed with unordered logic above
-    // Ideally use a proper markdown parser, but this matches legacy behavior
     return html;
 }
 
@@ -1717,7 +1334,6 @@ function getInterpretationFromCache(title, author) {
         const key = `${title}-${author}`;
         return cacheObj[key] || null;
     } catch (e) {
-        console.error('Error reading from cache:', e);
         return null;
     }
 }
@@ -1730,9 +1346,7 @@ function saveInterpretationToCache(title, author, content) {
         const key = `${title}-${author}`;
         cacheObj[key] = content;
         localStorage.setItem(AI_CACHE_KEY, JSON.stringify(cacheObj));
-    } catch (e) {
-        console.error('Error saving to cache:', e);
-    }
+    } catch (e) {}
 }
 
 async function explainText(text, model) {
@@ -1744,25 +1358,14 @@ async function getRealPoemInterpretation(title, author, verse, desc, forceRefres
         const cached = getInterpretationFromCache(title, author);
         if (cached) return cached;
     }
-
     const finalSystemPrompt = PROMPT_TEMPLATES[DEFAULT_TEMPLATE_KEY];
-    const textToInterpret = `诗词题目：${title}
-作者：${author}
-诗词内容：
-${verse}
-
-原注释：${desc}`;
-
+    const textToInterpret = `诗词题目：${title}\n作者：${author}\n诗词内容：\n${verse}\n\n原注释：${desc}`;
     const finalText = `${finalSystemPrompt}\n\n---\n\n${textToInterpret.trim()}`;
 
     try {
         const resultData = await explainText(finalText, DEFAULT_MODEL_ID);
         const markdownResult = resultData.explanation || resultData.data || resultData.text || resultData;
-
-        if (typeof markdownResult !== 'string' || !markdownResult.trim()) {
-            throw new Error(`API返回结果格式不正确: ${toDisplayString(resultData)}`);
-        }
-
+        if (typeof markdownResult !== 'string' || !markdownResult.trim()) throw new Error('API返回结果格式不正确');
         const finalResult = markdownResult.trim();
         saveInterpretationToCache(title, author, finalResult);
         return finalResult;
@@ -1772,32 +1375,21 @@ ${verse}
     }
 }
 
-// --- Feature Functions ---
-
-// 复制诗词到剪贴板 (修复换行问题)
+// 复制诗词
 function copyPoemToClipboard() {
     if (!currentPoem) return;
-    
-    // 将内容中的字面量 \n 替换为真正的换行符
     const content = currentPoem.content.replace(/\\n/g, '\n');
     const text = `${currentPoem.title}\n${currentPoem.auth}\n\n${content}`;
-    
     navigator.clipboard.writeText(text).then(() => {
         const btn = document.getElementById('copyBtn');
         if (btn) {
             const originalText = btn.textContent;
             btn.textContent = '✅';
-            setTimeout(() => {
-                btn.textContent = originalText;
-            }, 2000);
+            setTimeout(() => btn.textContent = originalText, 2000);
         }
-    }).catch(err => {
-        console.error('Failed to copy:', err);
-        alert('复制失败，请手动复制');
-    });
+    }).catch(err => alert('复制失败，请手动复制'));
 }
 
-// 切换搜索框显示
 window.toggleSearch = function() {
     const searchSection = document.getElementById('searchSection');
     if (searchSection.style.display === 'none') {
@@ -1809,46 +1401,35 @@ window.toggleSearch = function() {
     }
 };
 
-// 隐藏搜索框
 window.hideSearch = function() {
     document.getElementById('searchSection').style.display = 'none';
     document.getElementById('searchResults').style.display = 'none';
 };
 
-// 执行搜索
 window.performSearch = function() {
     const query = document.getElementById('searchInput').value.trim();
     if (!query) return;
-
-    const poemsToSearch = allPoems || [];
     const queryLower = query.toLowerCase();
-    const results = poemsToSearch.filter(poem =>
+    const results = (allPoems || []).filter(poem =>
         (poem.title && poem.title.toLowerCase().includes(queryLower)) ||
         (poem.content && poem.content.includes(query)) ||
         (poem.auth && poem.auth.includes(query)) ||
         (poem.tags && poem.tags.some(tag => tag.toLowerCase().includes(queryLower)))
     );
-
     displaySearchResults(results);
 };
 
-// 处理搜索框回车事件
 window.handleSearchKeyPress = function(event) {
-    if (event.key === 'Enter') {
-        performSearch();
-    }
+    if (event.key === 'Enter') performSearch();
 };
 
-// 显示搜索结果
 function displaySearchResults(results) {
-    const resultsContainer = document.getElementById('searchResults');
     const list = document.getElementById('searchResultsList');
     list.innerHTML = '';
-    
     if (results.length === 0) {
         list.innerHTML = '<li>未找到相关诗词</li>';
     } else {
-        results.slice(0, 20).forEach(poem => { 
+        results.slice(0, 20).forEach(poem => {
             const li = document.createElement('li');
             li.textContent = `${poem.title} - ${poem.auth}`;
             li.onclick = () => {
@@ -1859,136 +1440,42 @@ function displaySearchResults(results) {
             list.appendChild(li);
         });
     }
-    
-    resultsContainer.style.display = 'block';
+    document.getElementById('searchResults').style.display = 'block';
 }
 
-// 切换详情页布局（循环切换：竖排 -> 横排 -> 竖排...）
 function togglePoemLayout() {
-    if (!currentPoem) {
-        console.error('currentPoem is not defined');
-        return;
-    }
-
-    const verseElem = document.getElementById('poemVerse');
-    if (!verseElem) {
-        console.error('poemVerse element not found');
-        return;
-    }
-
-    const btn = document.getElementById('layoutToggleBtn');
-
-    // Check if current content uses individual line elements (new vertical layout) or has horizontal mode class
-    const hasLineElements = verseElem.querySelector('.vertical-line-element') !== null;
-    const isCurrentlyHorizontal = verseElem.classList.contains('horizontal-mode');
-    const isCurrentlyVertical = hasLineElements || verseElem.classList.contains('vertical-mode') || verseElem.classList.contains('vertical-mode-wider') || verseElem.classList.contains('vertical-mode-with-columns');
-
-    if (isCurrentlyVertical) {
-        // Switch from vertical layout to horizontal
-        verseElem.classList.remove('vertical-mode', 'vertical-mode-wider', 'vertical-mode-with-columns');
-        verseElem.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem);
-        verseElem.classList.add('horizontal-mode');
-        if (btn) {
-            btn.textContent = '🔄';
-            btn.title = '切换竖排/横排';
-        }
-    } else if (isCurrentlyHorizontal) {
-        // Switch from horizontal to vertical (individual line elements)
-        verseElem.classList.remove('horizontal-mode');
-
-        // For consistent toggle behavior, always create vertical layout regardless of poem length
-        let contentLines = currentPoem.content.split('\\n').filter(line => line.trim() !== '');
-
-        // If no line breaks, split by punctuation to create meaningful segments
-        if (contentLines.length === 1) {
-            const content = contentLines[0];
-            // 使用辅助函数分割，标点符号在前面
-            contentLines = splitContentWithPunctuationFirst(content);
-        } else {
-            // Multi-line content, process punctuation for each line
-            contentLines = contentLines.map(movePunctuationToStart);
-        }
-        
-        // Limit max characters per column
-        contentLines = splitLongLines(contentLines);
-
-        // Create individual line elements for each line to match scroll mode structure
-        const lineElements = contentLines.map((line, index) => {
-            const cleanLine = line.trim(); // Keep punctuation for proper display
-            return `<div class="vertical-line-element" data-line-index="${index}">${cleanLine}</div>`;
-        }).join('');
-
-        // Use the individual line elements directly and add the vertical-mode-with-columns class to the main container
-        verseElem.innerHTML = lineElements;
-        verseElem.classList.add('vertical-mode-with-columns');
-
-        if (btn) {
-            btn.textContent = '🔄';
-            btn.title = '切换竖排/横排';
-        }
-    } else {
-        // Default case: if neither horizontal nor vertical mode detected, default to horizontal
-        verseElem.classList.remove('vertical-mode', 'vertical-mode-wider', 'vertical-mode-with-columns');
-        verseElem.innerHTML = formatPoemWithLineBreaks(currentPoem.content, currentPoem);
-        verseElem.classList.add('horizontal-mode');
-        if (btn) {
-            btn.textContent = '🔄';
-            btn.title = '切换竖排/横排';
-        }
-    }
+    // Deprecated, handled by layoutToggleBtn click listener above
 }
 
-// AI解读 (完整实现)
 async function showAIInterpretation() {
     if (!currentPoem) return;
-    
     const descContent = document.getElementById('poemDescContent');
     const desc = document.getElementById('poemDesc');
-    
     descContent.style.display = 'block';
     
-    const separator = '<div style="border-top: 1px dashed #ddd; margin: 20px 0;"></div>';
-    const loadingBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 正在思考...</div>';
-    
-    // 保留原有注释（如果有）
     let originalDesc = desc.innerHTML;
-    // 如果已经有AI解读，尝试提取原始注释
     if (originalDesc.includes('border-top: 1px dashed #ddd')) {
         originalDesc = originalDesc.split('<div style="border-top: 1px dashed #ddd')[0];
     }
     
+    const separator = '<div style="border-top: 1px dashed #ddd; margin: 20px 0;"></div>';
+    const loadingBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 正在思考...</div>';
     desc.innerHTML = originalDesc + separator + loadingBadge + '<div class="loading-spinner" style="margin: 20px auto;"></div>';
     
     try {
-        // 获取诗词内容（处理换行）
         const verse = currentPoem.content.replace(/\\n/g, '\n');
-        
-        const result = await getRealPoemInterpretation(
-            currentPoem.title, 
-            currentPoem.auth, 
-            verse, 
-            originalDesc
-        );
-        
+        const result = await getRealPoemInterpretation(currentPoem.title, currentPoem.auth, verse, originalDesc);
         const aiBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 深度赏析 <span onclick="window.regenerateAnalysis()" style="cursor:pointer; margin-left:10px; font-size:0.8em; opacity:0.8; border-bottom:1px solid white;" title="重新生成解读">🔄 重新生成</span></div>';
-        
         desc.innerHTML = originalDesc + separator + aiBadge + markdownToHtml(result);
-        
     } catch (error) {
         desc.innerHTML = originalDesc + separator + `<div style="color:red;">AI解读失败: ${error.message}</div>`;
     }
 }
 
-// 重新生成分析
 window.regenerateAnalysis = async function() {
     if (!currentPoem) return;
-    
     const desc = document.getElementById('poemDesc');
-    let originalDesc = desc.innerHTML;
-    if (originalDesc.includes('border-top: 1px dashed #ddd')) {
-        originalDesc = originalDesc.split('<div style="border-top: 1px dashed #ddd')[0];
-    }
-    
+    let originalDesc = desc.innerHTML.split('<div style="border-top: 1px dashed #ddd')[0];
     const separator = '<div style="border-top: 1px dashed #ddd; margin: 20px 0;"></div>';
     const loadingBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 正在重新思考...</div>';
     
@@ -1996,138 +1483,57 @@ window.regenerateAnalysis = async function() {
     
     try {
         const verse = currentPoem.content.replace(/\\n/g, '\n');
-        const result = await getRealPoemInterpretation(
-            currentPoem.title, 
-            currentPoem.auth, 
-            verse, 
-            originalDesc,
-            true // force refresh
-        );
-        
+        const result = await getRealPoemInterpretation(currentPoem.title, currentPoem.auth, verse, originalDesc, true);
         const aiBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 深度赏析 <span onclick="window.regenerateAnalysis()" style="cursor:pointer; margin-left:10px; font-size:0.8em; opacity:0.8; border-bottom:1px solid white;" title="重新生成解读">🔄 重新生成</span></div>';
-        
         desc.innerHTML = originalDesc + separator + aiBadge + markdownToHtml(result);
     } catch (error) {
         desc.innerHTML = originalDesc + separator + `<div style="color:red;">重新生成失败: ${error.message}</div>`;
     }
 };
 
-// 显示作者信息
 function showAuthorInfo(authorName) {
     if (!authorName) return;
-    
-    // 从 AUTHOR_DATA 中查找作者信息
     const authorInfo = AUTHOR_DATA.find(a => a.name === authorName);
-    
     if (!authorInfo) {
         alert(`未找到作者"${authorName}"的详细信息`);
         return;
     }
     
-    // 创建模态框
     const modal = document.createElement('div');
     modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.7);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 10000;
-        backdrop-filter: blur(5px);
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center;
+        z-index: 10000; backdrop-filter: blur(5px);
     `;
     
     const modalContent = document.createElement('div');
     modalContent.style.cssText = `
-        background: var(--container-bg);
-        border-radius: 20px;
-        max-width: 600px;
-        max-height: 80vh;
-        overflow-y: auto;
-        padding: 30px;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-        position: relative;
+        background: var(--container-bg); border-radius: 20px; max-width: 600px; max-height: 80vh;
+        overflow-y: auto; padding: 30px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3); position: relative;
     `;
     
-    // 构建内容
     let html = `
         <div style="text-align: center; margin-bottom: 20px;">
-            <h2 style="color: var(--xhs-pink); margin: 0 0 10px 0; font-family: 'Noto Serif SC', serif;">
-                ${authorInfo.name}
-            </h2>
-            <div style="color: var(--text-secondary); font-size: 0.9rem;">
-                ${authorInfo.dynasty} · ${authorInfo.life_span}
-            </div>
-            ${authorInfo.titles ? `<div style="margin-top: 10px;">
-                ${authorInfo.titles.map(t => `<span style="display: inline-block; background: var(--xhs-pink-lighter); color: var(--xhs-pink); padding: 3px 10px; border-radius: 12px; margin: 3px; font-size: 0.85rem;">${t}</span>`).join('')}
-            </div>` : ''}
+            <h2 style="color: var(--xhs-pink); margin: 0 0 10px 0; font-family: 'Noto Serif SC', serif;">${authorInfo.name}</h2>
+            <div style="color: var(--text-secondary); font-size: 0.9rem;">${authorInfo.dynasty} · ${authorInfo.life_span}</div>
+            ${authorInfo.titles ? `<div style="margin-top: 10px;">${authorInfo.titles.map(t => `<span style="display: inline-block; background: var(--xhs-pink-lighter); color: var(--xhs-pink); padding: 3px 10px; border-radius: 12px; margin: 3px; font-size: 0.85rem;">${t}</span>`).join('')}</div>` : ''}
         </div>
-        
-        ${authorInfo.bio ? `
-        <div style="margin-bottom: 20px;">
-            <h3 style="color: var(--xhs-pink); font-size: 1.1rem; margin-bottom: 10px;">📖 生平简介</h3>
-            <p style="line-height: 1.8; color: var(--text-primary); text-indent: 2em;">${authorInfo.bio}</p>
-        </div>
-        ` : ''}
-        
-        ${authorInfo.achievements ? `
-        <div style="margin-bottom: 20px;">
-            <h3 style="color: var(--xhs-pink); font-size: 1.1rem; margin-bottom: 10px;">🏆 文学成就</h3>
-            <p style="line-height: 1.8; color: var(--text-primary); text-indent: 2em;">${authorInfo.achievements}</p>
-        </div>
-        ` : ''}
-        
-        ${authorInfo.style ? `
-        <div style="margin-bottom: 20px;">
-            <h3 style="color: var(--xhs-pink); font-size: 1.1rem; margin-bottom: 10px;">🎨 创作风格</h3>
-            <p style="line-height: 1.8; color: var(--text-primary); text-indent: 2em;">${authorInfo.style}</p>
-        </div>
-        ` : ''}
-        
-        ${authorInfo.works && authorInfo.works.length > 0 ? `
-        <div style="margin-bottom: 20px;">
-            <h3 style="color: var(--xhs-pink); font-size: 1.1rem; margin-bottom: 10px;">📝 代表作品</h3>
-            ${authorInfo.works.map(work => `
-                <div style="margin-bottom: 12px; padding: 10px; background: var(--bg-lighter); border-radius: 10px;">
-                    <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 5px;">《${work.title}》</div>
-                    <div style="color: var(--text-secondary); font-size: 0.9rem; font-style: italic;">${work.line}</div>
-                </div>
-            `).join('')}
-        </div>
-        ` : ''}
-        
-        <button id="closeAuthorInfo" style="
-            width: 100%;
-            padding: 12px;
-            background: linear-gradient(135deg, var(--xhs-pink), var(--xhs-pink-light));
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        ">关闭</button>
+        ${authorInfo.bio ? `<div style="margin-bottom: 20px;"><h3 style="color: var(--xhs-pink); font-size: 1.1rem; margin-bottom: 10px;">📖 生平简介</h3><p style="line-height: 1.8; color: var(--text-primary); text-indent: 2em;">${authorInfo.bio}</p></div>` : ''}
+        ${authorInfo.achievements ? `<div style="margin-bottom: 20px;"><h3 style="color: var(--xhs-pink); font-size: 1.1rem; margin-bottom: 10px;">🏆 文学成就</h3><p style="line-height: 1.8; color: var(--text-primary); text-indent: 2em;">${authorInfo.achievements}</p></div>` : ''}
+        ${authorInfo.style ? `<div style="margin-bottom: 20px;"><h3 style="color: var(--xhs-pink); font-size: 1.1rem; margin-bottom: 10px;">🎨 创作风格</h3><p style="line-height: 1.8; color: var(--text-primary); text-indent: 2em;">${authorInfo.style}</p></div>` : ''}
+        ${authorInfo.works && authorInfo.works.length > 0 ? `<div style="margin-bottom: 20px;"><h3 style="color: var(--xhs-pink); font-size: 1.1rem; margin-bottom: 10px;">📝 代表作品</h3>${authorInfo.works.map(work => `<div style="margin-bottom: 12px; padding: 10px; background: var(--bg-lighter); border-radius: 10px;"><div style="font-weight: 600; color: var(--text-primary); margin-bottom: 5px;">《${work.title}》</div><div style="color: var(--text-secondary); font-size: 0.9rem; font-style: italic;">${work.line}</div></div>`).join('')}</div>` : ''}
+        <button id="closeAuthorInfo" style="width: 100%; padding: 12px; background: linear-gradient(135deg, var(--xhs-pink), var(--xhs-pink-light)); color: white; border: none; border-radius: 10px; font-size: 1rem; cursor: pointer; transition: all 0.3s ease;">关闭</button>
     `;
     
     modalContent.innerHTML = html;
     modal.appendChild(modalContent);
     document.body.appendChild(modal);
     
-    // 关闭按钮事件
     const closeBtn = document.getElementById('closeAuthorInfo');
-    const closeModal = () => {
-        document.body.removeChild(modal);
-    };
-    
+    const closeModal = () => document.body.removeChild(modal);
     closeBtn.onclick = closeModal;
-    modal.onclick = (e) => {
-        if (e.target === modal) closeModal();
-    };
+    modal.onclick = (e) => { if (e.target === modal) closeModal(); };
     
-    // ESC键关闭
     const handleEsc = (e) => {
         if (e.key === 'Escape') {
             closeModal();
@@ -2137,9 +1543,4 @@ function showAuthorInfo(authorName) {
     document.addEventListener('keydown', handleEsc);
 }
 
-// 导出函数供 bindEventListeners 使用。
-export { 
-    copyPoemToClipboard, 
-    togglePoemLayout, 
-    showAIInterpretation 
-};
+export { copyPoemToClipboard, togglePoemLayout, showAIInterpretation };
