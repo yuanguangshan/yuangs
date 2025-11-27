@@ -9,7 +9,7 @@ import { CONFIG } from "./config.js";
 const SENTENCE_END = /[。！？!?]/; // 句末标点（单次）
 const HALF_PAUSE = /[，,、；;]/; // 半句停顿（逗号/顿号/分号）
 const PUNCT_GLOBAL = /[，。！？、；：,.!?;:]/g;
-const QUOTES_BRACKETS_GLOBAL = /["""‘’'（）\(\)《》〈〉【】\[\]『』「」]/g;
+const QUOTES_BRACKETS_GLOBAL = /["""‘’'“”（）\(\)《》〈〉【】\[\]『』「」]/g;
 
 function normalizeContent(content) {
   if (!content) return "";
@@ -28,7 +28,15 @@ function normalizeContent(content) {
     .split("\n")
     .map((l) => l.trim())
     .filter((l) => l !== "");
-  return lines.join("\n");
+  
+  let result = lines.join("\n");
+
+  // 【修复】消除句末标点和闭合引号之间的空白（包括换行）
+  // 防止引号被挤到下一行行首，解决横排模式下引号单独占一行的问题
+  // 匹配：句末标点 + 任意空白(含换行) + 闭合标点
+  result = result.replace(/([。！？!?])\s+([”’'""』」】\)])/g, '$1$2');
+
+  return result;
 }
 
 function stripPunctAndQuotes(s) {
@@ -44,7 +52,7 @@ function splitBySentenceEnds(content) {
     buf += ch;
     if (SENTENCE_END.test(ch)) {
       let j = i + 1;
-      while (j < content.length && /[""’'））》〉】』」]/.test(content[j])) {
+      while (j < content.length && /[""’'“”））》〉】』」]/.test(content[j])) {
         buf += content[j];
         j++;
       }
