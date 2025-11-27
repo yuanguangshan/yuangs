@@ -182,13 +182,42 @@ function initAuthorSelect() {
             const optgroup = document.createElement('optgroup');
             optgroup.label = dynasty;
 
-            dynastyGroups[dynasty].forEach(author => {
+            // 为每个作者添加作品数量信息并排序
+            const authorsWithCounts = dynastyGroups[dynasty].map(author => ({
+                ...author,
+                workCount: authorWorkCounts[author.name] || 0
+            }));
+
+            // 按作品数量降序排序
+            authorsWithCounts.sort((a, b) => b.workCount - a.workCount);
+
+            // 分离多作品作者和单作品作者
+            const multiWorkAuthors = authorsWithCounts.filter(a => a.workCount > 1);
+            const singleWorkAuthors = authorsWithCounts.filter(a => a.workCount === 1);
+
+            // 添加多作品作者（始终显示）
+            multiWorkAuthors.forEach(author => {
                 const option = document.createElement('option');
                 option.value = author.name;
-                const workCount = authorWorkCounts[author.name] || 0;
-                option.textContent = `${author.name} (${author.titles?.[0] || ''}) [${workCount}首]`;
+                option.textContent = `${author.name} (${author.titles?.[0] || ''}) [${author.workCount}首]`;
                 optgroup.appendChild(option);
             });
+
+            // 如果有单作品作者，添加一个"显示更多"选项
+            if (singleWorkAuthors.length > 0) {
+                const showMoreOption = document.createElement('option');
+                showMoreOption.value = `__show_more_${dynasty}__`;
+                showMoreOption.textContent = `┗━ 显示更多 (${singleWorkAuthors.length}位单作品作者)...`;
+                showMoreOption.style.fontStyle = 'italic';
+                showMoreOption.style.color = '#999';
+                showMoreOption.dataset.dynasty = dynasty;
+                showMoreOption.dataset.singleAuthors = JSON.stringify(singleWorkAuthors.map(a => ({
+                    name: a.name,
+                    title: a.titles?.[0] || '',
+                    workCount: a.workCount
+                })));
+                optgroup.appendChild(showMoreOption);
+            }
 
             select.appendChild(optgroup);
         }
@@ -228,6 +257,80 @@ function bindEventListeners() {
     if (authorSelect) {
         authorSelect.addEventListener('change', async (e) => {
             const selectedAuthor = e.target.value;
+            
+            // 检查是否点击了"显示更多"选项
+            if (selectedAuthor.startsWith('__show_more_')) {
+                const selectedOption = e.target.options[e.target.selectedIndex];
+                const dynasty = selectedOption.dataset.dynasty;
+                const singleAuthors = JSON.parse(selectedOption.dataset.singleAuthors);
+                
+                // 找到对应的 optgroup
+                const optgroups = Array.from(authorSelect.querySelectorAll('optgroup'));
+                const targetOptgroup = optgroups.find(og => og.label === dynasty);
+                
+                if (targetOptgroup) {
+                    // 移除"显示更多"选项
+                    selectedOption.remove();
+                    
+                    // 添加所有单作品作者
+                    singleAuthors.forEach(author => {
+                        const option = document.createElement('option');
+                        option.value = author.name;
+                        option.textContent = `  ${author.name} (${author.title}) [${author.workCount}首]`;
+                        option.style.color = '#666';
+                        targetOptgroup.appendChild(option);
+                    });
+                    
+                    // 添加"隐藏"选项
+                    const hideOption = document.createElement('option');
+                    hideOption.value = `__hide_more_${dynasty}__`;
+                    hideOption.textContent = `┗━ 收起单作品作者`;
+                    hideOption.style.fontStyle = 'italic';
+                    hideOption.style.color = '#999';
+                    hideOption.dataset.dynasty = dynasty;
+                    hideOption.dataset.singleAuthors = JSON.stringify(singleAuthors);
+                    targetOptgroup.appendChild(hideOption);
+                }
+                
+                // 重置选择
+                authorSelect.value = '';
+                return;
+            }
+            
+            // 检查是否点击了"隐藏"选项
+            if (selectedAuthor.startsWith('__hide_more_')) {
+                const selectedOption = e.target.options[e.target.selectedIndex];
+                const dynasty = selectedOption.dataset.dynasty;
+                const singleAuthors = JSON.parse(selectedOption.dataset.singleAuthors);
+                
+                // 找到对应的 optgroup
+                const optgroups = Array.from(authorSelect.querySelectorAll('optgroup'));
+                const targetOptgroup = optgroups.find(og => og.label === dynasty);
+                
+                if (targetOptgroup) {
+                    // 移除所有单作品作者和"隐藏"选项
+                    const singleAuthorNames = singleAuthors.map(a => a.name);
+                    const optionsToRemove = Array.from(targetOptgroup.querySelectorAll('option'))
+                        .filter(opt => singleAuthorNames.includes(opt.value) || opt.value.startsWith('__hide_more_'));
+                    optionsToRemove.forEach(opt => opt.remove());
+                    
+                    // 重新添加"显示更多"选项
+                    const showMoreOption = document.createElement('option');
+                    showMoreOption.value = `__show_more_${dynasty}__`;
+                    showMoreOption.textContent = `┗━ 显示更多 (${singleAuthors.length}位单作品作者)...`;
+                    showMoreOption.style.fontStyle = 'italic';
+                    showMoreOption.style.color = '#999';
+                    showMoreOption.dataset.dynasty = dynasty;
+                    showMoreOption.dataset.singleAuthors = JSON.stringify(singleAuthors);
+                    targetOptgroup.appendChild(showMoreOption);
+                }
+                
+                // 重置选择
+                authorSelect.value = '';
+                return;
+            }
+            
+            // 正常的作者选择逻辑
             if (selectedAuthor) {
                 filteredPoems = allPoems.filter(p => p.auth === selectedAuthor);
                 console.log(`Filtered ${filteredPoems.length} poems by ${selectedAuthor}`);
