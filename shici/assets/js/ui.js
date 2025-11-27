@@ -110,7 +110,7 @@ export async function initUI() {
 
     // 加载保存的主题偏好
     loadSavedTheme();
-    
+
     // 加载保存的布局模式偏好
     loadSavedLayoutMode();
 
@@ -123,6 +123,9 @@ export async function initUI() {
 
     // 绑定事件监听器
     bindEventListeners();
+
+    // 初始化AI模型选择菜单
+    initAIMenu();
 
     // 首次加载随机诗词
     await loadRandomPoem();
@@ -287,6 +290,25 @@ function bindEventListeners() {
         if (themeMenu && darkModeToggle) {
             if (!themeMenu.contains(e.target) && !darkModeToggle.contains(e.target)) {
                 themeMenu.classList.remove('active');
+            }
+        }
+    });
+
+    // AI model menu toggle functionality
+    const aiModelToggle = document.getElementById('aiModelToggle');
+    const aiModelMenu = document.getElementById('aiModelMenu');
+    if (aiModelToggle && aiModelMenu) {
+        aiModelToggle.addEventListener('click', function (e) {
+            e.stopPropagation();
+            aiModelMenu.classList.toggle('active');
+        });
+    }
+
+    // Close AI model menu when clicking outside
+    document.addEventListener('click', function (e) {
+        if (aiModelMenu && aiModelToggle) {
+            if (!aiModelMenu.contains(e.target) && !aiModelToggle.contains(e.target)) {
+                aiModelMenu.classList.remove('active');
             }
         }
     });
@@ -1267,6 +1289,7 @@ const API_DOMAIN = 'https://aiproxy.want.biz/';
 const API_PREFIX = API_DOMAIN.replace(/\/+$/, '');
 const DEFAULT_TIMEOUT = 120;
 const DEFAULT_MODEL_ID = 'gemini-pro-latest';
+const AI_MODEL_PREFERENCE_KEY = 'preferred_ai_model';
 const AI_CACHE_KEY = 'poem_ai_interpretations_v1';
 const PROMPT_TEMPLATES = {
     '诗词': '请为以下古诗词提供深度解读和赏析，使用Markdown格式输出，包含以下部分：1. 诗词背景与作者心境 2. 逐句解析（如果诗句较短可合并解析） 3. 艺术手法与修辞特点 4. 主题思想与情感内涵 5. 文学价值与影响 6.作者生平与经历'
@@ -1338,6 +1361,27 @@ function getInterpretationFromCache(title, author) {
     }
 }
 
+// 获取用户选择的AI模型
+function getUserPreferredModel() {
+    try {
+        const preferredModel = localStorage.getItem(AI_MODEL_PREFERENCE_KEY);
+        return preferredModel || DEFAULT_MODEL_ID;
+    } catch (e) {
+        console.warn('获取用户AI模型偏好失败:', e);
+        return DEFAULT_MODEL_ID;
+    }
+}
+
+// 设置用户选择的AI模型
+function setUserPreferredModel(modelId) {
+    try {
+        localStorage.setItem(AI_MODEL_PREFERENCE_KEY, modelId);
+        console.log('已设置AI模型:', modelId);
+    } catch (e) {
+        console.error('保存AI模型偏好失败:', e);
+    }
+}
+
 function saveInterpretationToCache(title, author, content) {
     try {
         const cache = localStorage.getItem(AI_CACHE_KEY);
@@ -1363,7 +1407,8 @@ async function getRealPoemInterpretation(title, author, verse, desc, forceRefres
     const finalText = `${finalSystemPrompt}\n\n---\n\n${textToInterpret.trim()}`;
 
     try {
-        const resultData = await explainText(finalText, DEFAULT_MODEL_ID);
+        const userModel = getUserPreferredModel();
+        const resultData = await explainText(finalText, userModel);
         const markdownResult = resultData.explanation || resultData.data || resultData.text || resultData;
         if (typeof markdownResult !== 'string' || !markdownResult.trim()) throw new Error('API返回结果格式不正确');
         const finalResult = markdownResult.trim();
@@ -1543,6 +1588,43 @@ function showAuthorInfo(authorName) {
     document.addEventListener('keydown', handleEsc);
 }
 
+// 设置AI模型的全局函数
+window.setAIModel = function(modelId) {
+    setUserPreferredModel(modelId);
+
+    // Update UI to show selected model
+    const aiModelOptions = document.querySelectorAll('.ai-model-option');
+    aiModelOptions.forEach(option => {
+        if (option.textContent.includes(modelId)) {
+            option.classList.add('selected');
+        } else {
+            option.classList.remove('selected');
+        }
+    });
+
+    // Close the menu
+    const aiModelMenu = document.getElementById('aiModelMenu');
+    if (aiModelMenu) {
+        aiModelMenu.classList.remove('active');
+    }
+
+    console.log('已设置AI模型:', modelId);
+};
+
+// 初始化AI模型选择界面
+function initAIMenu() {
+    // Highlight the currently selected model
+    const currentModel = getUserPreferredModel();
+    const aiModelOptions = document.querySelectorAll('.ai-model-option');
+    aiModelOptions.forEach(option => {
+        if (option.textContent.includes(currentModel)) {
+            option.classList.add('selected');
+        } else {
+            option.classList.remove('selected');
+        }
+    });
+}
+
 // --- 统一暴露全局函数 ---
 // 这样在 JSBox 或其他外部脚本中可以直接调用这些函数，无需每次手动修改
 Object.assign(window, {
@@ -1550,24 +1632,25 @@ Object.assign(window, {
     loadRandomPoem,
     renderWaterfall,
     displayPoem,
-    
+
     // AI 相关
     showAIInterpretation,
     regenerateAnalysis,
-    
+    setAIModel,
+
     // 布局与显示
     toggleScrollMode,
     togglePoemLayout,
     switchTheme,
     showAuthorInfo,
     showAuthorWorks,
-    
+
     // 交互操作
     copyPoemToClipboard,
     toggleFavorite,
     addToHistory,
     handleTagClick,
-    
+
     // 搜索相关
     toggleSearch,
     performSearch,
