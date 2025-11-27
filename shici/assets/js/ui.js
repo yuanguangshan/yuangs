@@ -1766,7 +1766,7 @@ console.log('Poetry App: All interactive functions have been exposed to global s
 // Register service worker for PWA functionality
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
+    navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
       .then(registration => {
         console.log('Service Worker registered successfully:', registration.scope);
 
