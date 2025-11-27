@@ -126,6 +126,10 @@ export async function initUI() {
 
     // 首次加载随机诗词
     await loadRandomPoem();
+    
+    // 暴露 AI 解释函数到全局作用域，供 JSBox 等外部调用
+    window.showAIInterpretation = showAIInterpretation;
+    console.log('showAIInterpretation 函数已暴露到全局作用域');
 }
 
 // 初始化作者选择器
@@ -1471,9 +1475,6 @@ async function showAIInterpretation() {
         desc.innerHTML = originalDesc + separator + `<div style="color:red;">AI解读失败: ${error.message}</div>`;
     }
 }
-
-// 暴露到全局作用域，供 JSBox 等外部调用
-window.showAIInterpretation = showAIInterpretation;
 
 window.regenerateAnalysis = async function() {
     if (!currentPoem) return;
