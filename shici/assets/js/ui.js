@@ -1472,6 +1472,9 @@ async function showAIInterpretation() {
     }
 }
 
+// 暴露到全局作用域，供 JSBox 等外部调用
+window.showAIInterpretation = showAIInterpretation;
+
 window.regenerateAnalysis = async function() {
     if (!currentPoem) return;
     const desc = document.getElementById('poemDesc');
