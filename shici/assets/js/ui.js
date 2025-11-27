@@ -23,6 +23,32 @@ let filteredPoems = null;
 let currentDisplayMode = 'vertical'; // 'horizontal', 'vertical', 'scroll'
 let currentTagFilter = null; // Current tag filter for waterfall
 
+// 辅助函数：将字符串末尾的标点移到开头
+function movePunctuationToStart(text) {
+    const trimmed = text.trim();
+    if (!trimmed) return '';
+    
+    // 检查是否以标点符号结尾（包含所有常见中文标点）
+    const punctuationMatch = trimmed.match(/([。！？;；:：,，、《》〈〉「」『』""''（）]+)$/);
+    
+    if (punctuationMatch) {
+        const punctuation = punctuationMatch[1];
+        const textWithoutPunctuation = trimmed.slice(0, -punctuation.length);
+        return punctuation + textWithoutPunctuation;
+    }
+    return trimmed;
+}
+
+// 辅助函数：按标点符号分割内容，并将每段内的标点符号放在前面
+function splitContentWithPunctuationFirst(content) {
+    // 先按标点符号分割，保留标点符号在每段的后面
+    // 包含常见中文标点
+    const segments = content.match(/[^。！？;；:：,，、《》〈〉「」『』""''（）]+[。！？;；:：,，、《》〈〉「」『』""''（）]?/g) || [content];
+    
+    // 对每一段，将标点符号移到前面
+    return segments.map(movePunctuationToStart).filter(line => line.trim() !== '');
+}
+
 // 初始化UI
 export async function initUI() {
     console.log('Initializing UI...');
@@ -264,9 +290,11 @@ function bindEventListeners() {
                 // 如果没有换行，按标点符号分割
                 if (contentLines.length === 1) {
                     const content = contentLines[0];
-                    // Split by sentence punctuation but keep punctuation WITH the preceding text
-                    contentLines = content.match(/[^。！？;；:：,，、]+[。！？;；:：,，、]?/g) || [content];
-                    contentLines = contentLines.filter(line => line.trim() !== '');
+                    // 使用辅助函数分割，标点符号在前面
+                    contentLines = splitContentWithPunctuationFirst(content);
+                } else {
+                    // 多行内容，对每一行处理标点符号
+                    contentLines = contentLines.map(movePunctuationToStart);
                 }
 
                 // 创建列 div 元素用于显示
@@ -299,9 +327,11 @@ function bindEventListeners() {
                 // If no line breaks, split by sentence punctuation to create meaningful segments
                 if (contentLines.length === 1) {
                     const content = contentLines[0];
-                    // Split by sentence punctuation but keep punctuation WITH the preceding text
-                    contentLines = content.match(/[^。！？;；:：,，、]+[。！？;；:：,，、]?/g) || [content];
-                    contentLines = contentLines.filter(line => line.trim() !== '');
+                    // 使用辅助函数分割，标点符号在前面
+                    contentLines = splitContentWithPunctuationFirst(content);
+                } else {
+                    // Multi-line content, process punctuation for each line
+                    contentLines = contentLines.map(movePunctuationToStart);
                 }
 
                 // Create column divs for each meaningful line/sentence
@@ -557,9 +587,11 @@ function toggleScrollMode() {
         // If no line breaks, split by sentence punctuation to create meaningful segments
         if (contentLines.length === 1) {
             const content = contentLines[0];
-            // Split by sentence punctuation but keep punctuation WITH the preceding text
-            contentLines = content.match(/[^。！？;；:：,，、]+[。！？;；:：,，、]?/g) || [content];
-            contentLines = contentLines.filter(line => line.trim() !== '');
+            // 使用辅助函数分割，标点符号在前面
+            contentLines = splitContentWithPunctuationFirst(content);
+        } else {
+            // Multi-line content, process punctuation for each line
+            contentLines = contentLines.map(movePunctuationToStart);
         }
 
         // Create column divs for each meaningful line/sentence
@@ -635,9 +667,11 @@ function displayPoem(poem) {
             // If no line breaks, split by sentence punctuation to create meaningful segments
             if (contentLines.length === 1) {
                 const content = contentLines[0];
-                // Split by sentence punctuation but keep punctuation WITH the preceding text
-                contentLines = content.match(/[^。！？;；:：,，、]+[。！？;；:：,，、]?/g) || [content];
-                contentLines = contentLines.filter(line => line.trim() !== '');
+                // 使用辅助函数分割，标点符号在前面
+                contentLines = splitContentWithPunctuationFirst(content);
+            } else {
+                // Multi-line content, process punctuation for each line
+                contentLines = contentLines.map(movePunctuationToStart);
             }
 
             // Create column divs for each meaningful line/sentence
@@ -678,9 +712,11 @@ function displayPoem(poem) {
             // 如果没有换行，按标点符号分割
             if (contentLines.length === 1) {
                 const content = contentLines[0];
-                // Split by sentence punctuation but keep punctuation WITH the preceding text
-                contentLines = content.match(/[^。！？;；:：,，、]+[。！？;；:：,，、]?/g) || [content];
-                contentLines = contentLines.filter(line => line.trim() !== '');
+                // 使用辅助函数分割，标点符号在前面
+                contentLines = splitContentWithPunctuationFirst(content);
+            } else {
+                // 多行内容，对每一行处理标点符号
+                contentLines = contentLines.map(movePunctuationToStart);
             }
 
             // 创建列 div 元素用于显示
@@ -1819,9 +1855,11 @@ function togglePoemLayout() {
         // If no line breaks, split by punctuation to create meaningful segments
         if (contentLines.length === 1) {
             const content = contentLines[0];
-            // Split by sentence punctuation but keep punctuation WITH the preceding text
-            contentLines = content.match(/[^。！？;；:：,，、]+[。！？;；:：,，、]?/g) || [content];
-            contentLines = contentLines.filter(line => line.trim() !== '');
+            // 使用辅助函数分割，标点符号在前面
+            contentLines = splitContentWithPunctuationFirst(content);
+        } else {
+            // Multi-line content, process punctuation for each line
+            contentLines = contentLines.map(movePunctuationToStart);
         }
 
         // Create individual line elements for each line to match scroll mode structure
