@@ -1763,4 +1763,35 @@ Object.assign(window, {
 
 console.log('Poetry App: All interactive functions have been exposed to global scope.');
 
+// Register service worker for PWA functionality
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js')
+      .then(registration => {
+        console.log('Service Worker registered successfully:', registration.scope);
+
+        // Send message to skip waiting if there's an updated service worker
+        if (registration.waiting) {
+          registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
+
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              // New update available
+              if (confirm('应用有新版本，是否更新？')) {
+                newWorker.postMessage({ type: 'SKIP_WAITING' });
+                window.location.reload();
+              }
+            }
+          });
+        });
+      })
+      .catch(error => {
+        console.error('Service Worker registration failed:', error);
+      });
+  });
+}
+
 export { copyPoemToClipboard, togglePoemLayout, showAIInterpretation };
