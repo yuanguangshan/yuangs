@@ -71,26 +71,40 @@ async function loadData() {
 // ============================================================
 // 3. 渲染列表
 // ============================================================
-function renderList() {
+function renderList(startIndex = null) {
     const listEl = document.getElementById('poem-list');
     document.getElementById('count').textContent = currentData.length;
     listEl.innerHTML = '';
 
-    // 倒序排列，让新添加的显示在最上面
-    currentData.slice().reverse().forEach((poem, index) => {
-        // 计算原始索引 (因为反转了，删除时需要原始索引)
-        const originalIndex = currentData.length - 1 - index;
-        
+    // 只显示最新的20条数据，提高性能
+    const itemsToShow = 20;
+    let recentData, actualStartIndex;
+
+    if (startIndex !== null && startIndex >= 0) {
+        // 如果指定了起始索引，显示从该索引开始的20条数据
+        actualStartIndex = Math.max(0, startIndex);
+        recentData = currentData.slice(actualStartIndex, actualStartIndex + itemsToShow);
+    } else {
+        // 否则显示最新的20条数据
+        recentData = currentData.slice(-itemsToShow);
+        actualStartIndex = Math.max(0, currentData.length - itemsToShow);
+    }
+
+    // 倒序排列，让新添加的显示在最上面 (在当前显示的数据范围内)
+    recentData.slice().reverse().forEach((poem, index) => {
+        // 计算原始索引 (相对于完整数据集)
+        const originalIndex = actualStartIndex + (recentData.length - 1 - index);
+
         const item = document.createElement('div');
         item.className = 'poem-item';
-        
+
         // ✅ 适配你的新字段：rhythmic (作为标题)
         // 如果旧数据里只有 title，为了兼容显示，做个 || 处理
         const displayTitle = poem.rhythmic || poem.title || '无标题';
-        
+
         item.innerHTML = `
             <div style="flex:1;">
-                <b>${displayTitle}</b> 
+                <b>${displayTitle}</b>
                 <span style="color:#666; font-size:0.9em;"> - ${poem.author}</span>
                 <br>
                 <small style="color:#999;">${poem.tags ? poem.tags.join(', ') : ''}</small>
@@ -107,6 +121,87 @@ function renderList() {
             deletePoem(idx);
         });
     });
+
+    // 添加分页控件
+    if (currentData.length > itemsToShow) {
+        const paginationDiv = document.createElement('div');
+        paginationDiv.style.textAlign = 'center';
+        paginationDiv.style.marginTop = '15px';
+        paginationDiv.style.color = '#666';
+
+        // 计算当前页码
+        const totalPages = Math.ceil(currentData.length / itemsToShow);
+        const currentPage = Math.floor(actualStartIndex / itemsToShow) + 1;
+
+        // 生成分页控件 HTML
+        let paginationHTML = `<div style="margin-bottom: 10px">显示 ${actualStartIndex + 1} - ${Math.min(actualStartIndex + itemsToShow, currentData.length)} 条，共 ${currentData.length} 条</div>`;
+
+        paginationHTML += '<div style="display: flex; justify-content: center; gap: 5px;">';
+
+        // 上一页按钮
+        if (currentPage > 1) {
+            paginationHTML += `<button id="prev-page" style="padding: 5px 10px; margin: 0 2px;">&lt; 上一页</button>`;
+        }
+
+        // 页码按钮
+        const startPage = Math.max(1, currentPage - 2);
+        const endPage = Math.min(totalPages, currentPage + 2);
+
+        if (startPage > 1) {
+            paginationHTML += `<button class="page-btn" data-page="0" style="padding: 5px 10px; margin: 0 2px;">1</button>`;
+            if (startPage > 2) {
+                paginationHTML += `<span style="padding: 5px 10px; margin: 0 2px;">...</span>`;
+            }
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            const isActive = i === currentPage;
+            const pageNum = i - 1; // 转换为0基索引
+            paginationHTML += `<button class="${isActive ? 'current-page' : 'page-btn'}" data-page="${pageNum}" style="padding: 5px 10px; margin: 0 2px; ${isActive ? 'font-weight: bold; background-color: #007bff; color: white;' : ''}">${i}</button>`;
+        }
+
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                paginationHTML += `<span style="padding: 5px 10px; margin: 0 2px;">...</span>`;
+            }
+            paginationHTML += `<button class="page-btn" data-page="${totalPages - 1}" style="padding: 5px 10px; margin: 0 2px;">${totalPages}</button>`;
+        }
+
+        // 下一页按钮
+        if (currentPage < totalPages) {
+            paginationHTML += `<button id="next-page" style="padding: 5px 10px; margin: 0 2px;">下一页 &gt;</button>`;
+        }
+
+        paginationHTML += '</div>';
+
+        paginationDiv.innerHTML = paginationHTML;
+        listEl.appendChild(paginationDiv);
+
+        // 绑定分页按钮事件
+        document.querySelectorAll('#prev-page').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const newStartIndex = Math.max(0, actualStartIndex - itemsToShow);
+                renderList(newStartIndex);
+            });
+        });
+
+        document.querySelectorAll('#next-page').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const newStartIndex = actualStartIndex + itemsToShow;
+                if (newStartIndex < currentData.length) {
+                    renderList(newStartIndex);
+                }
+            });
+        });
+
+        document.querySelectorAll('.page-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const pageNum = parseInt(e.target.getAttribute('data-page'));
+                const newStartIndex = pageNum * itemsToShow;
+                renderList(newStartIndex);
+            });
+        });
+    }
 }
 
 // ============================================================
@@ -128,24 +223,37 @@ document.getElementById('save-btn').addEventListener('click', async () => {
     // ✅ 构造符合你新 JSON 结构的对象
     const newPoem = {
         author: authorVal || '佚名',
-        
+
         // 1. 标题映射到 rhythmic
-        rhythmic: titleVal, 
-        
+        rhythmic: titleVal,
+
         // 2. 内容按换行符分割成数组，映射到 paragraphs
         paragraphs: contentVal.split('\n').filter(line => line.trim() !== ''),
-        
-        // 3. 将“朝代”输入框的内容，按逗号分割成 tags 数组
+
+        // 3. 将"朝代"输入框的内容，按逗号分割成 tags 数组
         // 输入示例："道德经, 先秦" -> ["道德经", "先秦"]
         tags: tagsVal ? tagsVal.split(/[,，]/).map(t => t.trim()) : []
     };
+
+    // Check for duplicate entries before adding to prevent potential duplication
+    const isDuplicate = currentData.some(existingPoem =>
+        existingPoem.rhythmic === newPoem.rhythmic &&
+        existingPoem.author === newPoem.author &&
+        JSON.stringify(existingPoem.paragraphs) === JSON.stringify(newPoem.paragraphs) &&
+        JSON.stringify(existingPoem.tags) === JSON.stringify(newPoem.tags)
+    );
+
+    if (isDuplicate) {
+        alert('该诗词已存在，无法重复添加！');
+        return;
+    }
 
     // 添加到本地数组
     currentData.push(newPoem);
 
     // 同步到云端
     await syncToCloud();
-    
+
     // 清空表单
     document.getElementById('title').value = '';
     document.getElementById('author').value = '';
@@ -175,11 +283,11 @@ async function syncToCloud() {
 
     try {
         const res = await fetch(WRITE_URL, {
-            method: 'POST',
+            method: 'PUT',  // Changed from POST to PUT to use overwrite mode instead of append mode
             headers: {
                 'Content-Type': 'application/json',
                 // ✅ 必须带上 Token
-                'X-Admin-Token': currentToken 
+                'X-Admin-Token': currentToken
             },
             // ✅ 发送完整的数组
             body: JSON.stringify(currentData)
@@ -189,7 +297,8 @@ async function syncToCloud() {
             alert('保存失败：密钥错误！(Error 403)');
         } else if (res.ok) {
             alert('保存成功！');
-            renderList(); // 重新渲染列表
+            // 重新加载数据以确保与服务器状态同步 and prevent potential duplication issues
+            await loadData();
         } else {
             alert('保存失败，状态码: ' + res.status);
         }
