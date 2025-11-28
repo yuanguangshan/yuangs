@@ -3,17 +3,19 @@
 const CACHE_NAME = 'shici-v1.0.0';
 const DATA_CACHE_NAME = 'shici-data-v1.0.0';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/assets/css/base.css',
-  '/assets/css/components.css',
-  '/assets/css/responsive.css',
-  '/assets/js/config.js',
-  '/assets/js/data-loader.js',
-  '/assets/js/ui.js',
-  '/assets/js/poem-display.js',
-  '/assets/js/author-data.js',
-  '/manifest.json'
+  './',
+  './index.html',
+  './assets/css/base.css',
+  './assets/css/components.css',
+  './assets/css/responsive.css',
+  './assets/js/config.js',
+  './assets/js/data-loader.js',
+  './assets/js/ui.js',
+  './assets/js/poem-display.js',
+  './assets/js/author-data.js',
+  './manifest.json',
+  './admin.html',
+  './assets/js/admin.js'
 ];
 
 // Install event - cache essential files
