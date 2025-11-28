@@ -94,7 +94,11 @@ export async function fetchAndCachePoems() {
 
         try {
             // 1. 尝试从远程获取
-            response = await fetch(CONFIG.DATA_PATH);
+            // 显式指定 cors 模式和忽略凭证（不带 Cookie），这是请求公开资源的最佳实践
+            response = await fetch(CONFIG.DATA_PATH, {
+                mode: 'cors',
+                credentials: 'omit'
+            });
             if (!response.ok) throw new Error(`Remote HTTP error! Status: ${response.status}`);
             jsonData = await response.json();
             console.log("Successfully fetched data from remote source");
