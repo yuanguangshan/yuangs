@@ -3,7 +3,7 @@
 
 import { CONFIG, getRandomColor, getRandomImageUrl, addToImageCache, getRandomCachedImage } from './config.js?v=1.0.2';
 import { AUTHOR_DATA, getDynastyByAuthorName } from './author-data.js?v=1.0.2';
-import { fetchAndCachePoems, getRandomPoem, getRandomPoems } from './data-loader.js?v=1.0.2';
+import { fetchAndCachePoems, getRandomPoem, getRandomPoems, clearCache } from './data-loader.js?v=1.0.2';
 import {
     formatPoemWithLineBreaks,
     isRegularPoem,
@@ -613,6 +613,21 @@ function bindEventListeners() {
     scrollModeToggle?.addEventListener('click', function () {
         toggleScrollMode();
     });
+
+    // 刷新数据按钮
+    const refreshDataBtn = document.getElementById('refreshDataBtn');
+    if (refreshDataBtn) {
+        refreshDataBtn.addEventListener('click', async () => {
+            if (confirm('确定要清除缓存并重新加载最新数据吗？这将消耗少量流量。')) {
+                const success = await clearCache();
+                if (success) {
+                    location.reload();
+                } else {
+                    alert('清除缓存失败，请尝试手动清除浏览器缓存。');
+                }
+            }
+        });
+    }
 }
 
 // Toggle scroll mode functionality

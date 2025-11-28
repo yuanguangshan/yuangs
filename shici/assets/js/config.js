@@ -2,7 +2,8 @@
 
 export const CONFIG = {
     // 数据路径
-    DATA_PATH: './assets/data/poetry_data.json',
+    DATA_PATH: 'https://pic.want.biz/poetry_data.json',
+    LOCAL_DATA_PATH: './assets/data/poetry_data.json',
     
     // IndexedDB配置
     DB_NAME: 'PoetryDB',
@@ -11,7 +12,7 @@ export const CONFIG = {
     
     // 缓存键名
     CACHE_KEY: 'poetry_cache_timestamp',
-    CACHE_DURATION: 7 * 24 * 60 * 60 * 1000, // 7天
+    CACHE_DURATION: 1 * 24 * 60 * 60 * 1000, // 改为1天，以便更快看到更新
     
     // 文章判断阈值
     ARTICLE_LENGTH_THRESHOLD: 600,

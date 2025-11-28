@@ -89,13 +89,27 @@ export async function fetchAndCachePoems() {
     // 获取新数据
     try {
         console.log("Fetching fresh poetry data...");
-        const response = await fetch(CONFIG.DATA_PATH);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-        }
+        let response;
+        let jsonData;
 
-        const jsonData = await response.json();
+        try {
+            // 1. 尝试从远程获取
+            response = await fetch(CONFIG.DATA_PATH);
+            if (!response.ok) throw new Error(`Remote HTTP error! Status: ${response.status}`);
+            jsonData = await response.json();
+            console.log("Successfully fetched data from remote source");
+        } catch (remoteError) {
+            console.warn("Failed to fetch from remote, falling back to local data:", remoteError);
+            // 2. 远程失败，尝试本地回退
+            if (CONFIG.LOCAL_DATA_PATH) {
+                response = await fetch(CONFIG.LOCAL_DATA_PATH);
+                if (!response.ok) throw new Error(`Local HTTP error! Status: ${response.status}`);
+                jsonData = await response.json();
+                console.log("Successfully fetched data from local fallback");
+            } else {
+                throw remoteError;
+            }
+        }
         const poems = [];
 
         jsonData.forEach(item => {
@@ -170,4 +184,17 @@ export function getRandomPoems(poems, count) {
     if (!poems || poems.length === 0) return [];
     const shuffled = [...poems].sort(() => 0.5 - Math.random());
     return shuffled.slice(0, Math.min(count, poems.length));
+}
+
+// 清除缓存
+export async function clearCache() {
+    try {
+        await SimpleDB.set(CONFIG.CACHE_KEY, null);
+        allPoems = null;
+        console.log("Cache cleared");
+        return true;
+    } catch (e) {
+        console.error("Failed to clear cache:", e);
+        return false;
+    }
 }
