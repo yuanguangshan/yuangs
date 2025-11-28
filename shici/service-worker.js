@@ -41,8 +41,8 @@ self.addEventListener('fetch', event => {
 
   const url = new URL(event.request.url);
 
-  // Skip requests to external domains (like fonts.googleapis.com)
-  if (url.origin !== self.location.origin && !url.pathname.includes('/api/')) {
+  // Skip requests to external domains (like fonts.googleapis.com), BUT allow pic.want.biz
+  if (url.origin !== self.location.origin && !url.pathname.includes('/api/') && !url.hostname.includes('pic.want.biz')) {
     // For external resources that are not critical, try to fetch but don't cache
     event.respondWith(
       fetch(event.request).catch(() => {
@@ -53,8 +53,8 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // For API or data requests, try cache first then network
-  if (url.pathname.includes('/api/') || url.pathname.includes('data/')) {
+  // For API or data requests (including remote JSON), try cache first then network
+  if (url.pathname.includes('/api/') || url.pathname.includes('data/') || url.hostname.includes('pic.want.biz')) {
     event.respondWith(
       caches.match(event.request)
         .then(response => {
@@ -65,7 +65,10 @@ self.addEventListener('fetch', event => {
           }
 
           // Otherwise make network request
-          return fetch(event.request).then(networkResponse => {
+          // IMPORTANT: Clone the request and set mode to 'cors' for cross-origin data
+          const fetchRequest = event.request.clone();
+          
+          return fetch(fetchRequest).then(networkResponse => {
             // If response is valid, clone it and store in data cache
             if (networkResponse && networkResponse.status === 200) {
               const responseToCache = networkResponse.clone();
