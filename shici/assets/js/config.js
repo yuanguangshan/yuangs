@@ -2,7 +2,7 @@
 
 export const CONFIG = {
     // 数据路径
-    DATA_PATH: 'https://pic.want.biz/poetry_data.json',
+    DATA_PATH: 'https://shici.want.biz',
     LOCAL_DATA_PATH: './assets/data/poetry_data.json',
     
     // IndexedDB配置

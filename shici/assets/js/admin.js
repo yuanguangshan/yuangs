@@ -4,8 +4,8 @@
  */
 
 // ✅ 1. 配置地址
-// 读取地址：直接从 R2 的公开链接读取，确保读到的是真实数据
-const READ_URL = 'https://pic.want.biz/poetry_data.json';
+// 读取地址：改回使用 Worker 读取，因为 Worker 代码里已经正确配置了 CORS 头
+const READ_URL = 'https://shici.want.biz';
 // 保存地址：通过 Cloudflare Worker 写入
 const WRITE_URL = 'https://shici.want.biz'; 
 
