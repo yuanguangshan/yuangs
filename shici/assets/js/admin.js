@@ -35,19 +35,16 @@ loginBtn.addEventListener('click', async () => {
     // 暂存 Token
     currentToken = token;
     
-    // 尝试获取数据来验证 Token 是否有效
-    try {
-        await loadData();
-        // 如果成功加载，切换到管理界面
-        loginSection.classList.add('hidden');
-        managerSection.classList.remove('hidden');
-        loginMsg.textContent = '';
-    } catch (err) {
+    // 直接切换到管理界面
+    loginSection.classList.add('hidden');
+    managerSection.classList.remove('hidden');
+    loginMsg.textContent = '';
+
+    // 异步加载数据
+    loadData().catch(err => {
         console.error(err);
-        loginMsg.textContent = '加载失败，请检查网络或稍后再试';
-        loginBtn.textContent = '进入管理';
-        loginBtn.disabled = false;
-    }
+        alert('注意：读取现有数据失败，请检查网络或跨域配置。\n您可以尝试刷新页面。');
+    });
 });
 
 // ============================================================
