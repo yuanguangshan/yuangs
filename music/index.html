@@ -1009,13 +1009,13 @@
 
         // 播放完整歌曲（在Apple Music中）
         function playFullSong(trackId, trackName, artistName) {
-            // 检查是否有collectionId（专辑ID）用于构建正确的URL
+            // 检查是否有trackViewUrl（iTunes商店页面URL）
             const song = state.playlist.find(s => s.trackId == trackId);
-            let albumId = song?.collectionId || trackId;
+            const trackViewUrl = song?.trackViewUrl;
 
             // 首先尝试使用iTMS协议打开Apple Music应用
-            const itmsUrl = `itms://itunes.apple.com/us/album/${albumId}?i=${trackId}`;
-            const itunesUrl = `https://music.apple.com/us/album/${albumId}?i=${trackId}`;
+            const itmsUrl = `itms://itunes.apple.com/us/album/?i=${trackId}`;
+            const itunesUrl = trackViewUrl || `https://music.apple.com/us/album/?i=${trackId}`;
 
             // 创建一个隐藏的iframe来尝试打开应用
             const iframe = document.createElement('iframe');
@@ -1026,7 +1026,13 @@
             // 如果无法打开应用，则在新标签页中打开网页版
             setTimeout(() => {
                 if (confirm(`无法直接在Apple Music中播放 "${trackName}" 由 ${artistName} 演唱的歌曲。是否在网页中打开Apple Music以播放完整版？`)) {
-                    window.open(itunesUrl, '_blank');
+                    if (trackViewUrl) {
+                        window.open(trackViewUrl, '_blank');
+                    } else {
+                        // 如果没有trackViewUrl，则使用搜索页面
+                        const searchUrl = `https://music.apple.com/us/search?term=${encodeURIComponent(trackName + ' ' + artistName)}`;
+                        window.open(searchUrl, '_blank');
+                    }
                 }
                 document.body.removeChild(iframe);
             }, 1000);
