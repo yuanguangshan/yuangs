@@ -7,7 +7,8 @@
     <style>
         :root {
             --primary: #1db954;
-            --accent: #ff5722; /* 随机按钮的颜色 */
+            --accent: #ff5722; 
+            --weather: #2196F3;
             --dark: #121212;
             --gray: #181818;
             --light: #b3b3b3;
@@ -23,6 +24,19 @@
             width: 100vw;
             overflow: hidden;
             position: relative;
+            /* 动态背景支持 */
+            background-size: cover;
+            background-position: center;
+            transition: background-image 0.5s ease;
+        }
+
+        /* 背景遮罩，确保文字清晰 */
+        body::before {
+            content: '';
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(18, 18, 18, 0.85); /* 深色遮罩 */
+            z-index: 0;
+            pointer-events: none;
         }
 
         /* 1. 顶部搜索栏 */
@@ -32,14 +46,14 @@
             left: 0;
             width: 100%;
             height: 70px;
-            background: rgba(18, 18, 18, 0.95);
-            backdrop-filter: blur(10px);
+            background: rgba(18, 18, 18, 0.8);
+            backdrop-filter: blur(20px);
             z-index: 50;
             display: flex;
             align-items: center;
             padding: 0 15px;
-            gap: 8px; /* 按钮之间的间距 */
-            border-bottom: 1px solid #333;
+            gap: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
         }
 
         input {
@@ -47,12 +61,14 @@
             padding: 10px 15px;
             border-radius: 20px;
             border: 1px solid #333;
-            background: #2a2a2a;
+            background: rgba(255,255,255,0.1);
             color: white;
             font-size: 14px;
             outline: none;
-            min-width: 0; /* 防止flex溢出 */
+            min-width: 0;
+            transition: background 0.2s;
         }
+        input:focus { background: rgba(255,255,255,0.2); border-color: var(--primary); }
 
         /* 通用按钮样式 */
         .btn {
@@ -65,262 +81,13 @@
             white-space: nowrap;
             font-size: 13px;
             transition: transform 0.1s;
+            display: flex; align-items: center; justify-content: center;
         }
         .btn:active { transform: scale(0.95); }
 
         .search-btn { background: var(--primary); }
-        
-        /* 随机按钮样式 */
-        .random-btn { 
-            background: var(--accent); 
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-        /* 天气按钮样式 */
-        .weather-btn {
-            background: #2196F3;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-        }
-
-        /* 弹幕条样式 */
-        .comment-bar {
-            position: fixed;
-            bottom: 120px; /* 再次抬高，避开播放器 */
-            left: 0;
-            width: 100%;
-            height: 200px; /* 增加高度，容纳更多轨道 */
-            z-index: 90;
-            pointer-events: none;
-            overflow: hidden;
-            display: none; 
-        }
-        .comment-bar.show { display: block; }
-        
-        .comment-item {
-            position: absolute;
-            left: 100%; /* 起始位置：屏幕右侧外 */
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: white;
-            font-size: 14px;
-            white-space: nowrap;
-            background: rgba(0,0,0,0.5); /* 加深背景色，提高可读性 */
-            padding: 6px 16px;
-            border-radius: 20px;
-            will-change: left;
-            animation: slideLeft linear forwards; /* 时长在 JS 中动态设置 */
-            text-shadow: 1px 1px 2px black;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-        .comment-avatar {
-            width: 28px; height: 28px; border-radius: 50%; border: 1px solid white;
-        }
-        @keyframes slideLeft {
-            from { left: 100%; transform: translateX(0); }
-            to { left: -20%; transform: translateX(-100%); } /* 跑到屏幕左侧外 */
-        }
-
-        /* ... (中间代码省略) ... */
-
-        // --- 创意4: 伪·弹幕评论区 (高并发版) ---
-        let commentTimer = null;
-        const commentHistory = []; 
-        
-        function startFakeComments() {
-            const bar = document.getElementById('comment-bar');
-            bar.classList.add('show');
-            
-            if(commentTimer) clearTimeout(commentTimer);
-            
-            // 初始爆发：先来 3 条
-            for(let i=0; i<3; i++) {
-                setTimeout(processComment, i * 500);
-            }
-            
-            // 启动循环生成
-            loopComments();
-        }
-
-        function loopComments() {
-            processComment();
-            // 随机间隔 2000ms - 10000ms 生成一条，降低密度
-            const nextTime = 2000 + Math.random() * 8000;
-            commentTimer = setTimeout(loopComments, nextTime);
-        }
-
-        async function processComment() {
-            const useCache = commentHistory.length > 0 && Math.random() < 0.4; // 提高一点缓存复用率
-            
-            if (useCache) {
-                const randomItem = commentHistory[Math.floor(Math.random() * commentHistory.length)];
-                renderComment(randomItem);
-            } else {
-                await fetchNewComment();
-            }
-        }
-
-        // ... fetchNewComment 保持不变 ...
-
-        function renderComment(data) {
-            const bar = document.getElementById('comment-bar');
-            const item = document.createElement('div');
-            item.className = 'comment-item';
-            item.innerHTML = `
-                <img src="${data.avatar}" class="comment-avatar">
-                <span style="color:#ffeb3b; font-weight:bold;">${data.name}:</span>
-                <span>${data.text}</span>
-            `;
-            
-            // 轨道逻辑：将高度分为 5 个轨道，防止重叠
-            // 轨道高度约 35px
-            const trackIndex = Math.floor(Math.random() * 5); 
-            const topPos = trackIndex * 40; // 每条轨道间隔 40px
-            
-            item.style.top = topPos + 'px';
-            
-            // 随机速度 (15s - 25s)，慢一点更有氛围
-            const randomDuration = 15 + Math.random() * 10;
-            item.style.animationDuration = randomDuration + 's';
-
-            item.onanimationend = () => {
-                item.remove();
-            };
-            
-            bar.appendChild(item);
-        }
-
-        /* 歌手百科样式 */
-        .artist-wiki {
-            width: 100%;
-            max-width: 600px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 20px;
-            font-size: 13px;
-            color: #ccc;
-            line-height: 1.6;
-            text-align: left;
-            display: none;
-        }
-        .artist-wiki.show { display: block; }
-
-        /* ... (中间代码省略) ... */
-
-        // --- 创意4: 伪·弹幕评论区 (升级版) ---
-        let commentInterval = null;
-        const commentHistory = []; // 评论缓存池
-        let fetchCount = 0; // 请求计数器
-        
-        function startFakeComments() {
-            const bar = document.getElementById('comment-bar');
-            bar.classList.add('show');
-            // 不清空 bar，保留正在滚动的弹幕
-            
-            if(commentInterval) clearInterval(commentInterval);
-            
-            // 立即来一条
-            processComment();
-            
-            // 每 2.5 秒来一条 (频率加快)
-            commentInterval = setInterval(processComment, 2500);
-        }
-
-        async function processComment() {
-            // 如果请求次数达到10次，强制使用缓存，不再消耗流量
-            if (fetchCount >= 10) {
-                if (commentHistory.length > 0) {
-                    const randomItem = commentHistory[Math.floor(Math.random() * commentHistory.length)];
-                    renderComment(randomItem);
-                }
-                return;
-            }
-
-            // 策略：30% 概率从缓存取旧的（如果缓存有货），70% 概率请求新的
-            const useCache = commentHistory.length > 0 && Math.random() < 0.3;
-            
-            if (useCache) {
-                const randomItem = commentHistory[Math.floor(Math.random() * commentHistory.length)];
-                renderComment(randomItem);
-            } else {
-                await fetchNewComment();
-            }
-        }
-
-        async function fetchNewComment() {
-            if (fetchCount >= 10) return;
-
-            try {
-                // 1. 随机头像
-                const userRes = await fetch('https://randomuser.me/api/?inc=name,picture&nat=us,cn');
-                const userData = await userRes.json();
-                const user = userData.results[0];
-                
-                // 2. 随机语录
-                let text = "";
-                if(Math.random() > 0.5) {
-                    const kRes = await fetch('https://api.kanye.rest/');
-                    const kData = await kRes.json();
-                    text = kData.quote;
-                } else {
-                    const hRes = await fetch('https://v1.hitokoto.cn/?c=a&c=b&c=c');
-                    const hData = await hRes.json();
-                    text = hData.hitokoto;
-                }
-
-                const commentData = {
-                    name: user.name.first,
-                    avatar: user.picture.thumbnail,
-                    text: text
-                };
-
-                // 存入缓存
-                commentHistory.push(commentData);
-                fetchCount++; // 成功一次，计数加一
-                // 限制缓存大小，防止内存溢出 (比如保留最近50条)
-                if(commentHistory.length > 50) commentHistory.shift();
-
-                renderComment(commentData);
-                
-            } catch(e) {
-                // 失败了就尝试用缓存兜底
-                if(commentHistory.length > 0) {
-                    const randomItem = commentHistory[Math.floor(Math.random() * commentHistory.length)];
-                    renderComment(randomItem);
-                }
-            }
-        }
-
-        function renderComment(data) {
-            const bar = document.getElementById('comment-bar');
-            const item = document.createElement('div');
-            item.className = 'comment-item';
-            item.innerHTML = `
-                <img src="${data.avatar}" class="comment-avatar">
-                <span style="color:#ffeb3b; font-weight:bold;">${data.name}:</span>
-                <span>${data.text}</span>
-            `;
-            
-            // 随机垂直位置 (0% - 70%)，防止重叠
-            const randomTop = Math.floor(Math.random() * 70);
-            item.style.top = randomTop + '%';
-            
-            // 随机速度 (10s - 18s)
-            const randomDuration = 10 + Math.random() * 8;
-            item.style.animationDuration = randomDuration + 's';
-
-            // 动画结束后移除 DOM 元素 (但数据还在 history 里)
-            item.onanimationend = () => {
-                item.remove();
-            };
-            
-            bar.appendChild(item);
-        }
+        .random-btn { background: var(--accent); font-size: 16px; padding: 8px 12px; }
+        .weather-btn { background: var(--weather); font-size: 16px; padding: 8px 12px; }
 
         /* 2. 中间内容区 */
         .results-container {
@@ -338,12 +105,13 @@
         }
 
         .song-card {
-            background: #282828;
+            background: rgba(255,255,255,0.05);
             padding: 10px;
-            border-radius: 6px;
+            border-radius: 8px;
             cursor: pointer;
             transition: 0.2s;
         }
+        .song-card:hover { background: rgba(255,255,255,0.1); }
         .song-card:active { transform: scale(0.98); }
         .song-card img {
             width: 100%;
@@ -376,14 +144,15 @@
             left: 0;
             width: 100%;
             height: 90px;
-            background: #282828;
-            border-top: 1px solid #444;
+            background: rgba(18, 18, 18, 0.95);
+            border-top: 1px solid #333;
             z-index: 100;
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 0 15px;
             box-shadow: 0 -2px 10px rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
         }
 
         .now-playing { display: flex; align-items: center; width: 35%; overflow: hidden; }
@@ -391,6 +160,7 @@
             width: 50px; height: 50px; border-radius: 50%;
             margin-right: 10px; border: 2px solid #111;
             animation: rotate 10s linear infinite; animation-play-state: paused;
+            background: #333;
         }
         .now-playing img.playing { animation-play-state: running; }
         @keyframes rotate { from {transform: rotate(0deg);} to {transform: rotate(360deg);} }
@@ -400,10 +170,11 @@
 
         .controls { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .play-btn {
-            width: 36px; height: 36px; border-radius: 50%; border: none;
-            background: var(--white); color: black; font-size: 16px;
+            width: 40px; height: 40px; border-radius: 50%; border: none;
+            background: var(--white); color: black; font-size: 18px;
             cursor: pointer; margin-bottom: 6px; display: flex; 
             align-items: center; justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
         }
         .progress-area { width: 100%; max-width: 300px; display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--light); }
         #progress-bar { flex: 1; height: 4px; background: #555; border-radius: 2px; cursor: pointer; position: relative; }
@@ -412,19 +183,73 @@
         .extras { width: 25%; display: flex; justify-content: flex-end; }
         .lyrics-btn {
             background: transparent; border: 1px solid #666; color: var(--light);
-            padding: 4px 10px; border-radius: 12px; font-size: 12px; cursor: pointer;
+            padding: 4px 12px; border-radius: 12px; font-size: 12px; cursor: pointer;
         }
 
-        /* 4. 歌词遮罩 */
+        /* 4. 歌词与百科遮罩 */
         .lyrics-overlay {
             position: fixed; top: 70px; bottom: 90px; left: 0; width: 100%;
-            background: rgba(0,0,0,0.95); z-index: 80; display: none;
+            background: rgba(0,0,0,0.92); z-index: 80; display: none;
             flex-direction: column; align-items: center; padding: 40px 20px;
             text-align: center; overflow-y: auto;
+            backdrop-filter: blur(5px);
         }
         .lyrics-overlay.show { display: flex; }
         .close-lyrics { position: absolute; top: 10px; right: 15px; background: none; border: none; color: #666; font-size: 28px; cursor: pointer; }
-        .lyrics-content { white-space: pre-wrap; line-height: 2; color: #ddd; font-size: 16px; margin-top: 20px; }
+        .lyrics-content { white-space: pre-wrap; line-height: 2; color: #ddd; font-size: 16px; margin-top: 20px; padding-bottom: 50px; }
+
+        /* 歌手百科样式 */
+        .artist-wiki {
+            width: 100%;
+            max-width: 600px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #ccc;
+            line-height: 1.6;
+            text-align: left;
+            display: none;
+            border-left: 3px solid var(--primary);
+        }
+        .artist-wiki.show { display: block; animation: fadeIn 0.5s; }
+
+        /* 5. 弹幕条样式 (优化版) */
+        .comment-bar {
+            position: fixed;
+            bottom: 120px; 
+            left: 0;
+            width: 100%;
+            height: 250px; 
+            z-index: 90;
+            pointer-events: none;
+            overflow: hidden;
+            display: none; 
+            /* 顶部和底部渐变透明，防止太突兀 */
+            mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+            -webkit-mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+        }
+        .comment-bar.show { display: block; }
+        
+        .comment-item {
+            position: absolute;
+            left: 100%;
+            display: flex; align-items: center; gap: 10px;
+            color: white; font-size: 14px; white-space: nowrap;
+            background: rgba(0,0,0,0.6); 
+            padding: 6px 16px; border-radius: 20px;
+            animation: slideLeft linear forwards; 
+            text-shadow: 1px 1px 2px black;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .comment-avatar { width: 28px; height: 28px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.5); }
+        
+        @keyframes slideLeft {
+            from { transform: translateX(0); }
+            to { transform: translateX(-150vw); } /* 确保完全移出屏幕 */
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
     </style>
 </head>
@@ -434,45 +259,41 @@
     <div class="search-container">
         <input type="text" id="search-input" placeholder="输入歌手或歌曲名..." value="">
         <button class="btn search-btn" onclick="searchMusic()">搜索</button>
-        <!-- 新增随机按钮 -->
-        <button class="btn random-btn" onclick="randomSearch()" title="随机推荐一个关键词">
-            <span>🎲</span>
-        </button>
-        <!-- 新增天气按钮 -->
-        <button class="btn weather-btn" onclick="searchByWeather()" title="看天听歌">
-            <span>🌤</span>
-        </button>
+        <button class="btn random-btn" onclick="randomSearch()" title="手气不错">🎲</button>
+        <button class="btn weather-btn" onclick="searchByWeather()" title="看天听歌">🌤</button>
     </div>
 
     <!-- 2. 中间列表 -->
     <div class="results-container" id="results">
-        <div style="text-align:center; padding-top:50px; color:#555; grid-column:1/-1;">
-            点击 🎲 试试手气，或者输入关键词搜索
+        <div style="text-align:center; padding-top:60px; color:#888; grid-column:1/-1;">
+            <div style="font-size:40px; margin-bottom:10px;">🎧</div>
+            点击 🎲 试试手气，或者输入关键词搜索<br>
+            <span style="font-size:12px; opacity:0.6;">(支持 Apple Music 试听)</span>
         </div>
     </div>
 
-    <!-- 3. 歌词遮罩 -->
+    <!-- 3. 歌词与详情遮罩 -->
     <div class="lyrics-overlay" id="lyrics-overlay">
         <button class="close-lyrics" onclick="toggleLyrics()">×</button>
-        <h3 id="lyrics-title" style="color:var(--primary); margin-bottom:10px;"></h3>
+        <h3 id="lyrics-title" style="color:var(--primary); margin-bottom:5px;"></h3>
+        <div id="lyrics-artist" style="color:var(--light); font-size:12px; margin-bottom:15px;"></div>
+        
         <!-- 歌手百科容器 -->
         <div id="artist-wiki" class="artist-wiki"></div>
         <div class="lyrics-content" id="lyrics-text">歌词加载中...</div>
     </div>
 
-    <!-- 弹幕条 -->
-    <div class="comment-bar" id="comment-bar">
-        <!-- 动态插入评论 -->
-    </div>
+    <!-- 4. 弹幕条 -->
+    <div class="comment-bar" id="comment-bar"></div>
 
-    <!-- 4. 底部播放器 -->
+    <!-- 5. 底部播放器 -->
     <div class="player-bar">
-        <audio id="audio-player"></audio>
+        <audio id="audio-player" crossorigin="anonymous"></audio>
         <div class="now-playing">
-            <img id="player-cover" src="https://via.placeholder.com/50" alt="CD">
+            <img id="player-cover" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="CD" style="background:#333">
             <div class="track-info">
                 <div class="name" id="player-name">极客音乐</div>
-                <div class="artist" id="player-artist">Ready to play</div>
+                <div class="artist" id="player-artist">Ready</div>
             </div>
         </div>
         <div class="controls">
@@ -484,210 +305,183 @@
             </div>
         </div>
         <div class="extras">
-            <button class="lyrics-btn" onclick="toggleLyrics()">词</button>
+            <button class="lyrics-btn" onclick="toggleLyrics()">详情</button>
         </div>
     </div>
 
     <script>
-        const audio = document.getElementById('audio-player');
-        const resultsDiv = document.getElementById('results');
-        const lyricsOverlay = document.getElementById('lyrics-overlay');
-        const playBtn = document.getElementById('play-btn');
-        const searchInput = document.getElementById('search-input');
+        // --- 全局状态管理 ---
+        const STATE = {
+            currentTrack: null,
+            commentInterval: null,
+            commentHistory: [], // 弹幕缓存池
+            fetchCount: 0,
+            isPlaying: false,
+            // 弹幕轨道占用状态 (5个轨道)
+            tracks: [false, false, false, false, false]
+        };
+
+        const DOM = {
+            audio: document.getElementById('audio-player'),
+            results: document.getElementById('results'),
+            lyricsOverlay: document.getElementById('lyrics-overlay'),
+            searchInput: document.getElementById('search-input'),
+            playerCover: document.getElementById('player-cover'),
+            playerName: document.getElementById('player-name'),
+            playerArtist: document.getElementById('player-artist'),
+            playBtn: document.getElementById('play-btn'),
+            progressFill: document.getElementById('progress-fill'),
+            currTime: document.getElementById('curr-time'),
+            commentBar: document.getElementById('comment-bar'),
+            lyricsText: document.getElementById('lyrics-text'),
+            lyricsTitle: document.getElementById('lyrics-title'),
+            lyricsArtist: document.getElementById('lyrics-artist'),
+            wikiDiv: document.getElementById('artist-wiki')
+        };
         
-// --- 1000 个随机音乐搜索关键词库 ---
-const keywords = [
-  // 情感 & 状态
-  "Love", "Happy", "Sad", "Lonely", "Crazy", "Beautiful", "Memory", "Forever", "Heart", "Soul",
-  "Dream", "Kiss", "Miss", "Baby", "Sorry", "Believe", "Free", "Smile", "Cry", "Hope",
-  "Hate", "Broken", "Wild", "Sweet", "Sweetheart", "Pain", "Joy", "Tears", "Fear", "Faith",
-  "Desire", "Despair", "Passion", "Paradise", "Heaven", "Hell", "Promise", "Truth", "Lies", "Secret",
-  "Lost", "Found", "Alone", "Together", "Stronger", "Weaker", "Brave", "Shy", "Proud", "Ashamed",
-  "Jealous", "Envy", "Regret", "Blessing", "Curse", "Wish", "Magic", "Miracle", "Comfort", "Silence",
-  "Freedom", "Control", "Chaos", "Order", "Light", "Dark", "Shadow", "Bright", "Cold", "Warm",
-  "Calm", "Angry", "Mad", "Crazy Love", "True Love", "First Love", "Last Love", "Young Love", "Endless Love", "Secret Love",
-  "Heartbreak", "Heartache", "Heartbeat", "Heartbeat Love", "Deep Love", "Deep Feelings", "Inner Voice", "Inner Fire", "Soulmate", "Soul Love",
+        // --- 1000 个随机音乐搜索关键词库 (完整保留) ---
+        const keywords = [
+          "Love", "Happy", "Sad", "Lonely", "Crazy", "Beautiful", "Memory", "Forever", "Heart", "Soul",
+          "Dream", "Kiss", "Miss", "Baby", "Sorry", "Believe", "Free", "Smile", "Cry", "Hope",
+          "Hate", "Broken", "Wild", "Sweet", "Sweetheart", "Pain", "Joy", "Tears", "Fear", "Faith",
+          "Desire", "Despair", "Passion", "Paradise", "Heaven", "Hell", "Promise", "Truth", "Lies", "Secret",
+          "Lost", "Found", "Alone", "Together", "Stronger", "Weaker", "Brave", "Shy", "Proud", "Ashamed",
+          "Jealous", "Envy", "Regret", "Blessing", "Curse", "Wish", "Magic", "Miracle", "Comfort", "Silence",
+          "Freedom", "Control", "Chaos", "Order", "Light", "Dark", "Shadow", "Bright", "Cold", "Warm",
+          "Calm", "Angry", "Mad", "Crazy Love", "True Love", "First Love", "Last Love", "Young Love", "Endless Love", "Secret Love",
+          "Heartbreak", "Heartache", "Heartbeat", "Heartbeat Love", "Deep Love", "Deep Feelings", "Inner Voice", "Inner Fire", "Soulmate", "Soul Love",
+          "Night", "Summer", "Rain", "Sky", "Ocean", "Sun", "Moon", "Star", "Fire", "Ice",
+          "California", "New York", "London", "Tokyo", "Paris", "Home", "Road", "City", "World", "Space",
+          "Yesterday", "Tomorrow", "Today", "Tonight", "Morning", "Midnight", "Noon", "Sunrise", "Sunset", "Dawn",
+          "Weekend", "Holiday", "Winter", "Autumn", "Spring", "Summer Night", "Summer Love", "Summer Rain", "Winter Night", "Winter Love",
+          "New Year", "Birthday", "Anniversary", "First Time", "Last Night", "One Day", "Someday", "One More Time", "One More Night", "One More Chance",
+          "Moment", "Forever Night", "Forever Young", "Young & Wild", "Old Days", "Good Old Days", "Golden Days", "Better Days", "Dark Days", "End Of Time",
+          "River", "Mountain", "Forest", "Desert", "Island", "Beach", "Sea", "Storm", "Thunder", "Lightning",
+          "Wind", "Snow", "Rainbow", "Cloud", "Galaxy", "Universe", "Street", "Highway", "Bridge", "Valley",
+          "Garden", "Field", "Castle", "Palace", "Jungle", "Harbor", "Harbour", "Harbor Lights", "Harbor Night", "Ocean Waves",
+          "City Lights", "Neon Lights", "Skyline", "Backstreet", "Downtown", "Uptown", "Subway", "Train", "Station", "Airport",
+          "Hotel", "Motel", "Bar", "Club", "Cafe", "Restaurant", "Room", "Bedroom", "Living Room", "Kitchen",
+          "Rooftop", "Basement", "Balcony", "Window", "Door", "Bridge To Heaven", "Bridge Of Love", "Long Road", "Lonely Road", "Open Road",
+          "Road Trip", "Journey", "Travel", "Run", "Fly", "Walk", "Talk", "Touch", "Feel", "Stop",
+          "Go", "Stay", "Leave", "Return", "Come Back", "Turn Back", "Turn Around", "Drive", "Ride", "Sail",
+          "Flight", "Escape", "Chase", "Hunt", "Race", "Race Car", "Highway Night", "Highway Star", "Freeway", "Crossroads",
+          "Border", "Borderline", "Checkpoint", "Destination", "Nowhere", "Anywhere", "Somewhere", "Far Away", "Close To You", "Next To Me",
+          "Rock", "Jazz", "Blues", "Pop", "Disco", "Dance", "Party", "Magic", "Power", "Glory",
+          "King", "Queen", "Angel", "Devil", "Hero", "Legend", "Life", "Time", "Yesterday", "Tomorrow",
+          "Funk", "Soul Music", "R&B", "Hip Hop", "Rap", "Trap", "House", "Techno", "Trance", "Dubstep",
+          "Electro", "Indie", "Alternative", "Metal", "Punk", "Classic", "Symphony", "Opera", "Ballad", "Acoustic",
+          "Chill", "Chillout", "Lo-Fi", "LoFi", "Ambient", "Instrumental", "Cover", "Remix", "Mashup", "Live",
+          "Unplugged", "Acoustic Live", "Studio", "Mixtape", "Playlist", "Session", "Jam", "Freestyle", "Battle", "Showtime",
+          "Blue", "Red", "Yellow", "Black", "White", "Pink", "Green", "Gold", "Silver", "Purple",
+          "Orange", "Brown", "Gray", "Grey", "Violet", "Indigo", "Scarlet", "Crimson", "Emerald", "Sapphire",
+          "Golden", "Golden Heart", "Golden Night", "Golden Sky", "Black Night", "Black Heart", "Black Rose", "Blue Sky", "Blue Moon", "Blue Night",
+          "Red Rose", "Red Moon", "White Night", "White Rose", "Pink Sky", "Pink Love", "Green Light", "Neon", "Neon Love", "Neon Night",
+          "Stranger", "Friend", "Best Friend", "Enemy", "Lover", "Dreamer", "Believer", "Dancer", "Singer", "Player",
+          "Warrior", "Soldier", "Rebel", "Outlaw", "Angel Eyes", "Fallen Angel", "Dark Angel", "Guardian Angel", "King Of Hearts", "Drama Queen",
+          "Heartbreaker", "Storyteller", "Runner", "Rider", "Fighter", "Survivor", "Winner", "Loser", "Champion", "Starboy",
+          "Good Girl", "Bad Girl", "Good Boy", "Bad Boy", "Lonely Boy", "Lonely Girl", "City Boy", "City Girl", "Wild Boy", "Wild Girl",
+          "Kiss Me", "Hold Me", "Touch Me", "Feel Me", "Call Me", "Call Me Maybe", "Catch Me", "Save Me", "Need You", "Miss You",
+          "Love You", "Hate You", "Without You", "With You", "For You", "About You", "By Your Side", "Next To You", "Over You", "Under You",
+          "Let Go", "Let Me Go", "Let It Go", "Carry On", "Move On", "Turn Up", "Turn Down", "Slow Down", "Speed Up", "Wake Up",
+          "Stay With Me", "Stay", "Don't Go", "Don't Stop", "Don't Leave", "Come On", "Come Home", "Come Closer", "Hold On", "Hold Tight",
+          "Dreams", "Nightmare", "Fantasy", "Illusion", "Vision", "Destiny", "Fate", "Chance", "Luck", "Karma",
+          "Shadow Of Love", "Shadow Of The Night", "Echoes", "Memories", "Flashback", "Afterglow", "Reborn", "Rebirth", "Revival", "Awakening",
+          "Addiction", "Obsession", "Temptation", "Salvation", "Redemption", "Revolution", "Evolution", "Change", "Transformation", "Metamorphosis",
+          "Infinity", "Eternity", "Zero", "One", "Million", "Million Reasons", "Million Dreams", "Thousand Miles", "Thousand Years", "Hundred Days",
+          "Beatles", "Queen", "Jackson", "Taylor", "Adele", "Coldplay", "Ed Sheeran", "Eminem", "Rihanna", "Beyonce",
+          "Bruno Mars", "Justin", "Linkin Park", "Nirvana", "Elvis", "Madonna", "Drake", "Weeknd", "Gaga", "Maroon 5",
+          "Kanye", "Swift", "Billie", "Dua Lipa", "Ariana", "Shakira", "Whitney", "Mariah", "Celine", "Katy Perry",
+          "Imagine Dragons", "OneRepublic", "Fall Out Boy", "Green Day", "Red Hot Chili Peppers", "Metallica", "ACDC", "U2", "Oasis", "Blur",
+          "Radiohead", "Muse", "The Killers", "Paramore", "Linkin", "Backstreet Boys", "NSYNC", "Spice Girls", "ABBA", "Bee Gees",
+          "Guitar", "Electric Guitar", "Acoustic Guitar", "Piano", "Grand Piano", "Keyboard", "Bass", "Drums", "Violin", "Cello",
+          "Saxophone", "Trumpet", "Trombone", "Flute", "Clarinet", "Harp", "Ukulele", "Banjo", "Harmonica", "Organ",
+          "Synth", "Synthwave", "808", "Beat", "Beats", "Rhythm", "Melody", "Harmony", "Chords", "Bassline",
+          "Choir", "Voice", "Vocal", "Whisper", "Shout", "Scream", "Echo", "Reverb", "Silence Sound", "Noise",
+          "Heartbeat Sound", "Drum & Bass", "Guitar Solo", "Piano Man", "Piano Girl", "Rock Guitar", "Jazz Piano", "Sax Solo", "Violin Song", "String Quartet",
+          "Party", "Birthday Party", "House Party", "Beach Party", "Pool Party", "After Party", "Night Club", "Dance Floor", "Festival", "Carnival",
+          "Parade", "Rave", "Concert", "Tour", "World Tour", "Live Show", "Opening Night", "Closing Time", "Night Out", "Girls Night",
+          "Boys Night", "Saturday Night", "Friday Night", "Sunday Morning", "Weekend Party", "Midnight Party", "Club Night", "Bar Night", "Bar Song", "Drinking Song",
+          "Love Story", "Sad Story", "True Story", "Our Story", "My Story", "Your Story", "Story Of My Life", "Story Of Us", "Broken Story", "Fairytale",
+          "Fairy Tale", "Happy Ending", "Sad Ending", "New Beginning", "Fresh Start", "First Date", "Blind Date", "One Night", "One Night Stand", "Secret Night",
+          "Secret Lover", "Forbidden Love", "Hidden Love", "Long Distance", "Long Distance Love", "Best Friend Love", "Friends Forever", "Friends To Lovers", "More Than Friends", "No More Tears",
+          "One Kiss", "Two Hearts", "Three Words", "Four Seasons", "Five Nights", "Seven Days", "Ten Years", "24 Hours", "365 Days", "24 7",
+          "First Kiss", "Second Chance", "Third Eye", "Lucky One", "Lucky Star", "Lucky Day", "Number One", "Top Ten", "Level Up", "Next Level",
+          "Zero Gravity", "Room 101", "Room 303", "Area 51", "High Five", "Midnight Train", "Midnight Sky", "Midnight City", "2AM", "3AM",
+          "Money", "Work", "School", "Friend", "Best", "Good", "Bad", "High", "Low", "Christmas",
+          "Job", "Boss", "Office", "College", "Campus", "Homework", "Exam", "Graduation", "Taxi", "Subway Train",
+          "Coffee", "Tea", "Wine", "Whiskey", "Beer", "Cigarettes", "Smoke", "Traffic", "Rush Hour", "Payday",
+          "Broke", "Rich", "Millionaire", "Street Life", "City Life", "Night Life", "Love Life", "Double Life", "Secret Life", "New Life",
+          "Christmas Night", "Christmas Love", "Christmas Eve", "Silent Night", "New Year Party", "New Year Love", "Valentine", "Valentine's Day", "Halloween Night", "Halloween Party",
+          "Easter", "Spring Break", "Summer Break", "Winter Wonderland", "Snowfall", "Snow Night", "Snow Love", "Rainy Day", "Rainy Night", "Stormy Night",
+          "Fireworks", "Lanterns", "Midnight Fireworks", "Festival Lights", "Summer Festival", "Music Festival", "Love Festival", "Carnival Night", "Carnival Love", "Holiday Love",
+          "Internet", "Online", "Offline", "WiFi", "Bluetooth", "Digital Love", "Virtual Love", "Virtual Reality", "Fantasy World", "Cyber Love",
+          "Screen", "Timeline", "News Feed", "Notification", "Message", "DM", "Inbox", "Outbox", "Voice Mail", "Hotline",
+          "Stream", "Streaming", "Playlist Love", "Shuffle", "Repeat", "Replay", "Rewind", "Fast Forward", "Skip", "Play Button",
+          "Never Give Up", "Stand Up", "Rise Up", "Wake Up Call", "Stronger Than Ever", "Born To Run", "Born To Die", "Born This Way", "Born For You", "Born Again",
+          "Fight For Love", "Fight For You", "Fight For Life", "Believe In Me", "Believe In You", "Believe In Love", "Chasing Dreams", "Chasing Stars", "Chasing Cars", "Reach For The Sky",
+          "Higher", "Higher Ground", "On Top", "Top Of The World", "Sky High", "Limitless", "No Limits", "No Fear", "Fearless", "Unstoppable",
+          "Broken Dreams", "Broken Wings", "Broken Heart", "Broken Love", "Empty Heart", "Empty Room", "Empty Streets", "Lonely Night", "Lonely Road", "Lonely World",
+          "Fade Away", "Fall Apart", "Falling Down", "Falling", "Drowning", "Bleeding Love", "Crying In The Rain", "Tears In Heaven", "Tears Of Love", "Nothing Left",
+          "Nowhere To Go", "Lost In You", "Lost In Love", "Lost In The Dark", "Lost In The Night", "Missing You", "Miss You So", "Need You Now", "Without Me", "Without Love",
+          "Dance With Me", "Dance All Night", "Last Dance", "Slow Dance", "Fast Dance", "Midnight Dance", "Crazy Dance", "Dance In The Dark", "Dance In The Rain", "Dance In The Moonlight",
+          "Rhythm Of The Night", "Rhythm Of Love", "Rhythm Divine", "Feel The Beat", "Drop The Beat", "Drop It", "Turn The Music Up", "Turn The Music On", "Turn The Lights Down", "Turn The Lights Off",
+          "Move Your Body", "Shake It", "Hands Up", "Hands Down", "Jump", "Jump Around", "Step By Step", "Two Step", "Footloose", "Groove",
+          "Into The Night", "Into The Sky", "Into The Wild", "Into You", "Into The Dark", "Out Of Love", "Out Of Time", "Out Of Control", "Out Of My Mind", "Out Of The Blue",
+          "All Of Me", "All Of You", "All Of Us", "All My Life", "All My Love", "All Night", "All Day", "All The Time", "For The First Time", "For The Last Time",
+          "Just The Way You Are", "Just A Dream", "Just A Kiss", "Just Like Heaven", "Just Like You", "Only You", "Only Love", "Only One", "One And Only", "One More Try",
+          "Miami", "Los Angeles", "Chicago", "Houston", "Seattle", "Boston", "Berlin", "Rome", "Barcelona", "Madrid",
+          "Amsterdam", "Moscow", "Hong Kong", "Shanghai", "Beijing", "Seoul", "Bangkok", "Sydney", "Melbourne", "Rio",
+          "Vegas", "Las Vegas", "Hawaii", "Ibiza", "Brooklyn", "Bronx", "Harlem", "Soho", "Hollywood", "Broadway",
+          "Fire And Ice", "Fire And Rain", "Fire In The Sky", "Fire In My Heart", "Rain And Thunder", "Rain On Me", "Snow And Ice", "Sun And Moon", "Sun And Rain", "Moon And Back",
+          "Hearts And Bones", "Hearts On Fire", "Hearts Of Gold", "Tears And Rain", "Salt And Pepper", "Sugar And Spice", "Wine And Roses", "Blood And Tears", "Blood And Wine", "Blood On The Dance Floor",
+          "Chill Vibes", "Good Vibes", "Summer Vibes", "Beach Vibes", "Night Vibes", "City Vibes", "Love Vibes", "Sad Vibes", "LoFi Vibes", "Coffee Break",
+          "Morning Coffee", "Night Coffee", "Midnight Coffee", "Sunset Drive", "Midnight Drive", "Night Drive", "City Drive", "Late Night", "Late Night Call", "Late Night Drive",
+          "Lazy Sunday", "Sunday Morning", "Sunday Night", "Monday Blues", "Friday Feeling", "Friday Night Lights", "Saturday Love", "Saturday Night Fever", "Weekend Love", "Weekend Mood",
+          "Beautiful Day", "Beautiful Girl", "Beautiful Boy", "Beautiful Life", "Beautiful World", "Crazy In Love", "Crazy For You", "Crazy Night", "Crazy World", "End Of The World",
+          "Shape Of You", "Thinking Of You", "Thinking Out Loud", "Back To You", "Back To Black", "Back To Life", "Back Home", "Back In Time", "Stay With You", "Stay The Night",
+          "Say You Love Me", "Say Something", "Say My Name", "Call My Name", "Call Your Name", "Kiss The Rain", "Walk On Water", "Walk Away", "Runaway", "Runaway Love",
+          "Take Me Home", "Take Me Back", "Take It Easy", "Take It Slow", "Take On Me", "Let Me Love You", "Let Me In", "Let It Be", "Let It Rain", "Let It Shine",
+          "Sky", "Stars", "Moonlight", "Starlight", "Spotlight", "Headlights", "City Lights", "Bright Lights", "Street Lights", "Northern Lights",
+          "Angel Of Mine", "Devil Inside", "Hero Of War", "Local Hero", "Teenage Dream", "Teenage Love", "Teenage Heart", "Teenage Riot", "Teen Spirit", "Broken Spirit",
+          "Wild Heart", "Wild Dreams", "Wild Nights", "Wild Things", "Wild World", "Sweet Dreams", "Sweet Home", "Sweet Child", "Sweet Life", "Sweet Escape",
+          "Golden Hour", "Midnight Hour", "Rush Of Blood", "Signs", "Signals", "Codes", "Secret Code", "Password", "Key To My Heart", "Key To The City"
+        ];
 
-  // 时间 & 纪念
-  "Night", "Summer", "Rain", "Sky", "Ocean", "Sun", "Moon", "Star", "Fire", "Ice",
-  "California", "New York", "London", "Tokyo", "Paris", "Home", "Road", "City", "World", "Space",
-  "Yesterday", "Tomorrow", "Today", "Tonight", "Morning", "Midnight", "Noon", "Sunrise", "Sunset", "Dawn",
-  "Weekend", "Holiday", "Winter", "Autumn", "Spring", "Summer Night", "Summer Love", "Summer Rain", "Winter Night", "Winter Love",
-  "New Year", "Birthday", "Anniversary", "First Time", "Last Night", "One Day", "Someday", "One More Time", "One More Night", "One More Chance",
-  "Moment", "Forever Night", "Forever Young", "Young & Wild", "Old Days", "Good Old Days", "Golden Days", "Better Days", "Dark Days", "End Of Time",
+        // --- 初始化逻辑 ---
+        document.addEventListener('DOMContentLoaded', () => {
+            randomSearch();
+            DOM.searchInput.addEventListener('keypress', (e) => {
+                if(e.key === 'Enter') searchMusic();
+            });
+        });
 
-  // 自然 & 场景
-  "River", "Mountain", "Forest", "Desert", "Island", "Beach", "Sea", "Storm", "Thunder", "Lightning",
-  "Wind", "Snow", "Rainbow", "Cloud", "Galaxy", "Universe", "Street", "Highway", "Bridge", "Valley",
-  "Garden", "Field", "Castle", "Palace", "Jungle", "Harbor", "Harbour", "Harbor Lights", "Harbor Night", "Ocean Waves",
-  "City Lights", "Neon Lights", "Skyline", "Backstreet", "Downtown", "Uptown", "Subway", "Train", "Station", "Airport",
-  "Hotel", "Motel", "Bar", "Club", "Cafe", "Restaurant", "Room", "Bedroom", "Living Room", "Kitchen",
-  "Rooftop", "Basement", "Balcony", "Window", "Door", "Bridge To Heaven", "Bridge Of Love", "Long Road", "Lonely Road", "Open Road",
-
-  // 旅途 & 运动
-  "Road Trip", "Journey", "Travel", "Run", "Fly", "Walk", "Talk", "Touch", "Feel", "Stop",
-  "Go", "Stay", "Leave", "Return", "Come Back", "Turn Back", "Turn Around", "Drive", "Ride", "Sail",
-  "Flight", "Escape", "Chase", "Hunt", "Race", "Race Car", "Highway Night", "Highway Star", "Freeway", "Crossroads",
-  "Border", "Borderline", "Checkpoint", "Destination", "Nowhere", "Anywhere", "Somewhere", "Far Away", "Close To You", "Next To Me",
-
-  // 风格 & 抽象
-  "Rock", "Jazz", "Blues", "Pop", "Disco", "Dance", "Party", "Magic", "Power", "Glory",
-  "King", "Queen", "Angel", "Devil", "Hero", "Legend", "Life", "Time", "Yesterday", "Tomorrow",
-  "Funk", "Soul Music", "R&B", "Hip Hop", "Rap", "Trap", "House", "Techno", "Trance", "Dubstep",
-  "Electro", "Indie", "Alternative", "Metal", "Punk", "Classic", "Symphony", "Opera", "Ballad", "Acoustic",
-  "Chill", "Chillout", "Lo-Fi", "LoFi", "Ambient", "Instrumental", "Cover", "Remix", "Mashup", "Live",
-  "Unplugged", "Acoustic Live", "Studio", "Mixtape", "Playlist", "Session", "Jam", "Freestyle", "Battle", "Showtime",
-
-  // 颜色
-  "Blue", "Red", "Yellow", "Black", "White", "Pink", "Green", "Gold", "Silver", "Purple",
-  "Orange", "Brown", "Gray", "Grey", "Violet", "Indigo", "Scarlet", "Crimson", "Emerald", "Sapphire",
-  "Golden", "Golden Heart", "Golden Night", "Golden Sky", "Black Night", "Black Heart", "Black Rose", "Blue Sky", "Blue Moon", "Blue Night",
-  "Red Rose", "Red Moon", "White Night", "White Rose", "Pink Sky", "Pink Love", "Green Light", "Neon", "Neon Love", "Neon Night",
-
-  // 身份 & 角色
-  "Stranger", "Friend", "Best Friend", "Enemy", "Lover", "Dreamer", "Believer", "Dancer", "Singer", "Player",
-  "Warrior", "Soldier", "Rebel", "Outlaw", "Angel Eyes", "Fallen Angel", "Dark Angel", "Guardian Angel", "King Of Hearts", "Drama Queen",
-  "Heartbreaker", "Storyteller", "Runner", "Rider", "Fighter", "Survivor", "Winner", "Loser", "Champion", "Starboy",
-  "Good Girl", "Bad Girl", "Good Boy", "Bad Boy", "Lonely Boy", "Lonely Girl", "City Boy", "City Girl", "Wild Boy", "Wild Girl",
-
-  // 行为 & 动作
-  "Kiss Me", "Hold Me", "Touch Me", "Feel Me", "Call Me", "Call Me Maybe", "Catch Me", "Save Me", "Need You", "Miss You",
-  "Love You", "Hate You", "Without You", "With You", "For You", "About You", "By Your Side", "Next To You", "Over You", "Under You",
-  "Let Go", "Let Me Go", "Let It Go", "Carry On", "Move On", "Turn Up", "Turn Down", "Slow Down", "Speed Up", "Wake Up",
-  "Stay With Me", "Stay", "Don't Go", "Don't Stop", "Don't Leave", "Come On", "Come Home", "Come Closer", "Hold On", "Hold Tight",
-
-  // 抽象 & 概念
-  "Dreams", "Nightmare", "Fantasy", "Illusion", "Vision", "Destiny", "Fate", "Chance", "Luck", "Karma",
-  "Shadow Of Love", "Shadow Of The Night", "Echoes", "Memories", "Flashback", "Afterglow", "Reborn", "Rebirth", "Revival", "Awakening",
-  "Addiction", "Obsession", "Temptation", "Salvation", "Redemption", "Revolution", "Evolution", "Change", "Transformation", "Metamorphosis",
-  "Infinity", "Eternity", "Zero", "One", "Million", "Million Reasons", "Million Dreams", "Thousand Miles", "Thousand Years", "Hundred Days",
-
-  // 经典艺人/乐队 (只作搜索关键词，不涉及任何非公开信息)
-  "Beatles", "Queen", "Jackson", "Taylor", "Adele", "Coldplay", "Ed Sheeran", "Eminem", "Rihanna", "Beyonce",
-  "Bruno Mars", "Justin", "Linkin Park", "Nirvana", "Elvis", "Madonna", "Drake", "Weeknd", "Gaga", "Maroon 5",
-  "Kanye", "Swift", "Billie", "Dua Lipa", "Ariana", "Shakira", "Whitney", "Mariah", "Celine", "Katy Perry",
-  "Imagine Dragons", "OneRepublic", "Fall Out Boy", "Green Day", "Red Hot Chili Peppers", "Metallica", "ACDC", "U2", "Oasis", "Blur",
-  "Radiohead", "Muse", "The Killers", "Paramore", "Linkin", "Backstreet Boys", "NSYNC", "Spice Girls", "ABBA", "Bee Gees",
-
-  // 乐器 & 声音
-  "Guitar", "Electric Guitar", "Acoustic Guitar", "Piano", "Grand Piano", "Keyboard", "Bass", "Drums", "Violin", "Cello",
-  "Saxophone", "Trumpet", "Trombone", "Flute", "Clarinet", "Harp", "Ukulele", "Banjo", "Harmonica", "Organ",
-  "Synth", "Synthwave", "808", "Beat", "Beats", "Rhythm", "Melody", "Harmony", "Chords", "Bassline",
-  "Choir", "Voice", "Vocal", "Whisper", "Shout", "Scream", "Echo", "Reverb", "Silence Sound", "Noise",
-  "Heartbeat Sound", "Drum & Bass", "Guitar Solo", "Piano Man", "Piano Girl", "Rock Guitar", "Jazz Piano", "Sax Solo", "Violin Song", "String Quartet",
-
-  // 派对 & 场合
-  "Party", "Birthday Party", "House Party", "Beach Party", "Pool Party", "After Party", "Night Club", "Dance Floor", "Festival", "Carnival",
-  "Parade", "Rave", "Concert", "Tour", "World Tour", "Live Show", "Opening Night", "Closing Time", "Night Out", "Girls Night",
-  "Boys Night", "Saturday Night", "Friday Night", "Sunday Morning", "Weekend Party", "Midnight Party", "Club Night", "Bar Night", "Bar Song", "Drinking Song",
-
-  // 关系 & 故事
-  "Love Story", "Sad Story", "True Story", "Our Story", "My Story", "Your Story", "Story Of My Life", "Story Of Us", "Broken Story", "Fairytale",
-  "Fairy Tale", "Happy Ending", "Sad Ending", "New Beginning", "Fresh Start", "First Date", "Blind Date", "One Night", "One Night Stand", "Secret Night",
-  "Secret Lover", "Forbidden Love", "Hidden Love", "Long Distance", "Long Distance Love", "Best Friend Love", "Friends Forever", "Friends To Lovers", "More Than Friends", "No More Tears",
-
-  // 数字 & 短语
-  "One Kiss", "Two Hearts", "Three Words", "Four Seasons", "Five Nights", "Seven Days", "Ten Years", "24 Hours", "365 Days", "24 7",
-  "First Kiss", "Second Chance", "Third Eye", "Lucky One", "Lucky Star", "Lucky Day", "Number One", "Top Ten", "Level Up", "Next Level",
-  "Zero Gravity", "Room 101", "Room 303", "Area 51", "High Five", "Midnight Train", "Midnight Sky", "Midnight City", "2AM", "3AM",
-
-  // 生活 & 现实
-  "Money", "Work", "School", "Friend", "Best", "Good", "Bad", "High", "Low", "Christmas",
-  "Job", "Boss", "Office", "College", "Campus", "Homework", "Exam", "Graduation", "Taxi", "Subway Train",
-  "Coffee", "Tea", "Wine", "Whiskey", "Beer", "Cigarettes", "Smoke", "Traffic", "Rush Hour", "Payday",
-  "Broke", "Rich", "Millionaire", "Street Life", "City Life", "Night Life", "Love Life", "Double Life", "Secret Life", "New Life",
-
-  // 节日 & 氛围
-  "Christmas Night", "Christmas Love", "Christmas Eve", "Silent Night", "New Year Party", "New Year Love", "Valentine", "Valentine's Day", "Halloween Night", "Halloween Party",
-  "Easter", "Spring Break", "Summer Break", "Winter Wonderland", "Snowfall", "Snow Night", "Snow Love", "Rainy Day", "Rainy Night", "Stormy Night",
-  "Fireworks", "Lanterns", "Midnight Fireworks", "Festival Lights", "Summer Festival", "Music Festival", "Love Festival", "Carnival Night", "Carnival Love", "Holiday Love",
-
-  // 网络 & 数字感
-  "Internet", "Online", "Offline", "WiFi", "Bluetooth", "Digital Love", "Virtual Love", "Virtual Reality", "Fantasy World", "Cyber Love",
-  "Screen", "Timeline", "News Feed", "Notification", "Message", "DM", "Inbox", "Outbox", "Voice Mail", "Hotline",
-  "Stream", "Streaming", "Playlist Love", "Shuffle", "Repeat", "Replay", "Rewind", "Fast Forward", "Skip", "Play Button",
-
-  // 励志 & 正能量
-  "Never Give Up", "Stand Up", "Rise Up", "Wake Up Call", "Stronger Than Ever", "Born To Run", "Born To Die", "Born This Way", "Born For You", "Born Again",
-  "Fight For Love", "Fight For You", "Fight For Life", "Believe In Me", "Believe In You", "Believe In Love", "Chasing Dreams", "Chasing Stars", "Chasing Cars", "Reach For The Sky",
-  "Higher", "Higher Ground", "On Top", "Top Of The World", "Sky High", "Limitless", "No Limits", "No Fear", "Fearless", "Unstoppable",
-
-  // 失落 & emo
-  "Broken Dreams", "Broken Wings", "Broken Heart", "Broken Love", "Empty Heart", "Empty Room", "Empty Streets", "Lonely Night", "Lonely Road", "Lonely World",
-  "Fade Away", "Fall Apart", "Falling Down", "Falling", "Drowning", "Bleeding Love", "Crying In The Rain", "Tears In Heaven", "Tears Of Love", "Nothing Left",
-  "Nowhere To Go", "Lost In You", "Lost In Love", "Lost In The Dark", "Lost In The Night", "Missing You", "Miss You So", "Need You Now", "Without Me", "Without Love",
-
-  // 节奏 & 舞蹈
-  "Dance With Me", "Dance All Night", "Last Dance", "Slow Dance", "Fast Dance", "Midnight Dance", "Crazy Dance", "Dance In The Dark", "Dance In The Rain", "Dance In The Moonlight",
-  "Rhythm Of The Night", "Rhythm Of Love", "Rhythm Divine", "Feel The Beat", "Drop The Beat", "Drop It", "Turn The Music Up", "Turn The Music On", "Turn The Lights Down", "Turn The Lights Off",
-  "Move Your Body", "Shake It", "Hands Up", "Hands Down", "Jump", "Jump Around", "Step By Step", "Two Step", "Footloose", "Groove",
-
-  // 抽象英文短语 (很适合搜歌)
-  "Into The Night", "Into The Sky", "Into The Wild", "Into You", "Into The Dark", "Out Of Love", "Out Of Time", "Out Of Control", "Out Of My Mind", "Out Of The Blue",
-  "All Of Me", "All Of You", "All Of Us", "All My Life", "All My Love", "All Night", "All Day", "All The Time", "For The First Time", "For The Last Time",
-  "Just The Way You Are", "Just A Dream", "Just A Kiss", "Just Like Heaven", "Just Like You", "Only You", "Only Love", "Only One", "One And Only", "One More Try",
-
-  // 城市 & 地点（补充）
-  "Miami", "Los Angeles", "Chicago", "Houston", "Seattle", "Boston", "Berlin", "Rome", "Barcelona", "Madrid",
-  "Amsterdam", "Moscow", "Hong Kong", "Shanghai", "Beijing", "Seoul", "Bangkok", "Sydney", "Melbourne", "Rio",
-  "Vegas", "Las Vegas", "Hawaii", "Ibiza", "Brooklyn", "Bronx", "Harlem", "Soho", "Hollywood", "Broadway",
-
-  // 押韵 & 常见单词组合
-  "Fire And Ice", "Fire And Rain", "Fire In The Sky", "Fire In My Heart", "Rain And Thunder", "Rain On Me", "Snow And Ice", "Sun And Moon", "Sun And Rain", "Moon And Back",
-  "Hearts And Bones", "Hearts On Fire", "Hearts Of Gold", "Tears And Rain", "Salt And Pepper", "Sugar And Spice", "Wine And Roses", "Blood And Tears", "Blood And Wine", "Blood On The Dance Floor",
-
-  // 轻松 & 生活味
-  "Chill Vibes", "Good Vibes", "Summer Vibes", "Beach Vibes", "Night Vibes", "City Vibes", "Love Vibes", "Sad Vibes", "LoFi Vibes", "Coffee Break",
-  "Morning Coffee", "Night Coffee", "Midnight Coffee", "Sunset Drive", "Midnight Drive", "Night Drive", "City Drive", "Late Night", "Late Night Call", "Late Night Drive",
-  "Lazy Sunday", "Sunday Morning", "Sunday Night", "Monday Blues", "Friday Feeling", "Friday Night Lights", "Saturday Love", "Saturday Night Fever", "Weekend Love", "Weekend Mood",
-
-  // 额外常见英文歌名元素
-  "Beautiful Day", "Beautiful Girl", "Beautiful Boy", "Beautiful Life", "Beautiful World", "Crazy In Love", "Crazy For You", "Crazy Night", "Crazy World", "End Of The World",
-  "Shape Of You", "Thinking Of You", "Thinking Out Loud", "Back To You", "Back To Black", "Back To Life", "Back Home", "Back In Time", "Stay With You", "Stay The Night",
-  "Say You Love Me", "Say Something", "Say My Name", "Call My Name", "Call Your Name", "Kiss The Rain", "Walk On Water", "Walk Away", "Runaway", "Runaway Love",
-  "Take Me Home", "Take Me Back", "Take It Easy", "Take It Slow", "Take On Me", "Let Me Love You", "Let Me In", "Let It Be", "Let It Rain", "Let It Shine",
-
-  // 备用 / 杂项高频词
-  "Sky", "Stars", "Moonlight", "Starlight", "Spotlight", "Headlights", "City Lights", "Bright Lights", "Street Lights", "Northern Lights",
-  "Angel Of Mine", "Devil Inside", "Hero Of War", "Local Hero", "Teenage Dream", "Teenage Love", "Teenage Heart", "Teenage Riot", "Teen Spirit", "Broken Spirit",
-  "Wild Heart", "Wild Dreams", "Wild Nights", "Wild Things", "Wild World", "Sweet Dreams", "Sweet Home", "Sweet Child", "Sweet Life", "Sweet Escape",
-  "Golden Hour", "Midnight Hour", "Rush Of Blood", "Signs", "Signals", "Codes", "Secret Code", "Password", "Key To My Heart", "Key To The City"
-];
-
-        let currentTrack = null;
-
-        // --- 随机搜索功能 ---
+        // --- 随机搜索 ---
         function randomSearch() {
-            // 1. 随机取一个词
             const randomIndex = Math.floor(Math.random() * keywords.length);
-            const word = keywords[randomIndex];
-            
-            // 2. 填入搜索框
-            searchInput.value = word;
-            
-            // 3. 触发搜索
+            DOM.searchInput.value = keywords[randomIndex];
             searchMusic();
         }
 
         async function searchMusic() {
-            const query = searchInput.value;
+            const query = DOM.searchInput.value.trim();
             if(!query) return;
 
-            resultsDiv.innerHTML = '<div style="text-align:center; padding:20px; color:#888; grid-column:1/-1;">正在连接 iTunes...</div>';
+            DOM.results.innerHTML = '<div style="text-align:center; padding:50px; color:#888;">正在连接 iTunes...</div>';
 
             try {
+                // 使用 HTTPS 接口，避免混合内容警告
                 const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=24`);
                 const data = await res.json();
                 renderResults(data.results);
             } catch (e) {
-                resultsDiv.innerHTML = `<div style="color:red; text-align:center; grid-column:1/-1;">网络错误 (Error: ${e.message})</div>`;
+                DOM.results.innerHTML = `<div style="color:#ff5252; text-align:center; padding:50px;">网络请求失败 (${e.message})</div>`;
             }
         }
 
         function renderResults(songs) {
-            resultsDiv.innerHTML = '';
+            DOM.results.innerHTML = '';
             if(songs.length === 0) {
-                resultsDiv.innerHTML = '<div style="text-align:center; padding:20px; color:#888; grid-column:1/-1;">未找到相关歌曲</div>';
+                DOM.results.innerHTML = '<div style="text-align:center; padding:50px; color:#888;">未找到相关歌曲</div>';
                 return;
             }
 
@@ -695,117 +489,134 @@ const keywords = [
                 const highResImage = song.artworkUrl100.replace('100x100bb', '300x300bb');
                 const card = document.createElement('div');
                 card.className = 'song-card';
-                // 点击卡片默认播放预览
                 card.onclick = () => playSong(song, highResImage);
 
                 card.innerHTML = `
                     <img src="${highResImage}" loading="lazy">
-                    <div class="song-title" style="cursor:pointer; text-decoration:underline; color:var(--primary);" title="在 Apple Music 中打开">
-                        ${song.trackName} 
-                    </div>
+                    <div class="song-title" title="${song.trackName}">${song.trackName}</div>
                     <div class="song-artist">${song.artistName}</div>
                 `;
-
-                // 获取标题元素并绑定独立点击事件
+                
+                // 移动端/桌面端 外部链接处理
                 const titleEl = card.querySelector('.song-title');
                 titleEl.onclick = (e) => {
-                    e.stopPropagation(); // 阻止冒泡
-                    
-                    // 智能判断设备类型
+                    e.stopPropagation();
                     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-                    
-                    if (isMobile) {
-                        // 移动端：直接跳转，避免留存空白页，并能唤起 App
-                        window.location.href = song.trackViewUrl;
-                    } else {
-                        // 桌面端：新标签页打开，保留当前播放器不被覆盖
-                        window.open(song.trackViewUrl, '_blank');
-                    }
+                    if (isMobile) window.location.href = song.trackViewUrl;
+                    else window.open(song.trackViewUrl, '_blank');
                 };
 
-                resultsDiv.appendChild(card);
+                DOM.results.appendChild(card);
             });
         }
 
+        // --- 核心播放逻辑 (重构版：非阻塞) ---
         function playSong(song, imageUrl) {
-            currentTrack = song;
-            document.getElementById('player-name').innerText = song.trackName;
-            document.getElementById('player-artist').innerText = song.artistName;
-            document.getElementById('player-cover').src = imageUrl;
+            STATE.currentTrack = song;
+
+            // 1. UI 立即响应
+            DOM.playerName.innerText = song.trackName;
+            DOM.playerArtist.innerText = song.artistName;
+            DOM.playerCover.src = imageUrl;
             
-            audio.src = song.previewUrl;
-            audio.play();
-            updatePlayBtnState(true);
+            // 2. 沉浸式背景：设置背景图并添加模糊
+            document.body.style.backgroundImage = `url(${imageUrl})`;
             
-            document.getElementById('lyrics-title').innerText = song.trackName;
-            document.getElementById('lyrics-text').innerText = "正在搜索歌词...";
+            // 3. 音频处理 (不等待附属信息)
+            DOM.audio.src = song.previewUrl;
+            DOM.audio.play()
+                .then(() => updatePlayBtnState(true))
+                .catch(e => {
+                    console.log("自动播放被拦截:", e);
+                    updatePlayBtnState(false);
+                });
+
+            // 4. 重置附属 UI
+            DOM.lyricsTitle.innerText = song.trackName;
+            DOM.lyricsArtist.innerText = song.artistName;
+            DOM.lyricsText.innerHTML = '<span style="opacity:0.6; font-size:14px;">正在连接歌词库...</span>';
+            DOM.wikiDiv.innerHTML = '';
+            DOM.wikiDiv.classList.remove('show');
+
+            // 5. 并行异步加载：弹幕、歌词、百科
+            startFakeComments(); 
             
-            // 清空并隐藏之前的百科
-            const wikiDiv = document.getElementById('artist-wiki');
-            wikiDiv.innerHTML = '';
-            wikiDiv.classList.remove('show');
-            
-            fetchLyrics(song.artistName, song.trackName);
-            fetchArtistInfo(song.artistName); // 获取歌手百科
-            
-            // 开启弹幕
-            startFakeComments();
+            // 使用 Promise.allSettled 确保一个失败不影响另一个
+            Promise.allSettled([
+                fetchLyrics(song.artistName, song.trackName),
+                fetchArtistInfo(song.artistName)
+            ]);
         }
 
-        // --- 创意1: 看天听歌 ---
+        function togglePlay() {
+            if(!DOM.audio.src) return;
+            if(DOM.audio.paused) {
+                DOM.audio.play();
+                updatePlayBtnState(true);
+            } else {
+                DOM.audio.pause();
+                updatePlayBtnState(false);
+            }
+        }
+
+        function updatePlayBtnState(isPlaying) {
+            STATE.isPlaying = isPlaying;
+            DOM.playBtn.innerText = isPlaying ? '⏸' : '▶';
+            if(isPlaying) DOM.playerCover.classList.add('playing');
+            else DOM.playerCover.classList.remove('playing');
+        }
+
+        // --- 创意1: 看天听歌 (优化版: HTTPS & 完整映射) ---
         async function searchByWeather() {
             const btn = document.querySelector('.weather-btn');
             const originalText = btn.innerHTML;
-            btn.innerHTML = '⌛'; // Loading state
+            btn.innerHTML = '⌛';
             
             try {
-                // 1. 获取位置 (更换为支持 HTTPS 的 GeoJS)
+                // 1. GeoJS (HTTPS) 获取定位
                 const geoRes = await fetch('https://get.geojs.io/v1/ip/geo.json');
                 const geo = await geoRes.json();
                 
-                // 2. 查天气 (Open-Meteo)
-                // GeoJS 返回的是 latitude 和 longitude (字符串类型，但可以直接拼接到 URL)
+                // 2. Open-Meteo 获取天气
                 const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${geo.latitude}&longitude=${geo.longitude}&current_weather=true`);
                 const weatherData = await weatherRes.json();
                 const wcode = weatherData.current_weather.weathercode;
                 
-                // 3. 映射关键词
+                // 3. 智能映射
                 let keyword = "Pop";
-                let weatherDesc = "未知天气";
+                let desc = "未知";
                 
-                if (wcode <= 3) { keyword = "Sunny Beach"; weatherDesc = "晴朗"; }
-                else if (wcode >= 45 && wcode <= 48) { keyword = "Foggy Jazz"; weatherDesc = "雾天"; }
-                else if (wcode >= 51 && wcode <= 67) { keyword = "Rainy Mood"; weatherDesc = "下雨"; }
-                else if (wcode >= 71) { keyword = "Winter Snow"; weatherDesc = "下雪"; }
-                else if (wcode >= 95) { keyword = "Thunderstorm"; weatherDesc = "雷暴"; }
-                else { keyword = "Cloudy Chill"; weatherDesc = "多云"; }
+                if (wcode <= 3) { keyword = "Sunny Beach"; desc = "晴朗"; }
+                else if (wcode >= 45 && wcode <= 48) { keyword = "Foggy Jazz"; desc = "雾气"; }
+                else if (wcode >= 51 && wcode <= 67) { keyword = "Rainy Mood"; desc = "下雨"; }
+                else if (wcode >= 71) { keyword = "Winter Snow"; desc = "下雪"; }
+                else if (wcode >= 80) { keyword = "Summer Rain"; desc = "阵雨"; }
+                else if (wcode >= 95) { keyword = "Thunderstorm"; desc = "雷暴"; }
+                else { keyword = "Cloudy Chill"; desc = "多云"; }
 
-                // 4. 搜索
-                searchInput.value = keyword;
+                DOM.searchInput.value = keyword;
                 searchMusic();
-                alert(`当前位置: ${geo.city}\n天气: ${weatherDesc} (Code: ${wcode})\n为你推荐: ${keyword}`);
+                alert(`📍 定位: ${geo.city}\n🌤 天气: ${desc}\n🎵 推荐: ${keyword}`);
                 
             } catch (e) {
-                alert("获取天气失败，请检查网络或定位权限");
+                alert("获取天气信息失败，请检查网络或隐私设置");
                 console.error(e);
             } finally {
                 btn.innerHTML = originalText;
             }
         }
 
-        // --- 创意2: 歌手小百科 ---
+        // --- 创意2: 歌手小百科 (HTTPS) ---
         async function fetchArtistInfo(artistName) {
-            // 清理名字，去掉 feat. 等后缀，只取第一个名字
-            // 增加对中文的处理，如果是中文名，直接搜
             let cleanName = artistName.split(/&|,|feat\.|ft\./)[0].trim();
             
-            // 尝试中文维基
+            // 优先中文
             let url = `https://zh.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cleanName)}`;
             
             try {
                 let res = await fetch(url);
                 if(!res.ok) {
-                    // 如果中文没搜到，试一下英文维基 (针对英文名)
+                    // 降级到英文
                     url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cleanName)}`;
                     res = await fetch(url);
                 }
@@ -813,111 +624,129 @@ const keywords = [
                 if(res.ok) {
                     const data = await res.json();
                     if (data.extract) {
-                        const wikiDiv = document.getElementById('artist-wiki');
-                        const wikiLink = data.content_urls && data.content_urls.desktop ? data.content_urls.desktop.page : '#';
-                        
-                        wikiDiv.innerHTML = `
-                            <strong style="color:var(--primary)">${data.title} 小百科:</strong><br>
-                            ${data.extract}
-                            <br><br>
-                            <a href="${wikiLink}" target="_blank" style="color:var(--primary); text-decoration:underline; font-size:12px;">阅读更多 (Wikipedia) &rarr;</a>
+                        const wikiLink = data.content_urls?.desktop?.page || '#';
+                        DOM.wikiDiv.innerHTML = `
+                            <div style="font-weight:bold; color:var(--primary); margin-bottom:5px;">${data.title} 小百科</div>
+                            <div>${data.extract}</div>
+                            <div style="margin-top:10px; text-align:right;">
+                                <a href="${wikiLink}" target="_blank" style="color:var(--light); font-size:12px;">Wikipedia &rarr;</a>
+                            </div>
                         `;
-                        wikiDiv.classList.add('show');
+                        DOM.wikiDiv.classList.add('show');
                     }
                 }
             } catch (e) {
-                console.log("Wiki info not found");
+                // 忽略百科错误
             }
         }
 
-        // --- 创意4: 伪·弹幕评论区 ---
-        let commentInterval = null;
-        
+        // --- 创意4: 伪·弹幕系统 (清洗后的逻辑：智能缓存 + 轨道管理) ---
         function startFakeComments() {
-            const bar = document.getElementById('comment-bar');
-            bar.classList.add('show');
-            bar.innerHTML = ''; // 清空旧的
+            DOM.commentBar.classList.add('show');
+            DOM.commentBar.innerHTML = ''; // 切歌清空
             
-            if(commentInterval) clearInterval(commentInterval);
+            if (STATE.commentInterval) clearInterval(STATE.commentInterval);
             
-            // 立即来一条
-            addComment();
-            
-            // 每 4 秒来一条
-            commentInterval = setInterval(addComment, 4000);
+            processComment(); // 立即发射一条
+            // 随机间隔 3-5 秒发射
+            STATE.commentInterval = setInterval(processComment, 3500);
         }
 
-        async function addComment() {
-            const bar = document.getElementById('comment-bar');
+        async function processComment() {
+            // 智能策略：如果请求超过20次，或者缓存有数据且运气好(40%)，则复用缓存，不再消耗流量
+            const useCache = STATE.commentHistory.length > 0 && (STATE.fetchCount > 20 || Math.random() < 0.4);
             
-            try {
-                // 1. 随机头像
-                const userRes = await fetch('https://randomuser.me/api/?inc=name,picture&nat=us,cn');
-                const userData = await userRes.json();
-                const user = userData.results[0];
-                const userName = user.name.first;
-                const userAvatar = user.picture.thumbnail;
-                
-                // 2. 随机语录 (50% 概率 Kanye, 50% 概率 一言)
-                let text = "";
-                if(Math.random() > 0.5) {
-                    // Kanye
-                    const kRes = await fetch('https://api.kanye.rest/');
-                    const kData = await kRes.json();
-                    text = kData.quote;
-                } else {
-                    // Hitokoto (一言)
-                    const hRes = await fetch('https://v1.hitokoto.cn/?c=a&c=b&c=c'); // 动画、漫画、游戏类
-                    const hData = await hRes.json();
-                    text = hData.hitokoto;
-                }
-
-                // 3. 构建 DOM
-                const item = document.createElement('div');
-                item.className = 'comment-item';
-                item.innerHTML = `
-                    <img src="${userAvatar}" class="comment-avatar">
-                    <span style="color:#bbb">${userName}:</span>
-                    <span>${text}</span>
-                `;
-                
-                // 清空之前的，保持只有一条在滚动 (或者你可以做多条)
-                // 这里为了简单，我们每次清空，让它重新滚动
-                bar.innerHTML = '';
-                bar.appendChild(item);
-                
-            } catch(e) {
-                console.log("Comment error", e);
-            }
-        }
-
-        function togglePlay() {
-            if(!audio.src) return;
-            if(audio.paused) {
-                audio.play();
-                updatePlayBtnState(true);
+            if (useCache) {
+                const randomItem = STATE.commentHistory[Math.floor(Math.random() * STATE.commentHistory.length)];
+                renderComment(randomItem);
             } else {
-                audio.pause();
-                updatePlayBtnState(false);
+                await fetchNewComment();
             }
         }
 
-        function updatePlayBtnState(isPlaying) {
-            playBtn.innerText = isPlaying ? '⏸' : '▶';
-            const cover = document.getElementById('player-cover');
-            if(isPlaying) cover.classList.add('playing');
-            else cover.classList.remove('playing');
+        async function fetchNewComment() {
+            try {
+                // 并行获取头像和文案
+                const [userRes, textRes] = await Promise.all([
+                    fetch('https://randomuser.me/api/?inc=name,picture&nat=us,cn'),
+                    // 50% 概率 Kanye, 50% 概率一言
+                    Math.random() > 0.5 ? fetch('https://api.kanye.rest/') : fetch('https://v1.hitokoto.cn/?c=a&c=b')
+                ]);
+
+                const userData = await userRes.json();
+                const textData = await textRes.json();
+
+                const commentData = {
+                    name: userData.results[0].name.first,
+                    avatar: userData.results[0].picture.thumbnail,
+                    text: textData.quote || textData.hitokoto
+                };
+
+                // 写入缓存池
+                STATE.commentHistory.push(commentData);
+                if(STATE.commentHistory.length > 50) STATE.commentHistory.shift(); // 保持池子大小
+                STATE.fetchCount++;
+
+                renderComment(commentData);
+            } catch(e) {
+                // 静默失败
+            }
         }
 
+        function renderComment(data) {
+            // 寻找空闲轨道 (0-4)
+            let trackIndex = STATE.tracks.findIndex(t => !t);
+            if (trackIndex === -1) trackIndex = Math.floor(Math.random() * 5); // 实在没有就随机挤
+            
+            // 占用轨道
+            STATE.tracks[trackIndex] = true;
+
+            const item = document.createElement('div');
+            item.className = 'comment-item';
+            
+            // 安全构建 DOM
+            const img = document.createElement('img');
+            img.className = 'comment-avatar';
+            img.src = data.avatar;
+            
+            const nameSpan = document.createElement('span');
+            nameSpan.style.color = '#ffeb3b';
+            nameSpan.style.fontWeight = 'bold';
+            nameSpan.textContent = data.name + ':';
+            
+            const textSpan = document.createElement('span');
+            textSpan.textContent = data.text;
+            
+            item.appendChild(img);
+            item.appendChild(nameSpan);
+            item.appendChild(textSpan);
+
+            // 计算 CSS
+            item.style.top = (trackIndex * 45 + 10) + 'px'; 
+            const duration = 15 + Math.random() * 5; // 15-20秒
+            item.style.animationDuration = duration + 's';
+
+            // 动画结束回调
+            item.onanimationend = () => {
+                item.remove();
+                STATE.tracks[trackIndex] = false; // 释放轨道
+            };
+            
+            DOM.commentBar.appendChild(item);
+        }
+
+        // --- 歌词 & 猫咪兜底 ---
         async function fetchLyrics(artist, title) {
             try {
                 const cleanTitle = title.split('(')[0].split('-')[0].trim();
                 const cleanArtist = artist.split('&')[0].split(',')[0].trim();
                 const res = await fetch(`https://api.lyrics.ovh/v1/${cleanArtist}/${cleanTitle}`);
+                
                 if(!res.ok) throw new Error('No lyrics');
                 const data = await res.json();
+                
                 if(data.lyrics) {
-                    document.getElementById('lyrics-text').innerText = data.lyrics;
+                    DOM.lyricsText.innerText = data.lyrics;
                 } else {
                     showRandomCat();
                 }
@@ -927,50 +756,42 @@ const keywords = [
         }
 
         async function showRandomCat() {
-            const lyricsDiv = document.getElementById('lyrics-text');
-            lyricsDiv.innerHTML = '<div style="margin-bottom:20px;">暂无歌词，正在召唤猫咪... 🐱</div>';
-            
+            DOM.lyricsText.innerHTML = '<div style="margin-bottom:20px;">暂无歌词，正在召唤猫咪... 🐱</div>';
             try {
                 const res = await fetch('https://api.thecatapi.com/v1/images/search');
                 const data = await res.json();
-                if(data && data[0] && data[0].url) {
-                    lyricsDiv.innerHTML = `
-                        <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:20px; max-width:90%; margin:0 auto; display:flex; flex-direction:column; align-items:center;">
-                            <div style="margin-bottom:15px; color:var(--light); font-size:14px; line-height:1.5; text-align:center;">
-                                暂无歌词<br>但这里有一只可爱的猫咪陪你听歌
-                            </div>
-                            <img src="${data[0].url}" style="max-width:100%; max-height:300px; width:auto; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.3);" alt="Random Cat">
-                        </div>
+                if(data?.[0]?.url) {
+                    DOM.lyricsText.innerHTML = `
+                        <div style="font-size:14px; margin-bottom:15px; color:#aaa;">暂无歌词，请欣赏猫片</div>
+                        <img src="${data[0].url}" style="max-width:80%; border-radius:10px; box-shadow:0 5px 15px rgba(0,0,0,0.5);">
                     `;
                 } else {
-                    lyricsDiv.innerText = "暂无歌词";
+                    DOM.lyricsText.innerText = "暂无歌词";
                 }
             } catch(e) {
-                lyricsDiv.innerText = "暂无歌词";
+                DOM.lyricsText.innerText = "暂无歌词";
             }
         }
 
-        audio.ontimeupdate = () => {
-            if(isNaN(audio.duration)) return;
-            const percent = (audio.currentTime / audio.duration) * 100;
-            document.getElementById('progress-fill').style.width = percent + '%';
-            const curM = Math.floor(audio.currentTime / 60);
-            const curS = Math.floor(audio.currentTime % 60);
-            document.getElementById('curr-time').innerText = `${curM}:${curS<10?'0'+curS:curS}`;
+        // --- 进度条控制 ---
+        DOM.audio.ontimeupdate = () => {
+            if(isNaN(DOM.audio.duration)) return;
+            const percent = (DOM.audio.currentTime / DOM.audio.duration) * 100;
+            DOM.progressFill.style.width = percent + '%';
+            
+            const curM = Math.floor(DOM.audio.currentTime / 60);
+            const curS = Math.floor(DOM.audio.currentTime % 60);
+            DOM.currTime.innerText = `${curM}:${curS<10?'0'+curS:curS}`;
         };
 
         function seek(e) {
-            if(!audio.src) return;
+            if(!DOM.audio.src) return;
             const bar = document.getElementById('progress-bar');
             const percent = e.offsetX / bar.clientWidth;
-            audio.currentTime = percent * audio.duration;
+            DOM.audio.currentTime = percent * DOM.audio.duration;
         }
 
-        function toggleLyrics() { lyricsOverlay.classList.toggle('show'); }
-        searchInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') searchMusic(); });
-
-        // 页面加载完成后立即搜索，无需等待图片等资源
-        document.addEventListener('DOMContentLoaded', randomSearch);
+        function toggleLyrics() { DOM.lyricsOverlay.classList.toggle('show'); }
 
     </script>
 </body>
