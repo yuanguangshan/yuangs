@@ -169,10 +169,22 @@
         .track-info .artist { font-size: 11px; color: var(--light); white-space: nowrap; }
 
         .controls { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .playback-controls {
+            display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 6px;
+        }
+        .control-btn {
+            width: 36px; height: 36px; border-radius: 50%; border: none;
+            background: var(--white); color: black; font-size: 16px;
+            cursor: pointer; display: flex;
+            align-items: center; justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            transition: transform 0.1s;
+        }
+        .control-btn:active { transform: scale(0.95); }
         .play-btn {
             width: 40px; height: 40px; border-radius: 50%; border: none;
             background: var(--white); color: black; font-size: 18px;
-            cursor: pointer; margin-bottom: 6px; display: flex; 
+            cursor: pointer; display: flex;
             align-items: center; justify-content: center;
             box-shadow: 0 2px 5px rgba(0,0,0,0.3);
         }
@@ -297,7 +309,11 @@
             </div>
         </div>
         <div class="controls">
-            <button class="play-btn" onclick="togglePlay()" id="play-btn">▶</button>
+            <div class="playback-controls">
+                <button class="control-btn" onclick="playPrevious()" id="prev-btn">⏮</button>
+                <button class="play-btn" onclick="togglePlay()" id="play-btn">▶</button>
+                <button class="control-btn" onclick="playNext()" id="next-btn">⏭</button>
+            </div>
             <div class="progress-area">
                 <span id="curr-time">0:00</span>
                 <div id="progress-bar" onclick="seek(event)"><div id="progress-fill"></div></div>
@@ -559,6 +575,66 @@
             }
         }
 
+        function playNext() {
+            // 获取当前播放列表中的所有歌曲
+            const songCards = document.querySelectorAll('.song-card');
+            if (songCards.length === 0) return;
+
+            // 找到当前播放歌曲在列表中的位置
+            let currentIndex = -1;
+            for (let i = 0; i < songCards.length; i++) {
+                const card = songCards[i];
+                const songTitle = card.querySelector('.song-title').textContent;
+                const artistName = card.querySelector('.song-artist').textContent;
+
+                if (songTitle === STATE.currentTrack.trackName &&
+                    artistName === STATE.currentTrack.artistName) {
+                    currentIndex = i;
+                    break;
+                }
+            }
+
+            // 如果找不到当前歌曲，从第一首开始播放
+            if (currentIndex === -1) {
+                songCards[0].click();
+                return;
+            }
+
+            // 播放下一首（循环播放）
+            const nextIndex = (currentIndex + 1) % songCards.length;
+            songCards[nextIndex].click();
+        }
+
+        function playPrevious() {
+            // 获取当前播放列表中的所有歌曲
+            const songCards = document.querySelectorAll('.song-card');
+            if (songCards.length === 0) return;
+
+            // 找到当前播放歌曲在列表中的位置
+            let currentIndex = -1;
+            for (let i = 0; i < songCards.length; i++) {
+                const card = songCards[i];
+                const songTitle = card.querySelector('.song-title').textContent;
+                const artistName = card.querySelector('.song-artist').textContent;
+
+                if (songTitle === STATE.currentTrack.trackName &&
+                    artistName === STATE.currentTrack.artistName) {
+                    currentIndex = i;
+                    break;
+                }
+            }
+
+            // 如果找不到当前歌曲，从第一首开始播放
+            if (currentIndex === -1) {
+                songCards[0].click();
+                return;
+            }
+
+            // 播放上一首（循环播放）
+            const prevIndex = (currentIndex - 1 + songCards.length) % songCards.length;
+            songCards[prevIndex].click();
+        }
+
         function updatePlayBtnState(isPlaying) {
             STATE.isPlaying = isPlaying;
             DOM.playBtn.innerText = isPlaying ? '⏸' : '▶';
@@ -773,12 +849,45 @@
             }
         }
 
+        // --- 播放完成自动播放下一首 ---
+        DOM.audio.onended = () => {
+            updatePlayBtnState(false);
+
+            // 获取当前播放列表中的所有歌曲
+            const songCards = document.querySelectorAll('.song-card');
+            if (songCards.length === 0) return;
+
+            // 找到当前播放歌曲在列表中的位置
+            let currentIndex = -1;
+            for (let i = 0; i < songCards.length; i++) {
+                const card = songCards[i];
+                const songTitle = card.querySelector('.song-title').textContent;
+                const artistName = card.querySelector('.song-artist').textContent;
+
+                if (songTitle === STATE.currentTrack.trackName &&
+                    artistName === STATE.currentTrack.artistName) {
+                    currentIndex = i;
+                    break;
+                }
+            }
+
+            // 如果找不到当前歌曲，从第一首开始播放
+            if (currentIndex === -1) {
+                songCards[0].click();
+                return;
+            }
+
+            // 播放下一首（循环播放）
+            const nextIndex = (currentIndex + 1) % songCards.length;
+            songCards[nextIndex].click();
+        };
+
         // --- 进度条控制 ---
         DOM.audio.ontimeupdate = () => {
             if(isNaN(DOM.audio.duration)) return;
             const percent = (DOM.audio.currentTime / DOM.audio.duration) * 100;
             DOM.progressFill.style.width = percent + '%';
-            
+
             const curM = Math.floor(DOM.audio.currentTime / 60);
             const curS = Math.floor(DOM.audio.currentTime % 60);
             DOM.currTime.innerText = `${curM}:${curS<10?'0'+curS:curS}`;
