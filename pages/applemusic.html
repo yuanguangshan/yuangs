@@ -77,6 +77,167 @@
             align-items: center;
             gap: 4px;
         }
+        /* 天气按钮样式 */
+        .weather-btn {
+            background: #2196F3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        /* 弹幕条样式 */
+        .comment-bar {
+            position: fixed;
+            bottom: 100px; /* 稍微抬高一点 */
+            left: 0;
+            width: 100%;
+            height: 120px; /* 增加高度，容纳多行弹幕 */
+            z-index: 90;
+            pointer-events: none;
+            overflow: hidden;
+            display: none; /* 默认隐藏，由 JS 控制显示 */
+        }
+        .comment-bar.show { display: block; }
+        
+        .comment-item {
+            position: absolute;
+            left: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: white;
+            font-size: 14px;
+            white-space: nowrap;
+            background: rgba(0,0,0,0.4);
+            padding: 4px 12px;
+            border-radius: 20px;
+            will-change: transform;
+            animation: slideLeft 12s linear forwards; /* 播放一次后停止 */
+            text-shadow: 1px 1px 2px black;
+        }
+        .comment-avatar {
+            width: 24px; height: 24px; border-radius: 50%; border: 1px solid white;
+        }
+        @keyframes slideLeft {
+            from { transform: translateX(100vw); }
+            to { transform: translateX(-100%); } /* 完全移出左侧 */
+        }
+
+        /* 歌手百科样式 */
+        .artist-wiki {
+            width: 100%;
+            max-width: 600px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #ccc;
+            line-height: 1.6;
+            text-align: left;
+            display: none;
+        }
+        .artist-wiki.show { display: block; }
+
+        /* ... (中间代码省略) ... */
+
+        // --- 创意4: 伪·弹幕评论区 (升级版) ---
+        let commentInterval = null;
+        const commentHistory = []; // 评论缓存池
+        
+        function startFakeComments() {
+            const bar = document.getElementById('comment-bar');
+            bar.classList.add('show');
+            // 不清空 bar，保留正在滚动的弹幕
+            
+            if(commentInterval) clearInterval(commentInterval);
+            
+            // 立即来一条
+            processComment();
+            
+            // 每 2.5 秒来一条 (频率加快)
+            commentInterval = setInterval(processComment, 2500);
+        }
+
+        async function processComment() {
+            // 策略：30% 概率从缓存取旧的（如果缓存有货），70% 概率请求新的
+            const useCache = commentHistory.length > 0 && Math.random() < 0.3;
+            
+            if (useCache) {
+                const randomItem = commentHistory[Math.floor(Math.random() * commentHistory.length)];
+                renderComment(randomItem);
+            } else {
+                await fetchNewComment();
+            }
+        }
+
+        async function fetchNewComment() {
+            try {
+                // 1. 随机头像
+                const userRes = await fetch('https://randomuser.me/api/?inc=name,picture&nat=us,cn');
+                const userData = await userRes.json();
+                const user = userData.results[0];
+                
+                // 2. 随机语录
+                let text = "";
+                if(Math.random() > 0.5) {
+                    const kRes = await fetch('https://api.kanye.rest/');
+                    const kData = await kRes.json();
+                    text = kData.quote;
+                } else {
+                    const hRes = await fetch('https://v1.hitokoto.cn/?c=a&c=b&c=c');
+                    const hData = await hRes.json();
+                    text = hData.hitokoto;
+                }
+
+                const commentData = {
+                    name: user.name.first,
+                    avatar: user.picture.thumbnail,
+                    text: text
+                };
+
+                // 存入缓存
+                commentHistory.push(commentData);
+                // 限制缓存大小，防止内存溢出 (比如保留最近50条)
+                if(commentHistory.length > 50) commentHistory.shift();
+
+                renderComment(commentData);
+                
+            } catch(e) {
+                // 失败了就尝试用缓存兜底
+                if(commentHistory.length > 0) {
+                    const randomItem = commentHistory[Math.floor(Math.random() * commentHistory.length)];
+                    renderComment(randomItem);
+                }
+            }
+        }
+
+        function renderComment(data) {
+            const bar = document.getElementById('comment-bar');
+            const item = document.createElement('div');
+            item.className = 'comment-item';
+            item.innerHTML = `
+                <img src="${data.avatar}" class="comment-avatar">
+                <span style="color:#ffeb3b; font-weight:bold;">${data.name}:</span>
+                <span>${data.text}</span>
+            `;
+            
+            // 随机垂直位置 (0% - 70%)，防止重叠
+            const randomTop = Math.floor(Math.random() * 70);
+            item.style.top = randomTop + '%';
+            
+            // 随机速度 (10s - 18s)
+            const randomDuration = 10 + Math.random() * 8;
+            item.style.animationDuration = randomDuration + 's';
+
+            // 动画结束后移除 DOM 元素 (但数据还在 history 里)
+            item.onanimationend = () => {
+                item.remove();
+            };
+            
+            bar.appendChild(item);
+        }
 
         /* 2. 中间内容区 */
         .results-container {
@@ -194,6 +355,10 @@
         <button class="btn random-btn" onclick="randomSearch()" title="随机推荐一个关键词">
             <span>🎲</span>
         </button>
+        <!-- 新增天气按钮 -->
+        <button class="btn weather-btn" onclick="searchByWeather()" title="看天听歌">
+            <span>🌤</span>
+        </button>
     </div>
 
     <!-- 2. 中间列表 -->
@@ -207,7 +372,14 @@
     <div class="lyrics-overlay" id="lyrics-overlay">
         <button class="close-lyrics" onclick="toggleLyrics()">×</button>
         <h3 id="lyrics-title" style="color:var(--primary); margin-bottom:10px;"></h3>
+        <!-- 歌手百科容器 -->
+        <div id="artist-wiki" class="artist-wiki"></div>
         <div class="lyrics-content" id="lyrics-text">歌词加载中...</div>
+    </div>
+
+    <!-- 弹幕条 -->
+    <div class="comment-bar" id="comment-bar">
+        <!-- 动态插入评论 -->
     </div>
 
     <!-- 4. 底部播放器 -->
@@ -484,7 +656,155 @@ const keywords = [
             
             document.getElementById('lyrics-title').innerText = song.trackName;
             document.getElementById('lyrics-text').innerText = "正在搜索歌词...";
+            
+            // 清空并隐藏之前的百科
+            const wikiDiv = document.getElementById('artist-wiki');
+            wikiDiv.innerHTML = '';
+            wikiDiv.classList.remove('show');
+            
             fetchLyrics(song.artistName, song.trackName);
+            fetchArtistInfo(song.artistName); // 获取歌手百科
+            
+            // 开启弹幕
+            startFakeComments();
+        }
+
+        // --- 创意1: 看天听歌 ---
+        async function searchByWeather() {
+            const btn = document.querySelector('.weather-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⌛'; // Loading state
+            
+            try {
+                // 1. 获取位置 (IP-API)
+                const geoRes = await fetch('http://ip-api.com/json/');
+                const geo = await geoRes.json();
+                
+                // 2. 查天气 (Open-Meteo)
+                const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${geo.lat}&longitude=${geo.lon}&current_weather=true`);
+                const weatherData = await weatherRes.json();
+                const wcode = weatherData.current_weather.weathercode;
+                
+                // 3. 映射关键词
+                let keyword = "Pop";
+                let weatherDesc = "未知天气";
+                
+                if (wcode <= 3) { keyword = "Sunny Beach"; weatherDesc = "晴朗"; }
+                else if (wcode >= 45 && wcode <= 48) { keyword = "Foggy Jazz"; weatherDesc = "雾天"; }
+                else if (wcode >= 51 && wcode <= 67) { keyword = "Rainy Mood"; weatherDesc = "下雨"; }
+                else if (wcode >= 71) { keyword = "Winter Snow"; weatherDesc = "下雪"; }
+                else if (wcode >= 95) { keyword = "Thunderstorm"; weatherDesc = "雷暴"; }
+                else { keyword = "Cloudy Chill"; weatherDesc = "多云"; }
+
+                // 4. 搜索
+                searchInput.value = keyword;
+                searchMusic();
+                alert(`当前位置: ${geo.city}\n天气: ${weatherDesc} (Code: ${wcode})\n为你推荐: ${keyword}`);
+                
+            } catch (e) {
+                alert("获取天气失败，请检查网络或定位权限");
+                console.error(e);
+            } finally {
+                btn.innerHTML = originalText;
+            }
+        }
+
+        // --- 创意2: 歌手小百科 ---
+        async function fetchArtistInfo(artistName) {
+            // 清理名字，去掉 feat. 等后缀，只取第一个名字
+            // 增加对中文的处理，如果是中文名，直接搜
+            let cleanName = artistName.split(/&|,|feat\.|ft\./)[0].trim();
+            
+            // 尝试中文维基
+            let url = `https://zh.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cleanName)}`;
+            
+            try {
+                let res = await fetch(url);
+                if(!res.ok) {
+                    // 如果中文没搜到，试一下英文维基 (针对英文名)
+                    url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cleanName)}`;
+                    res = await fetch(url);
+                }
+                
+                if(res.ok) {
+                    const data = await res.json();
+                    if (data.extract) {
+                        const wikiDiv = document.getElementById('artist-wiki');
+                        const wikiLink = data.content_urls && data.content_urls.desktop ? data.content_urls.desktop.page : '#';
+                        
+                        wikiDiv.innerHTML = `
+                            <strong style="color:var(--primary)">${data.title} 小百科:</strong><br>
+                            ${data.extract}
+                            <br><br>
+                            <a href="${wikiLink}" target="_blank" style="color:var(--primary); text-decoration:underline; font-size:12px;">阅读更多 (Wikipedia) &rarr;</a>
+                        `;
+                        wikiDiv.classList.add('show');
+                    }
+                }
+            } catch (e) {
+                console.log("Wiki info not found");
+            }
+        }
+
+        // --- 创意4: 伪·弹幕评论区 ---
+        let commentInterval = null;
+        
+        function startFakeComments() {
+            const bar = document.getElementById('comment-bar');
+            bar.classList.add('show');
+            bar.innerHTML = ''; // 清空旧的
+            
+            if(commentInterval) clearInterval(commentInterval);
+            
+            // 立即来一条
+            addComment();
+            
+            // 每 4 秒来一条
+            commentInterval = setInterval(addComment, 4000);
+        }
+
+        async function addComment() {
+            const bar = document.getElementById('comment-bar');
+            
+            try {
+                // 1. 随机头像
+                const userRes = await fetch('https://randomuser.me/api/?inc=name,picture&nat=us,cn');
+                const userData = await userRes.json();
+                const user = userData.results[0];
+                const userName = user.name.first;
+                const userAvatar = user.picture.thumbnail;
+                
+                // 2. 随机语录 (50% 概率 Kanye, 50% 概率 一言)
+                let text = "";
+                if(Math.random() > 0.5) {
+                    // Kanye
+                    const kRes = await fetch('https://api.kanye.rest/');
+                    const kData = await kRes.json();
+                    text = kData.quote;
+                } else {
+                    // Hitokoto (一言)
+                    const hRes = await fetch('https://v1.hitokoto.cn/?c=a&c=b&c=c'); // 动画、漫画、游戏类
+                    const hData = await hRes.json();
+                    text = hData.hitokoto;
+                }
+
+                // 3. 构建 DOM
+                const item = document.createElement('div');
+                item.className = 'comment-item';
+                item.innerHTML = `
+                    <img src="${userAvatar}" class="comment-avatar">
+                    <span style="color:#bbb">${userName}:</span>
+                    <span>${text}</span>
+                `;
+                
+                // 清空之前的，保持只有一条在滚动 (或者你可以做多条)
+                // 这里为了简单，我们每次清空，让它重新滚动
+                bar.innerHTML = '';
+                bar.appendChild(item);
+                
+            } catch(e) {
+                console.log("Comment error", e);
+            }
         }
 
         function togglePlay() {
