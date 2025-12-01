@@ -148,8 +148,8 @@
 
         function loopComments() {
             processComment();
-            // 随机间隔 800ms - 2000ms 生成一条，保持密集感
-            const nextTime = 800 + Math.random() * 1200;
+            // 随机间隔 2000ms - 10000ms 生成一条，降低密度
+            const nextTime = 2000 + Math.random() * 8000;
             commentTimer = setTimeout(loopComments, nextTime);
         }
 
@@ -215,6 +215,7 @@
         // --- 创意4: 伪·弹幕评论区 (升级版) ---
         let commentInterval = null;
         const commentHistory = []; // 评论缓存池
+        let fetchCount = 0; // 请求计数器
         
         function startFakeComments() {
             const bar = document.getElementById('comment-bar');
@@ -231,6 +232,15 @@
         }
 
         async function processComment() {
+            // 如果请求次数达到10次，强制使用缓存，不再消耗流量
+            if (fetchCount >= 10) {
+                if (commentHistory.length > 0) {
+                    const randomItem = commentHistory[Math.floor(Math.random() * commentHistory.length)];
+                    renderComment(randomItem);
+                }
+                return;
+            }
+
             // 策略：30% 概率从缓存取旧的（如果缓存有货），70% 概率请求新的
             const useCache = commentHistory.length > 0 && Math.random() < 0.3;
             
@@ -243,6 +253,8 @@
         }
 
         async function fetchNewComment() {
+            if (fetchCount >= 10) return;
+
             try {
                 // 1. 随机头像
                 const userRes = await fetch('https://randomuser.me/api/?inc=name,picture&nat=us,cn');
@@ -269,6 +281,7 @@
 
                 // 存入缓存
                 commentHistory.push(commentData);
+                fetchCount++; // 成功一次，计数加一
                 // 限制缓存大小，防止内存溢出 (比如保留最近50条)
                 if(commentHistory.length > 50) commentHistory.shift();
 
@@ -746,12 +759,13 @@ const keywords = [
             btn.innerHTML = '⌛'; // Loading state
             
             try {
-                // 1. 获取位置 (IP-API)
-                const geoRes = await fetch('http://ip-api.com/json/');
+                // 1. 获取位置 (更换为支持 HTTPS 的 GeoJS)
+                const geoRes = await fetch('https://get.geojs.io/v1/ip/geo.json');
                 const geo = await geoRes.json();
                 
                 // 2. 查天气 (Open-Meteo)
-                const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${geo.lat}&longitude=${geo.lon}&current_weather=true`);
+                // GeoJS 返回的是 latitude 和 longitude (字符串类型，但可以直接拼接到 URL)
+                const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${geo.latitude}&longitude=${geo.longitude}&current_weather=true`);
                 const weatherData = await weatherRes.json();
                 const wcode = weatherData.current_weather.weathercode;
                 
