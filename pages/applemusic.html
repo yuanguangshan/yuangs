@@ -89,39 +89,109 @@
         /* 弹幕条样式 */
         .comment-bar {
             position: fixed;
-            bottom: 100px; /* 稍微抬高一点 */
+            bottom: 120px; /* 再次抬高，避开播放器 */
             left: 0;
             width: 100%;
-            height: 120px; /* 增加高度，容纳多行弹幕 */
+            height: 200px; /* 增加高度，容纳更多轨道 */
             z-index: 90;
             pointer-events: none;
             overflow: hidden;
-            display: none; /* 默认隐藏，由 JS 控制显示 */
+            display: none; 
         }
         .comment-bar.show { display: block; }
         
         .comment-item {
             position: absolute;
-            left: 0;
+            left: 100%; /* 起始位置：屏幕右侧外 */
             display: flex;
             align-items: center;
             gap: 10px;
             color: white;
             font-size: 14px;
             white-space: nowrap;
-            background: rgba(0,0,0,0.4);
-            padding: 4px 12px;
+            background: rgba(0,0,0,0.5); /* 加深背景色，提高可读性 */
+            padding: 6px 16px;
             border-radius: 20px;
-            will-change: transform;
-            animation: slideLeft 12s linear forwards; /* 播放一次后停止 */
+            will-change: left;
+            animation: slideLeft linear forwards; /* 时长在 JS 中动态设置 */
             text-shadow: 1px 1px 2px black;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
         .comment-avatar {
-            width: 24px; height: 24px; border-radius: 50%; border: 1px solid white;
+            width: 28px; height: 28px; border-radius: 50%; border: 1px solid white;
         }
         @keyframes slideLeft {
-            from { transform: translateX(100vw); }
-            to { transform: translateX(-100%); } /* 完全移出左侧 */
+            from { left: 100%; transform: translateX(0); }
+            to { left: -20%; transform: translateX(-100%); } /* 跑到屏幕左侧外 */
+        }
+
+        /* ... (中间代码省略) ... */
+
+        // --- 创意4: 伪·弹幕评论区 (高并发版) ---
+        let commentTimer = null;
+        const commentHistory = []; 
+        
+        function startFakeComments() {
+            const bar = document.getElementById('comment-bar');
+            bar.classList.add('show');
+            
+            if(commentTimer) clearTimeout(commentTimer);
+            
+            // 初始爆发：先来 3 条
+            for(let i=0; i<3; i++) {
+                setTimeout(processComment, i * 500);
+            }
+            
+            // 启动循环生成
+            loopComments();
+        }
+
+        function loopComments() {
+            processComment();
+            // 随机间隔 800ms - 2000ms 生成一条，保持密集感
+            const nextTime = 800 + Math.random() * 1200;
+            commentTimer = setTimeout(loopComments, nextTime);
+        }
+
+        async function processComment() {
+            const useCache = commentHistory.length > 0 && Math.random() < 0.4; // 提高一点缓存复用率
+            
+            if (useCache) {
+                const randomItem = commentHistory[Math.floor(Math.random() * commentHistory.length)];
+                renderComment(randomItem);
+            } else {
+                await fetchNewComment();
+            }
+        }
+
+        // ... fetchNewComment 保持不变 ...
+
+        function renderComment(data) {
+            const bar = document.getElementById('comment-bar');
+            const item = document.createElement('div');
+            item.className = 'comment-item';
+            item.innerHTML = `
+                <img src="${data.avatar}" class="comment-avatar">
+                <span style="color:#ffeb3b; font-weight:bold;">${data.name}:</span>
+                <span>${data.text}</span>
+            `;
+            
+            // 轨道逻辑：将高度分为 5 个轨道，防止重叠
+            // 轨道高度约 35px
+            const trackIndex = Math.floor(Math.random() * 5); 
+            const topPos = trackIndex * 40; // 每条轨道间隔 40px
+            
+            item.style.top = topPos + 'px';
+            
+            // 随机速度 (15s - 25s)，慢一点更有氛围
+            const randomDuration = 15 + Math.random() * 10;
+            item.style.animationDuration = randomDuration + 's';
+
+            item.onanimationend = () => {
+                item.remove();
+            };
+            
+            bar.appendChild(item);
         }
 
         /* 歌手百科样式 */
@@ -851,10 +921,12 @@ const keywords = [
                 const data = await res.json();
                 if(data && data[0] && data[0].url) {
                     lyricsDiv.innerHTML = `
-                        <div style="margin-bottom:20px; color:var(--light); font-size:14px;">
-                            暂无歌词，但这里有一只可爱的猫咪陪你听歌
+                        <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:20px; max-width:90%; margin:0 auto; display:flex; flex-direction:column; align-items:center;">
+                            <div style="margin-bottom:15px; color:var(--light); font-size:14px; line-height:1.5; text-align:center;">
+                                暂无歌词<br>但这里有一只可爱的猫咪陪你听歌
+                            </div>
+                            <img src="${data[0].url}" style="max-width:100%; max-height:300px; width:auto; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.3);" alt="Random Cat">
                         </div>
-                        <img src="${data[0].url}" style="max-width:100%; max-height:60vh; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,0.5);" alt="Random Cat">
                     `;
                 } else {
                     lyricsDiv.innerText = "暂无歌词";
