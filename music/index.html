@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>极客音乐</title>
+
+    <!-- PWA 核心配置 -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#0a0a0a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="极客音乐">
+    
+    <!-- iOS 图标 -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%231db954'/%3E%3Ccircle cx='90' cy='90' r='50' fill='none' stroke='white' stroke-width='8'/%3E%3Ccircle cx='90' cy='90' r='18' fill='white'/%3E%3C/svg%3E">
+
+    <style>
+        :root {
+            --primary: #1db954;
+            --primary-dark: #1aa34a;
+            --accent: #ff6b6b;
+            --bg: #0a0a0a;
+            --card: #161616;
+            --card-hover: #1f1f1f;
+            --text: #ffffff;
+            --text-secondary: #a0a0a0;
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --safe-top: env(safe-area-inset-top);
+            --safe-bottom: env(safe-area-inset-bottom);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            min-height: 100dvh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* 动态背景 */
+        .bg-gradient {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            opacity: 0.6;
+            transition: opacity 0.8s ease;
+            background: radial-gradient(ellipse at 50% 0%, var(--primary) 0%, transparent 50%),
+                        radial-gradient(ellipse at 80% 50%, #6366f1 0%, transparent 40%),
+                        radial-gradient(ellipse at 20% 80%, #ec4899 0%, transparent 40%);
+            filter: blur(80px) saturate(150%);
+        }
+
+        .bg-album {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background-size: cover;
+            background-position: center;
+            opacity: 0;
+            transition: opacity 1s ease;
+            filter: blur(60px) brightness(0.4) saturate(120%);
+        }
+
+        .bg-album.active {
+            opacity: 0.7;
+        }
+
+        /* 顶部搜索栏 */
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: calc(12px + var(--safe-top)) 16px 12px;
+            background: linear-gradient(to bottom, rgba(10,10,10,0.95) 0%, rgba(10,10,10,0.8) 70%, transparent 100%);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .search-input {
+            flex: 1;
+            height: 44px;
+            padding: 0 18px;
+            border-radius: 22px;
+            border: 1px solid var(--glass-border);
+            background: var(--glass);
+            color: var(--text);
+            font-size: 16px;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .search-input:focus {
+            border-color: var(--primary);
+            background: rgba(29, 185, 84, 0.1);
+        }
+
+        .search-input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .btn {
+            height: 44px;
+            padding: 0 20px;
+            border-radius: 22px;
+            border: none;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-icon {
+            width: 44px;
+            padding: 0;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            color: var(--text);
+            font-size: 20px;
+        }
+
+        .btn-icon:hover {
+            background: var(--glass-border);
+        }
+
+        /* 内容区 */
+        .content {
+            position: relative;
+            z-index: 1;
+            padding: calc(80px + var(--safe-top)) 16px calc(200px + var(--safe-bottom));
+            min-height: 100vh;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 16px;
+        }
+
+        /* 歌曲卡片 */
+        .song-card {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+        }
+
+        .song-card:hover {
+            background: var(--card-hover);
+            transform: translateY(-4px);
+            border-color: var(--glass-border);
+        }
+
+        .song-card:active {
+            transform: scale(0.98);
+        }
+
+        .song-card.playing {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px rgba(29, 185, 84, 0.3);
+        }
+
+        .song-cover {
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 12px;
+            object-fit: cover;
+            background: #222;
+            margin-bottom: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .song-cover img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .song-card:hover .song-cover img {
+            transform: scale(1.05);
+        }
+
+        .play-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .song-card:hover .play-overlay,
+        .song-card.playing .play-overlay {
+            opacity: 1;
+        }
+
+        .play-overlay-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+
+        .song-title {
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 4px;
+        }
+
+        .song-artist {
+            font-size: 12px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* 底部播放器 - 全新设计 */
+        .player {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 0 16px calc(16px + var(--safe-bottom));
+            background: linear-gradient(to top, rgba(10,10,10,1) 0%, rgba(10,10,10,0.95) 50%, transparent 100%);
+            pointer-events: none;
+        }
+
+        .player-card {
+            background: var(--card);
+            border-radius: 24px;
+            padding: 16px;
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px);
+            box-shadow: 0 -4px 30px rgba(0,0,0,0.5);
+            pointer-events: auto;
+        }
+
+        .player-main {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 14px;
+        }
+
+        .player-cover {
+            width: 56px;
+            height: 56px;
+            border-radius: 12px;
+            object-fit: cover;
+            background: #222;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .player-cover.spinning {
+            animation: spin 8s linear infinite;
+            border-radius: 50%;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .player-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .player-title {
+            font-size: 15px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 4px;
+        }
+
+        .player-artist {
+            font-size: 13px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .player-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ctrl-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: none;
+            background: transparent;
+            color: var(--text);
+            font-size: 22px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .ctrl-btn:active {
+            transform: scale(0.9);
+        }
+
+        .ctrl-btn.play {
+            width: 52px;
+            height: 52px;
+            background: var(--primary);
+            font-size: 24px;
+        }
+
+        .ctrl-btn.play:hover {
+            background: var(--primary-dark);
+            transform: scale(1.05);
+        }
+
+        /* 进度条 */
+        .progress-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .time {
+            font-size: 11px;
+            color: var(--text-secondary);
+            min-width: 36px;
+            text-align: center;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            width: 0%;
+            border-radius: 2px;
+            transition: width 0.1s linear;
+        }
+
+        .progress-bar:hover .progress-fill {
+            background: #1ed760;
+        }
+
+        /* 歌词详情页 */
+        .lyrics-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 200;
+            background: var(--bg);
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            overflow-y: auto;
+            padding: calc(60px + var(--safe-top)) 24px calc(24px + var(--safe-bottom));
+        }
+
+        .lyrics-modal.show {
+            transform: translateY(0);
+        }
+
+        .lyrics-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: calc(16px + var(--safe-top)) 24px 16px;
+            background: linear-gradient(to bottom, var(--bg) 0%, transparent 100%);
+            z-index: 10;
+        }
+
+        .lyrics-close {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--glass);
+            border: none;
+            color: var(--text);
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .lyrics-cover {
+            width: 200px;
+            height: 200px;
+            border-radius: 20px;
+            margin: 0 auto 24px;
+            display: block;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+        }
+
+        .lyrics-title {
+            font-size: 24px;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .lyrics-artist {
+            font-size: 16px;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .lyrics-wiki {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 24px;
+            border-left: 3px solid var(--primary);
+            display: none;
+        }
+
+        .lyrics-wiki.show {
+            display: block;
+        }
+
+        .lyrics-wiki-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+
+        .lyrics-wiki-text {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .lyrics-text {
+            font-size: 18px;
+            line-height: 2;
+            color: var(--text-secondary);
+            text-align: center;
+            white-space: pre-wrap;
+        }
+
+        /* 弹幕 */
+        .danmaku {
+            position: fixed;
+            top: calc(100px + var(--safe-top));
+            left: 0;
+            right: 0;
+            height: 200px;
+            z-index: 50;
+            pointer-events: none;
+            overflow: hidden;
+            mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
+            display: none;
+        }
+
+        .danmaku.show {
+            display: block;
+        }
+
+        .danmaku-item {
+            position: absolute;
+            left: 100%;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            white-space: nowrap;
+            animation: danmaku-slide linear forwards;
+        }
+
+        .danmaku-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+        }
+
+        .danmaku-name {
+            color: var(--primary);
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .danmaku-text {
+            font-size: 13px;
+            color: var(--text);
+        }
+
+        @keyframes danmaku-slide {
+            from { transform: translateX(0); }
+            to { transform: translateX(calc(-100% - 100vw)); }
+        }
+
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .empty-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+
+        .empty-desc {
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        /* 加载状态 */
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--glass-border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: loading-spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes loading-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* PWA 安装提示 */
+        .install-prompt {
+            position: fixed;
+            bottom: calc(200px + var(--safe-bottom));
+            left: 16px;
+            right: 16px;
+            z-index: 150;
+            background: var(--card);
+            border-radius: 16px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            animation: slide-up 0.4s ease;
+        }
+
+        @keyframes slide-up {
+            from { 
+                opacity: 0;
+                transform: translateY(20px);
+            }
+        }
+
+        .install-icon {
+            font-size: 32px;
+        }
+
+        .install-text {
+            flex: 1;
+        }
+
+        .install-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .install-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .install-btn {
+            padding: 10px 20px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .install-close {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--glass);
+            border: none;
+            color: var(--text-secondary);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 响应式 */
+        @media (max-width: 400px) {
+            .grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 12px;
+            }
+
+            .song-card {
+                padding: 10px;
+            }
+        }
+
+        @media (min-width: 768px) {
+            .grid {
+                grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            }
+
+            .player-card {
+                max-width: 600px;
+                margin: 0 auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 背景 -->
+    <div class="bg-gradient"></div>
+    <div class="bg-album" id="bg-album"></div>
+
+    <!-- 顶部搜索 -->
+    <header class="header">
+        <div class="search-box">
+            <input type="text" class="search-input" id="search-input" placeholder="搜索歌手或歌曲...">
+            <button class="btn btn-primary" onclick="searchMusic()">搜索</button>
+            <button class="btn btn-icon" onclick="randomSearch()" title="随机探索">🎲</button>
+            <button class="btn btn-icon" onclick="searchByWeather()" title="看天听歌">🌤️</button>
+        </div>
+    </header>
+
+    <!-- 内容区 -->
+    <main class="content">
+        <div class="grid" id="results">
+            <div class="empty-state" style="grid-column: 1/-1;">
+                <div class="empty-icon">🎧</div>
+                <div class="empty-title">发现音乐</div>
+                <div class="empty-desc">点击 🎲 随机探索，或搜索你喜欢的歌曲</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 弹幕 -->
+    <div class="danmaku" id="danmaku"></div>
+
+    <!-- 底部播放器 -->
+    <div class="player">
+        <div class="player-card">
+            <div class="player-main">
+                <img class="player-cover" id="player-cover" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%23222' width='100' height='100'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%23333' stroke-width='2'/%3E%3Ccircle cx='50' cy='50' r='10' fill='%23333'/%3E%3C/svg%3E" alt="Cover">
+                <div class="player-info">
+                    <div class="player-title" id="player-title">极客音乐</div>
+                    <div class="player-artist" id="player-artist">等待播放</div>
+                </div>
+                <div class="player-controls">
+                    <button class="ctrl-btn" onclick="playPrevious()">⏮</button>
+                    <button class="ctrl-btn play" id="play-btn" onclick="togglePlay()">▶</button>
+                    <button class="ctrl-btn" onclick="playNext()">⏭</button>
+                </div>
+            </div>
+            <div class="progress-container">
+                <span class="time" id="current-time">0:00</span>
+                <div class="progress-bar" id="progress-bar" onclick="seek(event)">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <span class="time" id="total-time">0:30</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 歌词详情 -->
+    <div class="lyrics-modal" id="lyrics-modal">
+        <div class="lyrics-header">
+            <button class="lyrics-close" onclick="closeLyrics()">✕</button>
+        </div>
+        <img class="lyrics-cover" id="lyrics-cover" src="" alt="">
+        <h2 class="lyrics-title" id="lyrics-title"></h2>
+        <p class="lyrics-artist" id="lyrics-artist"></p>
+        <div class="lyrics-wiki" id="lyrics-wiki">
+            <div class="lyrics-wiki-title" id="wiki-title"></div>
+            <div class="lyrics-wiki-text" id="wiki-text"></div>
+        </div>
+        <div class="lyrics-text" id="lyrics-text">加载中...</div>
+    </div>
+
+    <audio id="audio" crossorigin="anonymous"></audio>
+
+    <script>
+        // 状态管理
+        const state = {
+            currentTrack: null,
+            playlist: [],
+            currentIndex: -1,
+            isPlaying: false,
+            danmakuInterval: null,
+            danmakuCache: [],
+            tracks: [false, false, false, false, false]
+        };
+
+        // DOM 元素
+        const $ = id => document.getElementById(id);
+        const audio = $('audio');
+
+        // 关键词库
+        const keywords = ["Love","Dream","Night","Summer","Rain","Happy","Sad","Dance","Party","Heart","Soul","Fire","Stars","Blue","Gold","Wild","Sweet","Crazy","Beautiful","Forever","Kiss","Miss","Baby","Believe","Free","Smile","Hope","Joy","Tears","Faith","Paradise","Heaven","Promise","Secret","Lost","Alone","Together","Brave","Angel","Devil","Hero","Legend","Magic","Power","Glory","King","Queen","Life","Time","Rock","Jazz","Blues","Pop","Disco","Funk","Chill","Sunset","Ocean","Sky","Moon","Sun","Winter","Spring","Autumn","California","Tokyo","Paris","London","New York","Berlin","Miami","Vegas","Chicago","Boston","Piano","Guitar","Violin","Drums","Beat","Rhythm","Melody","Acoustic","Electric","Symphony","Beatles","Queen","Jackson","Taylor","Adele","Coldplay","Eminem","Rihanna","Beyonce","Drake","Weekend","Bruno Mars","Ed Sheeran","Billie","Dua Lipa","Ariana","Katy Perry","Lady Gaga","Justin","Shakira","Mariah","Whitney","Celine","Madonna","Elvis","Nirvana","Oasis","U2","ABBA","Pink Floyd","Rolling Stones","Led Zeppelin","Bob Dylan","David Bowie","Prince","Michael","Elton John","Stevie Wonder","Aretha","James Brown","Marvin Gaye","Tina Turner","Phil Collins","Genesis","Police","Sting","Eric Clapton","Santana","Fleetwood Mac","Eagles","Journey","Bon Jovi","Aerosmith","Guns N Roses","Metallica","AC/DC","Van Halen","Def Leppard","Motley Crue","Scorpions","Iron Maiden","Judas Priest","Black Sabbath","Deep Purple","Rainbow","Whitesnake","Foreigner","REO Speedwagon","Styx","Kansas","Boston","Toto","Asia","Yes","ELO","Supertramp"];
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            randomSearch();
+            $('search-input').addEventListener('keypress', e => {
+                if (e.key === 'Enter') searchMusic();
+            });
+            
+            // 双击封面打开歌词
+            $('player-cover').addEventListener('dblclick', openLyrics);
+        });
+
+        // 随机搜索
+        function randomSearch() {
+            $('search-input').value = keywords[Math.floor(Math.random() * keywords.length)];
+            searchMusic();
+        }
+
+        // 搜索音乐
+        async function searchMusic() {
+            const query = $('search-input').value.trim();
+            if (!query) return;
+
+            $('results').innerHTML = `
+                <div class="loading" style="grid-column: 1/-1;">
+                    <div class="loading-spinner"></div>
+                    <div>正在搜索...</div>
+                </div>
+            `;
+
+            try {
+                const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=24`);
+                const data = await res.json();
+                state.playlist = data.results;
+                renderResults(data.results);
+            } catch (e) {
+                $('results').innerHTML = `
+                    <div class="empty-state" style="grid-column: 1/-1;">
+                        <div class="empty-icon">😵</div>
+                        <div class="empty-title">网络错误</div>
+                        <div class="empty-desc">请检查网络连接后重试</div>
+                    </div>
+                `;
+            }
+        }
+
+        // 渲染结果
+        function renderResults(songs) {
+            if (songs.length === 0) {
+                $('results').innerHTML = `
+                    <div class="empty-state" style="grid-column: 1/-1;">
+                        <div class="empty-icon">🔍</div>
+                        <div class="empty-title">未找到结果</div>
+                        <div class="empty-desc">换个关键词试试</div>
+                    </div>
+                `;
+                return;
+            }
+
+            $('results').innerHTML = songs.map((song, index) => `
+                <div class="song-card" data-index="${index}" onclick="playSong(${index})">
+                    <div class="song-cover">
+                        <img src="${song.artworkUrl100.replace('100x100bb', '300x300bb')}" loading="lazy" alt="">
+                        <div class="play-overlay">
+                            <div class="play-overlay-btn">▶</div>
+                        </div>
+                    </div>
+                    <div class="song-title">${escapeHtml(song.trackName)}</div>
+                    <div class="song-artist">${escapeHtml(song.artistName)}</div>
+                </div>
+            `).join('');
+        }
+
+        // HTML 转义
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 播放歌曲
+        function playSong(index) {
+            const song = state.playlist[index];
+            if (!song) return;
+
+            state.currentTrack = song;
+            state.currentIndex = index;
+
+            const cover = song.artworkUrl100.replace('100x100bb', '600x600bb');
+
+            // 更新 UI
+            $('player-title').textContent = song.trackName;
+            $('player-artist').textContent = song.artistName;
+            $('player-cover').src = cover;
+
+            // 背景
+            $('bg-album').style.backgroundImage = `url(${cover})`;
+            $('bg-album').classList.add('active');
+
+            // 标记当前播放
+            document.querySelectorAll('.song-card').forEach((card, i) => {
+                card.classList.toggle('playing', i === index);
+            });
+
+            // 播放
+            audio.src = song.previewUrl;
+            audio.play()
+                .then(() => updatePlayState(true))
+                .catch(() => updatePlayState(false));
+
+            // 弹幕
+            startDanmaku();
+
+            // 预加载歌词
+            $('lyrics-title').textContent = song.trackName;
+            $('lyrics-artist').textContent = song.artistName;
+            $('lyrics-cover').src = cover;
+            $('lyrics-text').textContent = '加载中...';
+            $('lyrics-wiki').classList.remove('show');
+
+            fetchLyrics(song.artistName, song.trackName);
+            fetchArtistWiki(song.artistName);
+        }
+
+        // 更新播放状态
+        function updatePlayState(playing) {
+            state.isPlaying = playing;
+            $('play-btn').textContent = playing ? '⏸' : '▶';
+            $('player-cover').classList.toggle('spinning', playing);
+        }
+
+        // 播放/暂停
+        function togglePlay() {
+            if (!audio.src) return;
+            if (audio.paused) {
+                audio.play();
+                updatePlayState(true);
+            } else {
+                audio.pause();
+                updatePlayState(false);
+            }
+        }
+
+        // 上一首/下一首
+        function playPrevious() {
+            if (state.playlist.length === 0) return;
+            const newIndex = (state.currentIndex - 1 + state.playlist.length) % state.playlist.length;
+            playSong(newIndex);
+        }
+
+        function playNext() {
+            if (state.playlist.length === 0) return;
+            const newIndex = (state.currentIndex + 1) % state.playlist.length;
+            playSong(newIndex);
+        }
+
+        // 进度条
+        audio.ontimeupdate = () => {
+            if (isNaN(audio.duration)) return;
+            const pct = (audio.currentTime / audio.duration) * 100;
+            $('progress-fill').style.width = pct + '%';
+            $('current-time').textContent = formatTime(audio.currentTime);
+        };
+
+        audio.onloadedmetadata = () => {
+            $('total-time').textContent = formatTime(audio.duration);
+        };
+
+        audio.onended = () => {
+            updatePlayState(false);
+            playNext();
+        };
+
+        function seek(e) {
+            if (!audio.src) return;
+            const rect = $('progress-bar').getBoundingClientRect();
+            const pct = (e.clientX - rect.left) / rect.width;
+            audio.currentTime = pct * audio.duration;
+        }
+
+        function formatTime(sec) {
+            const m = Math.floor(sec / 60);
+            const s = Math.floor(sec % 60);
+            return `${m}:${s.toString().padStart(2, '0')}`;
+        }
+
+        // 歌词
+        async function fetchLyrics(artist, title) {
+            try {
+                const cleanTitle = title.split('(')[0].split('-')[0].trim();
+                const cleanArtist = artist.split('&')[0].split(',')[0].trim();
+                const res = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(cleanArtist)}/${encodeURIComponent(cleanTitle)}`);
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.lyrics) {
+                        $('lyrics-text').textContent = data.lyrics;
+                        return;
+                    }
+                }
+                showCatFallback();
+            } catch {
+                showCatFallback();
+            }
+        }
+
+        async function showCatFallback() {
+            try {
+                const res = await fetch('https://api.thecatapi.com/v1/images/search');
+                const data = await res.json();
+                if (data?.[0]?.url) {
+                    $('lyrics-text').innerHTML = `
+                        <div style="margin-bottom: 20px; color: var(--text-secondary);">暂无歌词，送你一只猫 🐱</div>
+                        <img src="${data[0].url}" style="max-width: 280px; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.4);">
+                    `;
+                    return;
+                }
+            } catch {}
+            $('lyrics-text').textContent = '暂无歌词';
+        }
+
+        // 歌手百科
+        async function fetchArtistWiki(artistName) {
+            const cleanName = artistName.split(/&|,|feat\.|ft\./i)[0].trim();
+            
+            try {
+                let res = await fetch(`https://zh.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cleanName)}`);
+                if (!res.ok) {
+                    res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cleanName)}`);
+                }
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.extract) {
+                        $('wiki-title').textContent = `关于 ${data.title}`;
+                        $('wiki-text').textContent = data.extract;
+                        $('lyrics-wiki').classList.add('show');
+                    }
+                }
+            } catch {}
+        }
+
+        // 歌词页面
+        function openLyrics() {
+            if (!state.currentTrack) return;
+            $('lyrics-modal').classList.add('show');
+        }
+
+        function closeLyrics() {
+            $('lyrics-modal').classList.remove('show');
+        }
+
+        // 天气搜索
+        async function searchByWeather() {
+            try {
+                const geoRes = await fetch('https://get.geojs.io/v1/ip/geo.json');
+                const geo = await geoRes.json();
+                
+                const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${geo.latitude}&longitude=${geo.longitude}&current_weather=true`);
+                const weatherData = await weatherRes.json();
+                const code = weatherData.current_weather.weathercode;
+                
+                let keyword = 'Pop';
+                let weather = '未知';
+                
+                if (code <= 3) { keyword = 'Sunny Day'; weather = '晴朗'; }
+                else if (code >= 45 && code <= 48) { keyword = 'Foggy Mood'; weather = '雾天'; }
+                else if (code >= 51 && code <= 67) { keyword = 'Rainy Day'; weather = '下雨'; }
+                else if (code >= 71 && code <= 86) { keyword = 'Snow Winter'; weather = '下雪'; }
+                else if (code >= 95) { keyword = 'Thunder Storm'; weather = '雷暴'; }
+                else { keyword = 'Cloudy Sky'; weather = '多云'; }
+
+                $('search-input').value = keyword;
+                searchMusic();
+                
+                alert(`📍 ${geo.city || '未知'}\n🌤️ ${weather}\n🎵 推荐: ${keyword}`);
+            } catch {
+                alert('获取天气失败，请检查网络');
+            }
+        }
+
+        // 弹幕系统
+        function startDanmaku() {
+            $('danmaku').classList.add('show');
+            $('danmaku').innerHTML = '';
+            
+            if (state.danmakuInterval) clearInterval(state.danmakuInterval);
+            
+            spawnDanmaku();
+            state.danmakuInterval = setInterval(spawnDanmaku, 4000);
+        }
+
+        async function spawnDanmaku() {
+            const useCache = state.danmakuCache.length > 0 && Math.random() < 0.5;
+            
+            if (useCache) {
+                renderDanmaku(state.danmakuCache[Math.floor(Math.random() * state.danmakuCache.length)]);
+            } else {
+                try {
+                    const [userRes, textRes] = await Promise.all([
+                        fetch('https://randomuser.me/api/?inc=name,picture'),
+                        Math.random() > 0.5 
+                            ? fetch('https://api.kanye.rest/') 
+                            : fetch('https://v1.hitokoto.cn/?c=a&c=b')
+                    ]);
+                    
+                    const user = await userRes.json();
+                    const text = await textRes.json();
+                    
+                    const data = {
+                        name: user.results[0].name.first,
+                        avatar: user.results[0].picture.thumbnail,
+                        text: text.quote || text.hitokoto
+                    };
+                    
+                    state.danmakuCache.push(data);
+                    if (state.danmakuCache.length > 30) state.danmakuCache.shift();
+                    
+                    renderDanmaku(data);
+                } catch {}
+            }
+        }
+
+        function renderDanmaku(data) {
+            let track = state.tracks.findIndex(t => !t);
+            if (track === -1) track = Math.floor(Math.random() * 5);
+            
+            state.tracks[track] = true;
+            
+            const item = document.createElement('div');
+            item.className = 'danmaku-item';
+            item.style.top = (track * 40 + 10) + 'px';
+            item.style.animationDuration = (12 + Math.random() * 5) + 's';
+            
+            item.innerHTML = `
+                <img class="danmaku-avatar" src="${data.avatar}" alt="">
+                <span class="danmaku-name">${escapeHtml(data.name)}:</span>
+                <span class="danmaku-text">${escapeHtml(data.text)}</span>
+            `;
+            
+            item.onanimationend = () => {
+                item.remove();
+                state.tracks[track] = false;
+            };
+            
+            $('danmaku').appendChild(item);
+        }
+
+        // PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('SW registered:', reg.scope))
+                .catch(err => console.log('SW failed:', err));
+        }
+
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', e => {
+            e.preventDefault();
+            deferredPrompt = e;
+            showInstallPrompt();
+        });
+
+        function showInstallPrompt() {
+            if (document.querySelector('.install-prompt')) return;
+            
+            const div = document.createElement('div');
+            div.className = 'install-prompt';
+            div.innerHTML = `
+                <div class="install-icon">📱</div>
+                <div class="install-text">
+                    <div class="install-title">添加到主屏幕</div>
+                    <div class="install-desc">获得更好的全屏体验</div>
+                </div>
+                <button class="install-btn" onclick="installApp()">安装</button>
+                <button class="install-close" onclick="this.parentElement.remove()">×</button>
+            `;
+            document.body.appendChild(div);
+            
+            setTimeout(() => div.remove(), 10000);
+        }
+
+        function installApp() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then(() => {
+                    deferredPrompt = null;
+                    document.querySelector('.install-prompt')?.remove();
+                });
+            }
+        }
+    </script>
+</body>
+</html>
