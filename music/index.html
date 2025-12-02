@@ -1008,29 +1008,192 @@
         }
 
         // 播放完整歌曲（在Apple Music中）
-        function playFullSong(trackId, trackName, artistName) {
-            // 检查是否有collectionId（专辑ID）用于构建正确的URL
-            const song = state.playlist.find(s => s.trackId == trackId);
-            let albumId = song?.collectionId || trackId;
+function playFullSong(trackId, trackName, artistName) {
+    const song = state.playlist.find(s => s.trackId == trackId);
+    const albumId = song?.collectionId || trackId;
+    
+    const musicAppUrl = `music://music.apple.com/cn/album/${albumId}?i=${trackId}`;
+    const webUrl = `https://music.apple.com/cn/album/${albumId}?i=${trackId}`;
+    
+    // 检测设备类型
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isMac = /Macintosh/.test(navigator.userAgent);
+    const isAppleDevice = isIOS || isMac;
+    
+    if (isAppleDevice) {
+        // Apple 设备：尝试打开 App
+        const startTime = Date.now();
+        
+        // 使用 visibilitychange 检测是否成功跳转到 App
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                // 页面被隐藏，说明成功打开了 App
+                clearTimeout(fallbackTimer);
+                document.removeEventListener('visibilitychange', handleVisibilityChange);
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        
+        // 尝试打开 App
+        window.location.href = musicAppUrl;
+        
+        // 设置降级定时器
+        const fallbackTimer = setTimeout(() => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            
+            // 如果页面还可见且时间很短，说明 App 没打开
+            if (!document.hidden && Date.now() - startTime < 2000) {
+                showFallbackOptions(trackName, artistName, webUrl);
+            }
+        }, 1500);
+        
+    } else {
+        // 非 Apple 设备：直接打开网页版
+        window.open(webUrl, '_blank');
+        showToast(`正在打开 "${trackName}" - ${artistName}`);
+    }
+}
 
-            // 首先尝试使用iTMS协议打开Apple Music应用
-            const itmsUrl = `itms://itunes.apple.com/cn/album/${albumId}?i=${trackId}`;
-            const itunesUrl = `https://music.apple.com/cn/album/${albumId}?i=${trackId}`;
+// 显示降级选项
+function showFallbackOptions(trackName, artistName, webUrl) {
+    // 创建一个更友好的提示框
+    const modal = document.createElement('div');
+    modal.className = 'apple-music-modal';
+    modal.innerHTML = `
+        <div class="modal-overlay" onclick="this.parentElement.remove()">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-icon">🎵</div>
+                <h3>打开 Apple Music</h3>
+                <p>即将播放 "${trackName}"<br><span class="artist">${artistName}</span></p>
+                <div class="modal-buttons">
+                    <a href="${webUrl}" target="_blank" class="btn-primary" onclick="this.closest('.apple-music-modal').remove()">
+                        在网页中打开
+                    </a>
+                    <button class="btn-secondary" onclick="this.closest('.apple-music-modal').remove()">
+                        取消
+                    </button>
+                </div>
+                <p class="hint">提示：安装 Apple Music 应用可获得更好体验</p>
+            </div>
+        </div>
+    `;
+    
+    // 添加样式
+    if (!document.querySelector('#apple-music-modal-styles')) {
+        const styles = document.createElement('style');
+        styles.id = 'apple-music-modal-styles';
+        styles.textContent = `
+            .apple-music-modal .modal-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.6);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                animation: fadeIn 0.2s ease;
+            }
+            .apple-music-modal .modal-content {
+                background: white;
+                border-radius: 16px;
+                padding: 24px;
+                max-width: 320px;
+                width: 90%;
+                text-align: center;
+                animation: slideUp 0.3s ease;
+            }
+            .apple-music-modal .modal-icon {
+                font-size: 48px;
+                margin-bottom: 12px;
+            }
+            .apple-music-modal h3 {
+                margin: 0 0 8px;
+                font-size: 18px;
+                color: #1a1a1a;
+            }
+            .apple-music-modal p {
+                margin: 0 0 16px;
+                color: #666;
+                font-size: 14px;
+                line-height: 1.5;
+            }
+            .apple-music-modal .artist {
+                color: #999;
+            }
+            .apple-music-modal .modal-buttons {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+            .apple-music-modal .btn-primary {
+                background: linear-gradient(135deg, #fc3c44, #d93a41);
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 10px;
+                font-size: 16px;
+                font-weight: 500;
+                cursor: pointer;
+                text-decoration: none;
+                display: block;
+            }
+            .apple-music-modal .btn-secondary {
+                background: #f0f0f0;
+                color: #333;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 10px;
+                font-size: 16px;
+                cursor: pointer;
+            }
+            .apple-music-modal .hint {
+                font-size: 12px;
+                color: #999;
+                margin-top: 16px;
+                margin-bottom: 0;
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            @keyframes slideUp {
+                from { transform: translateY(20px); opacity: 0; }
+                to { transform: translateY(0); opacity: 1; }
+            }
+        `;
+        document.head.appendChild(styles);
+    }
+    
+    document.body.appendChild(modal);
+}
 
-            // 创建一个隐藏的iframe来尝试打开应用
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = itmsUrl;
-            document.body.appendChild(iframe);
-
-            // 如果无法打开应用，则在新标签页中打开网页版
-            setTimeout(() => {
-                if (confirm(`无法直接在Apple Music中播放 "${trackName}" 由 ${artistName} 演唱的歌曲。是否在网页中打开Apple Music以播放完整版？`)) {
-                    window.open(itunesUrl, '_blank');
-                }
-                document.body.removeChild(iframe);
-            }, 1000);
-        }
+// Toast 提示
+function showToast(message) {
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0,0,0,0.8);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-size: 14px;
+        z-index: 10000;
+        animation: fadeIn 0.3s ease;
+    `;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'fadeOut 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 300);
+    }, 2000);
+}
 
         // 歌词
         async function fetchLyrics(artist, title) {
