@@ -536,6 +536,39 @@
             color: var(--text-secondary);
             text-align: center;
             margin-bottom: 32px;
+            display: inline-block;
+        }
+
+        .lyrics-artist-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 32px;
+        }
+
+        .wikipedia-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            color: var(--text);
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .wikipedia-link:hover {
+            background: var(--primary);
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .wikipedia-icon {
+            font-size: 16px;
         }
 
         .lyrics-wiki {
@@ -837,7 +870,12 @@
         </div>
         <img class="lyrics-cover" id="lyrics-cover" src="" alt="">
         <h2 class="lyrics-title" id="lyrics-title"></h2>
-        <p class="lyrics-artist" id="lyrics-artist"></p>
+        <div class="lyrics-artist-container">
+            <p class="lyrics-artist" id="lyrics-artist"></p>
+            <a href="#" class="wikipedia-link" id="wikipedia-link" target="_blank" title="查看维基百科" style="display:none;">
+                <span class="wikipedia-icon">🌐</span>
+            </a>
+        </div>
         <div class="lyrics-wiki" id="lyrics-wiki">
             <div class="lyrics-wiki-title" id="wiki-title"></div>
             <div class="lyrics-wiki-text" id="wiki-text"></div>
@@ -1010,6 +1048,8 @@
             // 预加载歌词
             $('lyrics-title').textContent = song.trackName;
             $('lyrics-artist').textContent = song.artistName;
+            // Set up Wikipedia link
+            setupWikipediaLink(song.artistName);
             $('lyrics-cover').src = cover;
             $('lyrics-text').textContent = '加载中...';
             $('lyrics-wiki').classList.remove('show');
@@ -1309,22 +1349,80 @@ function showToast(message) {
             $('lyrics-text').textContent = '暂无歌词';
         }
 
+        // 设置维基百科链接
+        function setupWikipediaLink(artistName) {
+            const cleanName = artistName.split(/&|,|feat\.|ft\./i)[0].trim();
+            const encodedName = encodeURIComponent(cleanName);
+
+            // 尝试中文维基百科，如果不存在则使用英文
+            const wikiUrl = `https://zh.wikipedia.org/wiki/${encodedName}`;
+
+            // 设置链接
+            $('wikipedia-link').href = wikiUrl;
+
+            // 显示链接
+            $('wikipedia-link').style.display = 'inline-flex';
+
+            // 验证链接是否存在（异步检查）
+            verifyWikipediaPageExists(cleanName);
+        }
+
+        // 验证维基百科页面是否存在
+        async function verifyWikipediaPageExists(artistName) {
+            const cleanName = artistName.split(/&|,|feat\.|ft\./i)[0].trim();
+            const encodedName = encodeURIComponent(cleanName);
+
+            // 首先尝试中文维基百科
+            try {
+                const res = await fetch(`https://zh.wikipedia.org/api/rest_v1/page/summary/${encodedName}`);
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.title) {
+                        // 中文维基百科存在，使用中文链接
+                        $('wikipedia-link').href = `https://zh.wikipedia.org/wiki/${encodedName}`;
+                        return;
+                    }
+                }
+            } catch {}
+
+            // 如果中文不存在，尝试英文维基百科
+            try {
+                const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodedName}`);
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.title) {
+                        // 英文维基百科存在，使用英文链接
+                        $('wikipedia-link').href = `https://en.wikipedia.org/wiki/${encodedName}`;
+                        return;
+                    }
+                }
+            } catch {}
+
+            // 如果都不存在，使用中文链接，让用户知道可能不存在
+            $('wikipedia-link').href = `https://zh.wikipedia.org/wiki/${encodedName}`;
+        }
+
         // 歌手百科
         async function fetchArtistWiki(artistName) {
             const cleanName = artistName.split(/&|,|feat\.|ft\./i)[0].trim();
-            
+
             try {
                 let res = await fetch(`https://zh.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cleanName)}`);
                 if (!res.ok) {
                     res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cleanName)}`);
                 }
-                
+
                 if (res.ok) {
                     const data = await res.json();
                     if (data.extract) {
                         $('wiki-title').textContent = `关于 ${data.title}`;
                         $('wiki-text').textContent = data.extract;
                         $('lyrics-wiki').classList.add('show');
+                    } else {
+                        // If no wiki summary found, hide the wiki section
+                        $('lyrics-wiki').classList.remove('show');
                     }
                 }
             } catch {}
