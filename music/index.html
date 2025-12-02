@@ -341,7 +341,7 @@
 
         @keyframes spin {
             from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+            to { transform: rotate(-360deg); }
         }
 
         .player-info {
@@ -388,53 +388,47 @@
         }
 
         .ctrl-btn {
-            width: 36px; /* 稍微减小尺寸 */
-            height: 36px;
+            width: 44px;
+            height: 44px;
             border-radius: 50%;
             border: none;
-            background: transparent;
+            background: var(--glass);
             color: var(--text);
-            font-size: 24px;
+            font-size: 20px;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.2s ease;
-            opacity: 0.8;
+            transition: all 0.3s ease;
+            border: 1px solid var(--glass-border);
+        }
+
+        .ctrl-btn:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            transform: scale(1.15);
         }
 
         .ctrl-btn:active {
-            transform: scale(0.9);
-            background: rgba(255,255,255,0.1);
-        }
-        
-        .ctrl-btn:hover {
-            opacity: 1;
+            transform: scale(0.95);
         }
 
         .ctrl-btn.play {
-            width: 64px; /* 加大尺寸 */
-            height: 64px;
+            width: 68px;
+            height: 68px;
             background: var(--primary);
             color: white;
             font-size: 28px;
-            opacity: 1;
-            box-shadow: 0 8px 24px rgba(29, 185, 84, 0.4); /* 增加光晕 */
-            /* 视觉修正：播放图标通常偏左，需要往右移一点点 */
-            padding-left: 4px; 
-        }
-        
-        /* 当显示暂停图标时，取消 padding-left */
-        .ctrl-btn.play[data-playing="true"] {
-             padding-left: 0;
+            box-shadow: 0 8px 30px rgba(29, 185, 84, 0.5);
         }
 
         .ctrl-btn.play:hover {
             background: var(--primary-dark);
-            transform: scale(1.05);
-            box-shadow: 0 12px 32px rgba(29, 185, 84, 0.6);
+            transform: scale(1.08);
+            box-shadow: 0 12px 36px rgba(29, 185, 84, 0.7);
         }
-        
+
         .ctrl-btn.play:active {
             transform: scale(0.95);
         }
@@ -539,36 +533,8 @@
             display: inline-block;
         }
 
-        .lyrics-artist-container {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            margin-bottom: 32px;
-        }
-
-        .wikipedia-link {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: var(--glass);
-            border: 1px solid var(--glass-border);
-            color: var(--text);
-            text-decoration: none;
-            transition: all 0.2s ease;
-        }
-
-        .wikipedia-link:hover {
-            background: var(--primary);
-            color: white;
-            transform: scale(1.1);
-        }
-
-        .wikipedia-icon {
-            font-size: 16px;
+        .lyrics-artist.clickable:hover {
+            color: var(--primary);
         }
 
         .lyrics-wiki {
@@ -870,12 +836,7 @@
         </div>
         <img class="lyrics-cover" id="lyrics-cover" src="" alt="">
         <h2 class="lyrics-title" id="lyrics-title"></h2>
-        <div class="lyrics-artist-container">
-            <p class="lyrics-artist" id="lyrics-artist"></p>
-            <a href="#" class="wikipedia-link" id="wikipedia-link" target="_blank" title="查看维基百科" style="display:none;">
-                <span class="wikipedia-icon">🌐</span>
-            </a>
-        </div>
+        <p class="lyrics-artist clickable" id="lyrics-artist" style="cursor: pointer; text-decoration: underline;" title="点击访问维基百科"></p>
         <div class="lyrics-wiki" id="lyrics-wiki">
             <div class="lyrics-wiki-title" id="wiki-title"></div>
             <div class="lyrics-wiki-text" id="wiki-text"></div>
@@ -1048,7 +1009,7 @@
             // 预加载歌词
             $('lyrics-title').textContent = song.trackName;
             $('lyrics-artist').textContent = song.artistName;
-            // Set up Wikipedia link
+            // Set up Wikipedia link for artist name
             setupWikipediaLink(song.artistName);
             $('lyrics-cover').src = cover;
             $('lyrics-text').textContent = '加载中...';
@@ -1056,6 +1017,12 @@
 
             fetchLyrics(song.artistName, song.trackName);
             fetchArtistWiki(song.artistName);
+
+            // Add click event to artist name to open Wikipedia
+            $('lyrics-artist').onclick = function() {
+                const wikiUrl = $('lyrics-artist').dataset.wikiUrl || `https://zh.wikipedia.org/wiki/${encodeURIComponent(song.artistName.split(/&|,|feat\.|ft\./i)[0].trim())}`;
+                window.open(wikiUrl, '_blank');
+            };
         }
 
         // 更新播放状态
@@ -1357,11 +1324,8 @@ function showToast(message) {
             // 尝试中文维基百科，如果不存在则使用英文
             const wikiUrl = `https://zh.wikipedia.org/wiki/${encodedName}`;
 
-            // 设置链接
-            $('wikipedia-link').href = wikiUrl;
-
-            // 显示链接
-            $('wikipedia-link').style.display = 'inline-flex';
+            // 存储链接到艺术家元素的数据属性
+            $('lyrics-artist').dataset.wikiUrl = wikiUrl;
 
             // 验证链接是否存在（异步检查）
             verifyWikipediaPageExists(cleanName);
@@ -1380,7 +1344,7 @@ function showToast(message) {
                     const data = await res.json();
                     if (data.title) {
                         // 中文维基百科存在，使用中文链接
-                        $('wikipedia-link').href = `https://zh.wikipedia.org/wiki/${encodedName}`;
+                        $('lyrics-artist').dataset.wikiUrl = `https://zh.wikipedia.org/wiki/${encodedName}`;
                         return;
                     }
                 }
@@ -1394,14 +1358,14 @@ function showToast(message) {
                     const data = await res.json();
                     if (data.title) {
                         // 英文维基百科存在，使用英文链接
-                        $('wikipedia-link').href = `https://en.wikipedia.org/wiki/${encodedName}`;
+                        $('lyrics-artist').dataset.wikiUrl = `https://en.wikipedia.org/wiki/${encodedName}`;
                         return;
                     }
                 }
             } catch {}
 
             // 如果都不存在，使用中文链接，让用户知道可能不存在
-            $('wikipedia-link').href = `https://zh.wikipedia.org/wiki/${encodedName}`;
+            $('lyrics-artist').dataset.wikiUrl = `https://zh.wikipedia.org/wiki/${encodedName}`;
         }
 
         // 歌手百科
