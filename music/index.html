@@ -873,6 +873,59 @@
             tracks: [false, false, false, false, false]
         };
 
+        // 缓存系统
+        const CacheManager = {
+            // 获取缓存的数据
+            get: (key) => {
+                try {
+                    const cached = localStorage.getItem(key);
+                    if (!cached) return null;
+
+                    const parsed = JSON.parse(cached);
+                    const now = Date.now();
+
+                    // 检查是否过期
+                    if (parsed.expiry && now > parsed.expiry) {
+                        localStorage.removeItem(key);
+                        return null;
+                    }
+
+                    return parsed.data;
+                } catch (e) {
+                    console.warn('Cache get error:', e);
+                    return null;
+                }
+            },
+
+            // 设置缓存数据
+            set: (key, data, expiryHours = 24) => {
+                try {
+                    const expiry = Date.now() + (expiryHours * 60 * 60 * 1000);
+                    const cacheObj = {
+                        data: data,
+                        expiry: expiry
+                    };
+                    localStorage.setItem(key, JSON.stringify(cacheObj));
+                } catch (e) {
+                    console.warn('Cache set error:', e);
+                }
+            },
+
+            // 删除缓存数据
+            remove: (key) => {
+                try {
+                    localStorage.removeItem(key);
+                } catch (e) {
+                    console.warn('Cache remove error:', e);
+                }
+            }
+        };
+
+        // 生成缓存键
+        const generateCacheKey = (artist, title) => {
+            return `song_${encodeURIComponent(artist)}_${encodeURIComponent(title)}`;
+        };
+
         // DOM 元素
         const $ = id => document.getElementById(id);
         const audio = $('audio');
@@ -915,6 +968,17 @@
             const query = $('search-input').value.trim();
             if (!query) return;
 
+            // 尝试从缓存获取搜索结果
+            const cacheKey = `search_${query}`;
+            let cachedResults = CacheManager.get(cacheKey);
+
+            if (cachedResults) {
+                console.log('Using cached search results for:', query);
+                state.playlist = cachedResults;
+                renderResults(cachedResults);
+                return;
+            }
+
             $('results').innerHTML = `
                 <div class="loading" style="grid-column: 1/-1;">
                     <div class="loading-spinner"></div>
@@ -925,8 +989,24 @@
             try {
                 const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=24&country=cn`);
                 const data = await res.json();
+
+                // 缓存搜索结果（有效期1小时）
+                CacheManager.set(cacheKey, data.results, 1);
+
                 state.playlist = data.results;
                 renderResults(data.results);
+
+                // 同时缓存每个歌曲的元数据
+                data.results.forEach(song => {
+                    const songCacheKey = generateCacheKey(song.artistName, song.trackName);
+                    CacheManager.set(songCacheKey, {
+                        trackName: song.trackName,
+                        artistName: song.artistName,
+                        artworkUrl: song.artworkUrl100,
+                        previewUrl: song.previewUrl,
+                        collectionName: song.collectionName
+                    }, 24); // 24小时有效期
+                });
             } catch (e) {
                 $('results').innerHTML = `
                     <div class="empty-state" style="grid-column: 1/-1;">
@@ -951,19 +1031,28 @@
                 return;
             }
 
-            $('results').innerHTML = songs.map((song, index) => `
-                <div class="song-card" data-index="${index}" onclick="playSong(${index})">
-                    <div class="song-cover">
-                        <img src="${song.artworkUrl100.replace('100x100bb', '300x300bb')}" loading="lazy" alt="">
-                        <div class="play-overlay">
-                            <div class="play-overlay-btn">▶</div>
+            $('results').innerHTML = songs.map((song, index) => {
+                // 检查是否有缓存的元数据
+                const songCacheKey = generateCacheKey(song.artistName, song.trackName);
+                const cachedSong = CacheManager.get(songCacheKey);
+
+                // 使用缓存的或原始的封面URL
+                const coverUrl = (cachedSong?.artworkUrl || song.artworkUrl100).replace('100x100bb', '300x300bb');
+
+                return `
+                    <div class="song-card" data-index="${index}" onclick="playSong(${index})">
+                        <div class="song-cover">
+                            <img src="${coverUrl}" loading="lazy" alt="">
+                            <div class="play-overlay">
+                                <div class="play-overlay-btn">▶</div>
+                            </div>
+                            ${song.trackId ? `<div class="song-options" onclick="event.stopPropagation(); playFullSong('${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}')">⋯</div>` : ''}
                         </div>
-                        ${song.trackId ? `<div class="song-options" onclick="event.stopPropagation(); playFullSong('${song.trackId}', '${song.trackName}', '${song.artistName}')">⋯</div>` : ''}
+                        <div class="song-title">${escapeHtml(song.trackName)}</div>
+                        <div class="song-artist">${escapeHtml(song.artistName)}</div>
                     </div>
-                    <div class="song-title">${escapeHtml(song.trackName)}</div>
-                    <div class="song-artist">${escapeHtml(song.artistName)}</div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         // HTML 转义
@@ -981,25 +1070,36 @@
             state.currentTrack = song;
             state.currentIndex = index;
 
-            const cover = song.artworkUrl100.replace('100x100bb', '600x600bb');
+            // 从缓存获取完整数据，如果有的话
+            const songCacheKey = generateCacheKey(song.artistName, song.trackName);
+            const cachedSong = CacheManager.get(songCacheKey);
+
+            // 使用缓存数据或原始数据
+            const trackName = cachedSong?.trackName || song.trackName;
+            const artistName = cachedSong?.artistName || song.artistName;
+            const artworkUrl = cachedSong?.artworkUrl || song.artworkUrl100;
+            const previewUrl = cachedSong?.previewUrl || song.previewUrl;
+            const collectionName = cachedSong?.collectionName || song.collectionName || song.collectionName;
+
+            const cover = artworkUrl.replace('100x100bb', '600x600bb');
 
             // 更新 UI
             const titleEl = $('player-title');
             const artistEl = $('player-artist');
 
-            titleEl.textContent = song.trackName;
-            artistEl.textContent = song.artistName;
+            titleEl.textContent = trackName;
+            artistEl.textContent = artistName;
             $('player-cover').src = cover;
 
             // 添加点击事件到标题（搜索歌曲名）和艺术家名称（搜索艺术家），用于搜索
             titleEl.onclick = () => {
-                searchBySong(song.trackName);
+                searchBySong(trackName);
             };
             titleEl.style.cursor = 'pointer';
             titleEl.title = '点击搜索该歌曲';
 
             artistEl.onclick = () => {
-                searchByArtist(song.artistName);
+                searchByArtist(artistName);
             };
             artistEl.style.cursor = 'pointer';
             artistEl.title = '点击搜索该艺术家的歌曲';
@@ -1039,7 +1139,7 @@
             });
 
             // 播放
-            audio.src = song.previewUrl;
+            audio.src = previewUrl;
             audio.play()
                 .then(() => updatePlayState(true))
                 .catch(() => updatePlayState(false));
@@ -1048,27 +1148,27 @@
             startDanmaku();
 
             // 预加载歌词
-            $('lyrics-title').textContent = song.trackName;
-            $('lyrics-artist').textContent = song.artistName;
+            $('lyrics-title').textContent = trackName;
+            $('lyrics-artist').textContent = artistName;
             // Set up Wikipedia link for artist name
-            setupWikipediaLink(song.artistName);
+            setupWikipediaLink(artistName);
             $('lyrics-cover').src = cover;
             $('lyrics-text').textContent = '加载中...';
             $('lyrics-wiki').classList.remove('show');
 
-            fetchLyrics(song.artistName, song.trackName);
-            fetchArtistWiki(song.artistName);
+            fetchLyrics(artistName, trackName);
+            fetchArtistWiki(artistName);
 
             // Add click event to artist name to search for artist's songs (left click)
             // and open Wikipedia (Ctrl/Cmd+click)
             $('lyrics-artist').onclick = function(event) {
                 if (event.ctrlKey || event.metaKey) {
                     // Ctrl/Cmd + click: open Wikipedia
-                    const wikiUrl = $('lyrics-artist').dataset.wikiUrl || `https://zh.wikipedia.org/wiki/${encodeURIComponent(song.artistName.split(/&|,|feat\.|ft\./i)[0].trim())}`;
+                    const wikiUrl = $('lyrics-artist').dataset.wikiUrl || `https://zh.wikipedia.org/wiki/${encodeURIComponent(artistName.split(/&|,|feat\.|ft\./i)[0].trim())}`;
                     window.open(wikiUrl, '_blank');
                 } else {
                     // Regular click: search for artist's songs
-                    searchByArtist(song.artistName);
+                    searchByArtist(artistName);
                 }
             };
             $('lyrics-artist').style.cursor = 'pointer';
@@ -1333,15 +1433,27 @@ function showToast(message) {
 
         // 歌词
         async function fetchLyrics(artist, title) {
+            // 生成缓存键
+            const cacheKey = `lyrics_${encodeURIComponent(artist)}_${encodeURIComponent(title)}`;
+            const cachedLyrics = CacheManager.get(cacheKey);
+
+            if (cachedLyrics) {
+                console.log('Using cached lyrics for:', artist, title);
+                $('lyrics-text').textContent = cachedLyrics;
+                return;
+            }
+
             try {
                 const cleanTitle = title.split('(')[0].split('-')[0].trim();
                 const cleanArtist = artist.split('&')[0].split(',')[0].trim();
                 const res = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(cleanArtist)}/${encodeURIComponent(cleanTitle)}`);
-                
+
                 if (res.ok) {
                     const data = await res.json();
                     if (data.lyrics) {
                         $('lyrics-text').textContent = data.lyrics;
+                        // 缓存歌词（有效期24小时）
+                        CacheManager.set(cacheKey, data.lyrics, 24);
                         return;
                     }
                 }
@@ -1418,6 +1530,16 @@ function showToast(message) {
         // 歌手百科
         async function fetchArtistWiki(artistName) {
             const cleanName = artistName.split(/&|,|feat\.|ft\./i)[0].trim();
+            const cacheKey = `wiki_${encodeURIComponent(cleanName)}`;
+            const cachedWiki = CacheManager.get(cacheKey);
+
+            if (cachedWiki) {
+                console.log('Using cached wiki for:', cleanName);
+                $('wiki-title').textContent = `关于 ${cachedWiki.title}`;
+                $('wiki-text').textContent = cachedWiki.extract;
+                $('lyrics-wiki').classList.add('show');
+                return;
+            }
 
             try {
                 let res = await fetch(`https://zh.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cleanName)}`);
@@ -1431,6 +1553,11 @@ function showToast(message) {
                         $('wiki-title').textContent = `关于 ${data.title}`;
                         $('wiki-text').textContent = data.extract;
                         $('lyrics-wiki').classList.add('show');
+                        // 缓存维基百科数据（有效期12小时）
+                        CacheManager.set(cacheKey, {
+                            title: data.title,
+                            extract: data.extract
+                        }, 12);
                     } else {
                         // If no wiki summary found, hide the wiki section
                         $('lyrics-wiki').classList.remove('show');
