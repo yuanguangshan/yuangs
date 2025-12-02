@@ -347,23 +347,37 @@
         .player-info {
             flex: 1;
             min-width: 0;
+            overflow: hidden;
+            mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
+        }
+
+        .player-title, .player-artist {
+            white-space: nowrap;
+            width: fit-content;
+            /* 默认不滚动，由 JS 判断是否添加滚动动画 */
         }
 
         .player-title {
             font-size: 15px;
             font-weight: 600;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
             margin-bottom: 4px;
+            color: var(--text);
         }
 
         .player-artist {
             font-size: 13px;
             color: var(--text-secondary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+        }
+        
+        /* 滚动动画类 */
+        .scroll-text {
+            animation: scroll-left var(--duration, 10s) linear infinite alternate;
+        }
+        
+        @keyframes scroll-left {
+            0%, 10% { transform: translateX(0); }
+            90%, 100% { transform: translateX(var(--scroll-distance, -50%)); }
         }
 
         .player-controls {
@@ -942,9 +956,37 @@
             const cover = song.artworkUrl100.replace('100x100bb', '600x600bb');
 
             // 更新 UI
-            $('player-title').textContent = song.trackName;
-            $('player-artist').textContent = song.artistName;
+            const titleEl = $('player-title');
+            const artistEl = $('player-artist');
+            
+            titleEl.textContent = song.trackName;
+            artistEl.textContent = song.artistName;
             $('player-cover').src = cover;
+            
+            // 检查是否需要滚动
+            const checkScroll = (el) => {
+                // 先重置，以便准确测量
+                el.classList.remove('scroll-text');
+                el.style.transform = 'none';
+                
+                const parentWidth = el.parentElement.clientWidth;
+                const textWidth = el.scrollWidth;
+                
+                if (textWidth > parentWidth) {
+                    const distance = parentWidth - textWidth; // 负值，向左移动
+                    const duration = Math.abs(distance) / 30 + 2; // 速度控制：每秒30px，基础2s
+                    
+                    el.style.setProperty('--scroll-distance', `${distance}px`);
+                    el.style.setProperty('--duration', `${duration}s`);
+                    el.classList.add('scroll-text');
+                }
+            };
+            
+            // 稍微延时一点，确保 DOM 渲染完成
+            setTimeout(() => {
+                checkScroll(titleEl);
+                checkScroll(artistEl);
+            }, 50);
 
             // 背景
             $('bg-album').style.backgroundImage = `url(${cover})`;
