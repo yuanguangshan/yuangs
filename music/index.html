@@ -1576,34 +1576,79 @@ function showToast(message) {
             $('lyrics-modal').classList.remove('show');
         }
 
-        // 天气搜索
-        async function searchByWeather() {
-            try {
-                const geoRes = await fetch('https://get.geojs.io/v1/ip/geo.json');
-                const geo = await geoRes.json();
-                
-                const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${geo.latitude}&longitude=${geo.longitude}&current_weather=true`);
-                const weatherData = await weatherRes.json();
-                const code = weatherData.current_weather.weathercode;
-                
-                let keyword = 'Pop';
-                let weather = '未知';
-                
-                if (code <= 3) { keyword = 'Sunny Day'; weather = '晴朗'; }
-                else if (code >= 45 && code <= 48) { keyword = 'Foggy Mood'; weather = '雾天'; }
-                else if (code >= 51 && code <= 67) { keyword = 'Rainy Day'; weather = '下雨'; }
-                else if (code >= 71 && code <= 86) { keyword = 'Snow Winter'; weather = '下雪'; }
-                else if (code >= 95) { keyword = 'Thunder Storm'; weather = '雷暴'; }
-                else { keyword = 'Cloudy Sky'; weather = '多云'; }
-
-                $('search-input').value = keyword;
-                searchMusic();
-                
-                alert(`📍 ${geo.city || '未知'}\n🌤️ ${weather}\n🎵 推荐: ${keyword}`);
-            } catch {
-                alert('获取天气失败，请检查网络');
-            }
+        // 天气搜索 - 随机关键词增强版
+async function searchByWeather() {
+    try {
+        // 1. 获取地理位置
+        const geoRes = await fetch('https://get.geojs.io/v1/ip/geo.json');
+        const geo = await geoRes.json();
+        
+        // 2. 获取天气数据
+        const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${geo.latitude}&longitude=${geo.longitude}&current_weather=true`);
+        const weatherData = await weatherRes.json();
+        const code = weatherData.current_weather.weathercode;
+        
+        // 3. 定义变量
+        let keywordOptions = []; // 候选关键词列表
+        let weatherLabel = '未知'; // 天气中文名
+        
+        // 4. 根据天气代码分配关键词库
+        if (code <= 3) { 
+            // 晴朗 (0-3)
+            weatherLabel = '晴朗'; 
+            keywordOptions = ['Sunny Day', 'Summer Vibes', 'Road Trip', 'Happy Pop', 'Feel Good', 'Energetic', 'Disco'];
         }
+        else if (code >= 45 && code <= 48) { 
+            // 雾天 (45, 48)
+            weatherLabel = '雾天'; 
+            keywordOptions = ['Foggy Mood', 'Ambient', 'Mystery', 'Dreamy', 'Shoegaze', 'Haze', 'Cinematic'];
+        }
+        else if (code >= 51 && code <= 67) { 
+            // 下雨 (51-67)
+            weatherLabel = '下雨'; 
+            keywordOptions = ['Rainy Day', 'Acoustic', 'Jazz', 'Lofi Hip Hop', 'Sad Songs', 'R&B', 'Cozy'];
+        }
+        else if (code >= 71 && code <= 86) { 
+            // 下雪 (71-86)
+            weatherLabel = '下雪'; 
+            keywordOptions = ['Snow Winter', 'Christmas', 'Piano', 'Chillout', 'Classical', 'Fireplace', 'Soft Jazz'];
+        }
+        else if (code >= 95) { 
+            // 雷暴 (95+)
+            weatherLabel = '雷暴'; 
+            keywordOptions = ['Thunder Storm', 'Rock', 'Heavy Metal', 'Epic', 'Dark Wave', 'Intense', 'Dramatic'];
+        }
+        else { 
+            // 多云/阴天 (其他情况)
+            weatherLabel = '多云'; 
+            keywordOptions = ['Cloudy Sky', 'Indie', 'Folk', 'Mellow', 'Soft Rock', 'Chill', 'Coffee Shop'];
+        }
+
+        // 5. 核心：从数组中随机选择一个关键词
+        const randomKeyword = keywordOptions[Math.floor(Math.random() * keywordOptions.length)];
+
+        // 6. 执行搜索与提示
+        const searchInput = document.getElementById('search-input') || document.querySelector('#search-input'); // 兼容写法，防止 $ 未定义
+        if (searchInput) {
+            searchInput.value = randomKeyword;
+        } else {
+             // 如果你用的是 jQuery 或者自定义的 $ 函数，请保留原样：
+             // $('search-input').value = randomKeyword;
+             console.warn('未找到输入框元素');
+        }
+        
+        // 假设 searchMusic() 是你定义好的搜索函数
+        if (typeof searchMusic === 'function') {
+            searchMusic();
+        }
+        
+        alert(`📍 ${geo.city || '未知'}\n🌤️ ${weatherLabel}\n🎲 随机心情: ${randomKeyword}`);
+
+    } catch (e) {
+        console.error(e);
+        alert('获取天气失败，请检查网络');
+    }
+}
 
         // 弹幕系统
         function startDanmaku() {
