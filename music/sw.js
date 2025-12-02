@@ -1,6 +1,6 @@
 const CACHE_NAME = 'geek-music-v3';
 const urlsToCache = [
-    './applemusic.html',
+    './index.html',
     './manifest.json'
 ];
 
