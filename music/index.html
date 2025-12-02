@@ -1953,6 +1953,18 @@ const keywords = [
             playNext(true); // 传入 true 表示自动播放
         };
 
+        // 停止弹幕系统
+        function stopDanmaku() {
+            if (state.danmakuInterval) {
+                clearInterval(state.danmakuInterval);
+                state.danmakuInterval = null;
+            }
+            $('danmaku').classList.remove('show');
+            $('danmaku').innerHTML = '';
+            // 停止定期刷新弹幕数据
+            DanmakuManager.stopRefresh();
+        }
+
         function seek(e) {
             if (!audio.src) return;
             const rect = $('progress-bar').getBoundingClientRect();
@@ -2377,41 +2389,31 @@ async function searchByWeather() {
         function startDanmaku() {
             $('danmaku').classList.add('show');
             $('danmaku').innerHTML = '';
-            
+
             if (state.danmakuInterval) clearInterval(state.danmakuInterval);
-            
-            spawnDanmaku();
-            state.danmakuInterval = setInterval(spawnDanmaku, 4000);
+
+            // 初始化弹幕数据
+            DanmakuManager.fetchAndFill().then(() => {
+                spawnDanmaku();
+                state.danmakuInterval = setInterval(spawnDanmaku, 4000);
+                // 开始定期刷新弹幕数据
+                DanmakuManager.startRefresh();
+            });
         }
 
         async function spawnDanmaku() {
-            const useCache = state.danmakuCache.length > 0 && Math.random() < 0.5;
-            
-            if (useCache) {
-                renderDanmaku(state.danmakuCache[Math.floor(Math.random() * state.danmakuCache.length)]);
+            // 从全局弹幕存储中获取随机弹幕
+            const danmaku = DanmakuManager.getRandom();
+
+            if (danmaku) {
+                renderDanmaku(danmaku);
             } else {
-                try {
-                    const [userRes, textRes] = await Promise.all([
-                        fetch('https://randomuser.me/api/?inc=name,picture'),
-                        Math.random() > 0.5 
-                            ? fetch('https://api.kanye.rest/') 
-                            : fetch('https://v1.hitokoto.cn/?c=a&c=b')
-                    ]);
-                    
-                    const user = await userRes.json();
-                    const text = await textRes.json();
-                    
-                    const data = {
-                        name: user.results[0].name.first,
-                        avatar: user.results[0].picture.thumbnail,
-                        text: text.quote || text.hitokoto
-                    };
-                    
-                    state.danmakuCache.push(data);
-                    if (state.danmakuCache.length > 30) state.danmakuCache.shift();
-                    
-                    renderDanmaku(data);
-                } catch {}
+                // 如果没有可用弹幕，获取新数据
+                await DanmakuManager.fillNewRecords(5);
+                const danmaku = DanmakuManager.getRandom();
+                if (danmaku) {
+                    renderDanmaku(danmaku);
+                }
             }
         }
 
@@ -2439,6 +2441,151 @@ async function searchByWeather() {
             
             $('danmaku').appendChild(item);
         }
+
+        // 弹幕管理器
+        const DanmakuManager = {
+            STORAGE_KEY: 'danmaku_records',
+            MAX_RECORDS: 100,
+            EXPIRY_TIME: 12 * 60 * 60 * 1000, // 12 hours in milliseconds
+            REFRESH_INTERVAL: null, // 定时刷新定时器
+
+            // 获取所有弹幕记录
+            getAll: () => {
+                try {
+                    const data = localStorage.getItem(DanmakuManager.STORAGE_KEY);
+                    if (!data) return [];
+
+                    const records = JSON.parse(data);
+                    const now = Date.now();
+
+                    // 过滤掉过期的记录
+                    const validRecords = records.filter(record => now - record.timestamp < DanmakuManager.EXPIRY_TIME);
+
+                    // 如果有过期记录，更新存储
+                    if (records.length !== validRecords.length) {
+                        localStorage.setItem(DanmakuManager.STORAGE_KEY, JSON.stringify(validRecords));
+                    }
+
+                    return validRecords;
+                } catch (e) {
+                    console.error('Failed to get danmaku records:', e);
+                    return [];
+                }
+            },
+
+            // 保存弹幕记录（最多100条，超出则移除最旧的）
+            save: (records) => {
+                try {
+                    // 确保不超过最大数量
+                    if (records.length > DanmakuManager.MAX_RECORDS) {
+                        records = records.slice(-DanmakuManager.MAX_RECORDS);
+                    }
+
+                    localStorage.setItem(DanmakuManager.STORAGE_KEY, JSON.stringify(records));
+                } catch (e) {
+                    console.error('Failed to save danmaku records:', e);
+                }
+            },
+
+            // 添加新弹幕记录
+            add: (danmaku) => {
+                let records = DanmakuManager.getAll();
+                records.push({
+                    ...danmaku,
+                    timestamp: Date.now()
+                });
+
+                // 保存时自动清理过期记录并限制数量
+                DanmakuManager.save(records);
+            },
+
+            // 随机获取一条弹幕记录
+            getRandom: () => {
+                const records = DanmakuManager.getAll();
+                if (records.length === 0) return null;
+                return records[Math.floor(Math.random() * records.length)];
+            },
+
+            // 获取并填充新弹幕数据（如果记录为空或过期）
+            fetchAndFill: async () => {
+                const records = DanmakuManager.getAll();
+                const now = Date.now();
+
+                // 如果记录少于10条，或所有记录都快过期，请求新数据
+                if (records.length < 10) {
+                    await DanmakuManager.fillNewRecords(20); // 填充20条新记录
+                } else {
+                    // 检查是否需要更新
+                    const oldestRecord = records.reduce((oldest, record) => {
+                        return record.timestamp < oldest.timestamp ? record : oldest;
+                    }, records[0]);
+
+                    if (now - oldestRecord.timestamp > DanmakuManager.EXPIRY_TIME * 0.8) { // 如果最老的记录超过有效期的80%
+                        await DanmakuManager.fillNewRecords(5); // 填充5条新记录
+                    }
+                }
+            },
+
+            // 开始定期刷新弹幕数据
+            startRefresh: () => {
+                // 停止之前的刷新定时器
+                if (DanmakuManager.REFRESH_INTERVAL) {
+                    clearInterval(DanmakuManager.REFRESH_INTERVAL);
+                }
+
+                // 每10分钟检查一次是否需要更新弹幕数据
+                DanmakuManager.REFRESH_INTERVAL = setInterval(async () => {
+                    await DanmakuManager.fetchAndFill();
+                }, 10 * 60 * 1000); // 10分钟
+            },
+
+            // 停止定期刷新弹幕数据
+            stopRefresh: () => {
+                if (DanmakuManager.REFRESH_INTERVAL) {
+                    clearInterval(DanmakuManager.REFRESH_INTERVAL);
+                    DanmakuManager.REFRESH_INTERVAL = null;
+                }
+            },
+
+            // 填充新的弹幕记录
+            fillNewRecords: async (count) => {
+                try {
+                    for (let i = 0; i < count; i++) {
+                        // 随机生成弹幕数据（如果API调用失败，使用默认值）
+                        const useKanye = Math.random() > 0.5;
+
+                        const [userRes, textRes] = await Promise.all([
+                            fetch('https://randomuser.me/api/?inc=name,picture'),
+                            useKanye
+                                ? fetch('https://api.kanye.rest/')
+                                : fetch('https://v1.hitokoto.cn/?c=a&c=b')
+                        ]);
+
+                        const user = await userRes.json();
+                        const text = await textRes.json();
+
+                        const danmaku = {
+                            name: user.results[0].name.first,
+                            avatar: user.results[0].picture.thumbnail,
+                            text: text.quote || text.hitokoto
+                        };
+
+                        DanmakuManager.add(danmaku);
+                    }
+                } catch (err) {
+                    console.error('Failed to fetch new danmaku records:', err);
+                    // 如果API调用失败，生成一些默认弹幕
+                    for (let i = 0; i < count; i++) {
+                        const danmaku = {
+                            name: '用户' + (Math.floor(Math.random() * 10000)),
+                            avatar: 'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50"%3E%3Ccircle cx="25" cy="25" r="25" fill="%23ccc"/%3E%3C/svg%3E',
+                            text: '这是一条随机弹幕'
+                        };
+                        DanmakuManager.add(danmaku);
+                    }
+                }
+            }
+        };
 
         // PWA
         if ('serviceWorker' in navigator) {
