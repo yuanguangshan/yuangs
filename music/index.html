@@ -347,6 +347,43 @@
             text-overflow: ellipsis;
         }
 
+        /* 两列结果布局 */
+        .results-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            width: 100%;
+        }
+
+        .results-column {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .simple-header {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            padding-left: 4px;
+        }
+
+        .empty-message {
+            grid-column: 1/-1;
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        @media (max-width: 768px) {
+            .results-columns {
+                grid-template-columns: 1fr;
+                gap: 24px;
+            }
+        }
+
         /* 底部播放器 - 全新设计 */
         .player {
             position: fixed;
@@ -2058,39 +2095,21 @@
                 // 可能是 CORS 或网络问题，不中断整个搜索流程
             }
 
-            // 合并结果：优先使用 iTunes 数据，补充 YouTube 数据
-            let combinedResults = [...iTunesData.results];
-
-            // 只添加与搜索查询相关的 YouTube 结果
-            const youTubeResultsToAdd = youTubeData.filter(ytSong => {
-                const songMatch = ytSong.trackName.toLowerCase().includes(query.toLowerCase());
-                const artistMatch = ytSong.artistName.toLowerCase().includes(query.toLowerCase());
-                return songMatch || artistMatch;
-            });
-
-            // 避免重复，按歌曲和艺术家匹配
-            const existingTracks = new Set();
-            combinedResults.forEach(song => {
-                const trackKey = `${song.trackName.toLowerCase()}-${song.artistName.toLowerCase()}`;
-                existingTracks.add(trackKey);
-            });
-
-            for (const ytSong of youTubeResultsToAdd) {
-                const trackKey = `${ytSong.trackName.toLowerCase()}-${ytSong.artistName.toLowerCase()}`;
-                if (!existingTracks.has(trackKey)) {
-                    combinedResults.push(ytSong);
-                    existingTracks.add(trackKey);
-                }
-            }
+            // 不合并结果，而是分别保存 iTunes 和 YouTube 数据
+            const iTunesResults = iTunesData.results || [];
+            const youTubeResults = youTubeData || [];
 
             // 缓存搜索结果（有效期1小时）
-            CacheManager.set(cacheKey, combinedResults, 1);
+            CacheManager.set(cacheKey, { itunes: iTunesResults, youtube: youTubeResults }, 1);
 
-            state.playlist = combinedResults;
-            renderResults(combinedResults);
+            // 保存到 state，用于播放
+            state.playlist = [...iTunesResults, ...youTubeResults];
+
+            // 渲染两列结果
+            renderSeparateResults(iTunesResults, youTubeResults);
 
             // 同时缓存每个歌曲的元数据
-            combinedResults.forEach(song => {
+            [...iTunesResults, ...youTubeResults].forEach(song => {
                 const songCacheKey = generateCacheKey(song.artistName, song.trackName);
                 CacheManager.set(songCacheKey, {
                     trackName: song.trackName,
@@ -2101,6 +2120,61 @@
                     kind: song.kind  // 保存来源类型
                 }, 24); // 24小时有效期
             });
+        }
+
+        // 渲染分离的结果（iTunes 和 YouTube 分列显示）
+        function renderSeparateResults(iTunesSongs, youTubeSongs) {
+            if (iTunesSongs.length === 0 && youTubeSongs.length === 0) {
+                $('results').innerHTML = `
+                    <div class="empty-state" style="grid-column: 1/-1;">
+                        <div class="empty-icon">🔍</div>
+                        <div class="empty-title">未找到结果</div>
+                        <div class="empty-desc">换个关键词试试</div>
+                    </div>
+                `;
+                return;
+            }
+
+            const renderSongList = (songs, startIndex) => {
+                return songs.map((song, index) => {
+                    const actualIndex = startIndex + index;
+                    const songCacheKey = generateCacheKey(song.artistName, song.trackName);
+                    const cachedSong = CacheManager.get(songCacheKey);
+                    const coverUrl = (cachedSong?.artworkUrl || song.artworkUrl100).replace('100x100bb', '300x300bb');
+                    const isYouTube = song.kind === 'youtube' || song.previewUrl?.includes('youtube.com');
+
+                    return `
+                        <div class="song-card" data-index="${actualIndex}" onclick="playSong(${actualIndex})">
+                            <div class="song-cover">
+                                <img src="${coverUrl}" loading="lazy" alt="">
+                                <div class="play-overlay">
+                                    <div class="play-overlay-btn">▶</div>
+                                </div>
+                                ${song.trackId ? `<div class="song-options" onclick="event.stopPropagation(); ${isYouTube ? `playYouTubeFullSong('${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}', '${coverUrl}')` : `playFullSong('${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}')`}">⋯</div>` : ''}
+                            </div>
+                            <div class="song-title">${isYouTube ? '<span style="color: #ff6b6b;">▶</span> ' : ''}${escapeHtml(song.trackName)}</div>
+                            <div class="song-artist">${escapeHtml(song.artistName)}</div>
+                        </div>
+                    `;
+                }).join('');
+            };
+
+            $('results').innerHTML = `
+                <div class="results-columns" style="grid-column: 1 / -1;">
+                    <div class="results-column">
+                        <div class="simple-header">iTunes</div>
+                        <div class="grid">
+                            ${iTunesSongs.length > 0 ? renderSongList(iTunesSongs, 0) : '<div class="empty-message">暂无结果</div>'}
+                        </div>
+                    </div>
+                    <div class="results-column">
+                        <div class="simple-header">YouTube</div>
+                        <div class="grid">
+                            ${youTubeSongs.length > 0 ? renderSongList(youTubeSongs, iTunesSongs.length) : '<div class="empty-message">暂无结果</div>'}
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
         // 渲染结果
