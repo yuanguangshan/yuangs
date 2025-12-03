@@ -1,3 +1,5 @@
+# 此文件作为youtube服务已经到服务器供data_api使用
+
 from ytmusicapi import YTMusic
 
 class YouTubeMusicService:
