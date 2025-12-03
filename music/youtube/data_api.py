@@ -1902,6 +1902,119 @@ def weixin_push():
         return jsonify({"error": f"服务器内部错误: {str(e)}"}), 500
 
 
+# =====================================================================
+# --- 6. YouTube Music API 路由 ---
+# =====================================================================
+
+# 导入 YouTube Music 服务
+try:
+    from youtube_service import (
+        search_song,
+        search_artist,
+        get_artist_info,
+        get_lyrics,
+        get_song_details
+    )
+    YOUTUBE_SERVICE_AVAILABLE = True
+    app.logger.info("✅ YouTube Music 服务已加载")
+except ImportError as e:
+    YOUTUBE_SERVICE_AVAILABLE = False
+    app.logger.warning(f"⚠️ YouTube Music 服务不可用: {e}")
+
+
+@app.route('/youtubeapi/search/song', methods=['GET'])
+@log_execution_time
+def youtube_search_song():
+    """搜索歌曲接口"""
+    if not YOUTUBE_SERVICE_AVAILABLE:
+        return jsonify({'success': False, 'error': 'YouTube Music 服务不可用'}), 503
+    
+    query = request.args.get('q', '')
+    limit = request.args.get('limit', 5, type=int)
+    
+    if not query:
+        return jsonify({'success': False, 'error': '缺少搜索关键词 (参数: q)'}), 400
+    
+    if limit < 1 or limit > 50:
+        return jsonify({'success': False, 'error': 'limit 参数必须在 1-50 之间'}), 400
+    
+    try:
+        result = search_song(query, limit)
+        return jsonify(result)
+    except Exception as e:
+        app.logger.error(f"YouTube 搜索歌曲失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/youtubeapi/search/artist', methods=['GET'])
+@log_execution_time
+def youtube_search_artist():
+    """搜索艺术家接口"""
+    if not YOUTUBE_SERVICE_AVAILABLE:
+        return jsonify({'success': False, 'error': 'YouTube Music 服务不可用'}), 503
+    
+    query = request.args.get('q', '')
+    limit = request.args.get('limit', 5, type=int)
+    
+    if not query:
+        return jsonify({'success': False, 'error': '缺少搜索关键词 (参数: q)'}), 400
+    
+    if limit < 1 or limit > 50:
+        return jsonify({'success': False, 'error': 'limit 参数必须在 1-50 之间'}), 400
+    
+    try:
+        result = search_artist(query, limit)
+        return jsonify(result)
+    except Exception as e:
+        app.logger.error(f"YouTube 搜索艺术家失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/youtubeapi/artist/<channel_id>', methods=['GET'])
+@log_execution_time
+def youtube_get_artist(channel_id):
+    """获取艺术家详细信息接口"""
+    if not YOUTUBE_SERVICE_AVAILABLE:
+        return jsonify({'success': False, 'error': 'YouTube Music 服务不可用'}), 503
+    
+    try:
+        result = get_artist_info(channel_id)
+        return jsonify(result)
+    except Exception as e:
+        app.logger.error(f"YouTube 获取艺术家信息失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/youtubeapi/lyrics/<video_id>', methods=['GET'])
+@log_execution_time
+def youtube_get_lyrics(video_id):
+    """获取歌词接口"""
+    if not YOUTUBE_SERVICE_AVAILABLE:
+        return jsonify({'success': False, 'error': 'YouTube Music 服务不可用'}), 503
+    
+    try:
+        result = get_lyrics(video_id)
+        return jsonify(result)
+    except Exception as e:
+        app.logger.error(f"YouTube 获取歌词失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/youtubeapi/song/<video_id>', methods=['GET'])
+@log_execution_time
+def youtube_get_song_details(video_id):
+    """获取歌曲完整信息接口（包括歌词）"""
+    if not YOUTUBE_SERVICE_AVAILABLE:
+        return jsonify({'success': False, 'error': 'YouTube Music 服务不可用'}), 503
+    
+    try:
+        result = get_song_details(video_id)
+        return jsonify(result)
+    except Exception as e:
+        app.logger.error(f"YouTube 获取歌曲详情失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # --- 7. 启动入口 ---
 if __name__ == "__main__":
     try:
