@@ -2194,7 +2194,7 @@
                                 <div class="play-overlay">
                                     <div class="play-overlay-btn">▶</div>
                                 </div>
-                                ${song.trackId ? `<div class="song-options" onclick="event.stopPropagation(); ${isYouTube ? `playYouTubeFullSong('${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}', '${coverUrl}')` : `playFullSong('${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}')`}">⋯</div>` : ''}
+                                ${song.trackId ? `<div class="song-options" onclick="event.stopPropagation(); toggleOptionsMenu(event, '${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}', '${coverUrl}', ${isYouTube})">⋯</div>` : ''}
                             </div>
                             <div class="song-title">${isYouTube ? '<span style="color: #ff6b6b;">▶</span> ' : ''}${escapeHtml(song.trackName)}</div>
                             <div class="song-artist">${escapeHtml(song.artistName)}</div>
@@ -2271,7 +2271,7 @@
                             <div class="play-overlay">
                                 <div class="play-overlay-btn">▶</div>
                             </div>
-                            ${song.trackId ? `<div class="song-options" onclick="event.stopPropagation(); ${isYouTube ? `playYouTubeFullSong('${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}', '${coverUrl}')` : `playFullSong('${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}')`}">⋯</div>` : ''}
+                            ${song.trackId ? `<div class="song-options" onclick="event.stopPropagation(); toggleOptionsMenu(event, '${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}', '${coverUrl}', ${isYouTube})">⋯</div>` : ''}
                         </div>
                         <div class="song-title">${isYouTube ? '<span style="color: #ff6b6b;">▶</span> ' : ''}${escapeHtml(song.trackName)}</div>
                         <div class="song-artist">${escapeHtml(song.artistName)}</div>
@@ -3112,6 +3112,189 @@
         // 播放 YouTube 完整歌曲（选项菜单调用）
         function playYouTubeFullSong(videoId, trackName, artistName, coverUrl) {
             playYouTubeSong(videoId, trackName, artistName, coverUrl);
+        }
+
+        // 打开 iTunes 歌曲在 Apple Music 应用或网页中
+        function openAppleMusic(trackId, trackName, artistName) {
+            const song = state.playlist.find(s => s.trackId == trackId);
+            const albumId = song?.collectionId || trackId;
+
+            const musicAppUrl = `music://music.apple.com/cn/album/${albumId}?i=${trackId}`;
+            const webUrl = `https://music.apple.com/cn/album/${albumId}?i=${trackId}`;
+
+            // 检测设备类型
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const isMac = /Macintosh/.test(navigator.userAgent);
+            const isAppleDevice = isIOS || isMac;
+
+            if (isAppleDevice) {
+                // Apple 设备：尝试打开 App
+                const startTime = Date.now();
+
+                // 使用 visibilitychange 检测是否成功跳转到 App
+                const handleVisibilityChange = () => {
+                    if (document.hidden) {
+                        // 页面被隐藏，说明成功打开了 App
+                        clearTimeout(fallbackTimer);
+                        document.removeEventListener('visibilitychange', handleVisibilityChange);
+                    }
+                };
+                document.addEventListener('visibilitychange', handleVisibilityChange);
+
+                // 尝试打开 App
+                window.location.href = musicAppUrl;
+
+                // 设置降级定时器
+                const fallbackTimer = setTimeout(() => {
+                    document.removeEventListener('visibilitychange', handleVisibilityChange);
+
+                    // 如果页面还可见且时间很短，说明 App 没打开
+                    if (!document.hidden && Date.now() - startTime < 2000) {
+                        showFallbackOptions(trackName, artistName, webUrl);
+                    }
+                }, 1500);
+
+            } else {
+                // 非 Apple 设备：直接打开网页版
+                window.open(webUrl, '_blank');
+                showToast(`正在打开 "${trackName}" - ${artistName}`);
+            }
+        }
+
+        // 打开 YouTube 歌曲在 YouTube Music 应用或网页中
+        function openYouTubeMusic(videoId, trackName, artistName) {
+            const youTubeMusicUrl = `vnd.youtube://watch?v=${videoId}`; // YouTube Music app scheme
+            const webUrl = `https://music.youtube.com/watch?v=${videoId}`;
+
+            // 检测设备类型
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const isAndroid = /Android/.test(navigator.userAgent);
+            const isMobile = isIOS || isAndroid;
+
+            if (isMobile) {
+                // 移动设备：尝试打开 YouTube Music App
+                const startTime = Date.now();
+
+                // 使用 iframe 方式尝试打开，这样不会被拦截
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = youTubeMusicUrl;
+                document.body.appendChild(iframe);
+
+                // 设置降级定时器
+                setTimeout(() => {
+                    document.body.removeChild(iframe);
+
+                    // 如果还在当前页面，尝试打开网页版
+                    if (Date.now() - startTime < 2000) {
+                        window.open(webUrl, '_blank');
+                        showToast(`正在打开 "${trackName}" - ${artistName}`);
+                    }
+                }, 1500);
+
+            } else {
+                // 桌面设备：直接打开网页版
+                window.open(webUrl, '_blank');
+                showToast(`正在打开 "${trackName}" - ${artistName}`);
+            }
+        }
+
+        // 显示歌曲选项菜单
+        function toggleOptionsMenu(event, trackId, trackName, artistName, coverUrl, isYouTube) {
+            event.stopPropagation();
+
+            // 移除已存在的选项菜单
+            const existingMenu = document.querySelector('.song-options-menu');
+            if (existingMenu) {
+                existingMenu.remove();
+            }
+
+            // 创建选项菜单
+            const menu = document.createElement('div');
+            menu.className = 'song-options-menu';
+            menu.style.cssText = `
+                position: absolute;
+                top: 32px;
+                right: 8px;
+                background: var(--card);
+                border: 1px solid var(--glass-border);
+                border-radius: 12px;
+                padding: 8px 0;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                z-index: 100;
+                min-width: 160px;
+            `;
+
+            // 根据来源构建菜单项
+            if (isYouTube) {
+                menu.innerHTML = `
+                    <div class="option-item" onclick="playYouTubeSong('${trackId}', '${trackName}', '${artistName}', '${coverUrl}'); this.closest('.song-options-menu').remove();">
+                        <span>🎵 在此播放</span>
+                    </div>
+                    <div class="option-item" onclick="openYouTubeMusic('${trackId}', '${trackName}', '${artistName}'); this.closest('.song-options-menu').remove();">
+                        <span>▶️ 打开 YouTube Music</span>
+                    </div>
+                `;
+            } else {
+                menu.innerHTML = `
+                    <div class="option-item" onclick="playFullSong('${trackId}', '${trackName}', '${artistName}'); this.closest('.song-options-menu').remove();">
+                        <span>🎵 在此播放</span>
+                    </div>
+                    <div class="option-item" onclick="openAppleMusic('${trackId}', '${trackName}', '${artistName}'); this.closest('.song-options-menu').remove();">
+                        <span>📱 打开 Apple Music</span>
+                    </div>
+                `;
+            }
+
+            // 添加选项项的样式
+            if (!document.querySelector('#song-options-menu-styles')) {
+                const styles = document.createElement('style');
+                styles.id = 'song-options-menu-styles';
+                styles.textContent = `
+                    .option-item {
+                        padding: 10px 16px;
+                        cursor: pointer;
+                        transition: background 0.2s ease;
+                        font-size: 14px;
+                        color: var(--text);
+                    }
+                    .option-item:hover {
+                        background: var(--glass-border);
+                    }
+                    .song-options-menu {
+                        position: absolute;
+                        top: 32px;
+                        right: 8px;
+                        background: var(--card);
+                        border: 1px solid var(--glass-border);
+                        border-radius: 12px;
+                        padding: 8px 0;
+                        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                        z-index: 100;
+                        min-width: 160px;
+                    }
+                `;
+                document.head.appendChild(styles);
+            }
+
+            // 添加菜单到页面
+            document.body.appendChild(menu);
+
+            // 定位菜单（相对于点击的目标元素）
+            const targetRect = event.target.getBoundingClientRect();
+            menu.style.top = `${targetRect.bottom + window.scrollY - 8}px`;
+            menu.style.right = `${window.innerWidth - targetRect.right - 16}px`;
+
+            // 点击其他地方关闭菜单
+            setTimeout(() => {
+                const closeMenu = (e) => {
+                    if (!menu.contains(e.target) && e.target !== event.target) {
+                        menu.remove();
+                        document.removeEventListener('click', closeMenu);
+                    }
+                };
+                document.addEventListener('click', closeMenu);
+            }, 10);
         }
 
         // 显示降级选项
