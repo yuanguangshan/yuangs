@@ -1986,13 +1986,14 @@ const keywords = getAllKeywords();
                             // 将 YouTube 数据转换为 iTunes 格式
                             trackId: item.video_id || item.id,
                             trackName: item.title || item.name,
-                            artistName: item.artist || item.author || 'Unknown Artist',
-                            collectionName: 'YouTube Music',
+                            artistName: Array.isArray(item.artists) ? item.artists.join(', ') : (item.artist || item.author || 'Unknown Artist'),
+                            collectionName: item.album || 'YouTube Music',
                             artworkUrl100: item.thumbnail || item.thumbnails?.[0]?.url || item.image || 'https://i.ytimg.com/img/no_thumbnail.jpg',
                             previewUrl: `https://www.youtube.com/watch?v=${item.video_id || item.id}`,
                             kind: 'youtube',  // 标记为 YouTube 来源
                             genre: item.category || item.genre || 'YouTube',
-                            releaseDate: item.publish_date || item.publishedAt || new Date().toISOString()
+                            releaseDate: item.publish_date || item.publishedAt || new Date().toISOString(),
+                            duration: item.duration || 'Unknown Duration'  // 添加时长信息
                         }));
                     } else {
                         console.warn('YouTube API 响应格式不正确:', youTubeJson);
@@ -2327,7 +2328,15 @@ const keywords = getAllKeywords();
                     console.log('YouTube search API 响应:', data); // Debug log
 
                     if (data && data.data && data.data.length > 0) {
-                        return data.data;
+                        // 确保返回的数据格式一致
+                        return data.data.map(item => ({
+                            ...item,
+                            // 确保艺术家字段正确映射
+                            artist: Array.isArray(item.artists) ? item.artists.join(', ') : item.artist,
+                            // 如果需要 iTunes 兼容格式
+                            artistName: Array.isArray(item.artists) ? item.artists.join(', ') : (item.artist || item.author || 'Unknown Artist'),
+                            trackName: item.title || item.name
+                        }));
                     }
                 } else {
                     console.error('YouTube API 请求失败，状态码:', response.status);
@@ -2792,14 +2801,14 @@ const keywords = getAllKeywords();
             }
         };
 
-        // 为 YouTube 播放器创建定时器来更新进度
+        // 为 YouTube 播放器创建定时器来更新进度 - 使用更频繁的更新
         setInterval(() => {
             if (state.youtubePlayer && state.isYouTubePlaying) {
                 try {
                     const currentTime = state.youtubePlayer.getCurrentTime();
                     const duration = state.youtubePlayer.getDuration();
 
-                    if (duration && currentTime) {
+                    if (!isNaN(duration) && !isNaN(currentTime) && duration > 0) {
                         const pct = (currentTime / duration) * 100;
                         $('progress-fill').style.width = pct + '%';
                         $('current-time').textContent = formatTime(currentTime);
@@ -2809,7 +2818,7 @@ const keywords = getAllKeywords();
                     // 如果 YouTube 播放器还没准备好，忽略错误
                 }
             }
-        }, 1000); // 每秒更新一次进度
+        }, 500); // 每0.5秒更新一次进度，使时间轴更流畅
 
         // 停止弹幕系统
         function stopDanmaku() {
