@@ -2489,6 +2489,10 @@ const keywords = getAllKeywords();
             $('danmaku').innerHTML = '';
             // Clear the displayed danmaku set
             state.displayedDanmaku.clear();
+            // Clear recent danmaku indices
+            if (state.recentDanmakuIndices) {
+                state.recentDanmakuIndices = [];
+            }
             // Reset tracks
             state.tracks = [false, false, false, false, false];
             // 停止定期刷新弹幕数据
@@ -2925,6 +2929,10 @@ async function searchByWeather() {
             $('danmaku').innerHTML = '';
             // Clear the displayed danmaku set when starting
             state.displayedDanmaku.clear();
+            // Clear recent danmaku indices to allow more variety
+            if (state.recentDanmakuIndices) {
+                state.recentDanmakuIndices = [];
+            }
             // Reset tracks
             state.tracks = [false, false, false, false, false];
 
@@ -2932,8 +2940,15 @@ async function searchByWeather() {
 
             // 初始化弹幕数据
             DanmakuManager.fetchAndFill().then(() => {
-                spawnDanmaku();
-                state.danmakuInterval = setInterval(spawnDanmaku, 4000);
+                // 立即生成几条弹幕以增加多样性
+                for (let i = 0; i < 3; i++) {
+                    setTimeout(() => {
+                        spawnDanmaku();
+                    }, i * 800); // 错开时间显示，避免同时出现
+                }
+
+                // 设置定时器持续生成弹幕
+                state.danmakuInterval = setInterval(spawnDanmaku, 2000); // 减少间隔以增加频率
                 // 开始定期刷新弹幕数据
                 DanmakuManager.startRefresh();
             });
@@ -2948,9 +2963,9 @@ async function searchByWeather() {
             } else {
                 // 如果没有可用弹幕，获取新数据
                 await DanmakuManager.fillNewRecords(5);
-                const danmaku = DanmakuManager.getRandom();
-                if (danmaku) {
-                    renderDanmaku(danmaku);
+                const newDanmaku = DanmakuManager.getRandom();
+                if (newDanmaku) {
+                    renderDanmaku(newDanmaku);
                 }
             }
         }
@@ -2958,14 +2973,40 @@ async function searchByWeather() {
         function renderDanmaku(data) {
             // Create a unique content identifier to prevent duplicates
             const content = `${data.name}:${data.text}`;
+            const fullContent = `${data.name}:${data.text}:${Date.now()}`; // Add timestamp to make it always unique for display
 
-            // Check if this content is already displayed
+            // Check if this content is already displayed in the current view
+            // Only check for recent duplicates (last 20 items) to avoid the issue of no fresh content
+            if (state.displayedDanmaku.size > 20) {
+                // Clear the set if it gets too large to avoid memory issues and allow refresh
+                const recent = Array.from(state.displayedDanmaku).slice(-10); // Keep last 10 items as recent
+                state.displayedDanmaku.clear();
+                recent.forEach(item => state.displayedDanmaku.add(item));
+            }
+
             if (state.displayedDanmaku.has(content)) {
-                return; // Don't render if duplicate content is already on screen
+                // If this exact content is already displayed recently, try to get another one
+                setTimeout(async () => {
+                    const alternativeDanmaku = DanmakuManager.getRandom();
+                    if (alternativeDanmaku) {
+                        renderDanmaku(alternativeDanmaku);
+                    } else {
+                        // If no alternative, try to fill with new records
+                        await DanmakuManager.fillNewRecords(3);
+                        const newDanmaku = DanmakuManager.getRandom();
+                        if (newDanmaku) {
+                            renderDanmaku(newDanmaku);
+                        }
+                    }
+                }, 100); // Small delay to avoid blocking
+                return;
             }
 
             let track = state.tracks.findIndex(t => !t);
-            if (track === -1) track = Math.floor(Math.random() * 5);
+            if (track === -1) {
+                // If all tracks are busy, try to find the one that will finish earliest or just pick randomly
+                track = Math.floor(Math.random() * 5);
+            }
 
             state.tracks[track] = true;
 
@@ -3058,10 +3099,43 @@ async function searchByWeather() {
                 DanmakuManager.save(records);
             },
 
-            // 随机获取一条弹幕记录
+            // 随机获取一条弹幕记录，避免短时间内重复
             getRandom: () => {
                 const records = DanmakuManager.getAll();
                 if (records.length === 0) return null;
+
+                // 如果记录数量大于5，尝试避免返回最近返回过的弹幕
+                if (records.length > 5) {
+                    // 保存最近返回的弹幕索引，避免重复
+                    if (!state.recentDanmakuIndices) {
+                        state.recentDanmakuIndices = [];
+                    }
+
+                    // 清除过期的索引记录（超过10个就保留最新的5个）
+                    if (state.recentDanmakuIndices.length > 10) {
+                        state.recentDanmakuIndices = state.recentDanmakuIndices.slice(-5);
+                    }
+
+                    // 尝试找到一个不在最近列表中的弹幕
+                    let validIndices = [];
+                    for (let i = 0; i < records.length; i++) {
+                        if (!state.recentDanmakuIndices.includes(i)) {
+                            validIndices.push(i);
+                        }
+                    }
+
+                    // 如果所有弹幕都在最近列表中，或者有效选项太少，则使用所有记录
+                    if (validIndices.length < 3) {
+                        validIndices = Array.from({length: records.length}, (_, i) => i);
+                    }
+
+                    const randomIndex = validIndices[Math.floor(Math.random() * validIndices.length)];
+                    state.recentDanmakuIndices.push(randomIndex);
+
+                    return records[randomIndex];
+                }
+
+                // 如果记录数量少于等于5，直接随机返回
                 return records[Math.floor(Math.random() * records.length)];
             },
 
@@ -3070,17 +3144,17 @@ async function searchByWeather() {
                 const records = DanmakuManager.getAll();
                 const now = Date.now();
 
-                // 如果记录少于10条，或所有记录都快过期，请求新数据
-                if (records.length < 10) {
-                    await DanmakuManager.fillNewRecords(20); // 填充20条新记录
+                // 如果记录少于15条，请求新数据（增加数量以确保有足够的弹幕）
+                if (records.length < 15) {
+                    await DanmakuManager.fillNewRecords(30); // 增加填充数量
                 } else {
                     // 检查是否需要更新
                     const oldestRecord = records.reduce((oldest, record) => {
                         return record.timestamp < oldest.timestamp ? record : oldest;
                     }, records[0]);
 
-                    if (now - oldestRecord.timestamp > DanmakuManager.EXPIRY_TIME * 0.8) { // 如果最老的记录超过有效期的80%
-                        await DanmakuManager.fillNewRecords(5); // 填充5条新记录
+                    if (now - oldestRecord.timestamp > DanmakuManager.EXPIRY_TIME * 0.5) { // 降低更新阈值到50%有效期
+                        await DanmakuManager.fillNewRecords(15); // 增加每次填充的数量
                     }
                 }
             },
