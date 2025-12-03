@@ -22,13 +22,18 @@ class YouTubeMusicService:
             songs = []
             
             for item in results:
+                video_id = item.get('videoId', '')
                 song_info = {
                     'title': item.get('title', ''),
-                    'video_id': item.get('videoId', ''),
+                    'video_id': video_id,
                     'artists': [artist.get('name', '') for artist in item.get('artists', [])],
                     'album': item.get('album', {}).get('name', '') if item.get('album') else '',
                     'duration': item.get('duration', ''),
-                    'thumbnails': item.get('thumbnails', [])
+                    'thumbnails': item.get('thumbnails', []),
+                    # 添加播放链接
+                    'youtube_url': f'https://www.youtube.com/watch?v={video_id}',
+                    'youtube_music_url': f'https://music.youtube.com/watch?v={video_id}',
+                    'embed_url': f'https://www.youtube.com/embed/{video_id}'
                 }
                 songs.append(song_info)
             
@@ -92,10 +97,14 @@ class YouTubeMusicService:
             top_songs = []
             if artist_info.get('songs') and artist_info['songs'].get('results'):
                 for song in artist_info['songs']['results'][:10]:  # 限制前10首
+                    video_id = song.get('videoId', '')
                     top_songs.append({
                         'title': song.get('title', ''),
-                        'video_id': song.get('videoId', ''),
-                        'thumbnails': song.get('thumbnails', [])
+                        'video_id': video_id,
+                        'thumbnails': song.get('thumbnails', []),
+                        # 添加播放链接
+                        'youtube_url': f'https://www.youtube.com/watch?v={video_id}',
+                        'youtube_music_url': f'https://music.youtube.com/watch?v={video_id}'
                     })
             
             return {
@@ -171,6 +180,10 @@ class YouTubeMusicService:
                 'artists': [artist.get('name', '') for artist in watch_playlist.get('tracks', [{}])[0].get('artists', [])],
                 'album': watch_playlist.get('tracks', [{}])[0].get('album', {}).get('name', ''),
                 'thumbnails': watch_playlist.get('tracks', [{}])[0].get('thumbnail', []),
+                # 添加播放链接
+                'youtube_url': f'https://www.youtube.com/watch?v={video_id}',
+                'youtube_music_url': f'https://music.youtube.com/watch?v={video_id}',
+                'embed_url': f'https://www.youtube.com/embed/{video_id}',
                 'lyrics': None
             }
             

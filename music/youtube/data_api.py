@@ -47,6 +47,32 @@ except ImportError as e:
     )
     exit(1)
 
+# --- 导入 YouTube Music 服务 ---
+try:
+    from youtube_service import (
+        search_song,
+        search_artist,
+        get_artist_info,
+        get_lyrics,
+        get_song_details
+    )
+    YOUTUBE_SERVICE_AVAILABLE = True
+    print("✅ YouTube Music 服务已加载")
+except ImportError as e:
+    YOUTUBE_SERVICE_AVAILABLE = False
+    print(f"⚠️ YouTube Music 服务不可用: {e}")
+    # 定义空函数以避免路由报错
+    def search_song(*args, **kwargs):
+        return {'success': False, 'error': 'YouTube Music 服务未安装'}
+    def search_artist(*args, **kwargs):
+        return {'success': False, 'error': 'YouTube Music 服务未安装'}
+    def get_artist_info(*args, **kwargs):
+        return {'success': False, 'error': 'YouTube Music 服务未安装'}
+    def get_lyrics(*args, **kwargs):
+        return {'success': False, 'error': 'YouTube Music 服务未安装'}
+    def get_song_details(*args, **kwargs):
+        return {'success': False, 'error': 'YouTube Music 服务未安装'}
+
 # --- 2. 初始化与配置 ---
 load_dotenv()
 
@@ -1905,21 +1931,6 @@ def weixin_push():
 # =====================================================================
 # --- 6. YouTube Music API 路由 ---
 # =====================================================================
-
-# 导入 YouTube Music 服务
-try:
-    from youtube_service import (
-        search_song,
-        search_artist,
-        get_artist_info,
-        get_lyrics,
-        get_song_details
-    )
-    YOUTUBE_SERVICE_AVAILABLE = True
-    app.logger.info("✅ YouTube Music 服务已加载")
-except ImportError as e:
-    YOUTUBE_SERVICE_AVAILABLE = False
-    app.logger.warning(f"⚠️ YouTube Music 服务不可用: {e}")
 
 
 @app.route('/youtubeapi/search/song', methods=['GET'])
