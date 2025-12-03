@@ -3147,10 +3147,22 @@
                                 console.log('Could not get duration on ready:', e);
                             }
 
-                            // Autoplay if requested
+                            // Autoplay if requested - make sure to call this directly in response to user interaction
                             if (state.shouldAutoplayYouTube) {
-                                event.target.playVideo();
-                                state.shouldAutoplayYouTube = false;
+                                // Try to play immediately, but handle potential autoplay policy restrictions
+                                requestAudioPlayback().then(() => {
+                                    event.target.playVideo();
+                                    state.isYouTubePlaying = true;
+                                    updatePlayState(true);
+                                    state.shouldAutoplayYouTube = false;
+                                }).catch(() => {
+                                    // If requestAudioPlayback fails, try to play anyway
+                                    // The browser might still allow playback if called directly from user interaction
+                                    event.target.playVideo();
+                                    state.isYouTubePlaying = true;
+                                    updatePlayState(true);
+                                    state.shouldAutoplayYouTube = false;
+                                });
                             }
 
                             resolve(event.target);
@@ -3207,24 +3219,7 @@
             if (!videoId) return;
 
             try {
-                // Set flag to autoplay when ready
-                state.shouldAutoplayYouTube = true;
-
-                // Initialize or update YouTube player
-                if (!state.youtubePlayer) {
-                    state.youtubePlayer = await initYouTubePlayer(videoId);
-                } else {
-                    state.youtubePlayer.loadVideoById(videoId);
-                    // For already-initialized player, play immediately
-                    setTimeout(() => {
-                        if (state.youtubePlayer && state.shouldAutoplayYouTube) {
-                            state.youtubePlayer.playVideo();
-                            state.shouldAutoplayYouTube = false;
-                        }
-                    }, 100);
-                }
-
-                // Update state and UI
+                // Update state and UI first
                 state.currentTrack = {
                     trackId: videoId,
                     trackName: title,
@@ -3340,6 +3335,54 @@
                 // Update recommendation tags
                 updateRecommendationTags(state.currentTrack);
 
+                // Initialize or update YouTube player
+                if (!state.youtubePlayer) {
+                    // Set flag to autoplay when ready
+                    state.shouldAutoplayYouTube = true;
+                    state.youtubePlayer = await initYouTubePlayer(videoId);
+                } else {
+                    state.youtubePlayer.loadVideoById(videoId);
+                    // For already-initialized player, try to play immediately after loading
+                    // Wait a bit for the video to load, then play it
+                    setTimeout(() => {
+                        if (state.youtubePlayer) {
+                            // Try to play the video directly from this context which should still be user-initiated
+                            requestAudioPlayback().then(() => {
+                                state.youtubePlayer.playVideo();
+                                state.isYouTubePlaying = true;
+                                updatePlayState(true);
+                            }).catch(() => {
+                                // If requestAudioPlayback fails, try to play anyway
+                                state.youtubePlayer.playVideo();
+                                state.isYouTubePlaying = true;
+                                updatePlayState(true);
+                            });
+                        }
+                    }, 100); // Reduced timeout to be faster
+                }
+
+                // For immediate playback after user interaction (in case user clicked to play)
+                if (state.youtubePlayer && state.youtubePlayer.getVideoUrl && state.youtubePlayer.getVideoUrl().includes(videoId)) {
+                    // If player is already ready and loaded with the right video, try to play now
+                    try {
+                        // Try to play immediately if available
+                        if (state.youtubePlayer && state.youtubePlayer.getPlayerState &&
+                            state.youtubePlayer.getPlayerState() !== YT.PlayerState.PLAYING) {
+                            requestAudioPlayback().then(() => {
+                                state.youtubePlayer.playVideo();
+                                state.isYouTubePlaying = true;
+                                updatePlayState(true);
+                            }).catch(() => {
+                                state.youtubePlayer.playVideo();
+                                state.isYouTubePlaying = true;
+                                updatePlayState(true);
+                            });
+                        }
+                    } catch (e) {
+                        console.log("Could not play immediately:", e);
+                    }
+                }
+
             } catch (error) {
                 console.error('Error initializing YouTube player:', error);
                 showToast('YouTube 播放器初始化失败，尝试使用备用方案...');
@@ -3373,9 +3416,17 @@
                     requestAudioPlayback().then(() => {
                         state.youtubePlayer.playVideo();
                         state.isYouTubePlaying = true;
+                        updatePlayState(true);
                     }).catch(() => {
-                        state.youtubePlayer.playVideo();
-                        state.isYouTubePlaying = true;
+                        try {
+                            state.youtubePlayer.playVideo();
+                            state.isYouTubePlaying = true;
+                            updatePlayState(true);
+                        } catch (error) {
+                            console.error('Failed to play YouTube video:', error);
+                            updatePlayState(false);
+                            showToast('无法播放YouTube音乐，请检查网络连接');
+                        }
                     });
                 }
                 updatePlayState(state.isYouTubePlaying);
