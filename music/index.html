@@ -1312,7 +1312,9 @@
             tracks: [false, false, false, false, false],
             displayedDanmaku: new Set(),  // Track currently displayed danmaku content to prevent duplicates
             youtubePlayer: null,  // YouTube player instance
-            isYouTubePlaying: false  // Track if YouTube player is currently playing
+            isYouTubePlaying: false,  // Track if YouTube player is currently playing
+            youtubeProgressInterval: null,  // Interval for YouTube progress updates
+            lastPosition: 0  // Store last playback position when app goes to background
         };
 
         // 缓存系统
@@ -2802,7 +2804,8 @@ const keywords = getAllKeywords();
         };
 
         // 为 YouTube 播放器创建定时器来更新进度 - 使用更频繁的更新
-        setInterval(() => {
+        // Using a more robust interval that can continue in background
+        let youtubeProgressInterval = setInterval(() => {
             if (state.youtubePlayer && state.isYouTubePlaying) {
                 try {
                     const currentTime = state.youtubePlayer.getCurrentTime();
@@ -2813,12 +2816,24 @@ const keywords = getAllKeywords();
                         $('progress-fill').style.width = pct + '%';
                         $('current-time').textContent = formatTime(currentTime);
                         $('total-time').textContent = formatTime(duration);
+
+                        // Update media session position state for background playback controls
+                        if ('setPositionState' in navigator.mediaSession) {
+                            navigator.mediaSession.setPositionState({
+                                duration: duration,
+                                playbackRate: 1.0,
+                                position: currentTime
+                            });
+                        }
                     }
                 } catch (e) {
                     // 如果 YouTube 播放器还没准备好，忽略错误
                 }
             }
         }, 500); // 每0.5秒更新一次进度，使时间轴更流畅
+
+        // Store the interval ID so we can clear it if needed
+        state.youtubeProgressInterval = youtubeProgressInterval;
 
         // 停止弹幕系统
         function stopDanmaku() {
@@ -3029,6 +3044,9 @@ function onYouTubeIframeAPIReady() {
 // Initialize YouTube player
 function initYouTubePlayer(videoId) {
     return new Promise((resolve, reject) => {
+        // Initialize background audio context before creating player
+        initializeBackgroundAudio();
+
         // Create container for YouTube player if it doesn't exist
         let playerContainer = document.getElementById('youtube-player-container');
         if (!playerContainer) {
@@ -3048,11 +3066,17 @@ function initYouTubePlayer(videoId) {
                 'fs': 0,       // Disable fullscreen
                 'iv_load_policy': 3, // Disable annotations
                 'modestbranding': 1, // Reduce YouTube branding
-                'rel': 0 // Don't show related videos at the end
+                'rel': 0, // Don't show related videos at the end
+                'autoplay': 0, // Don't autoplay, we'll control it
+                'mute': 0 // Don't mute initially
             },
             events: {
                 'onReady': function(event) {
                     console.log('YouTube player ready');
+                    // Resume audio context when player is ready
+                    if (backgroundAudioContext && backgroundAudioContext.state !== 'running') {
+                        backgroundAudioContext.resume();
+                    }
                     resolve(event.target);
                 },
                 'onStateChange': function(event) {
@@ -3061,6 +3085,10 @@ function initYouTubePlayer(videoId) {
                     if (event.data === YT.PlayerState.PLAYING) {
                         state.isYouTubePlaying = true;
                         updatePlayState(true);
+                        // Ensure audio context is running
+                        if (backgroundAudioContext && backgroundAudioContext.state === 'suspended') {
+                            backgroundAudioContext.resume();
+                        }
                     } else if (event.data === YT.PlayerState.PAUSED) {
                         state.isYouTubePlaying = false;
                         updatePlayState(false);
@@ -3072,11 +3100,26 @@ function initYouTubePlayer(videoId) {
                         setTimeout(() => {
                             playNextForYouTube();
                         }, 300);
+                    } else if (event.data === YT.PlayerState.BUFFERING) {
+                        // Ensure audio context remains active during buffering
+                        if (backgroundAudioContext && backgroundAudioContext.state === 'suspended') {
+                            backgroundAudioContext.resume();
+                        }
                     }
                 },
                 'onError': function(error) {
                     console.error('YouTube player error:', error);
-                    reject(error);
+                    // Retry initialization with different parameters if there's an error
+                    if (error.data === 100 || error.data === 101 || error.data === 150) {
+                        // Video not found or not allowed to play - propagate error
+                        reject(error);
+                    } else {
+                        // Other errors - might be recoverable
+                        console.log('YouTube player error, but continuing:', error);
+                        // Don't reject for other errors, as the player might still work
+                        // Resolve with the player instance anyway
+                        resolve(event.target);
+                    }
                 }
             }
         });
@@ -3246,12 +3289,151 @@ function toggleYouTubePlay() {
             state.youtubePlayer.pauseVideo();
             state.isYouTubePlaying = false;
         } else {
-            state.youtubePlayer.playVideo();
-            state.isYouTubePlaying = true;
+            // Request user interaction to enable audio in background
+            requestAudioPlayback().then(() => {
+                state.youtubePlayer.playVideo();
+                state.isYouTubePlaying = true;
+            }).catch(() => {
+                state.youtubePlayer.playVideo();
+                state.isYouTubePlaying = true;
+            });
         }
         updatePlayState(state.isYouTubePlaying);
     }
 }
+
+// Audio context for maintaining background audio on mobile
+let backgroundAudioContext = null;
+
+// Initialize audio context for background playback
+function initializeBackgroundAudio() {
+    if (backgroundAudioContext) return;
+
+    if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+        backgroundAudioContext = new (AudioContext || webkitAudioContext)();
+
+        // Create a minimal silent buffer to maintain the audio context
+        const silentBuffer = backgroundAudioContext.createBuffer(1, 1, 22050);
+        const source = backgroundAudioContext.createBufferSource();
+        source.buffer = silentBuffer;
+
+        // Connect to output without amplification (essentially silent)
+        const gainNode = backgroundAudioContext.createGain();
+        gainNode.gain.value = 0; // Completely silent
+        source.connect(gainNode);
+        gainNode.connect(backgroundAudioContext.destination);
+
+        // Loop the silent buffer indefinitely
+        source.loop = true;
+        source.start();
+
+        // Resume if suspended
+        if (backgroundAudioContext.state === 'suspended') {
+            backgroundAudioContext.resume();
+        }
+    }
+}
+
+// Request audio playback permission on mobile devices
+function requestAudioPlayback() {
+    return new Promise((resolve, reject) => {
+        // Initialize background audio context
+        initializeBackgroundAudio();
+
+        // Resume audio context if suspended
+        if (backgroundAudioContext && backgroundAudioContext.state === 'suspended') {
+            backgroundAudioContext.resume().then(() => {
+                resolve();
+            }).catch(reject);
+        } else {
+            resolve();
+        }
+    });
+}
+
+// Handle visibility changes for mobile background audio
+document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') {
+        // When returning to foreground, ensure audio is properly resumed
+        if (state.youtubePlayer && state.isYouTubePlaying) {
+            // Small delay to ensure YouTube player is ready
+            setTimeout(() => {
+                if (state.youtubePlayer.getPlayerState() !== YT.PlayerState.PLAYING) {
+                    toggleYouTubePlay();
+                }
+            }, 100);
+        }
+    }
+});
+
+// Additional mobile-specific handling
+if ('mediaSession' in navigator) {
+    navigator.mediaSession.setActionHandler('play', toggleYouTubePlay);
+    navigator.mediaSession.setActionHandler('pause', toggleYouTubePlay);
+
+    // Handle seek actions to maintain audio session
+    try {
+        navigator.mediaSession.setActionHandler('seekbackward', () => {
+            if (state.youtubePlayer) {
+                const currentTime = state.youtubePlayer.getCurrentTime();
+                state.youtubePlayer.seekTo(Math.max(0, currentTime - 10), true);
+            }
+        });
+
+        navigator.mediaSession.setActionHandler('seekforward', () => {
+            if (state.youtubePlayer) {
+                const currentTime = state.youtubePlayer.getCurrentTime();
+                const duration = state.youtubePlayer.getDuration();
+                state.youtubePlayer.seekTo(Math.min(duration, currentTime + 10), true);
+            }
+        });
+    } catch (error) {
+        console.log('Seek actions not supported:', error);
+    }
+}
+
+// Additional event listeners to handle app lifecycle and backgrounding
+window.addEventListener('pagehide', function() {
+    // Try to maintain audio when page is hidden (e.g., switching apps)
+    if (state.youtubePlayer && state.isYouTubePlaying) {
+        // Store the current time to resume from when returning
+        state.lastPosition = state.youtubePlayer.getCurrentTime();
+    }
+});
+
+// Handle page visibility changes more comprehensively
+document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') {
+        // When returning to foreground, resume audio if needed
+        if (state.youtubePlayer && state.isYouTubePlaying) {
+            // Small delay to ensure YouTube player is ready after page becomes visible
+            setTimeout(() => {
+                const playerState = state.youtubePlayer.getPlayerState();
+                if (playerState !== YT.PlayerState.PLAYING) {
+                    // Try to resume playback
+                    state.youtubePlayer.playVideo();
+                }
+            }, 500);
+        }
+    }
+});
+
+// Handle focus/blur events which can affect audio on mobile
+window.addEventListener('focus', function() {
+    // On iOS Safari especially, audio may need to be resumed when window regains focus
+    if (state.youtubePlayer && state.isYouTubePlaying && state.youtubePlayer.getPlayerState() !== YT.PlayerState.PLAYING) {
+        setTimeout(() => {
+            state.youtubePlayer.playVideo();
+        }, 100);
+    }
+});
+
+window.addEventListener('blur', function() {
+    // Store position when leaving the page
+    if (state.youtubePlayer && state.isYouTubePlaying) {
+        state.lastPosition = state.youtubePlayer.getCurrentTime();
+    }
+});
 
 // Toast 提示
 function showToast(message) {
