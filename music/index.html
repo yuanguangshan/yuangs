@@ -2618,14 +2618,14 @@
                     console.error('播放失败:', error);
                     updatePlayState(false);
 
-                    // 尝试使用 YouTube Music URL
-                    const musicAudioUrl = `https://music.youtube.com/watch?v=${videoId}`;
-                    audio.src = musicAudioUrl;
+                    // 尝试使用 YouTube URL as fallback
+                    const fallbackAudioUrl = `https://www.youtube.com/watch?v=${videoId}`;
+                    audio.src = fallbackAudioUrl;
                     audio.load();
                     audio.play()
                         .then(() => updatePlayState(true))
                         .catch(err => {
-                            console.error('YouTube Music 播放也失败:', err);
+                            console.error('YouTube 播放也失败:', err);
                             showToast('即将准备就绪，别着急');
                         });
                 });
@@ -3161,10 +3161,11 @@
             }
         }
 
-        // 打开 YouTube 歌曲在 YouTube Music 应用或网页中
-        function openYouTubeMusic(videoId, trackName, artistName) {
-            const youTubeMusicUrl = `https://music.youtube.com/watch?v=${videoId}`; // YouTube Music app scheme
-            const webUrl = `https://music.youtube.com/watch?v=${videoId}`;
+        // 打开 YouTube 歌曲在 YouTube 应用或网页中
+        function openYouTubeApp(videoId, trackName, artistName) {
+            const youTubeWebUrl = `https://www.youtube.com/watch?v=${videoId}`; // YouTube web URL
+            const youTubeAppUrl = `vnd.youtube://www.youtube.com/watch?v=${videoId}`; // YouTube app scheme (iOS)
+            const youTubeAppAndroid = `youtube://www.youtube.com/watch?v=${videoId}`; // YouTube app scheme (Android)
 
             // 检测设备类型
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -3172,13 +3173,19 @@
             const isMobile = isIOS || isAndroid;
 
             if (isMobile) {
-                // 移动设备：尝试打开 YouTube Music App
+                // 移动设备：尝试打开 YouTube App
                 const startTime = Date.now();
+
+                // 选择适合当前平台的 YouTube app scheme
+                let appUrl = youTubeAppUrl; // Default to iOS scheme
+                if (isAndroid) {
+                    appUrl = youTubeAppAndroid; // Use Android scheme
+                }
 
                 // 使用 iframe 方式尝试打开，这样不会被拦截
                 const iframe = document.createElement('iframe');
                 iframe.style.display = 'none';
-                iframe.src = youTubeMusicUrl;
+                iframe.src = appUrl;
                 document.body.appendChild(iframe);
 
                 // 设置降级定时器
@@ -3187,10 +3194,74 @@
 
                     // 如果还在当前页面，尝试打开网页版
                     if (Date.now() - startTime < 2000) {
-                        window.open(webUrl, '_blank');
+                        window.open(youTubeWebUrl, '_blank');
                         showToast(`正在打开 "${trackName}" - ${artistName}`);
                     }
                 }, 1500);
+
+            } else {
+                // 桌面设备：直接打开网页版
+                window.open(youTubeWebUrl, '_blank');
+                showToast(`正在打开 "${trackName}" - ${artistName}`);
+            }
+        }
+
+        // 打开 YouTube 歌曲在 YouTube Music 应用或网页中
+        function openYouTubeMusic(videoId, trackName, artistName) {
+            const webUrl = `https://music.youtube.com/watch?v=${videoId}`;
+            const ytmusicUrl = `ytmusic://music.youtube.com/watch?v=${videoId}`; // YouTube Music app scheme
+            const youtubemusicUrl = `youtubemusic://music.youtube.com/watch?v=${videoId}`; // Alternative scheme
+
+            // 检测设备类型
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const isAndroid = /Android/.test(navigator.userAgent);
+            const isMobile = isIOS || isAndroid;
+
+            if (isMobile) {
+                // 移动设备：尝试打开 YouTube Music App with multiple fallbacks
+                const startTime = Date.now();
+
+                // Try YouTube Music specific schemes first
+                const schemesToTry = [ytmusicUrl, youtubemusicUrl];
+
+                let schemeIndex = 0;
+                const tryNextScheme = () => {
+                    if (schemeIndex < schemesToTry.length) {
+                        const schemeUrl = schemesToTry[schemeIndex];
+                        schemeIndex++;
+
+                        // 使用 iframe 方式尝试打开，这样不会被拦截
+                        const iframe = document.createElement('iframe');
+                        iframe.style.display = 'none';
+                        iframe.src = schemeUrl;
+                        document.body.appendChild(iframe);
+
+                        // Remove the iframe after a short time
+                        setTimeout(() => {
+                            if (iframe.parentNode) {
+                                document.body.removeChild(iframe);
+                            }
+
+                            // Check if app opened by measuring elapsed time
+                            if (Date.now() - startTime < 2000 && schemeIndex < schemesToTry.length) {
+                                // If still on page, try next scheme
+                                tryNextScheme();
+                            } else if (Date.now() - startTime < 2000) {
+                                // If still on page and all schemes tried, fallback to web
+                                window.open(webUrl, '_blank');
+                                showToast(`正在打开 "${trackName}" - ${artistName}`);
+                            }
+                        }, 800); // Reduced timeout to try schemes faster
+                    } else {
+                        // All schemes tried, fallback to web
+                        if (Date.now() - startTime < 2000) {
+                            window.open(webUrl, '_blank');
+                            showToast(`正在打开 "${trackName}" - ${artistName}`);
+                        }
+                    }
+                };
+
+                tryNextScheme();
 
             } else {
                 // 桌面设备：直接打开网页版
@@ -3231,8 +3302,8 @@
                     <div class="option-item" onclick="playYouTubeSong('${trackId}', '${trackName}', '${artistName}', '${coverUrl}'); this.closest('.song-options-menu').remove();">
                         <span>🎵 在此播放</span>
                     </div>
-                    <div class="option-item" onclick="openYouTubeMusic('${trackId}', '${trackName}', '${artistName}'); this.closest('.song-options-menu').remove();">
-                        <span>▶️ 打开 YouTube Music</span>
+                    <div class="option-item" onclick="openYouTubeApp('${trackId}', '${trackName}', '${artistName}'); this.closest('.song-options-menu').remove();">
+                        <span>▶️ 打开 YouTube 应用</span>
                     </div>
                 `;
             } else {
