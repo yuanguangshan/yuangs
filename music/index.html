@@ -1296,6 +1296,9 @@
 
     <audio id="audio" crossorigin="anonymous"></audio>
 
+    <!-- YouTube Iframe API -->
+    <script src="https://www.youtube.com/iframe_api"></script>
+
     <script>
         // 状态管理
         const state = {
@@ -1307,7 +1310,9 @@
             danmakuInterval: null,
             danmakuCache: [],
             tracks: [false, false, false, false, false],
-            displayedDanmaku: new Set()  // Track currently displayed danmaku content to prevent duplicates
+            displayedDanmaku: new Set(),  // Track currently displayed danmaku content to prevent duplicates
+            youtubePlayer: null,  // YouTube player instance
+            isYouTubePlaying: false  // Track if YouTube player is currently playing
         };
 
         // 缓存系统
@@ -1952,24 +1957,80 @@ const keywords = getAllKeywords();
             `;
 
             try {
-                const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=48&country=cn`);
-                const data = await res.json();
+                // 首先尝试 iTunes API
+                let iTunesData = null;
+                try {
+                    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=24&country=cn`);
+                    iTunesData = await res.json();
+                } catch (e) {
+                    console.error('iTunes API 搜索失败:', e);
+                    iTunesData = { results: [] };
+                }
+
+                // 同时搜索 YouTube
+                let youTubeData = [];
+                try {
+                    const youTubeRes = await fetch(`https://api.yuangs.cc/youtubeapi/search/song?q=${encodeURIComponent(query)}&limit=24`);
+                    const youTubeJson = await youTubeRes.json();
+                    if (youTubeJson.success && youTubeJson.data) {
+                        youTubeData = youTubeJson.data.map(item => ({
+                            // 将 YouTube 数据转换为 iTunes 格式
+                            trackId: item.video_id,
+                            trackName: item.title,
+                            artistName: item.artist,
+                            collectionName: 'YouTube Music',
+                            artworkUrl100: item.thumbnail || item.thumbnails?.[0]?.url || 'https://i.ytimg.com/img/no_thumbnail.jpg',
+                            previewUrl: `https://www.youtube.com/watch?v=${item.video_id}`,
+                            kind: 'youtube',  // 标记为 YouTube 来源
+                            genre: item.category || 'YouTube',
+                            releaseDate: item.publish_date || new Date().toISOString()
+                        }));
+                    }
+                } catch (e) {
+                    console.error('YouTube API 搜索失败:', e);
+                }
+
+                // 合并结果：优先使用 iTunes 数据，补充 YouTube 数据
+                let combinedResults = [...iTunesData.results];
+
+                // 只添加与搜索查询相关的 YouTube 结果
+                const youTubeResultsToAdd = youTubeData.filter(ytSong => {
+                    const songMatch = ytSong.trackName.toLowerCase().includes(query.toLowerCase());
+                    const artistMatch = ytSong.artistName.toLowerCase().includes(query.toLowerCase());
+                    return songMatch || artistMatch;
+                });
+
+                // 避免重复，按歌曲和艺术家匹配
+                const existingTracks = new Set();
+                combinedResults.forEach(song => {
+                    const trackKey = `${song.trackName.toLowerCase()}-${song.artistName.toLowerCase()}`;
+                    existingTracks.add(trackKey);
+                });
+
+                for (const ytSong of youTubeResultsToAdd) {
+                    const trackKey = `${ytSong.trackName.toLowerCase()}-${ytSong.artistName.toLowerCase()}`;
+                    if (!existingTracks.has(trackKey)) {
+                        combinedResults.push(ytSong);
+                        existingTracks.add(trackKey);
+                    }
+                }
 
                 // 缓存搜索结果（有效期1小时）
-                CacheManager.set(cacheKey, data.results, 1);
+                CacheManager.set(cacheKey, combinedResults, 1);
 
-                state.playlist = data.results;
-                renderResults(data.results);
+                state.playlist = combinedResults;
+                renderResults(combinedResults);
 
                 // 同时缓存每个歌曲的元数据
-                data.results.forEach(song => {
+                combinedResults.forEach(song => {
                     const songCacheKey = generateCacheKey(song.artistName, song.trackName);
                     CacheManager.set(songCacheKey, {
                         trackName: song.trackName,
                         artistName: song.artistName,
                         artworkUrl: song.artworkUrl100,
                         previewUrl: song.previewUrl,
-                        collectionName: song.collectionName
+                        collectionName: song.collectionName,
+                        kind: song.kind  // 保存来源类型
                     }, 24); // 24小时有效期
                 });
             } catch (e) {
@@ -2004,6 +2065,9 @@ const keywords = getAllKeywords();
                 // 使用缓存的或原始的封面URL
                 const coverUrl = (cachedSong?.artworkUrl || song.artworkUrl100).replace('100x100bb', '300x300bb');
 
+                // 检查是否是 YouTube 来源
+                const isYouTube = song.kind === 'youtube' || song.previewUrl?.includes('youtube.com');
+
                 return `
                     <div class="song-card" data-index="${index}" onclick="playSong(${index})">
                         <div class="song-cover">
@@ -2011,9 +2075,9 @@ const keywords = getAllKeywords();
                             <div class="play-overlay">
                                 <div class="play-overlay-btn">▶</div>
                             </div>
-                            ${song.trackId ? `<div class="song-options" onclick="event.stopPropagation(); playFullSong('${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}')">⋯</div>` : ''}
+                            ${song.trackId ? `<div class="song-options" onclick="event.stopPropagation(); ${isYouTube ? `playYouTubeFullSong('${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}', '${coverUrl}')` : `playFullSong('${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}')`}">⋯</div>` : ''}
                         </div>
-                        <div class="song-title">${escapeHtml(song.trackName)}</div>
+                        <div class="song-title">${escapeHtml(song.trackName)} ${isYouTube ? '▶️' : ''}</div>
                         <div class="song-artist">${escapeHtml(song.artistName)}</div>
                     </div>
                 `;
@@ -2031,6 +2095,20 @@ const keywords = getAllKeywords();
         function playSong(index) {
             const song = state.playlist[index];
             if (!song) return;
+
+            // 检查是否是 YouTube 来源的歌曲
+            const isYouTube = song.kind === 'youtube' || song.previewUrl?.includes('youtube.com');
+
+            if (isYouTube) {
+                // 如果是 YouTube 歌曲，使用 YouTube 播放函数
+                playYouTubeSong(
+                    song.trackId,
+                    song.trackName || '未知歌曲',
+                    song.artistName || '未知艺术家',
+                    song.artworkUrl100 || song.thumbnails?.[0]?.url || 'https://i.ytimg.com/img/no_thumbnail.jpg'
+                );
+                return;
+            }
 
             state.currentTrack = song;
             state.currentIndex = index;
@@ -2234,6 +2312,181 @@ const keywords = getAllKeywords();
             tagsElement.style.display = 'block';
         }
 
+        // YouTube 音乐 API 搜索函数
+        async function searchYouTubeMusic(query) {
+            try {
+                const response = await fetch(`https://api.yuangs.cc/youtubeapi/search/song?q=${encodeURIComponent(query)}&limit=10`);
+                const data = await response.json();
+
+                if (data.success && data.data && data.data.length > 0) {
+                    return data.data;
+                }
+                return [];
+            } catch (error) {
+                console.error('YouTube API 搜索失败:', error);
+                return [];
+            }
+        }
+
+        // 播放 YouTube 完整歌曲
+        async function playYouTubeSong(videoId, title, artist, coverUrl = '') {
+            if (!videoId) return;
+
+            // 创建 YouTube 音频流 URL
+            const audioUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+            // 更新播放状态
+            state.currentTrack = {
+                trackId: videoId,
+                trackName: title,
+                artistName: artist,
+                artworkUrl100: coverUrl || 'https://i.ytimg.com/img/no_thumbnail.jpg',
+                previewUrl: audioUrl
+            };
+
+            // 更新播放器 UI
+            const cover = coverUrl || 'https://i.ytimg.com/img/no_thumbnail.jpg';
+            $('player-cover').src = cover;
+
+            const titleTextEl = $('player-title-text');
+            const artistTextEl = $('player-artist-text');
+
+            titleTextEl.textContent = title;
+            artistTextEl.textContent = artist;
+
+            // 更新顶部信息栏
+            $('player-cover').src = cover;
+            $('bg-album').style.backgroundImage = `url(${cover})`;
+            $('bg-album').classList.add('active');
+
+            // 设置维基百科按钮
+            const wikiBtn = $('player-wiki-btn');
+            const cleanArtistName = artist.split(/&|,|feat\.|ft\./i)[0].trim();
+            wikiBtn.style.display = 'flex';
+            wikiBtn.onclick = () => {
+                const wikiUrl = `https://zh.wikipedia.org/wiki/${encodeURIComponent(cleanArtistName)}`;
+                window.open(wikiUrl, '_blank');
+            };
+            wikiBtn.title = `查看 ${cleanArtistName} 的维基百科`;
+
+            // 设置标签推荐按钮
+            const tagBtn = $('player-tag-btn');
+            tagBtn.style.display = 'flex';
+            tagBtn.onclick = () => {
+                showCurrentSongTags();
+            };
+            tagBtn.title = '查看歌曲标签推荐';
+
+            // 检查是否需要滚动
+            const checkScroll = (el) => {
+                el.classList.remove('scroll-text');
+                el.style.transform = 'none';
+
+                const containerWidth = el.parentElement.clientWidth;
+                const textWidth = el.scrollWidth;
+
+                if (textWidth > containerWidth) {
+                    const distance = containerWidth - textWidth;
+                    const duration = Math.abs(distance) / 30 + 2;
+
+                    el.style.setProperty('--scroll-distance', `${distance}px`);
+                    el.style.setProperty('--duration', `${duration}s`);
+                    el.classList.add('scroll-text');
+                }
+            };
+
+            setTimeout(() => {
+                checkScroll(titleTextEl);
+                checkScroll(artistTextEl);
+            }, 50);
+
+            // 播放音频
+            audio.src = audioUrl;
+            audio.load(); // 加载新音频源
+            audio.play()
+                .then(() => updatePlayState(true))
+                .catch(error => {
+                    console.error('播放失败:', error);
+                    updatePlayState(false);
+
+                    // 尝试使用 YouTube Music URL
+                    const musicAudioUrl = `https://music.youtube.com/watch?v=${videoId}`;
+                    audio.src = musicAudioUrl;
+                    audio.load();
+                    audio.play()
+                        .then(() => updatePlayState(true))
+                        .catch(err => {
+                            console.error('YouTube Music 播放也失败:', err);
+                            showToast('播放失败，请尝试其他歌曲');
+                        });
+                });
+
+            // 弹幕
+            startDanmaku();
+
+            // 预加载歌词
+            $('lyrics-title').textContent = title;
+            $('lyrics-artist').textContent = artist;
+            setupWikipediaLink(artist);
+            $('lyrics-cover').src = cover;
+            $('lyrics-text').textContent = '加载中...';
+            $('lyrics-wiki').classList.remove('show');
+
+            fetchLyrics(artist, title);
+            fetchArtistWiki(artist);
+
+            // 添加到历史记录
+            HistoryManager.add({
+                trackId: videoId,
+                trackName: title,
+                artistName: artist,
+                artworkUrl100: cover
+            });
+
+            // 更新系统媒体中心控制 (Media Session API)
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: title,
+                    artist: artist,
+                    album: 'YouTube Music',
+                    artwork: [
+                        { src: cover, sizes: '96x96', type: 'image/jpeg' },
+                        { src: cover, sizes: '128x128', type: 'image/jpeg' },
+                        { src: cover, sizes: '192x192', type: 'image/jpeg' },
+                        { src: cover, sizes: '256x256', type: 'image/jpeg' },
+                        { src: cover, sizes: '512x512', type: 'image/jpeg' }
+                    ]
+                });
+
+                navigator.mediaSession.setActionHandler('play', togglePlay);
+                navigator.mediaSession.setActionHandler('pause', togglePlay);
+                navigator.mediaSession.setActionHandler('previoustrack', playPrevious);
+                navigator.mediaSession.setActionHandler('nexttrack', () => playNext(false));
+            }
+
+            // 更新收藏按钮状态
+            updateFavoriteButton();
+
+            // 更新推荐标签
+            updateRecommendationTags(state.currentTrack);
+        }
+
+        // 从 YouTube 搜索并播放歌曲
+        async function searchAndPlayYouTubeSong(query) {
+            const results = await searchYouTubeMusic(query);
+            if (results && results.length > 0) {
+                const song = results[0]; // 使用第一个结果
+                playYouTubeSong(
+                    song.video_id,
+                    song.title || '未知歌曲',
+                    song.artist || '未知艺术家',
+                    song.thumbnail || song.thumbnails?.[0]?.url || ''
+                );
+                return true;
+            }
+            return false;
+        }
+
         // 按标签搜索
         function searchByTag(tag) {
             if (!tag) {
@@ -2388,13 +2641,24 @@ const keywords = getAllKeywords();
             if (!state.currentTrack && state.playlist.length > 0) {
                 // 如果没有当前播放的歌曲但有播放列表，则播放第一首
                 playSong(0);
-            } else if (audio.src) {
-                if (audio.paused) {
-                    audio.play();
-                    updatePlayState(true);
+            } else if (state.currentTrack) {
+                // 检查是否是 YouTube 来源的歌曲
+                const isYouTube = state.currentTrack.kind === 'youtube' ||
+                                (state.currentTrack.previewUrl && state.currentTrack.previewUrl.includes('youtube.com'));
+
+                if (isYouTube) {
+                    toggleYouTubePlay();
                 } else {
-                    audio.pause();
-                    updatePlayState(false);
+                    // 对于 iTunes 歌曲，继续使用标准音频元素
+                    if (audio.src) {
+                        if (audio.paused) {
+                            audio.play();
+                            updatePlayState(true);
+                        } else {
+                            audio.pause();
+                            updatePlayState(false);
+                        }
+                    }
                 }
             }
         }
@@ -2464,19 +2728,31 @@ const keywords = getAllKeywords();
 
         // 进度条
         audio.ontimeupdate = () => {
-            if (isNaN(audio.duration)) return;
-            const pct = (audio.currentTime / audio.duration) * 100;
-            $('progress-fill').style.width = pct + '%';
-            $('current-time').textContent = formatTime(audio.currentTime);
+            // Only update progress bar for non-YouTube sources (iTunes previews)
+            if (!state.currentTrack || !(state.currentTrack.kind === 'youtube' ||
+                (state.currentTrack.previewUrl && state.currentTrack.previewUrl.includes('youtube.com')))) {
+                if (isNaN(audio.duration)) return;
+                const pct = (audio.currentTime / audio.duration) * 100;
+                $('progress-fill').style.width = pct + '%';
+                $('current-time').textContent = formatTime(audio.currentTime);
+            }
         };
 
         audio.onloadedmetadata = () => {
-            $('total-time').textContent = formatTime(audio.duration);
+            // Only update duration for non-YouTube sources
+            if (!state.currentTrack || !(state.currentTrack.kind === 'youtube' ||
+                (state.currentTrack.previewUrl && state.currentTrack.previewUrl.includes('youtube.com')))) {
+                $('total-time').textContent = formatTime(audio.duration);
+            }
         };
 
         audio.onended = () => {
-            updatePlayState(false);
-            playNext(true); // 传入 true 表示自动播放
+            // For YouTube, we rely on the YouTube player's onStateChange event
+            if (!state.currentTrack || !(state.currentTrack.kind === 'youtube' ||
+                (state.currentTrack.previewUrl && state.currentTrack.previewUrl.includes('youtube.com')))) {
+                updatePlayState(false);
+                playNext(true); // 传入 true 表示自动播放
+            }
         };
 
         // 停止弹幕系统
@@ -2559,6 +2835,11 @@ function playFullSong(trackId, trackName, artistName) {
     }
 }
 
+// 播放 YouTube 完整歌曲（选项菜单调用）
+function playYouTubeFullSong(videoId, trackName, artistName, coverUrl) {
+    playYouTubeSong(videoId, trackName, artistName, coverUrl);
+}
+
 // 显示降级选项
 function showFallbackOptions(trackName, artistName, webUrl) {
     // 创建一个更友好的提示框
@@ -2582,7 +2863,7 @@ function showFallbackOptions(trackName, artistName, webUrl) {
             </div>
         </div>
     `;
-    
+
     // 添加样式
     if (!document.querySelector('#apple-music-modal-styles')) {
         const styles = document.createElement('style');
@@ -2671,8 +2952,232 @@ function showFallbackOptions(trackName, artistName, webUrl) {
         `;
         document.head.appendChild(styles);
     }
-    
+
     document.body.appendChild(modal);
+}
+
+// YouTube Player functions
+function onYouTubeIframeAPIReady() {
+    console.log('YouTube Iframe API ready');
+}
+
+// Initialize YouTube player
+function initYouTubePlayer(videoId) {
+    return new Promise((resolve, reject) => {
+        // Create container for YouTube player if it doesn't exist
+        let playerContainer = document.getElementById('youtube-player-container');
+        if (!playerContainer) {
+            playerContainer = document.createElement('div');
+            playerContainer.id = 'youtube-player-container';
+            playerContainer.style.display = 'none';
+            document.body.appendChild(playerContainer);
+        }
+
+        // Create the YouTube player
+        const player = new YT.Player('youtube-player-container', {
+            videoId: videoId,
+            playerVars: {
+                'playsinline': 1,
+                'controls': 0,  // Hide controls to play audio only
+                'disablekb': 1, // Disable keyboard controls
+                'fs': 0,       // Disable fullscreen
+                'iv_load_policy': 3, // Disable annotations
+                'modestbranding': 1, // Reduce YouTube branding
+                'rel': 0 // Don't show related videos at the end
+            },
+            events: {
+                'onReady': function(event) {
+                    console.log('YouTube player ready');
+                    resolve(event.target);
+                },
+                'onStateChange': function(event) {
+                    console.log('YouTube player state:', event.data);
+                    // Update our state based on YouTube player state
+                    if (event.data === YT.PlayerState.PLAYING) {
+                        state.isYouTubePlaying = true;
+                        updatePlayState(true);
+                    } else if (event.data === YT.PlayerState.PAUSED || event.data === YT.PlayerState.ENDED) {
+                        state.isYouTubePlaying = false;
+                        updatePlayState(false);
+                    }
+                },
+                'onError': function(error) {
+                    console.error('YouTube player error:', error);
+                    reject(error);
+                }
+            }
+        });
+    });
+}
+
+// Update the playYouTubeSong function to use YouTube player
+async function playYouTubeSong(videoId, title, artist, coverUrl = '') {
+    if (!videoId) return;
+
+    try {
+        // Initialize or update YouTube player
+        if (!state.youtubePlayer) {
+            state.youtubePlayer = await initYouTubePlayer(videoId);
+        } else {
+            state.youtubePlayer.loadVideoById(videoId);
+        }
+
+        // Update state and UI
+        state.currentTrack = {
+            trackId: videoId,
+            trackName: title,
+            artistName: artist,
+            artworkUrl100: coverUrl || 'https://i.ytimg.com/img/no_thumbnail.jpg',
+            kind: 'youtube'
+        };
+
+        // Update player UI
+        const cover = coverUrl || 'https://i.ytimg.com/img/no_thumbnail.jpg';
+        $('player-cover').src = cover;
+
+        const titleTextEl = $('player-title-text');
+        const artistTextEl = $('player-artist-text');
+
+        titleTextEl.textContent = title;
+        artistTextEl.textContent = artist;
+
+        // Update top info bar
+        $('player-cover').src = cover;
+        $('bg-album').style.backgroundImage = `url(${cover})`;
+        $('bg-album').classList.add('active');
+
+        // Setup Wikipedia button
+        const wikiBtn = $('player-wiki-btn');
+        const cleanArtistName = artist.split(/&|,|feat\.|ft\./i)[0].trim();
+        wikiBtn.style.display = 'flex';
+        wikiBtn.onclick = () => {
+            const wikiUrl = `https://zh.wikipedia.org/wiki/${encodeURIComponent(cleanArtistName)}`;
+            window.open(wikiUrl, '_blank');
+        };
+        wikiBtn.title = `查看 ${cleanArtistName} 的维基百科`;
+
+        // Setup tag recommendation button
+        const tagBtn = $('player-tag-btn');
+        tagBtn.style.display = 'flex';
+        tagBtn.onclick = () => {
+            showCurrentSongTags();
+        };
+        tagBtn.title = '查看歌曲标签推荐';
+
+        // Check if text needs scrolling
+        const checkScroll = (el) => {
+            el.classList.remove('scroll-text');
+            el.style.transform = 'none';
+
+            const containerWidth = el.parentElement.clientWidth;
+            const textWidth = el.scrollWidth;
+
+            if (textWidth > containerWidth) {
+                const distance = containerWidth - textWidth;
+                const duration = Math.abs(distance) / 30 + 2;
+
+                el.style.setProperty('--scroll-distance', `${distance}px`);
+                el.style.setProperty('--duration', `${duration}s`);
+                el.classList.add('scroll-text');
+            }
+        };
+
+        setTimeout(() => {
+            checkScroll(titleTextEl);
+            checkScroll(artistTextEl);
+        }, 50);
+
+        // Wait a moment then play
+        setTimeout(() => {
+            if (state.youtubePlayer) {
+                state.youtubePlayer.playVideo();
+            }
+        }, 100);
+
+        // Danmaku
+        startDanmaku();
+
+        // Preload lyrics
+        $('lyrics-title').textContent = title;
+        $('lyrics-artist').textContent = artist;
+        setupWikipediaLink(artist);
+        $('lyrics-cover').src = cover;
+        $('lyrics-text').textContent = '加载中...';
+        $('lyrics-wiki').classList.remove('show');
+
+        fetchLyrics(artist, title);
+        fetchArtistWiki(artist);
+
+        // Add to history
+        HistoryManager.add({
+            trackId: videoId,
+            trackName: title,
+            artistName: artist,
+            artworkUrl100: cover,
+            kind: 'youtube'
+        });
+
+        // Update media session (with updated metadata)
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: title,
+                artist: artist,
+                album: 'YouTube Music',
+                artwork: [
+                    { src: cover, sizes: '96x96', type: 'image/jpeg' },
+                    { src: cover, sizes: '128x128', type: 'image/jpeg' },
+                    { src: cover, sizes: '192x192', type: 'image/jpeg' },
+                    { src: cover, sizes: '256x256', type: 'image/jpeg' },
+                    { src: cover, sizes: '512x512', type: 'image/jpeg' }
+                ]
+            });
+
+            navigator.mediaSession.setActionHandler('play', toggleYouTubePlay);
+            navigator.mediaSession.setActionHandler('pause', toggleYouTubePlay);
+            navigator.mediaSession.setActionHandler('previoustrack', playPrevious);
+            navigator.mediaSession.setActionHandler('nexttrack', () => playNext(false));
+        }
+
+        // Update favorite button state
+        updateFavoriteButton();
+
+        // Update recommendation tags
+        updateRecommendationTags(state.currentTrack);
+
+    } catch (error) {
+        console.error('Error initializing YouTube player:', error);
+        showToast('YouTube 播放器初始化失败，尝试使用备用方案...');
+
+        // Fallback: use the audio element with YouTube video URL (may not work in all browsers)
+        const audioUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        audio.src = audioUrl;
+        audio.load();
+        audio.play()
+            .then(() => {
+                updatePlayState(true);
+                state.isYouTubePlaying = true;
+            })
+            .catch(err => {
+                console.error('Fallback also failed:', err);
+                showToast('播放失败，请尝试其他歌曲');
+                updatePlayState(false);
+                state.isYouTubePlaying = false;
+            });
+    }
+}
+
+// Toggle play/pause for YouTube player
+function toggleYouTubePlay() {
+    if (state.youtubePlayer) {
+        if (state.isYouTubePlaying) {
+            state.youtubePlayer.pauseVideo();
+            state.isYouTubePlaying = false;
+        } else {
+            state.youtubePlayer.playVideo();
+            state.isYouTubePlaying = true;
+        }
+        updatePlayState(state.isYouTubePlaying);
+    }
 }
 
 // Toast 提示
@@ -2715,6 +3220,27 @@ function showToast(message) {
             try {
                 const cleanTitle = title.split('(')[0].split('-')[0].trim();
                 const cleanArtist = artist.split('&')[0].split(',')[0].trim();
+
+                // 尝试使用 YouTube API 获取歌词（如果当前播放的是 YouTube 歌曲）
+                if (state.currentTrack && state.currentTrack.trackId &&
+                    (state.currentTrack.kind === 'youtube' || state.currentTrack.previewUrl?.includes('youtube.com'))) {
+                    try {
+                        const youTubeLyricsRes = await fetch(`https://api.yuangs.cc/youtubeapi/lyrics/${state.currentTrack.trackId}`);
+                        const youTubeLyricsData = await youTubeLyricsRes.json();
+
+                        if (youTubeLyricsData.success && youTubeLyricsData.data && youTubeLyricsData.data.lyrics) {
+                            $('lyrics-text').textContent = youTubeLyricsData.data.lyrics;
+                            // 缓存歌词（有效期24小时）
+                            CacheManager.set(cacheKey, youTubeLyricsData.data.lyrics, 24);
+                            return;
+                        }
+                    } catch (e) {
+                        console.error('YouTube lyrics API failed:', e);
+                        // 如果 YouTube API 失败，继续尝试其他 API
+                    }
+                }
+
+                // 尝试使用原版 API
                 const res = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(cleanArtist)}/${encodeURIComponent(cleanTitle)}`);
 
                 if (res.ok) {
