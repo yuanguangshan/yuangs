@@ -149,7 +149,7 @@
 
         .results {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            grid-template-columns: repeat(2, 1fr);
             gap: 20px;
         }
 
@@ -173,6 +173,27 @@
         .song-card:hover {
             transform: translateY(-3px);
             border-color: rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%;
+            /* 16:9 Aspect Ratio */
+            height: 0;
+            overflow: hidden;
+            border-radius: 12px;
+            background: #000;
+        }
+
+        .video-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: 0;
         }
 
         .thumb-wrapper {
@@ -428,6 +449,7 @@
 
         /* 移动端优化 */
         @media (hover: none) and (pointer: coarse) {
+
             /* 针对触摸设备的优化 */
             button,
             .links a {
@@ -560,8 +582,19 @@
                 const duration = song.duration || '未知时长';
                 const thumbnail = song.thumbnail_url || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"></svg>';
 
+                // Extract Video ID
+                let videoId = '';
+                if (song.youtube_url) {
+                    try {
+                        const urlObj = new URL(song.youtube_url);
+                        videoId = urlObj.searchParams.get('v');
+                    } catch (e) {
+                        console.error('Invalid YouTube URL:', song.youtube_url);
+                    }
+                }
+
                 return `
-        <article class="song-card">
+        <article class="song-card" onclick="playVideo(this, '${videoId}')">
             <div class="thumb-wrapper">
                 <img src="${thumbnail}" alt="${song.title}" onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='flex';">
                 <div class="img-placeholder">
@@ -573,13 +606,32 @@
                 <div class="meta">🎤 歌手：${artists}</div>
                 <div class="meta">💿 专辑：${album}</div>
                 <div class="meta">⏱️ 时长：${duration}</div>
-                <div class="links">
-                    ${song.youtube_url ? `<a href="${song.youtube_url}" target="_blank" rel="noopener noreferrer">YouTube</a>` : ''}
-                    ${song.youtube_music_url ? `<a href="${song.youtube_music_url}" target="_blank" rel="noopener noreferrer">YouTube Music</a>` : ''}
-                </div>
             </div>
         </article>`;
             }).join('');
+        }
+
+        function playVideo(cardElement, videoId) {
+            if (!videoId) return;
+
+            // Prevent re-rendering if already playing
+            if (cardElement.querySelector('iframe')) return;
+
+            const thumbWrapper = cardElement.querySelector('.thumb-wrapper');
+            if (thumbWrapper) {
+                thumbWrapper.innerHTML = `
+                    <div class="video-container">
+                        <iframe 
+                            src="https://www.youtube.com/embed/${videoId}?autoplay=1" 
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                            allowfullscreen>
+                        </iframe>
+                    </div>
+                `;
+                // Adjust style for video playback mode if needed
+                thumbWrapper.style.flex = '1 1 100%';
+                cardElement.style.flexDirection = 'column';
+            }
         }
     </script>
 </body>
