@@ -1312,7 +1312,9 @@
             tracks: [false, false, false, false, false],
             displayedDanmaku: new Set(),  // Track currently displayed danmaku content to prevent duplicates
             youtubePlayer: null,  // YouTube player instance
-            isYouTubePlaying: false  // Track if YouTube player is currently playing
+            isYouTubePlaying: false,  // Track if YouTube player is currently playing
+            youtubeProgressInterval: null,  // Interval for YouTube progress updates
+            lastPosition: 0  // Store last playback position when app goes to background
         };
 
         // 缓存系统
@@ -1956,92 +1958,99 @@ const keywords = getAllKeywords();
                 </div>
             `;
 
+            // 首先尝试 iTunes API
+            let iTunesData = null;
             try {
-                // 首先尝试 iTunes API
-                let iTunesData = null;
-                try {
-                    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=24&country=cn`);
+                const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=24&country=cn`);
+                if (res.ok) {
                     iTunesData = await res.json();
-                } catch (e) {
-                    console.error('iTunes API 搜索失败:', e);
+                } else {
+                    console.error('iTunes API 请求失败，状态码:', res.status);
                     iTunesData = { results: [] };
                 }
+            } catch (e) {
+                console.error('iTunes API 搜索失败:', e);
+                iTunesData = { results: [] };
+            }
 
-                // 同时搜索 YouTube
-                let youTubeData = [];
-                try {
-                    const youTubeRes = await fetch(`https://api.yuangs.cc/youtubeapi/search/song?q=${encodeURIComponent(query)}&limit=24`);
+            // 同时搜索 YouTube
+            let youTubeData = [];
+            try {
+                const youTubeRes = await fetch(`https://api.yuangs.cc/youtubeapi/search/song?q=${encodeURIComponent(query)}&limit=24`);
+                if (youTubeRes.ok) {
                     const youTubeJson = await youTubeRes.json();
-                    if (youTubeJson.success && youTubeJson.data) {
+                    console.log('YouTube API 响应:', youTubeJson); // Debug log
+
+                    // Check if response has the expected structure
+                    if (youTubeJson && youTubeJson.data) {
+                        // If the API returns data in the expected format
                         youTubeData = youTubeJson.data.map(item => ({
                             // 将 YouTube 数据转换为 iTunes 格式
-                            trackId: item.video_id,
-                            trackName: item.title,
-                            artistName: item.artist,
-                            collectionName: 'YouTube Music',
-                            artworkUrl100: item.thumbnail || item.thumbnails?.[0]?.url || 'https://i.ytimg.com/img/no_thumbnail.jpg',
-                            previewUrl: `https://www.youtube.com/watch?v=${item.video_id}`,
+                            trackId: item.video_id || item.id,
+                            trackName: item.title || item.name,
+                            artistName: Array.isArray(item.artists) ? item.artists.join(', ') : (item.artist || item.author || 'Unknown Artist'),
+                            collectionName: item.album || 'YouTube Music',
+                            artworkUrl100: item.thumbnail || item.thumbnails?.[0]?.url || item.image || 'https://i.ytimg.com/img/no_thumbnail.jpg',
+                            previewUrl: `https://www.youtube.com/watch?v=${item.video_id || item.id}`,
                             kind: 'youtube',  // 标记为 YouTube 来源
-                            genre: item.category || 'YouTube',
-                            releaseDate: item.publish_date || new Date().toISOString()
+                            genre: item.category || item.genre || 'YouTube',
+                            releaseDate: item.publish_date || item.publishedAt || new Date().toISOString(),
+                            duration: item.duration || 'Unknown Duration'  // 添加时长信息
                         }));
+                    } else {
+                        console.warn('YouTube API 响应格式不正确:', youTubeJson);
                     }
-                } catch (e) {
-                    console.error('YouTube API 搜索失败:', e);
+                } else {
+                    console.error('YouTube API 请求失败，状态码:', youTubeRes.status);
                 }
-
-                // 合并结果：优先使用 iTunes 数据，补充 YouTube 数据
-                let combinedResults = [...iTunesData.results];
-
-                // 只添加与搜索查询相关的 YouTube 结果
-                const youTubeResultsToAdd = youTubeData.filter(ytSong => {
-                    const songMatch = ytSong.trackName.toLowerCase().includes(query.toLowerCase());
-                    const artistMatch = ytSong.artistName.toLowerCase().includes(query.toLowerCase());
-                    return songMatch || artistMatch;
-                });
-
-                // 避免重复，按歌曲和艺术家匹配
-                const existingTracks = new Set();
-                combinedResults.forEach(song => {
-                    const trackKey = `${song.trackName.toLowerCase()}-${song.artistName.toLowerCase()}`;
-                    existingTracks.add(trackKey);
-                });
-
-                for (const ytSong of youTubeResultsToAdd) {
-                    const trackKey = `${ytSong.trackName.toLowerCase()}-${ytSong.artistName.toLowerCase()}`;
-                    if (!existingTracks.has(trackKey)) {
-                        combinedResults.push(ytSong);
-                        existingTracks.add(trackKey);
-                    }
-                }
-
-                // 缓存搜索结果（有效期1小时）
-                CacheManager.set(cacheKey, combinedResults, 1);
-
-                state.playlist = combinedResults;
-                renderResults(combinedResults);
-
-                // 同时缓存每个歌曲的元数据
-                combinedResults.forEach(song => {
-                    const songCacheKey = generateCacheKey(song.artistName, song.trackName);
-                    CacheManager.set(songCacheKey, {
-                        trackName: song.trackName,
-                        artistName: song.artistName,
-                        artworkUrl: song.artworkUrl100,
-                        previewUrl: song.previewUrl,
-                        collectionName: song.collectionName,
-                        kind: song.kind  // 保存来源类型
-                    }, 24); // 24小时有效期
-                });
             } catch (e) {
-                $('results').innerHTML = `
-                    <div class="empty-state" style="grid-column: 1/-1;">
-                        <div class="empty-icon">😵</div>
-                        <div class="empty-title">网络错误</div>
-                        <div class="empty-desc">请检查网络连接后重试</div>
-                    </div>
-                `;
+                console.error('YouTube API 搜索失败:', e);
+                // 可能是 CORS 或网络问题，不中断整个搜索流程
             }
+
+            // 合并结果：优先使用 iTunes 数据，补充 YouTube 数据
+            let combinedResults = [...iTunesData.results];
+
+            // 只添加与搜索查询相关的 YouTube 结果
+            const youTubeResultsToAdd = youTubeData.filter(ytSong => {
+                const songMatch = ytSong.trackName.toLowerCase().includes(query.toLowerCase());
+                const artistMatch = ytSong.artistName.toLowerCase().includes(query.toLowerCase());
+                return songMatch || artistMatch;
+            });
+
+            // 避免重复，按歌曲和艺术家匹配
+            const existingTracks = new Set();
+            combinedResults.forEach(song => {
+                const trackKey = `${song.trackName.toLowerCase()}-${song.artistName.toLowerCase()}`;
+                existingTracks.add(trackKey);
+            });
+
+            for (const ytSong of youTubeResultsToAdd) {
+                const trackKey = `${ytSong.trackName.toLowerCase()}-${ytSong.artistName.toLowerCase()}`;
+                if (!existingTracks.has(trackKey)) {
+                    combinedResults.push(ytSong);
+                    existingTracks.add(trackKey);
+                }
+            }
+
+            // 缓存搜索结果（有效期1小时）
+            CacheManager.set(cacheKey, combinedResults, 1);
+
+            state.playlist = combinedResults;
+            renderResults(combinedResults);
+
+            // 同时缓存每个歌曲的元数据
+            combinedResults.forEach(song => {
+                const songCacheKey = generateCacheKey(song.artistName, song.trackName);
+                CacheManager.set(songCacheKey, {
+                    trackName: song.trackName,
+                    artistName: song.artistName,
+                    artworkUrl: song.artworkUrl100,
+                    previewUrl: song.previewUrl,
+                    collectionName: song.collectionName,
+                    kind: song.kind  // 保存来源类型
+                }, 24); // 24小时有效期
+            });
         }
 
         // 渲染结果
@@ -2077,7 +2086,7 @@ const keywords = getAllKeywords();
                             </div>
                             ${song.trackId ? `<div class="song-options" onclick="event.stopPropagation(); ${isYouTube ? `playYouTubeFullSong('${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}', '${coverUrl}')` : `playFullSong('${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}')`}">⋯</div>` : ''}
                         </div>
-                        <div class="song-title">${escapeHtml(song.trackName)} ${isYouTube ? '▶️' : ''}</div>
+                        <div class="song-title">${isYouTube ? '<span style="color: #ff6b6b;">▶</span> ' : ''}${escapeHtml(song.trackName)}</div>
                         <div class="song-artist">${escapeHtml(song.artistName)}</div>
                     </div>
                 `;
@@ -2316,10 +2325,23 @@ const keywords = getAllKeywords();
         async function searchYouTubeMusic(query) {
             try {
                 const response = await fetch(`https://api.yuangs.cc/youtubeapi/search/song?q=${encodeURIComponent(query)}&limit=10`);
-                const data = await response.json();
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('YouTube search API 响应:', data); // Debug log
 
-                if (data.success && data.data && data.data.length > 0) {
-                    return data.data;
+                    if (data && data.data && data.data.length > 0) {
+                        // 确保返回的数据格式一致
+                        return data.data.map(item => ({
+                            ...item,
+                            // 确保艺术家字段正确映射
+                            artist: Array.isArray(item.artists) ? item.artists.join(', ') : item.artist,
+                            // 如果需要 iTunes 兼容格式
+                            artistName: Array.isArray(item.artists) ? item.artists.join(', ') : (item.artist || item.author || 'Unknown Artist'),
+                            trackName: item.title || item.name
+                        }));
+                    }
+                } else {
+                    console.error('YouTube API 请求失败，状态码:', response.status);
                 }
                 return [];
             } catch (error) {
@@ -2663,6 +2685,32 @@ const keywords = getAllKeywords();
             }
         }
 
+        // 在 YouTube 播放器中播放下一首
+        function playNextForYouTube() {
+            if (state.playMode === 'single') {
+                // 单曲循环，重新播放当前歌曲
+                if (state.youtubePlayer) {
+                    state.youtubePlayer.seekTo(0);
+                    state.youtubePlayer.playVideo();
+                }
+                return;
+            }
+
+            if (state.playlist.length === 0) return;
+
+            let newIndex;
+            if (state.playMode === 'random') {
+                newIndex = Math.floor(Math.random() * state.playlist.length);
+                // 尽量避免随机到同一首（除非只有一首）
+                if (state.playlist.length > 1 && newIndex === state.currentIndex) {
+                    newIndex = (newIndex + 1) % state.playlist.length;
+                }
+            } else {
+                newIndex = (state.currentIndex + 1) % state.playlist.length;
+            }
+            playSong(newIndex);
+        }
+
         // 切换播放模式
         function togglePlayMode() {
             const modes = ['sequence', 'random', 'single'];
@@ -2754,6 +2802,38 @@ const keywords = getAllKeywords();
                 playNext(true); // 传入 true 表示自动播放
             }
         };
+
+        // 为 YouTube 播放器创建定时器来更新进度 - 使用更频繁的更新
+        // Using a more robust interval that can continue in background
+        let youtubeProgressInterval = setInterval(() => {
+            if (state.youtubePlayer && state.isYouTubePlaying) {
+                try {
+                    const currentTime = state.youtubePlayer.getCurrentTime();
+                    const duration = state.youtubePlayer.getDuration();
+
+                    if (!isNaN(duration) && !isNaN(currentTime) && duration > 0) {
+                        const pct = (currentTime / duration) * 100;
+                        $('progress-fill').style.width = pct + '%';
+                        $('current-time').textContent = formatTime(currentTime);
+                        $('total-time').textContent = formatTime(duration);
+
+                        // Update media session position state for background playback controls
+                        if ('setPositionState' in navigator.mediaSession) {
+                            navigator.mediaSession.setPositionState({
+                                duration: duration,
+                                playbackRate: 1.0,
+                                position: currentTime
+                            });
+                        }
+                    }
+                } catch (e) {
+                    // 如果 YouTube 播放器还没准备好，忽略错误
+                }
+            }
+        }, 500); // 每0.5秒更新一次进度，使时间轴更流畅
+
+        // Store the interval ID so we can clear it if needed
+        state.youtubeProgressInterval = youtubeProgressInterval;
 
         // 停止弹幕系统
         function stopDanmaku() {
@@ -2964,6 +3044,9 @@ function onYouTubeIframeAPIReady() {
 // Initialize YouTube player
 function initYouTubePlayer(videoId) {
     return new Promise((resolve, reject) => {
+        // Initialize background audio context before creating player
+        initializeBackgroundAudio();
+
         // Create container for YouTube player if it doesn't exist
         let playerContainer = document.getElementById('youtube-player-container');
         if (!playerContainer) {
@@ -2983,11 +3066,17 @@ function initYouTubePlayer(videoId) {
                 'fs': 0,       // Disable fullscreen
                 'iv_load_policy': 3, // Disable annotations
                 'modestbranding': 1, // Reduce YouTube branding
-                'rel': 0 // Don't show related videos at the end
+                'rel': 0, // Don't show related videos at the end
+                'autoplay': 0, // Don't autoplay, we'll control it
+                'mute': 0 // Don't mute initially
             },
             events: {
                 'onReady': function(event) {
                     console.log('YouTube player ready');
+                    // Resume audio context when player is ready
+                    if (backgroundAudioContext && backgroundAudioContext.state !== 'running') {
+                        backgroundAudioContext.resume();
+                    }
                     resolve(event.target);
                 },
                 'onStateChange': function(event) {
@@ -2996,14 +3085,41 @@ function initYouTubePlayer(videoId) {
                     if (event.data === YT.PlayerState.PLAYING) {
                         state.isYouTubePlaying = true;
                         updatePlayState(true);
-                    } else if (event.data === YT.PlayerState.PAUSED || event.data === YT.PlayerState.ENDED) {
+                        // Ensure audio context is running
+                        if (backgroundAudioContext && backgroundAudioContext.state === 'suspended') {
+                            backgroundAudioContext.resume();
+                        }
+                    } else if (event.data === YT.PlayerState.PAUSED) {
                         state.isYouTubePlaying = false;
                         updatePlayState(false);
+                    } else if (event.data === YT.PlayerState.ENDED) {
+                        // 当 YouTube 歌曲播放结束时
+                        state.isYouTubePlaying = false;
+                        updatePlayState(false);
+                        // 延迟一点时间再播放下一首，确保状态更新完成
+                        setTimeout(() => {
+                            playNextForYouTube();
+                        }, 300);
+                    } else if (event.data === YT.PlayerState.BUFFERING) {
+                        // Ensure audio context remains active during buffering
+                        if (backgroundAudioContext && backgroundAudioContext.state === 'suspended') {
+                            backgroundAudioContext.resume();
+                        }
                     }
                 },
                 'onError': function(error) {
                     console.error('YouTube player error:', error);
-                    reject(error);
+                    // Retry initialization with different parameters if there's an error
+                    if (error.data === 100 || error.data === 101 || error.data === 150) {
+                        // Video not found or not allowed to play - propagate error
+                        reject(error);
+                    } else {
+                        // Other errors - might be recoverable
+                        console.log('YouTube player error, but continuing:', error);
+                        // Don't reject for other errors, as the player might still work
+                        // Resolve with the player instance anyway
+                        resolve(event.target);
+                    }
                 }
             }
         });
@@ -3173,12 +3289,151 @@ function toggleYouTubePlay() {
             state.youtubePlayer.pauseVideo();
             state.isYouTubePlaying = false;
         } else {
-            state.youtubePlayer.playVideo();
-            state.isYouTubePlaying = true;
+            // Request user interaction to enable audio in background
+            requestAudioPlayback().then(() => {
+                state.youtubePlayer.playVideo();
+                state.isYouTubePlaying = true;
+            }).catch(() => {
+                state.youtubePlayer.playVideo();
+                state.isYouTubePlaying = true;
+            });
         }
         updatePlayState(state.isYouTubePlaying);
     }
 }
+
+// Audio context for maintaining background audio on mobile
+let backgroundAudioContext = null;
+
+// Initialize audio context for background playback
+function initializeBackgroundAudio() {
+    if (backgroundAudioContext) return;
+
+    if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+        backgroundAudioContext = new (AudioContext || webkitAudioContext)();
+
+        // Create a minimal silent buffer to maintain the audio context
+        const silentBuffer = backgroundAudioContext.createBuffer(1, 1, 22050);
+        const source = backgroundAudioContext.createBufferSource();
+        source.buffer = silentBuffer;
+
+        // Connect to output without amplification (essentially silent)
+        const gainNode = backgroundAudioContext.createGain();
+        gainNode.gain.value = 0; // Completely silent
+        source.connect(gainNode);
+        gainNode.connect(backgroundAudioContext.destination);
+
+        // Loop the silent buffer indefinitely
+        source.loop = true;
+        source.start();
+
+        // Resume if suspended
+        if (backgroundAudioContext.state === 'suspended') {
+            backgroundAudioContext.resume();
+        }
+    }
+}
+
+// Request audio playback permission on mobile devices
+function requestAudioPlayback() {
+    return new Promise((resolve, reject) => {
+        // Initialize background audio context
+        initializeBackgroundAudio();
+
+        // Resume audio context if suspended
+        if (backgroundAudioContext && backgroundAudioContext.state === 'suspended') {
+            backgroundAudioContext.resume().then(() => {
+                resolve();
+            }).catch(reject);
+        } else {
+            resolve();
+        }
+    });
+}
+
+// Handle visibility changes for mobile background audio
+document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') {
+        // When returning to foreground, ensure audio is properly resumed
+        if (state.youtubePlayer && state.isYouTubePlaying) {
+            // Small delay to ensure YouTube player is ready
+            setTimeout(() => {
+                if (state.youtubePlayer.getPlayerState() !== YT.PlayerState.PLAYING) {
+                    toggleYouTubePlay();
+                }
+            }, 100);
+        }
+    }
+});
+
+// Additional mobile-specific handling
+if ('mediaSession' in navigator) {
+    navigator.mediaSession.setActionHandler('play', toggleYouTubePlay);
+    navigator.mediaSession.setActionHandler('pause', toggleYouTubePlay);
+
+    // Handle seek actions to maintain audio session
+    try {
+        navigator.mediaSession.setActionHandler('seekbackward', () => {
+            if (state.youtubePlayer) {
+                const currentTime = state.youtubePlayer.getCurrentTime();
+                state.youtubePlayer.seekTo(Math.max(0, currentTime - 10), true);
+            }
+        });
+
+        navigator.mediaSession.setActionHandler('seekforward', () => {
+            if (state.youtubePlayer) {
+                const currentTime = state.youtubePlayer.getCurrentTime();
+                const duration = state.youtubePlayer.getDuration();
+                state.youtubePlayer.seekTo(Math.min(duration, currentTime + 10), true);
+            }
+        });
+    } catch (error) {
+        console.log('Seek actions not supported:', error);
+    }
+}
+
+// Additional event listeners to handle app lifecycle and backgrounding
+window.addEventListener('pagehide', function() {
+    // Try to maintain audio when page is hidden (e.g., switching apps)
+    if (state.youtubePlayer && state.isYouTubePlaying) {
+        // Store the current time to resume from when returning
+        state.lastPosition = state.youtubePlayer.getCurrentTime();
+    }
+});
+
+// Handle page visibility changes more comprehensively
+document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') {
+        // When returning to foreground, resume audio if needed
+        if (state.youtubePlayer && state.isYouTubePlaying) {
+            // Small delay to ensure YouTube player is ready after page becomes visible
+            setTimeout(() => {
+                const playerState = state.youtubePlayer.getPlayerState();
+                if (playerState !== YT.PlayerState.PLAYING) {
+                    // Try to resume playback
+                    state.youtubePlayer.playVideo();
+                }
+            }, 500);
+        }
+    }
+});
+
+// Handle focus/blur events which can affect audio on mobile
+window.addEventListener('focus', function() {
+    // On iOS Safari especially, audio may need to be resumed when window regains focus
+    if (state.youtubePlayer && state.isYouTubePlaying && state.youtubePlayer.getPlayerState() !== YT.PlayerState.PLAYING) {
+        setTimeout(() => {
+            state.youtubePlayer.playVideo();
+        }, 100);
+    }
+});
+
+window.addEventListener('blur', function() {
+    // Store position when leaving the page
+    if (state.youtubePlayer && state.isYouTubePlaying) {
+        state.lastPosition = state.youtubePlayer.getCurrentTime();
+    }
+});
 
 // Toast 提示
 function showToast(message) {
@@ -3226,13 +3481,17 @@ function showToast(message) {
                     (state.currentTrack.kind === 'youtube' || state.currentTrack.previewUrl?.includes('youtube.com'))) {
                     try {
                         const youTubeLyricsRes = await fetch(`https://api.yuangs.cc/youtubeapi/lyrics/${state.currentTrack.trackId}`);
-                        const youTubeLyricsData = await youTubeLyricsRes.json();
+                        if (youTubeLyricsRes.ok) {
+                            const youTubeLyricsData = await youTubeLyricsRes.json();
 
-                        if (youTubeLyricsData.success && youTubeLyricsData.data && youTubeLyricsData.data.lyrics) {
-                            $('lyrics-text').textContent = youTubeLyricsData.data.lyrics;
-                            // 缓存歌词（有效期24小时）
-                            CacheManager.set(cacheKey, youTubeLyricsData.data.lyrics, 24);
-                            return;
+                            if (youTubeLyricsData.success && youTubeLyricsData.data && youTubeLyricsData.data.lyrics) {
+                                $('lyrics-text').textContent = youTubeLyricsData.data.lyrics;
+                                // 缓存歌词（有效期24小时）
+                                CacheManager.set(cacheKey, youTubeLyricsData.data.lyrics, 24);
+                                return;
+                            }
+                        } else {
+                            console.error('YouTube lyrics API 请求失败，状态码:', youTubeLyricsRes.status);
                         }
                     } catch (e) {
                         console.error('YouTube lyrics API failed:', e);
