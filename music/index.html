@@ -833,10 +833,30 @@
         }
 
         @keyframes slide-up {
-            from { 
+            from {
                 opacity: 0;
                 transform: translateY(20px);
             }
+        }
+
+        /* 推荐标签样式 */
+        .recommendation-tag {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            color: var(--text);
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .recommendation-tag:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            transform: scale(1.05);
         }
 
         .install-icon {
@@ -1128,7 +1148,7 @@
                 <button class="search-clear-btn" id="search-clear-btn" title="清空搜索" style="display: none;">✕</button>
             </div>
             <button class="btn btn-icon" onclick="searchMusic()" title="搜索">🔍</button>
-            <button class="btn btn-icon" onclick="randomSearch()" title="随机探索">🎲</button>
+            <button class="btn btn-icon" onclick="smartRandomSearch()" title="智能探索">🎲</button>
             <button class="btn btn-icon" onclick="searchByWeather()" title="看天听歌">🌤️</button>
             <button class="btn btn-icon" onclick="openHistory()" title="播放历史">📖</button>
             <button class="btn btn-icon" onclick="openFavorites()" title="我的收藏">❤️</button>
@@ -1162,9 +1182,10 @@
                 <div class="player-text-wrapper artist-wrapper">
                     <span class="player-artist-text" id="player-artist-text">等待播放</span>
                 </div>
+                <button class="player-wiki-btn" id="player-tag-btn" title="查看歌曲标签推荐" style="display: none; margin-right: 8px;">🏷️</button>
                 <button class="player-wiki-btn" id="player-wiki-btn" title="查看艺术家维基百科" style="display: none;">📖</button>
             </div>
-            
+
             <!-- 主控制区 -->
             <div class="player-main">
                 <img class="player-cover" id="player-cover" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%23222' width='100' height='100'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%23333' stroke-width='2'/%3E%3Ccircle cx='50' cy='50' r='10' fill='%23333'/%3E%3C/svg%3E" alt="Cover">
@@ -1176,7 +1197,7 @@
                     <button class="ctrl-btn" onclick="playNext()">⏭</button>
                 </div>
             </div>
-            
+
             <!-- 进度条 -->
             <div class="progress-container">
                 <span class="time" id="current-time">0:00</span>
@@ -1184,6 +1205,13 @@
                     <div class="progress-fill" id="progress-fill"></div>
                 </div>
                 <span class="time" id="total-time">0:30</span>
+            </div>
+
+            <!-- 推荐标签区 -->
+            <div class="recommendation-tags" id="recommendation-tags" style="margin-top: 12px; display: none;">
+                <div class="player-label" style="margin-bottom: 6px;">相关推荐：</div>
+                <div class="recommendation-tags-container" id="recommendation-tags-container" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 40px; overflow-y: auto;"></div>
+                <div class="show-more-recommendations" id="show-more-recommendations" style="margin-top: 6px; color: var(--primary); font-size: 12px; cursor: pointer; display: none;">展开更多推荐</div>
             </div>
         </div>
     </div>
@@ -1503,94 +1531,255 @@
         const $ = id => document.getElementById(id);
         const audio = $('audio');
 
-        // 关键词库 (500+ 词汇扩充版)
-const keywords = [
-    // --- 原始核心词 ---
-    "Love", "Dream", "Night", "Summer", "Rain", "Happy", "Sad", "Dance", "Party", "Heart", "Soul", "Fire", "Stars", "Blue", "Gold", "Wild", "Sweet", "Crazy", "Beautiful", "Forever", "Kiss", "Miss", "Baby", "Believe", "Free", "Smile", "Hope", "Joy", "Tears", "Faith", "Paradise", "Heaven", "Promise", "Secret", "Lost", "Alone", "Together", "Brave", "Angel", "Devil", "Hero", "Legend", "Magic", "Power", "Glory", "King", "Queen", "Life", "Time",
+        // 层次化音乐标签系统
+const musicTags = {
+    // 一级分类：音乐属性
+    attributes: {
+        // 二级分类：情绪与氛围 (Vibes & Moods)
+        moods: {
+            positive: ["Happy", "Joy", "Cheerful", "Uplifting", "Energetic", "Upbeat", "Euphoria", "Peaceful", "Calm", "Serene", "Chill", "Relax", "Cozy", "Mellow", "Groovy", "Cool", "Fresh"],
+            romantic: ["Love", "Romantic", "Heart", "Kiss", "Miss", "Baby", "Intimate", "Affection", "Passion", "Sensual", "Sexy"],
+            melancholy: ["Sad", "Melancholy", "Nostalgia", "Sentimental", "Blue", "Tears", "Lonely", "Gloomy", "Melancholic", "Heartbreak"],
+            intense: ["Drama", "Intense", "Power", "Epic", "Cinematic", "Dark", "Mystery", "Mysterious", "Heavy", "Spooky", "Creepy", "Mysterious", "Supernatural"],
+            spiritual: ["Faith", "Believe", "Angels", "Heaven", "Paradise", "Divine", "Sacred", "Spiritual", "Transcendent", "Soulful"]
+        },
+        // 二级分类：音乐风格 (Stylistic Elements)
+        styles: {
+            sonic: ["Acoustic", "Electric", "Instrumental", "Acapella", "Live", "Studio", "Remix", "Cover", "Original"],
+            aesthetic: ["Vintage", "Retro", "Classic", "Modern", "Futuristic", "Cyberpunk", "Aesthetic", "Pastel", "Neon", "Funky"]
+        }
+    },
+    // 一级分类：音乐类型
+    genres: {
+        // 二级分类：主要流派 (Main Genres)
+        main: {
+            pop: ["Pop", "Mandopop", "Cantopop", "K-Pop", "J-Pop", "Jazz", "Soul", "R&B"],
+            rock: ["Rock", "Alternative", "Indie", "Punk", "Grunge", "Emo", "Metal", "Heavy Metal"],
+            electronic: ["EDM", "House", "Techno", "Trance", "Dubstep", "Drum and Bass", "Garage", "Ambient"],
+            hip_hop: ["Hip Hop", "Rap", "Trap", "R&B"],
+            traditional: ["Country", "Folk", "Classical", "Opera", "Blues"],
+            world: ["Latin", "Reggae", "Dancehall", "Salsa", "Bachata", "Reggaeton", "Anime", "Ghibli"]
+        },
+        // 三级分类：衍生流派 (Sub-Genres)
+        sub_genres: {
+            pop_sub: ["Synthpop", "Electropop", "Dance-pop", "Indie Pop", "Art Pop"],
+            rock_sub: ["Glam Rock", "Progressive Rock", "Punk Rock", "Hard Rock", "Grunge Rock", "Alternative Rock"],
+            electronic_sub: ["Lo-Fi", "Lofi Hip Hop", "Synthwave", "Vaporwave", "Retrowave", "Deep House", "Future Bass"],
+            hip_hop_sub: ["Old School Hip Hop", "Trap", "Drill", "Conscious Rap", "Mumble Rap"],
+            traditional_sub: ["Bluegrass", "Folk Rock", "Baroque", "Chamber Music", "Contemporary Classical"]
+        }
+    },
+    // 一级分类：场景活动
+    scenarios: {
+        // 二级分类：时间场景 (Time-based)
+        time_based: {
+            daily_routine: ["Morning", "Wake Up", "Afternoon", "Evening", "Late Night", "Midnight", "Sunrise", "Sunset"],
+            weekly: ["Weekend", "Friday", "Sunday", "Monday", "Workday"],
+            seasonal: ["Spring", "Summer", "Autumn", "Winter", "Holiday", "New Year", "Valentine", "Christmas", "Halloween"],
+            special_occasions: ["Birthday", "Wedding", "Graduation", "Travel", "Vacation", "Beach", "Camping", "Festival"]
+        },
+        // 二级分类：活动场景 (Activity-based)
+        activity_based: {
+            exercise: ["Workout", "Gym", "Running", "Jogging", "Yoga", "Meditation", "Stretching"],
+            work_study: ["Study", "Coding", "Reading", "Focus", "Background", "Concentration", "Deep Work"],
+            travel: ["Driving", "Road Trip", "Car Music", "Commuting", "Long Drive"],
+            social: ["Party", "Club", "Bar", "Lounge", "Dinner", "Cooking", "Cleaning"],
+            relaxation: ["Sleep", "Meditation", "Spa", "Shower", "Bath", "Coffee Shop", "Cafe"]
+        }
+    },
+    // 一级分类：文化元素
+    culture: {
+        // 二级分类：地域文化 (Regional Culture)
+        regional: {
+            western: ["American", "British", "European", "African", "Caribbean"],
+            asian: ["Chinese", "Korean", "Japanese", "Taiwanese", "Hong Kong", "Southeast Asian"],
+            latin: ["Latin America", "Brazil", "Mexico", "Caribbean"]
+        },
+        // 二级分类：艺术家与作品 (Artists & Works)
+        artists: {
+            western_mainstream: [
+                "Taylor Swift", "Ed Sheeran", "Ariana Grande", "Justin Bieber", "The Weeknd", "Dua Lipa",
+                "Billie Eilish", "Harry Styles", "Bruno Mars", "Adele", "Rihanna", "Beyonce", "Lady Gaga",
+                "Katy Perry", "Miley Cyrus", "Post Malone", "Coldplay", "Imagine Dragons", "OneRepublic",
+                "Drake", "Kendrick Lamar", "Eminem", "Jay-Z", "Travis Scott", "Kanye West", "J. Cole",
+                "Beatles", "Queen", "Pink Floyd", "Led Zeppelin", "AC/DC", "Red Hot Chili Peppers",
+                "Linkin Park", "Arctic Monkeys", "Tame Impala", "Oasis", "David Bowie", "Prince",
+                "Elton John", "Bob Dylan", "Beyoncé", "Alicia Keys", "John Legend"
+            ],
+            korean: ["BTS", "Blackpink", "Twice", "EXO", "Big Bang", "NewJeans", "Stray Kids", "IU", "SEVENTEEN"],
+            chinese: ["周杰伦", "林俊杰", "陈奕迅", "王力宏", "陶喆", "蔡依林", "孙燕姿", "梁静茹", "五月天",
+                     "Beyond", "邓丽君", "张国荣", "王菲", "张学友", "刘德华", "黎明", "郭富城", "罗大佑",
+                     "李宗盛", "崔健", "窦唯", "伍佰", "张雨生", "邓紫棋", "李荣浩", "薛之谦", "周深",
+                     "毛不易", "华晨宇", "张杰", "许嵩", "告五人", "痛仰", "陈粒", "赵雷"],
+            japanese: ["安室奈美恵", "宇多田ヒカル", "米津玄師", "RADWIMPS", "YOASOBI"],
+            instrumental: ["Hans Zimmer", "John Williams", "Joe Hisaishi", "Ennio Morricone", "Ludwig Göransson"]
+        },
+        // 二级分类：影视文化 (Media Culture)
+        media: {
+            franchises: ["Marvel", "DC", "Star Wars", "Harry Potter", "Lord of the Rings", "Game of the Thrones"],
+            shows: ["Stranger Things", "Friends", "Simpsons", "Breaking Bad", "The Office"],
+            games: ["Cyberpunk 2077", "GTA", "FIFA", "Mario", "Zelda", "Pokemon", "Fortnite"],
+            other: ["Disney", "Musical", "Broadway", "Anime OST", "Video Game Music"]
+        }
+    },
+    // 一级分类：自然与抽象
+    nature_abstract: {
+        // 二级分类：自然元素 (Natural Elements)
+        nature: {
+            weather: ["Rain", "Storm", "Thunder", "Snow", "Wind", "Sun", "Moon", "Stars"],
+            landscapes: ["Ocean", "Sea", "River", "Forest", "Jungle", "Mountain", "Desert"],
+            locations: ["California", "New York", "London", "Paris", "Tokyo", "Seoul", "Hong Kong", "Shanghai", "Miami", "Ibiza", "Hawaii", "Space", "Galaxy", "Universe", "City", "Street", "Highway"]
+        },
+        // 二级分类：抽象概念 (Abstract Concepts)
+        abstract: {
+            transcendental: ["Dream", "Night", "Fire", "Gold", "Wild", "Free", "Magic", "Legend", "Hero", "Angel", "Devil", "King", "Queen", "Life", "Time", "Eternity"],
+            emotions: ["Hope", "Smile", "Believe", "Together", "Alone", "Lost", "Forever", "Secret", "Promise"]
+        }
+    }
+};
 
-    // --- 情绪与氛围 (Vibes & Moods) ---
-    "Chill", "Relax", "Cozy", "Mellow", "Groovy", "Funky", "Energetic", "Upbeat", "Melancholy", "Nostalgia", "Sentimental", "Romantic", "Sexy", "Dark", "Gloomy", "Mystery", "Euphoria", "Hypnotic", "Psychedelic", "Peaceful", "Calm", "Serene", "Focus", "Intense", "Dramatic", "Epic", "Cinematic", "Ethereal", "Dreamy", "Floating", "Heavy", "Soft", "Warm", "Cold", "Spooky", "Creepy", "Funny", "Weird", "Cool", "Fresh", "Vintage", "Retro", "Classic", "Modern", "Futuristic", "Urban", "Rural", "Pastel", "Neon", "Cyberpunk", "Aesthetic",
+// 从层次化标签系统中提取所有标签词，用于随机搜索
+function getAllKeywords() {
+    const keywords = [];
 
-    // --- 场景与活动 (Scenarios) ---
-    "Workout", "Gym", "Running", "Jogging", "Driving", "Road Trip", "Car Music", "Study", "Coding", "Reading", "Focus", "Sleep", "Meditation", "Yoga", "Spa", "Gaming", "Background", "Coffee Shop", "Cafe", "Dinner", "Cooking", "Cleaning", "Shower", "Bath", "Morning", "Wake Up", "Late Night", "Midnight", "Sunset", "Sunrise", "Weekend", "Friday", "Sunday", "Holiday", "Vacation", "Beach", "Pool", "Camping", "Festival", "Club", "Bar", "Lounge", "Wedding", "Birthday", "Christmas", "Halloween", "New Year", "Valentine",
+    function collectKeywords(obj) {
+        for (const key in obj) {
+            if (typeof obj[key] === 'object') {
+                collectKeywords(obj[key]);
+            } else if (Array.isArray(obj[key])) {
+                obj[key].forEach(item => keywords.push(item));
+            }
+        }
+    }
 
-    // --- 音乐流派 (Genres) ---
-    "Pop", "Rock", "Jazz", "Blues", "Soul", "R&B", "Hip Hop", "Rap", "Trap", "Country", "Folk", "Indie", "Alternative", "Metal", "Heavy Metal", "Punk", "Grunge", "Emo", "Ska", "Reggae", "Dancehall", "Latin", "Salsa", "Bachata", "Reggaeton", "K-Pop", "J-Pop", "C-Pop", "Mandopop", "Cantopop", "EDM", "House", "Deep House", "Techno", "Trance", "Dubstep", "Drum and Bass", "Garage", "Disco", "Funk", "Motown", "Gospel", "Christian", "Classical", "Opera", "Symphony", "Orchestra", "Piano", "Violin", "Cello", "Acoustic", "Instrumental", "Acapella", "Lo-Fi", "Lofi Hip Hop", "Synthwave", "Vaporwave", "Retrowave", "Ambient", "New Age", "Experimental", "Soundtrack", "OST", "Anime", "Disney", "Musical", "Broadway",
+    collectKeywords(musicTags);
+    return keywords;
+}
 
-    // --- 著名艺人与乐队 (Artists - Modern & Legends) ---
-    // Pop/Mainstream
-    "Taylor Swift", "Ed Sheeran", "Ariana Grande", "Justin Bieber", "The Weeknd", "Dua Lipa", "Billie Eilish", "Harry Styles", "Bruno Mars", "Adele", "Rihanna", "Beyonce", "Lady Gaga", "Katy Perry", "Miley Cyrus", "Shawn Mendes", "Camila Cabello", "Selena Gomez", "Post Malone", "Maroon 5", "Imagine Dragons", "OneRepublic", "Coldplay", "Sia", "Sam Smith", "Charlie Puth",
-    // Hip-Hop/Rap/R&B
-    "Drake", "Kendrick Lamar", "Kanye West", "Eminem", "Jay-Z", "Travis Scott", "J. Cole", "Nicki Minaj", "Cardi B", "Doja Cat", "SZA", "Frank Ocean", "Chris Brown", "Usher", "Alicia Keys", "John Legend", "Pharrell Williams", "Snoop Dogg", "Dr. Dre", "2Pac", "Notorious BIG", "Wu-Tang Clan",
-    // Rock/Indie/Alternative
-    "Beatles", "Queen", "Rolling Stones", "Pink Floyd", "Led Zeppelin", "AC/DC", "Nirvana", "Guns N Roses", "Metallica", "Red Hot Chili Peppers", "Linkin Park", "Green Day", "Blink-182", "Radiohead", "Arctic Monkeys", "The Strokes", "Tame Impala", "The Killers", "Oasis", "Blur", "U2", "Bon Jovi", "Aerosmith", "Eagles", "Fleetwood Mac", "David Bowie", "Prince", "Elton John", "Bob Dylan",
-    // Electronic/Dance
-    "Daft Punk", "Calvin Harris", "Avicii", "David Guetta", "Tiesto", "Martin Garrix", "Marshmello", "The Chainsmokers", "Zedd", "Skrillex", "Diplo", "Kygo", "Alan Walker", "Disclosure", "Kraftwerk",
-    // K-Pop/Asian
-    "BTS", "Blackpink", "Twice", "EXO", "Big Bang", "NewJeans", "Stray Kids", "Seventeen", "IU", "Jay Chou", "JJ Lin", "Eason Chan",
+// 获取标签推荐
+function getRecommendationsByTag(tag, limit = 20) {
+    const recommendations = [];
 
-    // --- 地点与自然 (Places & Nature) ---
-    "California", "New York", "London", "Paris", "Tokyo", "Seoul", "Hong Kong", "Shanghai", "Miami", "Ibiza", "Hawaii", "Space", "Galaxy", "Universe", "Moon", "Sun", "Sky", "Ocean", "Sea", "River", "Forest", "Jungle", "Mountain", "Desert", "City", "Street", "Highway", "Rain", "Storm", "Thunder", "Snow", "Wind", "Fire", "Water", "Earth", "Air", "Flower", "Rose", "Cherry Blossom",
+    function findRelatedTags(obj, currentPath = []) {
+        for (const key in obj) {
+            if (typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+                findRelatedTags(obj[key], [...currentPath, key]);
+            } else if (Array.isArray(obj[key])) {
+                // 检查当前标签是否在数组中
+                if (obj[key].includes(tag)) {
+                    // 添加同级的其他标签
+                    obj[key].forEach(item => {
+                        if (item !== tag && !recommendations.includes(item)) {
+                            recommendations.push(item);
+                        }
+                    });
 
-    // --- 影视与文化 (Culture) ---
-    "Marvel", "DC", "Star Wars", "Harry Potter", "Lord of the Rings", "Game of Thrones", "Stranger Things", "Cyberpunk 2077", "GTA", "FIFA", "Nintendo", "Mario", "Zelda", "Pokemon", "Ghibli", "Hans Zimmer", "John Williams", "Joe Hisaishi", "Ennio Morricone", "80s Hits", "90s Hits", "00s Hits", "Top 100", "Viral", "TikTok Songs",
-    // --- 核心流派与风格 (Chinese Genres) ---
-    "华语流行 (Mandopop)", "粤语流行 (Cantopop)", "台语/闽南语 (Hokkien Pop)", 
-    "古风 (Ancient Style/Gufeng)", "中国风 (China Wave)", "戏腔 (Opera Vocals)", 
-    "国潮 (China Chic)", "仙侠 (Xianxia)", "武侠 (Wuxia)", "江湖 (Jianghu)",
-    "民谣 (Folk)", "校园民谣 (Campus Folk)", "城市民谣 (Urban Folk)", 
-    "华语摇滚 (Chinese Rock)", "华语说唱 (Chinese Hip-Hop)", "中国有嘻哈 (Rap of China)",
-    "抒情歌 (Ballad)", "苦情歌 (Sad Love Song)", "甜歌 (Sweet Song)", "口水歌 (Bubblegum Pop)",
-    "网络歌曲 (Internet Songs)", "抖音神曲 (Douyin/TikTok Hits)", "洗脑神曲 (Earworms)",
-    "经典老歌 (Oldies)", "怀旧金曲 (Nostalgic Hits)", "KTV必点 (KTV Classics)",
-    "影视原声 (OST)", "电视剧插曲 (Drama OST)", "动漫主题曲 (Anime OP/ED)",
+                    // 添加同组的其他标签（如果有）
+                    if (currentPath.length > 0) {
+                        const parentPath = currentPath.slice(0, -1);
+                        const parentObj = getParentObject(musicTags, parentPath);
 
-    // --- 情感与主题 (Themes & Vibes) ---
-    "初恋 (First Love)", "暗恋 (Crush)", "失恋 (Heartbreak)", "分手 (Breakup)", 
-    "备胎 (Second Choice)", "遗憾 (Regret)", "成全 (Sacrifice)", "暧昧 (Situationship)",
-    "青春 (Youth)", "毕业 (Graduation)", "回忆 (Memories)", "成长 (Growing Up)",
-    "思乡 (Homesickness)", "漂泊 (Drifting)", "北漂/沪漂 (City Struggle)", "奋斗 (Struggle)",
-    "治愈 (Healing)", "温暖 (Warmth)", "励志 (Inspirational)", "正能量 (Positive Energy)",
-    "孤独 (Loneliness)", "深夜网抑云 (Late Night Depression)", "emo时刻",
-    "甜蜜 (Sweet)", "撒糖 (Lovey-dovey)", "告白 (Confession)", "婚礼 (Wedding)",
+                        for (const parentKey in parentObj) {
+                            if (Array.isArray(parentObj[parentKey]) && parentObj[parentKey] !== obj[key]) {
+                                parentObj[parentKey].forEach(item => {
+                                    if (!recommendations.includes(item)) {
+                                        recommendations.push(item);
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-    // --- 乐器与元素 (Instruments & Elements) ---
-    "古筝 (Guzheng)", "琵琶 (Pipa)", "二胡 (Erhu)", "笛子 (Flute)", "萧 (Xiao)", "唢呐 (Suona)",
-    "钢琴 (Piano)", "吉他 (Guitar)", "尤克里里 (Ukulele)", 
-    "烟嗓 (Husky Voice)", "高音 (High Note)", "海豚音 (Whistle Register)", "低音 (Bass)",
-    "人声 (Vocal)", "清唱 (Acapella)", "现场版 (Live)", "翻唱 (Cover)",
+    function getParentObject(obj, path) {
+        let current = obj;
+        for (const key of path) {
+            current = current[key];
+        }
+        return current;
+    }
 
-    // --- 华语乐坛代表人物 (Iconic Artists Expansion) ---
-    // 传奇/天王天后 (Legends)
-    "邓丽君 (Teresa Teng)", "张国荣 (Leslie Cheung)", "王菲 (Faye Wong)", "梅艳芳 (Anita Mui)",
-    "张学友 (Jacky Cheung)", "刘德华 (Andy Lau)", "黎明 (Leon Lai)", "郭富城 (Aaron Kwok)",
-    "罗大佑 (Lo Ta-yu)", "李宗盛 (Jonathan Lee)", "崔健 (Cui Jian)", "窦唯 (Dou Wei)",
-    "伍佰 (Wu Bai)", "Beyond", "草蜢 (Grasshopper)", "张雨生 (Tom Chang)",
+    findRelatedTags(musicTags);
 
-    // 千禧一代/黄金时代 (2000s Icons)
-    "周杰伦 (Jay Chou)", "林俊杰 (JJ Lin)", "陈奕迅 (Eason Chan)", "王力宏 (Leehom Wang)", "陶喆 (David Tao)",
-    "蔡依林 (Jolin Tsai)", "孙燕姿 (Stefanie Sun)", "梁静茹 (Fish Leong)", "萧亚轩 (Elva Hsiao)", "张惠妹 (A-Mei)",
-    "五月天 (Mayday)", "苏打绿 (Sodagreen)", "S.H.E", "Twins", "飞儿乐团 (F.I.R)",
-    "潘玮柏 (Willber Pan)", "罗志祥 (Show Lo)", "杨丞琳 (Rainie Yang)", "王心凌 (Cyndi Wang)", "张韶涵 (Angela Chang)",
+    // 只返回指定数量的推荐
+    return recommendations.slice(0, limit);
+}
 
-    // 现代流行/新生代 (Modern/Trending)
-    "邓紫棋 (G.E.M.)", "李荣浩 (Li Ronghao)", "薛之谦 (Joker Xue)", "周深 (Zhou Shen)", "毛不易 (Mao Buyi)",
-    "华晨宇 (Hua Chenyu)", "张杰 (Jason Zhang)", "汪苏泷 (Silence Wang)", "许嵩 (Vae)",
-    "告五人 (Accusefive)", "草东没有派对 (No Party For Cao Dong)", "新裤子 (New Pants)", "痛仰 (Miserable Faith)",
-    "陈粒 (Chen Li)", "赵雷 (Zhao Lei)", "宋冬野", "房东的猫",
+// 获取标签的层次信息
+function getTagHierarchy(tag) {
+    const hierarchy = [];
 
-    // 说唱/嘻哈 (Rap/Hip-Hop)
-    "Gai (周延)", "马思唯 (MaSiWei)", "Higher Brothers", "热狗 (MC HotDog)", 
-    "顽童MJ116", "蛋堡 (Soft Lipa)", "万妮达 (Vinida)", "艾热 (Air)",
+    function findTag(obj, currentPath = []) {
+        for (const key in obj) {
+            if (typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+                if (findTag(obj[key], [...currentPath, key])) {
+                    return true;
+                }
+            } else if (Array.isArray(obj[key])) {
+                if (obj[key].includes(tag)) {
+                    hierarchy.push(...currentPath, key);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 
-    // --- 场景与特定名词 (Scenarios & Terms) ---
-    "春晚 (Spring Festival Gala)", "广场舞 (Square Dance)", "夜店 (Clubbing)", 
-    "咖啡馆 (Cafe)", "书店 (Bookstore)", "旅行 (Travel)", "自驾 (Road Trip)",
-    "下雨天 (Rainy Day)", "晚安 (Good Night)", "早安 (Good Morning)",
-    "综艺 (Variety Show)", "我是歌手 (I Am A Singer)", "乐队的夏天 (The Big Band)",
-    "选秀 (Talent Show)", "女团 (Girl Group)", "男团 (Boy Group)"
-];
-        // 初始化
+    findTag(musicTags);
+    return hierarchy;
+}
+
+// 获取当前播放歌曲的相关标签推荐
+function getSongRecommendations(song) {
+    // 基于艺术家的推荐
+    const artistRecommendations = [];
+    for (const category in musicTags.culture.artists) {
+        if (musicTags.culture.artists[category].includes(song.artistName)) {
+            // 添加同类型艺术家
+            musicTags.culture.artists[category].forEach(artist => {
+                if (artist !== song.artistName && !artistRecommendations.includes(artist)) {
+                    artistRecommendations.push(artist);
+                }
+            });
+        }
+    }
+
+    // 基于流派的推荐
+    const genreRecommendations = [];
+    for (const category in musicTags.genres.main) {
+        if (musicTags.genres.main[category].some(genre =>
+            song.trackName.toLowerCase().includes(genre.toLowerCase()) ||
+            song.artistName.toLowerCase().includes(genre.toLowerCase()))) {
+            // 添加同类流派
+            musicTags.genres.main[category].forEach(genre => {
+                if (!genreRecommendations.includes(genre) &&
+                    !artistRecommendations.includes(genre)) {
+                    genreRecommendations.push(genre);
+                }
+            });
+
+            // 添加子流派
+            if (musicTags.genres.sub_genres[`${category}_sub`]) {
+                musicTags.genres.sub_genres[`${category}_sub`].forEach(subGenre => {
+                    if (!genreRecommendations.includes(subGenre)) {
+                        genreRecommendations.push(subGenre);
+                    }
+                });
+            }
+        }
+    }
+
+    // 合并所有推荐并限制数量
+    const allRecommendations = [...artistRecommendations, ...genreRecommendations];
+    return [...new Set(allRecommendations)].slice(0, 10);
+}
+
+// 从层次化标签中获取所有关键词
+const keywords = getAllKeywords();
+
         // 初始化
         document.addEventListener('DOMContentLoaded', () => {
             randomSearch();
@@ -1652,6 +1841,45 @@ const keywords = [
         function randomSearch() {
             $('search-input').value = keywords[Math.floor(Math.random() * keywords.length)];
             searchMusic();
+        }
+
+        // 智能随机搜索 - 基于标签层次结构
+        function smartRandomSearch() {
+            // 从标签的顶层类别中随机选择一个
+            const topLevelCategories = Object.keys(musicTags);
+            const randomCategory = topLevelCategories[Math.floor(Math.random() * topLevelCategories.length)];
+
+            // 从该类别中随机选择一个子类别
+            const subCategories = Object.keys(musicTags[randomCategory]);
+            const randomSubCategory = subCategories[Math.floor(Math.random() * subCategories.length)];
+
+            // 从子类别中随机选择一个标签
+            const tagsInSubCategory = musicTags[randomCategory][randomSubCategory];
+            if (Array.isArray(tagsInSubCategory) && tagsInSubCategory.length > 0) {
+                const randomTag = tagsInSubCategory[Math.floor(Math.random() * tagsInSubCategory.length)];
+                $('search-input').value = randomTag;
+                searchMusic();
+                showToast(`智能推荐：${randomTag} (${randomCategory} > ${randomSubCategory})`);
+            } else {
+                // 如果子类别不是数组而是更深层结构，则继续深入
+                const deeperCategories = Object.keys(musicTags[randomCategory][randomSubCategory]);
+                if (deeperCategories.length > 0) {
+                    const randomDeeperCategory = deeperCategories[Math.floor(Math.random() * deeperCategories.length)];
+                    const tagsInDeeperCategory = musicTags[randomCategory][randomSubCategory][randomDeeperCategory];
+                    if (Array.isArray(tagsInDeeperCategory) && tagsInDeeperCategory.length > 0) {
+                        const randomTag = tagsInDeeperCategory[Math.floor(Math.random() * tagsInDeeperCategory.length)];
+                        $('search-input').value = randomTag;
+                        searchMusic();
+                        showToast(`智能推荐：${randomTag} (${randomCategory} > ${randomSubCategory} > ${randomDeeperCategory})`);
+                    } else {
+                        // 回退到普通随机搜索
+                        randomSearch();
+                    }
+                } else {
+                    // 回退到普通随机搜索
+                    randomSearch();
+                }
+            }
         }
 
         // 搜索音乐
@@ -1803,6 +2031,14 @@ const keywords = [
                 window.open(wikiUrl, '_blank');
             };
             wikiBtn.title = `查看 ${cleanArtistName} 的维基百科`;
+
+            // 设置标签推荐按钮
+            const tagBtn = $('player-tag-btn');
+            tagBtn.style.display = 'flex';
+            tagBtn.onclick = () => {
+                showCurrentSongTags();
+            };
+            tagBtn.title = '查看歌曲标签推荐';
             
             // 检查是否需要滚动
             const checkScroll = (el) => {
@@ -1901,6 +2137,168 @@ const keywords = [
             
             // 更新收藏按钮状态
             updateFavoriteButton();
+
+            // 更新推荐标签
+            updateRecommendationTags(song);
+        }
+
+        // 更新推荐标签
+        function updateRecommendationTags(song) {
+            const recommendations = getSongRecommendations(song);
+            const container = $('recommendation-tags-container');
+            const tagsElement = $('recommendation-tags');
+            const showMoreBtn = $('show-more-recommendations');
+
+            if (recommendations.length === 0) {
+                tagsElement.style.display = 'none';
+                return;
+            }
+
+            // 只显示前5个推荐
+            const displayRecommendations = recommendations.slice(0, 5);
+
+            // 渲染推荐标签
+            container.innerHTML = displayRecommendations.map(tag => `
+                <span class="recommendation-tag" onclick="searchByTag('${tag}')">${escapeHtml(tag)}</span>
+            `).join('');
+
+            // 如果还有更多推荐，显示"展开更多"按钮
+            if (recommendations.length > 5) {
+                showMoreBtn.style.display = 'block';
+                showMoreBtn.onclick = () => {
+                    // 显示所有推荐
+                    container.innerHTML = recommendations.map(tag => `
+                        <span class="recommendation-tag" onclick="searchByTag('${tag}')">${escapeHtml(tag)}</span>
+                    `).join('');
+                    showMoreBtn.style.display = 'none';
+                };
+            } else {
+                showMoreBtn.style.display = 'none';
+            }
+
+            // 显示推荐区域
+            tagsElement.style.display = 'block';
+        }
+
+        // 按标签搜索
+        function searchByTag(tag) {
+            $('search-input').value = tag;
+            searchMusic();
+        }
+
+        // 显示当前播放歌曲的标签层次结构
+        function showCurrentSongTags() {
+            if (!state.currentTrack) {
+                showToast('请先播放一首歌曲');
+                return;
+            }
+
+            const song = state.currentTrack;
+            const recommendations = getSongRecommendations(song);
+
+            if (recommendations.length === 0) {
+                showToast('未找到相关标签');
+                return;
+            }
+
+            // 创建标签详情弹窗
+            const modal = document.createElement('div');
+            modal.className = 'tag-details-modal';
+            modal.innerHTML = `
+                <div class="modal-overlay" onclick="this.parentElement.remove()">
+                    <div class="modal-content" onclick="event.stopPropagation()">
+                        <h3>相关标签推荐</h3>
+                        <div class="tags-list">
+                            ${recommendations.map(tag => `
+                                <div class="tag-item" onclick="searchByTag('${tag}')">
+                                    <span class="tag-name">${escapeHtml(tag)}</span>
+                                    <span class="tag-search-btn">🔍</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button class="modal-close-btn" onclick="this.parentElement.parentElement.remove()">关闭</button>
+                    </div>
+                </div>
+            `;
+
+            // 添加样式
+            if (!document.querySelector('#tag-details-modal-styles')) {
+                const styles = document.createElement('style');
+                styles.id = 'tag-details-modal-styles';
+                styles.textContent = `
+                    .tag-details-modal .modal-overlay {
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        right: 0;
+                        bottom: 0;
+                        background: rgba(0,0,0,0.8);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        z-index: 10000;
+                    }
+                    .tag-details-modal .modal-content {
+                        background: var(--card);
+                        border-radius: 16px;
+                        padding: 24px;
+                        max-width: 400px;
+                        width: 90%;
+                        max-height: 80vh;
+                        overflow-y: auto;
+                        border: 1px solid var(--glass-border);
+                        backdrop-filter: blur(20px);
+                    }
+                    .tag-details-modal h3 {
+                        margin: 0 0 16px;
+                        color: var(--text);
+                        text-align: center;
+                    }
+                    .tags-list {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 8px;
+                        margin-bottom: 16px;
+                    }
+                    .tag-item {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        padding: 10px 12px;
+                        background: var(--glass);
+                        border-radius: 8px;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                    }
+                    .tag-item:hover {
+                        background: var(--primary);
+                        color: white;
+                    }
+                    .tag-search-btn {
+                        opacity: 0.7;
+                        transition: opacity 0.2s ease;
+                    }
+                    .tag-item:hover .tag-search-btn {
+                        opacity: 1;
+                    }
+                    .modal-close-btn {
+                        width: 100%;
+                        padding: 12px;
+                        background: var(--glass);
+                        border: 1px solid var(--glass-border);
+                        color: var(--text);
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-weight: 500;
+                    }
+                    .modal-close-btn:hover {
+                        background: var(--card-hover);
+                    }
+                `;
+                document.head.appendChild(styles);
+            }
+
+            document.body.appendChild(modal);
         }
 
         // 更新播放状态
@@ -1910,6 +2308,14 @@ const keywords = [
             btn.textContent = playing ? '⏸' : '▶';
             btn.setAttribute('data-playing', playing); // 用于 CSS 样式修正
             $('player-cover').classList.toggle('spinning', playing);
+        }
+
+        // 隐藏播放器按钮
+        function hidePlayerButtons() {
+            const wikiBtn = $('player-wiki-btn');
+            const tagBtn = $('player-tag-btn');
+            if (wikiBtn) wikiBtn.style.display = 'none';
+            if (tagBtn) tagBtn.style.display = 'none';
         }
 
         // 播放/暂停
@@ -2372,67 +2778,71 @@ async function searchByWeather() {
         // 1. 获取地理位置
         const geoRes = await fetch('https://get.geojs.io/v1/ip/geo.json');
         const geo = await geoRes.json();
-        
+
         // 2. 获取天气数据
         const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${geo.latitude}&longitude=${geo.longitude}&current_weather=true`);
         const weatherData = await weatherRes.json();
         const code = weatherData.current_weather.weathercode;
-        
+
         // 3. 定义变量
         let keywordOptions = []; // 候选关键词列表
         let weatherLabel = '未知'; // 天气中文名
-        
-        // 4. 根据天气代码分配关键词库
-        if (code <= 3) { 
+
+        // 4. 根据天气代码分配关键词库，并与标签系统关联
+        if (code <= 3) {
             // 晴朗 (0-3)
-            weatherLabel = '晴朗'; 
-            keywordOptions = ['Sunny Day', 'Summer Vibes', 'Road Trip', 'Happy Pop', 'Feel Good', 'Energetic', 'Disco'];
+            weatherLabel = '晴朗';
+            // 从情绪标签中的积极情绪中选择
+            keywordOptions = [...musicTags.attributes.moods.positive, ...musicTags.scenarios.activity_based.exercise, ...musicTags.scenarios.activity_based.social];
         }
-        else if (code >= 45 && code <= 48) { 
+        else if (code >= 45 && code <= 48) {
             // 雾天 (45, 48)
-            weatherLabel = '雾天'; 
-            keywordOptions = ['Foggy Mood', 'Ambient', 'Mystery', 'Dreamy', 'Shoegaze', 'Haze', 'Cinematic'];
+            weatherLabel = '雾天';
+            // 从氛围标签中选择神秘、梦幻的标签
+            keywordOptions = [...musicTags.attributes.moods.intense, ...musicTags.attributes.moods.melancholy, ...musicTags.attributes.styles.aesthetic];
         }
-        else if (code >= 51 && code <= 67) { 
+        else if (code >= 51 && code <= 67) {
             // 下雨 (51-67)
-            weatherLabel = '下雨'; 
-            keywordOptions = ['Rainy Day', 'Acoustic', 'Jazz', 'Lofi Hip Hop', 'Sad Songs', 'R&B', 'Cozy'];
+            weatherLabel = '下雨';
+            // 选择安静、舒适的音乐类型
+            keywordOptions = [...musicTags.attributes.moods.melancholy, ...musicTags.scenarios.activity_based.relaxation, ...musicTags.genres.main.traditional];
         }
-        else if (code >= 71 && code <= 86) { 
+        else if (code >= 71 && code <= 86) {
             // 下雪 (71-86)
-            weatherLabel = '下雪'; 
-            keywordOptions = ['Snow Winter', 'Christmas', 'Piano', 'Chillout', 'Classical', 'Fireplace', 'Soft Jazz'];
+            weatherLabel = '下雪';
+            // 选择温暖、节日的音乐类型
+            keywordOptions = [...musicTags.scenarios.special_occasions, ...musicTags.genres.main.traditional, ...musicTags.nature_abstract.nature.weather];
         }
-        else if (code >= 95) { 
+        else if (code >= 95) {
             // 雷暴 (95+)
-            weatherLabel = '雷暴'; 
-            keywordOptions = ['Thunder Storm', 'Rock', 'Heavy Metal', 'Epic', 'Dark Wave', 'Intense', 'Dramatic'];
+            weatherLabel = '雷暴';
+            // 选择强烈、有冲击力的音乐类型
+            keywordOptions = [...musicTags.attributes.moods.intense, ...musicTags.genres.main.rock, ...musicTags.genres.main.electronic];
         }
-        else { 
+        else {
             // 多云/阴天 (其他情况)
-            weatherLabel = '多云'; 
-            keywordOptions = ['Cloudy Sky', 'Indie', 'Folk', 'Mellow', 'Soft Rock', 'Chill', 'Coffee Shop'];
+            weatherLabel = '多云';
+            // 选择温和、日常的音乐类型
+            keywordOptions = [...musicTags.attributes.moods.mellow, ...musicTags.scenarios.time_based.daily_routine, ...musicTags.genres.main.pop];
         }
 
         // 5. 核心：从数组中随机选择一个关键词
         const randomKeyword = keywordOptions[Math.floor(Math.random() * keywordOptions.length)];
+        if (!randomKeyword) {
+            // 如果标签库中没有对应类别，使用默认天气相关的关键词
+            const defaultKeywords = [
+                'Sunny Day', 'Rainy Day', 'Snow Winter', 'Cloudy Sky',
+                'Foggy Mood', 'Thunder Storm', 'Summer Vibes', 'Winter Mood'
+            ];
+            const randomKeyword = defaultKeywords[Math.floor(Math.random() * defaultKeywords.length)];
+            $('search-input').value = randomKeyword;
+        } else {
+            $('search-input').value = randomKeyword;
+        }
 
         // 6. 执行搜索与提示
-        const searchInput = document.getElementById('search-input') || document.querySelector('#search-input'); // 兼容写法，防止 $ 未定义
-        if (searchInput) {
-            searchInput.value = randomKeyword;
-        } else {
-             // 如果你用的是 jQuery 或者自定义的 $ 函数，请保留原样：
-             // $('search-input').value = randomKeyword;
-             console.warn('未找到输入框元素');
-        }
-        
-        // 假设 searchMusic() 是你定义好的搜索函数
-        if (typeof searchMusic === 'function') {
-            searchMusic();
-        }
-        
-        alert(`📍 ${geo.city || '未知'}\n🌤️ ${weatherLabel}\n🎲 随机心情: ${randomKeyword}`);
+        searchMusic();
+        alert(`📍 ${geo.city || '未知'}\n🌤️ ${weatherLabel}\n🎲 智能推荐: ${$('search-input').value}`);
 
     } catch (e) {
         console.error(e);
