@@ -1734,13 +1734,22 @@ function getTagHierarchy(tag) {
 
 // 获取当前播放歌曲的相关标签推荐
 function getSongRecommendations(song) {
+    // 检查歌曲对象是否有效
+    if (!song || !song.artistName || !song.trackName) {
+        return [];
+    }
+
+    // 确保字符串属性存在且不为空
+    const artistName = song.artistName || '';
+    const trackName = song.trackName || '';
+
     // 基于艺术家的推荐
     const artistRecommendations = [];
     for (const category in musicTags.culture.artists) {
-        if (musicTags.culture.artists[category].includes(song.artistName)) {
+        if (musicTags.culture.artists[category].includes(artistName)) {
             // 添加同类型艺术家
             musicTags.culture.artists[category].forEach(artist => {
-                if (artist !== song.artistName && !artistRecommendations.includes(artist)) {
+                if (artist !== artistName && !artistRecommendations.includes(artist)) {
                     artistRecommendations.push(artist);
                 }
             });
@@ -1751,8 +1760,8 @@ function getSongRecommendations(song) {
     const genreRecommendations = [];
     for (const category in musicTags.genres.main) {
         if (musicTags.genres.main[category].some(genre =>
-            song.trackName.toLowerCase().includes(genre.toLowerCase()) ||
-            song.artistName.toLowerCase().includes(genre.toLowerCase()))) {
+            trackName.toLowerCase().includes(genre.toLowerCase()) ||
+            artistName.toLowerCase().includes(genre.toLowerCase()))) {
             // 添加同类流派
             musicTags.genres.main[category].forEach(genre => {
                 if (!genreRecommendations.includes(genre) &&
@@ -1847,30 +1856,46 @@ const keywords = getAllKeywords();
         function smartRandomSearch() {
             // 从标签的顶层类别中随机选择一个
             const topLevelCategories = Object.keys(musicTags);
+            if (topLevelCategories.length === 0) {
+                randomSearch(); // 回退到普通随机搜索
+                return;
+            }
             const randomCategory = topLevelCategories[Math.floor(Math.random() * topLevelCategories.length)];
 
             // 从该类别中随机选择一个子类别
             const subCategories = Object.keys(musicTags[randomCategory]);
+            if (subCategories.length === 0) {
+                randomSearch(); // 回退到普通随机搜索
+                return;
+            }
             const randomSubCategory = subCategories[Math.floor(Math.random() * subCategories.length)];
 
             // 从子类别中随机选择一个标签
             const tagsInSubCategory = musicTags[randomCategory][randomSubCategory];
             if (Array.isArray(tagsInSubCategory) && tagsInSubCategory.length > 0) {
                 const randomTag = tagsInSubCategory[Math.floor(Math.random() * tagsInSubCategory.length)];
-                $('search-input').value = randomTag;
-                searchMusic();
-                showToast(`智能推荐：${randomTag} (${randomCategory} > ${randomSubCategory})`);
+                if (randomTag) {  // 确保标签不为undefined或null
+                    $('search-input').value = randomTag;
+                    searchMusic();
+                    showToast(`智能推荐：${randomTag} (${randomCategory} > ${randomSubCategory})`);
+                } else {
+                    randomSearch(); // 回退到普通随机搜索
+                }
             } else {
                 // 如果子类别不是数组而是更深层结构，则继续深入
                 const deeperCategories = Object.keys(musicTags[randomCategory][randomSubCategory]);
-                if (deeperCategories.length > 0) {
+                if (deeperCategories && deeperCategories.length > 0) {
                     const randomDeeperCategory = deeperCategories[Math.floor(Math.random() * deeperCategories.length)];
                     const tagsInDeeperCategory = musicTags[randomCategory][randomSubCategory][randomDeeperCategory];
                     if (Array.isArray(tagsInDeeperCategory) && tagsInDeeperCategory.length > 0) {
                         const randomTag = tagsInDeeperCategory[Math.floor(Math.random() * tagsInDeeperCategory.length)];
-                        $('search-input').value = randomTag;
-                        searchMusic();
-                        showToast(`智能推荐：${randomTag} (${randomCategory} > ${randomSubCategory} > ${randomDeeperCategory})`);
+                        if (randomTag) {  // 确保标签不为undefined或null
+                            $('search-input').value = randomTag;
+                            searchMusic();
+                            showToast(`智能推荐：${randomTag} (${randomCategory} > ${randomSubCategory} > ${randomDeeperCategory})`);
+                        } else {
+                            randomSearch(); // 回退到普通随机搜索
+                        }
                     } else {
                         // 回退到普通随机搜索
                         randomSearch();
@@ -1884,7 +1909,7 @@ const keywords = getAllKeywords();
 
         // 搜索音乐
         async function searchMusic() {
-            const query = $('search-input').value.trim();
+            const query = $('search-input').value?.trim();
             if (!query) return;
 
             // 尝试从缓存获取搜索结果
@@ -2149,13 +2174,21 @@ const keywords = getAllKeywords();
             const tagsElement = $('recommendation-tags');
             const showMoreBtn = $('show-more-recommendations');
 
-            if (recommendations.length === 0) {
+            if (!recommendations || recommendations.length === 0) {
+                tagsElement.style.display = 'none';
+                return;
+            }
+
+            // 过滤掉无效的推荐标签
+            const validRecommendations = recommendations.filter(tag => tag && typeof tag === 'string');
+
+            if (validRecommendations.length === 0) {
                 tagsElement.style.display = 'none';
                 return;
             }
 
             // 只显示前5个推荐
-            const displayRecommendations = recommendations.slice(0, 5);
+            const displayRecommendations = validRecommendations.slice(0, 5);
 
             // 渲染推荐标签
             container.innerHTML = displayRecommendations.map(tag => `
@@ -2163,11 +2196,11 @@ const keywords = getAllKeywords();
             `).join('');
 
             // 如果还有更多推荐，显示"展开更多"按钮
-            if (recommendations.length > 5) {
+            if (validRecommendations.length > 5) {
                 showMoreBtn.style.display = 'block';
                 showMoreBtn.onclick = () => {
                     // 显示所有推荐
-                    container.innerHTML = recommendations.map(tag => `
+                    container.innerHTML = validRecommendations.map(tag => `
                         <span class="recommendation-tag" onclick="searchByTag('${tag}')">${escapeHtml(tag)}</span>
                     `).join('');
                     showMoreBtn.style.display = 'none';
@@ -2182,6 +2215,9 @@ const keywords = getAllKeywords();
 
         // 按标签搜索
         function searchByTag(tag) {
+            if (!tag) {
+                return;
+            }
             $('search-input').value = tag;
             searchMusic();
         }
@@ -2196,8 +2232,16 @@ const keywords = getAllKeywords();
             const song = state.currentTrack;
             const recommendations = getSongRecommendations(song);
 
-            if (recommendations.length === 0) {
+            if (!recommendations || recommendations.length === 0) {
                 showToast('未找到相关标签');
+                return;
+            }
+
+            // 过滤掉无效的推荐标签
+            const validRecommendations = recommendations.filter(tag => tag && typeof tag === 'string');
+
+            if (validRecommendations.length === 0) {
+                showToast('未找到有效标签');
                 return;
             }
 
@@ -2209,7 +2253,7 @@ const keywords = getAllKeywords();
                     <div class="modal-content" onclick="event.stopPropagation()">
                         <h3>相关标签推荐</h3>
                         <div class="tags-list">
-                            ${recommendations.map(tag => `
+                            ${validRecommendations.map(tag => `
                                 <div class="tag-item" onclick="searchByTag('${tag}')">
                                     <span class="tag-name">${escapeHtml(tag)}</span>
                                     <span class="tag-search-btn">🔍</span>
