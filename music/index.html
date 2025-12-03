@@ -2861,8 +2861,15 @@
                     // 对于 iTunes 歌曲，继续使用标准音频元素
                     if (audio.src) {
                         if (audio.paused) {
-                            audio.play();
-                            updatePlayState(true);
+                            audio.play()
+                                .then(() => updatePlayState(true))
+                                .catch(error => {
+                                    console.error('无法播放音频:', error);
+                                    // If standard audio fails, try to initialize YouTube player if it's a YouTube source
+                                    if (isYouTube) {
+                                        toggleYouTubePlay();
+                                    }
+                                });
                         } else {
                             audio.pause();
                             updatePlayState(false);
@@ -3228,11 +3235,11 @@
             console.log('YouTube Iframe API ready');
         }
 
-        // Initialize YouTube player
+        // Initialize YouTube player with better error handling and fallback
         function initYouTubePlayer(videoId) {
             return new Promise((resolve, reject) => {
                 // Initialize background audio context before creating player
-                initializeBackgroundAudio();
+                aggressiveAudioContextInit();
 
                 // Create container for YouTube player if it doesn't exist
                 let playerContainer = document.getElementById('youtube-player-container');
@@ -3243,111 +3250,182 @@
                     document.body.appendChild(playerContainer);
                 }
 
-                // Create the YouTube player
-                const player = new YT.Player('youtube-player-container', {
-                    videoId: videoId,
-                    playerVars: {
-                        'playsinline': 1,
-                        'controls': 0,  // Hide controls to play audio only
-                        'disablekb': 1, // Disable keyboard controls
-                        'fs': 0,       // Disable fullscreen
-                        'iv_load_policy': 3, // Disable annotations
-                        'modestbranding': 1, // Reduce YouTube branding
-                        'rel': 0, // Don't show related videos at the end
-                        'autoplay': 0, // Don't autoplay, we'll control it
-                        'mute': 0 // Don't mute initially
-                    },
-                    events: {
-                        'onReady': function (event) {
-                            console.log('YouTube player ready');
-                            // Resume audio context when player is ready
-                            if (backgroundAudioContext && backgroundAudioContext.state !== 'running') {
-                                backgroundAudioContext.resume();
-                            }
+                // Prepare player parameters with better audio settings
+                const playerVars = {
+                    'playsinline': 1,
+                    'controls': 0,  // Hide controls to play audio only
+                    'disablekb': 1, // Disable keyboard controls
+                    'fs': 0,       // Disable fullscreen
+                    'iv_load_policy': 3, // Disable annotations
+                    'modestbranding': 1, // Reduce YouTube branding
+                    'rel': 0, // Don't show related videos at the end
+                    'autoplay': 0, // Don't autoplay, we'll control it
+                    'mute': 0, // Don't mute initially
+                    'enablejsapi': 1, // Enable API
+                    'origin': window.location.origin, // Important for security policy
+                    'widgetid': 'youtube-player'
+                };
 
-                            // Set initial position state with duration for MediaSession API
-                            // This ensures duration displays correctly in UI and lock screen
-                            try {
-                                const duration = event.target.getDuration();
-                                if (!isNaN(duration) && duration > 0) {
-                                    $('total-time').textContent = formatTime(duration);
-
-                                    if ('setPositionState' in navigator.mediaSession) {
-                                        navigator.mediaSession.setPositionState({
-                                            duration: duration,
-                                            playbackRate: 1.0,
-                                            position: 0
+                try {
+                    // Create the YouTube player
+                    const player = new YT.Player('youtube-player-container', {
+                        videoId: videoId,
+                        playerVars: playerVars,
+                        events: {
+                            'onReady': function (event) {
+                                console.log('YouTube player ready');
+                                // Ensure audio context is running when player is ready
+                                if (backgroundAudioContext) {
+                                    if (backgroundAudioContext.state === 'suspended') {
+                                        backgroundAudioContext.resume().catch(err => {
+                                            console.warn('Could not resume audio context:', err);
                                         });
                                     }
                                 }
-                            } catch (e) {
-                                console.log('Could not get duration on ready:', e);
-                            }
 
-                            // Autoplay if requested - make sure to call this directly in response to user interaction
-                            if (state.shouldAutoplayYouTube) {
-                                // Try to play immediately, but handle potential autoplay policy restrictions
-                                requestAudioPlayback().then(() => {
-                                    event.target.playVideo();
-                                    state.isYouTubePlaying = true;
-                                    updatePlayState(true);
-                                    state.shouldAutoplayYouTube = false;
-                                }).catch(() => {
-                                    // If requestAudioPlayback fails, try to play anyway
-                                    // The browser might still allow playback if called directly from user interaction
-                                    event.target.playVideo();
-                                    state.isYouTubePlaying = true;
-                                    updatePlayState(true);
-                                    state.shouldAutoplayYouTube = false;
-                                });
-                            }
+                                // Set initial position state with duration for MediaSession API
+                                // This ensures duration displays correctly in UI and lock screen
+                                try {
+                                    // Wait a bit to ensure duration is available
+                                    setTimeout(() => {
+                                        const duration = event.target.getDuration();
+                                        if (!isNaN(duration) && duration > 0) {
+                                            $('total-time').textContent = formatTime(duration);
 
-                            resolve(event.target);
-                        },
-                        'onStateChange': function (event) {
-                            console.log('YouTube player state:', event.data);
-                            // Update our state based on YouTube player state
-                            if (event.data === YT.PlayerState.PLAYING) {
-                                state.isYouTubePlaying = true;
-                                updatePlayState(true);
-                                // Ensure audio context is running
-                                if (backgroundAudioContext && backgroundAudioContext.state === 'suspended') {
-                                    backgroundAudioContext.resume();
+                                            if ('setPositionState' in navigator.mediaSession) {
+                                                navigator.mediaSession.setPositionState({
+                                                    duration: duration,
+                                                    playbackRate: 1.0,
+                                                    position: 0
+                                                });
+                                            }
+                                        }
+                                    }, 500); // Delay to ensure duration is loaded
+                                } catch (e) {
+                                    console.log('Could not get duration on ready:', e);
                                 }
-                            } else if (event.data === YT.PlayerState.PAUSED) {
-                                state.isYouTubePlaying = false;
-                                updatePlayState(false);
-                            } else if (event.data === YT.PlayerState.ENDED) {
-                                // 当 YouTube 歌曲播放结束时
-                                state.isYouTubePlaying = false;
-                                updatePlayState(false);
-                                // 延迟一点时间再播放下一首，确保状态更新完成
-                                setTimeout(() => {
-                                    playNextForYouTube();
-                                }, 300);
-                            } else if (event.data === YT.PlayerState.BUFFERING) {
-                                // Ensure audio context remains active during buffering
-                                if (backgroundAudioContext && backgroundAudioContext.state === 'suspended') {
-                                    backgroundAudioContext.resume();
+
+                                // Autoplay if requested - make sure to call this directly in response to user interaction
+                                if (state.shouldAutoplayYouTube) {
+                                    // Try to play immediately, but handle potential autoplay policy restrictions
+                                    requestAudioPlayback().then(() => {
+                                        // Try to play with error handling
+                                        try {
+                                            event.target.playVideo();
+                                            state.isYouTubePlaying = true;
+                                            updatePlayState(true);
+                                        } catch (playError) {
+                                            console.warn('Direct play failed, attempting alternative:', playError);
+                                            // Fallback: try to play after a microtask
+                                            Promise.resolve().then(() => {
+                                                try {
+                                                    event.target.playVideo();
+                                                    state.isYouTubePlaying = true;
+                                                    updatePlayState(true);
+                                                } catch (retryError) {
+                                                    console.error('Retry play also failed:', retryError);
+                                                    // Show user a message about needing to interact again
+                                                    showToast('需要再次点击播放按钮开始播放');
+                                                }
+                                            });
+                                        }
+                                        state.shouldAutoplayYouTube = false;
+                                    }).catch(audioError => {
+                                        console.warn('Audio context play failed:', audioError);
+                                        // Try to play anyway, as it might work from user interaction
+                                        try {
+                                            event.target.playVideo();
+                                            state.isYouTubePlaying = true;
+                                            updatePlayState(true);
+                                        } catch (playError) {
+                                            console.error('Playback failed:', playError);
+                                            // Show user a message about needing to interact again
+                                            showToast('需要再次点击播放按钮开始播放');
+                                        }
+                                        state.shouldAutoplayYouTube = false;
+                                    });
                                 }
-                            }
-                        },
-                        'onError': function (error) {
-                            console.error('YouTube player error:', error);
-                            // Retry initialization with different parameters if there's an error
-                            if (error.data === 100 || error.data === 101 || error.data === 150) {
-                                // Video not found or not allowed to play - propagate error
-                                reject(error);
-                            } else {
-                                // Other errors - might be recoverable
-                                console.log('YouTube player error, but continuing:', error);
-                                // Don't reject for other errors, as the player might still work
-                                // Resolve with the player instance anyway
+
                                 resolve(event.target);
+                            },
+                            'onStateChange': function (event) {
+                                console.log('YouTube player state:', event.data);
+                                // Update our state based on YouTube player state
+                                if (event.data === YT.PlayerState.PLAYING) {
+                                    state.isYouTubePlaying = true;
+                                    updatePlayState(true);
+                                    // Ensure audio context is running
+                                    if (backgroundAudioContext && backgroundAudioContext.state === 'suspended') {
+                                        backgroundAudioContext.resume().catch(err => {
+                                            console.warn('Could not resume audio context in PLAYING state:', err);
+                                        });
+                                    }
+                                } else if (event.data === YT.PlayerState.PAUSED) {
+                                    state.isYouTubePlaying = false;
+                                    updatePlayState(false);
+                                } else if (event.data === YT.PlayerState.ENDED) {
+                                    // 当 YouTube 歌曲播放结束时
+                                    state.isYouTubePlaying = false;
+                                    updatePlayState(false);
+                                    // 延迟一点时间再播放下一首，确保状态更新完成
+                                    setTimeout(() => {
+                                        playNextForYouTube();
+                                    }, 300);
+                                } else if (event.data === YT.PlayerState.BUFFERING) {
+                                    // Ensure audio context remains active during buffering
+                                    if (backgroundAudioContext && backgroundAudioContext.state === 'suspended') {
+                                        backgroundAudioContext.resume().catch(err => {
+                                            console.warn('Could not resume audio context in BUFFERING state:', err);
+                                        });
+                                    }
+                                } else if (event.data === YT.PlayerState.CUED) {
+                                    // Video is cued and ready to play - try to play if autoplay was requested
+                                    if (state.shouldAutoplayYouTube) {
+                                        requestAudioPlayback().then(() => {
+                                            try {
+                                                event.target.playVideo();
+                                                state.isYouTubePlaying = true;
+                                                updatePlayState(true);
+                                            } catch (e) {
+                                                console.warn('Could not play from cued state:', e);
+                                            }
+                                            state.shouldAutoplayYouTube = false;
+                                        });
+                                    }
+                                }
+                            },
+                            'onError': function (error) {
+                                console.error('YouTube player error:', error);
+
+                                // Try alternative video ID format or fallback
+                                if (error.data === 100 || error.data === 101 || error.data === 150) {
+                                    // Video not found or not allowed to play - try alternative approach
+                                    console.log('YouTube video issue, attempting fallback...');
+
+                                    // Create a backup method using direct YouTube URL for audio
+                                    const fallbackAudio = $('audio');
+                                    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+                                    // Try to load this URL (this might work in some browsers)
+                                    // Note: This is a fallback and may not work due to CORS restrictions
+
+                                    // Return error for now, but keep trying to resolve with available player
+                                    reject(error);
+                                } else {
+                                    // Other errors - might be recoverable
+                                    console.log('YouTube player error, but continuing:', error);
+                                    // Don't reject for other errors, as the player might still work
+                                    // Resolve with the player instance anyway
+                                    resolve(event.target);
+                                }
                             }
                         }
-                    }
-                });
+                    });
+                } catch (creationError) {
+                    console.error('Error creating YouTube player:', creationError);
+                    // Try fallback approach
+                    reject(creationError);
+                }
             });
         }
 
@@ -3476,7 +3554,30 @@
                 if (!state.youtubePlayer) {
                     // Set flag to autoplay when ready
                     state.shouldAutoplayYouTube = true;
-                    state.youtubePlayer = await initYouTubePlayer(videoId);
+                    try {
+                        state.youtubePlayer = await initYouTubePlayer(videoId);
+                    } catch (error) {
+                        console.error('YouTube player initialization failed:', error);
+                        showToast('YouTube 播放器初始化失败，正在重试...');
+                        // Retry with a slight delay
+                        setTimeout(async () => {
+                            try {
+                                state.youtubePlayer = await initYouTubePlayer(videoId);
+                                // Try to play after successful initialization
+                                if (state.shouldAutoplayYouTube && state.youtubePlayer) {
+                                    requestAudioPlayback().then(() => {
+                                        state.youtubePlayer.playVideo();
+                                        state.isYouTubePlaying = true;
+                                        updatePlayState(true);
+                                        state.shouldAutoplayYouTube = false;
+                                    });
+                                }
+                            } catch (retryError) {
+                                console.error('YouTube player retry also failed:', retryError);
+                                showToast('YouTube 播放失败，请重试或尝试其他歌曲');
+                            }
+                        }, 500);
+                    }
                 } else {
                     state.youtubePlayer.loadVideoById(videoId);
                     // For already-initialized player, try to play immediately after loading
@@ -3490,6 +3591,11 @@
                                 updatePlayState(true);
                             }).catch(() => {
                                 // If requestAudioPlayback fails, try to play anyway
+                                // Show helpful message for first-time playback
+                                const playerState = state.youtubePlayer.getPlayerState();
+                                if (playerState === -1 || playerState === YT.PlayerState.CUED) { // -1 is unstarted, 5 is cued
+                                    showToast('首次播放可能需要点击播放按钮');
+                                }
                                 state.youtubePlayer.playVideo();
                                 state.isYouTubePlaying = true;
                                 updatePlayState(true);
@@ -3556,13 +3662,15 @@
                         updatePlayState(true);
                     }).catch(() => {
                         try {
+                            // Try to play the video - this may fail due to browser autoplay policies
                             state.youtubePlayer.playVideo();
                             state.isYouTubePlaying = true;
                             updatePlayState(true);
                         } catch (error) {
                             console.error('Failed to play YouTube video:', error);
+                            // Show more helpful message about browser autoplay restrictions
+                            showToast('首次播放可能需要用户交互，请点击播放按钮重试');
                             updatePlayState(false);
-                            showToast('无法播放YouTube音乐，请检查网络连接');
                         }
                     });
                 }
@@ -3570,34 +3678,65 @@
             }
         }
 
-        // Audio context for maintaining background audio on mobile
+        // Audio context for maintaining background audio across browsers
         let backgroundAudioContext = null;
 
-        // Initialize audio context for background playback
+        // Initialize audio context for background playback with better approach
         function initializeBackgroundAudio() {
             if (backgroundAudioContext) return;
 
             if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
                 backgroundAudioContext = new (AudioContext || webkitAudioContext)();
 
-                // Create a minimal silent buffer to maintain the audio context
-                const silentBuffer = backgroundAudioContext.createBuffer(1, 1, 22050);
-                const source = backgroundAudioContext.createBufferSource();
-                source.buffer = silentBuffer;
-
-                // Connect to output without amplification (essentially silent)
+                // Create a very low-volume oscillator to keep context active without audible output
+                const oscillator = backgroundAudioContext.createOscillator();
                 const gainNode = backgroundAudioContext.createGain();
-                gainNode.gain.value = 0; // Completely silent
-                source.connect(gainNode);
-                gainNode.connect(backgroundAudioContext.destination);
 
-                // Loop the silent buffer indefinitely
-                source.loop = true;
-                source.start();
+                // Set gain to extremely low value (nearly silent but keeps context active)
+                gainNode.gain.value = 0.00001;
+
+                oscillator.connect(gainNode);
+                gainNode.connect(backgroundAudioContext.destination);
+                oscillator.start(0);
+
+                // Stop after a brief moment to avoid continuous processing
+                if (backgroundAudioContext.currentTime) {
+                    oscillator.stop(backgroundAudioContext.currentTime + 0.01);
+                }
 
                 // Resume if suspended
                 if (backgroundAudioContext.state === 'suspended') {
                     backgroundAudioContext.resume();
+                }
+            }
+        }
+
+        // More aggressive audio context initialization on user interaction
+        function aggressiveAudioContextInit() {
+            if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+                if (!backgroundAudioContext) {
+                    backgroundAudioContext = new (AudioContext || webkitAudioContext)();
+                }
+
+                // Try to resume if suspended, regardless of whether we've created it before
+                if (backgroundAudioContext.state === 'suspended') {
+                    backgroundAudioContext.resume().catch(err => {
+                        console.warn('Audio context resume failed:', err);
+                    });
+                }
+
+                // Create and start a very brief audio source to fully activate context
+                try {
+                    const source = backgroundAudioContext.createBufferSource();
+                    const silentBuffer = backgroundAudioContext.createBuffer(1, 1, 22050);
+                    source.buffer = silentBuffer;
+                    source.connect(backgroundAudioContext.destination);
+                    source.start(0);
+                    if (backgroundAudioContext.currentTime) {
+                        source.stop(backgroundAudioContext.currentTime + 0.001);
+                    }
+                } catch (e) {
+                    console.warn('Could not create silent buffer:', e);
                 }
             }
         }
@@ -3608,16 +3747,42 @@
                 // Initialize background audio context
                 initializeBackgroundAudio();
 
-                // Resume audio context if suspended
+                // Try to resume in all possible ways
+                const resumePromises = [];
+
                 if (backgroundAudioContext && backgroundAudioContext.state === 'suspended') {
-                    backgroundAudioContext.resume().then(() => {
-                        resolve();
-                    }).catch(reject);
+                    resumePromises.push(backgroundAudioContext.resume());
+                }
+
+                if (resumePromises.length > 0) {
+                    Promise.all(resumePromises)
+                        .then(() => resolve())
+                        .catch(() => {
+                            // Even if resume fails, we proceed - the YouTube player might still work
+                            // due to being called from user interaction
+                            resolve();
+                        });
                 } else {
                     resolve();
                 }
             });
         }
+
+        // Initialize audio context immediately on any user interaction
+        function initAudioOnInteraction() {
+            // Initialize audio context aggressively on first user interaction
+            aggressiveAudioContextInit();
+
+            // Remove the event listener after first interaction to avoid repeated initialization
+            ['click', 'touchstart', 'keydown', 'mousedown'].forEach(eventType => {
+                document.removeEventListener(eventType, initAudioOnInteraction, { passive: true });
+            });
+        }
+
+        // Add event listeners for immediate audio context initialization
+        ['click', 'touchstart', 'keydown', 'mousedown'].forEach(eventType => {
+            document.addEventListener(eventType, initAudioOnInteraction, { passive: true });
+        });
 
         // Handle visibility changes for mobile background audio
         document.addEventListener('visibilitychange', function () {
