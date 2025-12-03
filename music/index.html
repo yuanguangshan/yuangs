@@ -1410,6 +1410,15 @@
             lastPosition: 0  // Store last playback position when app goes to background
         };
 
+        // URL参数解析函数
+        function getUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                apple: params.get('apple') === 'true',
+                youtube: params.get('youtube') === 'true'
+            };
+        }
+
         // 缓存系统
         const CacheManager = {
             // 获取缓存的数据
@@ -2033,6 +2042,12 @@
             const query = $('search-input').value?.trim();
             if (!query) return;
 
+            // 解析URL参数
+            const urlParams = getUrlParams();
+            const isAppleOnly = urlParams.apple && !urlParams.youtube;
+            const isYouTubeOnly = urlParams.youtube && !urlParams.apple;
+            const isBoth = !isAppleOnly && !isYouTubeOnly; // 默认情况，显示两个来源
+
             // 尝试从缓存获取搜索结果
             const cacheKey = `search_${query}`;
             let cachedResults = CacheManager.get(cacheKey);
@@ -2051,59 +2066,77 @@
                 </div>
             `;
 
-            // 首先尝试 iTunes API
-            let iTunesData = null;
-            try {
-                const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=24&country=cn`);
-                if (res.ok) {
-                    iTunesData = await res.json();
-                } else {
-                    console.error('iTunes API 请求失败，状态码:', res.status);
-                    iTunesData = { results: [] };
-                }
-            } catch (e) {
-                console.error('iTunes API 搜索失败:', e);
-                iTunesData = { results: [] };
-            }
+            let iTunesResults = [];
+            let youTubeResults = [];
 
-            // 同时搜索 YouTube
-            let youTubeData = [];
-            try {
-                const youTubeRes = await fetch(`https://api.yuangs.cc/youtubeapi/search/song?q=${encodeURIComponent(query)}&limit=24`);
-                if (youTubeRes.ok) {
-                    const youTubeJson = await youTubeRes.json();
-                    console.log('YouTube API 响应:', youTubeJson); // Debug log
-
-                    // Check if response has the expected structure
-                    if (youTubeJson && youTubeJson.data) {
-                        // If the API returns data in the expected format
-                        youTubeData = youTubeJson.data.map(item => ({
-                            // 将 YouTube 数据转换为 iTunes 格式
-                            trackId: item.video_id || item.id,
-                            trackName: item.title || item.name,
-                            artistName: Array.isArray(item.artists) ? item.artists.join(', ') : (item.artist || item.author || 'Unknown Artist'),
-                            collectionName: item.album || 'YouTube Music',
-                            artworkUrl100: item.thumbnail || item.thumbnails?.[0]?.url || item.image || 'https://i.ytimg.com/img/no_thumbnail.jpg',
-                            previewUrl: `https://www.youtube.com/watch?v=${item.video_id || item.id}`,
-                            kind: 'youtube',  // 标记为 YouTube 来源
-                            genre: item.category || item.genre || 'YouTube',
-                            releaseDate: item.publish_date || item.publishedAt || new Date().toISOString(),
-                            duration: item.duration || 'Unknown Duration'  // 添加时长信息
-                        }));
+            // 根据URL参数决定搜索哪个来源
+            if (!isYouTubeOnly) {
+                // 搜索 iTunes API (如果未指定只用YouTube)
+                try {
+                    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=48&country=cn`);
+                    if (res.ok) {
+                        const iTunesData = await res.json();
+                        iTunesResults = iTunesData.results || [];
                     } else {
-                        console.warn('YouTube API 响应格式不正确:', youTubeJson);
+                        console.error('iTunes API 请求失败，状态码:', res.status);
+                        iTunesResults = [];
                     }
-                } else {
-                    console.error('YouTube API 请求失败，状态码:', youTubeRes.status);
+                } catch (e) {
+                    console.error('iTunes API 搜索失败:', e);
+                    iTunesResults = [];
                 }
-            } catch (e) {
-                console.error('YouTube API 搜索失败:', e);
-                // 可能是 CORS 或网络问题，不中断整个搜索流程
             }
 
-            // 不合并结果，而是分别保存 iTunes 和 YouTube 数据
-            const iTunesResults = iTunesData.results || [];
-            const youTubeResults = youTubeData || [];
+            if (!isAppleOnly) {
+                // 搜索 YouTube (如果未指定只用iTunes)
+                try {
+                    const youTubeRes = await fetch(`https://api.yuangs.cc/youtubeapi/search/song?q=${encodeURIComponent(query)}&limit=48`);
+                    if (youTubeRes.ok) {
+                        const youTubeJson = await youTubeRes.json();
+                        console.log('YouTube API 响应:', youTubeJson); // Debug log
+
+                        // Check if response has the expected structure
+                        if (youTubeJson && youTubeJson.data) {
+                            // If the API returns data in the expected format
+                            youTubeResults = youTubeJson.data.map(item => ({
+                                // 将 YouTube 数据转换为 iTunes 格式
+                                trackId: item.video_id || item.id,
+                                trackName: item.title || item.name,
+                                artistName: Array.isArray(item.artists) ? item.artists.join(', ') : (item.artist || item.author || 'Unknown Artist'),
+                                collectionName: item.album || 'YouTube Music',
+                                artworkUrl100: item.thumbnail || item.thumbnails?.[0]?.url || item.image || 'https://i.ytimg.com/img/no_thumbnail.jpg',
+                                previewUrl: `https://www.youtube.com/watch?v=${item.video_id || item.id}`,
+                                kind: 'youtube',  // 标记为 YouTube 来源
+                                genre: item.category || item.genre || 'YouTube',
+                                releaseDate: item.publish_date || item.publishedAt || new Date().toISOString(),
+                                duration: item.duration || 'Unknown Duration'  // 添加时长信息
+                            }));
+                        } else {
+                            console.warn('YouTube API 响应格式不正确:', youTubeJson);
+                        }
+                    } else {
+                        console.error('YouTube API 请求失败，状态码:', youTubeRes.status);
+                    }
+                } catch (e) {
+                    console.error('YouTube API 搜索失败:', e);
+                    // 可能是 CORS 或网络问题，不中断整个搜索流程
+                }
+            }
+
+            // 根据URL参数决定最终展示的歌曲数量（总共48首）
+            if (isAppleOnly) {
+                // 只展示iTunes来源，取前48首
+                iTunesResults = iTunesResults.slice(0, 48);
+                youTubeResults = [];
+            } else if (isYouTubeOnly) {
+                // 只展示YouTube来源，取前48首
+                youTubeResults = youTubeResults.slice(0, 48);
+                iTunesResults = [];
+            } else {
+                // 默认情况，每个来源展示24首（总共48首）
+                iTunesResults = iTunesResults.slice(0, 24);
+                youTubeResults = youTubeResults.slice(0, 24);
+            }
 
             // 缓存搜索结果（有效期1小时）
             CacheManager.set(cacheKey, { itunes: iTunesResults, youtube: youTubeResults }, 1);
@@ -2141,6 +2174,11 @@
                 return;
             }
 
+            // 解析URL参数来确定显示模式
+            const urlParams = getUrlParams();
+            const isAppleOnly = urlParams.apple && !urlParams.youtube;
+            const isYouTubeOnly = urlParams.youtube && !urlParams.apple;
+
             const renderSongList = (songs, startIndex) => {
                 return songs.map((song, index) => {
                     const actualIndex = startIndex + index;
@@ -2165,22 +2203,50 @@
                 }).join('');
             };
 
-            $('results').innerHTML = `
-                <div class="results-columns" style="grid-column: 1 / -1;">
-                    <div class="results-column">
-                        <div class="simple-header">iTunes</div>
-                        <div class="grid">
-                            ${iTunesSongs.length > 0 ? renderSongList(iTunesSongs, 0) : '<div class="empty-message">暂无结果</div>'}
+            // 根据URL参数决定渲染模式
+            if (isAppleOnly) {
+                // 只显示iTunes来源
+                $('results').innerHTML = `
+                    <div class="results-columns" style="grid-column: 1 / -1;">
+                        <div class="results-column">
+                            <div class="simple-header">iTunes Music</div>
+                            <div class="grid">
+                                ${iTunesSongs.length > 0 ? renderSongList(iTunesSongs, 0) : '<div class="empty-message">暂无结果</div>'}
+                            </div>
                         </div>
                     </div>
-                    <div class="results-column">
-                        <div class="simple-header">YouTube</div>
-                        <div class="grid">
-                            ${youTubeSongs.length > 0 ? renderSongList(youTubeSongs, iTunesSongs.length) : '<div class="empty-message">暂无结果</div>'}
+                `;
+            } else if (isYouTubeOnly) {
+                // 只显示YouTube来源
+                $('results').innerHTML = `
+                    <div class="results-columns" style="grid-column: 1 / -1;">
+                        <div class="results-column">
+                            <div class="simple-header">YouTube Music</div>
+                            <div class="grid">
+                                ${youTubeSongs.length > 0 ? renderSongList(youTubeSongs, 0) : '<div class="empty-message">暂无结果</div>'}
+                            </div>
                         </div>
                     </div>
-                </div>
-            `;
+                `;
+            } else {
+                // 默认显示两个来源
+                $('results').innerHTML = `
+                    <div class="results-columns" style="grid-column: 1 / -1;">
+                        <div class="results-column">
+                            <div class="simple-header">iTunes</div>
+                            <div class="grid">
+                                ${iTunesSongs.length > 0 ? renderSongList(iTunesSongs, 0) : '<div class="empty-message">暂无结果</div>'}
+                            </div>
+                        </div>
+                        <div class="results-column">
+                            <div class="simple-header">YouTube</div>
+                            <div class="grid">
+                                ${youTubeSongs.length > 0 ? renderSongList(youTubeSongs, iTunesSongs.length) : '<div class="empty-message">暂无结果</div>'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
         }
 
         // 渲染结果
