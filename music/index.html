@@ -3557,7 +3557,7 @@
                     'iv_load_policy': 3, // Disable annotations
                     'modestbranding': 1, // Reduce YouTube branding
                     'rel': 0, // Don't show related videos at the end
-                    'autoplay': 0, // Don't autoplay, we'll control it
+                    'autoplay': 1, // 启用自动播放，在用户交互上下文中初始化时会自动播放
                     'mute': 0, // Don't mute initially
                     'enablejsapi': 1, // Enable API
                     'origin': window.location.origin, // Important for security policy
@@ -3603,45 +3603,14 @@
                                     console.log('Could not get duration on ready:', e);
                                 }
 
-                                // Autoplay if requested - make sure to call this directly in response to user interaction
+                                // 由于已启用 autoplay: 1，播放器会自动播放
+                                // 我们只需要在这里更新状态
                                 if (state.shouldAutoplayYouTube) {
-                                    // Try to play immediately, but handle potential autoplay policy restrictions
-                                    requestAudioPlayback().then(() => {
-                                        // Try to play with error handling
-                                        try {
-                                            event.target.playVideo();
-                                            state.isYouTubePlaying = true;
-                                            updatePlayState(true);
-                                        } catch (playError) {
-                                            console.warn('Direct play failed, attempting alternative:', playError);
-                                            // Fallback: try to play after a microtask
-                                            Promise.resolve().then(() => {
-                                                try {
-                                                    event.target.playVideo();
-                                                    state.isYouTubePlaying = true;
-                                                    updatePlayState(true);
-                                                } catch (retryError) {
-                                                    console.error('Retry play also failed:', retryError);
-                                                    // Show user a message about needing to interact again
-                                                    showToast('需要再次点击播放按钮开始播放');
-                                                }
-                                            });
-                                        }
-                                        state.shouldAutoplayYouTube = false;
-                                    }).catch(audioError => {
-                                        console.warn('Audio context play failed:', audioError);
-                                        // Try to play anyway, as it might work from user interaction
-                                        try {
-                                            event.target.playVideo();
-                                            state.isYouTubePlaying = true;
-                                            updatePlayState(true);
-                                        } catch (playError) {
-                                            console.error('Playback failed:', playError);
-                                            // Show user a message about needing to interact again
-                                            showToast('需要再次点击播放按钮开始播放');
-                                        }
-                                        state.shouldAutoplayYouTube = false;
-                                    });
+                                    // 标记为正在播放
+                                    state.isYouTubePlaying = true;
+                                    updatePlayState(true);
+                                    state.shouldAutoplayYouTube = false;
+                                    console.log('YouTube 播放器已自动播放');
                                 }
 
                                 resolve(event.target);
@@ -3858,58 +3827,83 @@
                 // Update recommendation tags
                 updateRecommendationTags(state.currentTrack);
 
+                // 检测是否为移动设备
+                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                
                 // Initialize or update YouTube player
                 if (!state.youtubePlayer) {
                     // Set flag to autoplay when ready
                     state.shouldAutoplayYouTube = true;
+                    
+                    // 在移动端，显示提示让用户知道正在加载
+                    if (isMobile) {
+                        showToast('正在加载，请稍候...');
+                    }
+                    
                     try {
                         state.youtubePlayer = await initYouTubePlayer(videoId);
+                        
+                        // 播放器初始化成功后，立即尝试播放
+                        // 这里仍在用户交互的"信任链"中
+                        if (state.youtubePlayer && state.shouldAutoplayYouTube) {
+                            try {
+                                // 先恢复音频上下文
+                                await requestAudioPlayback();
+                                // 然后播放
+                                state.youtubePlayer.playVideo();
+                                state.isYouTubePlaying = true;
+                                updatePlayState(true);
+                                state.shouldAutoplayYouTube = false;
+                                
+                                if (isMobile) {
+                                    showToast('开始播放');
+                                }
+                            } catch (playError) {
+                                console.warn('自动播放失败:', playError);
+                                // 移动端自动播放失败时，显示明确提示
+                                if (isMobile) {
+                                    showToast('请点击播放按钮开始播放');
+                                    updatePlayState(false);
+                                }
+                            }
+                        }
                     } catch (error) {
                         console.error('YouTube player initialization failed:', error);
-                        showToast('YouTube 播放器初始化失败，正在重试...');
-                        // Retry with a slight delay
-                        setTimeout(async () => {
-                            try {
-                                state.youtubePlayer = await initYouTubePlayer(videoId);
-                                // Try to play after successful initialization
-                                if (state.shouldAutoplayYouTube && state.youtubePlayer) {
-                                    requestAudioPlayback().then(() => {
-                                        state.youtubePlayer.playVideo();
-                                        state.isYouTubePlaying = true;
-                                        updatePlayState(true);
-                                        state.shouldAutoplayYouTube = false;
-                                    });
-                                }
-                            } catch (retryError) {
-                                console.error('YouTube player retry also failed:', retryError);
-                                showToast('即将准备就绪，别着急');
-                            }
-                        }, 500);
+                        showToast('YouTube 播放器初始化失败，请点击播放按钮重试');
+                        state.shouldAutoplayYouTube = false;
                     }
                 } else {
+                    // 播放器已存在，加载新视频
                     state.youtubePlayer.loadVideoById(videoId);
-                    // For already-initialized player, try to play immediately after loading
-                    // Wait a bit for the video to load, then play it
+                    
+                    // 等待视频加载后立即播放
+                    // 使用更短的延迟以保持在用户交互上下文中
                     setTimeout(() => {
                         if (state.youtubePlayer) {
-                            // Try to play the video directly from this context which should still be user-initiated
-                            requestAudioPlayback().then(() => {
-                                state.youtubePlayer.playVideo();
-                                state.isYouTubePlaying = true;
-                                updatePlayState(true);
-                            }).catch(() => {
-                                // If requestAudioPlayback fails, try to play anyway
-                                // Show helpful message for first-time playback
-                                const playerState = state.youtubePlayer.getPlayerState();
-                                if (playerState === -1 || playerState === YT.PlayerState.CUED) { // -1 is unstarted, 5 is cued
-                                    showToast('首次播放可能需要点击播放按钮');
+                            try {
+                                // 尝试立即播放
+                                requestAudioPlayback().then(() => {
+                                    state.youtubePlayer.playVideo();
+                                    state.isYouTubePlaying = true;
+                                    updatePlayState(true);
+                                    
+                                    if (isMobile) {
+                                        showToast('开始播放');
+                                    }
+                                }).catch(() => {
+                                    // 如果 requestAudioPlayback 失败，仍然尝试播放
+                                    state.youtubePlayer.playVideo();
+                                    state.isYouTubePlaying = true;
+                                    updatePlayState(true);
+                                });
+                            } catch (e) {
+                                console.warn('播放失败:', e);
+                                if (isMobile) {
+                                    showToast('请点击播放按钮开始播放');
                                 }
-                                state.youtubePlayer.playVideo();
-                                state.isYouTubePlaying = true;
-                                updatePlayState(true);
-                            });
+                            }
                         }
-                    }, 100); // Reduced timeout to be faster
+                    }, 50); // 缩短延迟时间，保持在用户交互上下文中
                 }
 
                 // For immediate playback after user interaction (in case user clicked to play)
