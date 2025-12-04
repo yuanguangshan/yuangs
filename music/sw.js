@@ -41,6 +41,16 @@ self.addEventListener('fetch', event => {
     const request = event.request;
     const url = new URL(request.url);
 
+    // 【新增修复代码】忽略非 http/https 协议的请求（如 chrome-extension://）
+    if (!url.protocol.startsWith('http')) {
+        return;
+    }
+
+    // 【新增修复代码】忽略 POST 请求（Cache API 只能缓存 GET）
+    if (request.method !== 'GET') {
+        return;
+    }
+
     // 静态资源（HTML, CSS, JS, manifest）- 网络优先，失败时使用缓存
     if (isStaticResource(request)) {
         event.respondWith(networkFirstStrategy(request));
@@ -92,6 +102,13 @@ function isApiRequest(request) {
 
 // 网络优先策略
 function networkFirstStrategy(request) {
+    // Skip caching requests from browser extensions
+    if (request.url.startsWith('chrome-extension:') ||
+        request.url.startsWith('moz-extension:') ||
+        request.url.startsWith('safari-extension:')) {
+        return fetch(request);
+    }
+
     return fetch(request)
         .then(response => {
             if (response.status === 200) {
@@ -106,6 +123,13 @@ function networkFirstStrategy(request) {
 
 // 缓存优先策略（用于图片）
 function cacheFirstStrategy(request, cacheName) {
+    // Skip caching requests from browser extensions
+    if (request.url.startsWith('chrome-extension:') ||
+        request.url.startsWith('moz-extension:') ||
+        request.url.startsWith('safari-extension:')) {
+        return fetch(request);
+    }
+
     return caches.match(request)
         .then(response => {
             if (response) {
@@ -138,6 +162,13 @@ function cacheFirstStrategy(request, cacheName) {
 
 // 带过期时间的网络优先策略（用于API）
 function networkFirstWithExpiryStrategy(request) {
+    // Skip caching requests from browser extensions
+    if (request.url.startsWith('chrome-extension:') ||
+        request.url.startsWith('moz-extension:') ||
+        request.url.startsWith('safari-extension:')) {
+        return fetch(request);
+    }
+
     const cacheKey = request.url;
 
     return caches.open(API_CACHE_NAME)
@@ -183,6 +214,13 @@ function networkFirstWithExpiryStrategy(request) {
 
 // 从网络获取并缓存的辅助函数
 function fetchAndCache(request) {
+    // Skip caching requests from browser extensions
+    if (request.url.startsWith('chrome-extension:') ||
+        request.url.startsWith('moz-extension:') ||
+        request.url.startsWith('safari-extension:')) {
+        return fetch(request);
+    }
+
     return fetch(request)
         .then(networkResponse => {
             if (networkResponse.status === 200) {
