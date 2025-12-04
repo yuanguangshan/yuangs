@@ -3162,51 +3162,45 @@
             }
         }
 
-        // 打开 YouTube 歌曲在 YouTube 应用或网页中
-        function openYouTubeApp(videoId, trackName, artistName) {
-            const youTubeWebUrl = `https://www.youtube.com/watch?v=${videoId}`; // YouTube web URL
-            const youTubeAppUrl = `https://www.youtube.com/watch?v=${videoId}`; // YouTube app scheme (iOS)
-            const youTubeAppAndroid = `https://www.youtube.com/watch?v=${videoId}`; // YouTube app scheme (Android)
+            // 打开 YouTube 歌曲在 YouTube 应用或网页中
+            function openYouTubeApp(videoId, trackName, artistName) {
+                const webUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        // Android Intent (Chrome 推荐方式)
+        // S.browser_fallback_url 指定了如果没安装 App 跳转的地址
+        const androidIntent = `intent://www.youtube.com/watch?v=${videoId}#Intent;package=com.google.android.youtube;scheme=https;S.browser_fallback_url=${encodeURIComponent(webUrl)};end`;
+        // iOS Scheme (不推荐，推荐直接用 webUrl，但在某些场景可用)
+        const iosScheme = `youtube://watch?v=${videoId}`;
 
-            // 检测设备类型
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-            const isAndroid = /Android/.test(navigator.userAgent);
-            const isMobile = isIOS || isAndroid;
+        // 1. 更精准的设备检测
+        const u = navigator.userAgent;
+        const isAndroid = u.indexOf('Android') > -1 || u.indexOf('Adr') > -1;
+        // 兼容 iPad Desktop Mode 的检测
+        const isIOS = !!u.match(/\(i[^;]+;( U;)? CPU.+Mac OS X/) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-            if (isMobile) {
-                // 移动设备：尝试打开 YouTube App
-                const startTime = Date.now();
+        showToast(`正在打开 "${trackName}" - ${artistName}`);
 
-                // 选择适合当前平台的 YouTube app scheme
-                let appUrl = youTubeAppUrl; // Default to iOS scheme
-                if (isAndroid) {
-                    appUrl = youTubeAppAndroid; // Use Android scheme
-                }
-
-                // 使用 iframe 方式尝试打开，这样不会被拦截
-                const iframe = document.createElement('iframe');
-                iframe.style.display = 'none';
-                iframe.src = appUrl;
-                document.body.appendChild(iframe);
-
-                // 设置降级定时器
-                setTimeout(() => {
-                    document.body.removeChild(iframe);
-
-                    // 如果还在当前页面，尝试打开网页版
-                    if (Date.now() - startTime < 2000) {
-                        window.open(youTubeWebUrl, '_blank');
-                        showToast(`正在打开 "${trackName}" - ${artistName}`);
-                    }
-                }, 1500);
-
-            } else {
-                // 桌面设备：直接打开网页版
-                window.open(youTubeWebUrl, '_blank');
-                showToast(`正在打开 "${trackName}" - ${artistName}`);
-            }
+        if (isAndroid) {
+            // Android 最佳实践: 使用 Intent
+            // 如果已安装 App，系统直接打开；没安装，Chrome 会自动处理 fallback 到网页
+            window.location.href = androidIntent;
+        } else if (isIOS) {
+            // iOS 最佳实践: 直接访问 Universal Link (HTTPS)
+            // iOS 系统会自动拦截这个链接并询问是否在 App 中打开
+            // 强行用 Scheme 往往体验不好，且很难准确判断是否安装
+            window.location.href = webUrl;
+            
+            // --- 如果你非要强行尝试 Scheme (不推荐) ---
+            // window.location.href = iosScheme; 
+            // setTimeout(() => {
+            //    // iOS 上不能在 timeout 里 window.open，只能改变 location
+            //    window.location.href = webUrl; 
+            // }, 2000);
+            // ----------------------------------------
+        } else {
+            // 桌面端
+            window.open(webUrl, '_blank');
         }
-
+    }
         // 打开 YouTube 歌曲在 YouTube Music 应用或网页中
         function openYouTubeMusic(videoId, trackName, artistName) {
             const webUrl = `https://music.youtube.com/watch?v=${videoId}`;
