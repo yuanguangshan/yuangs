@@ -146,7 +146,7 @@ function cacheFirstStrategy(request, cacheName) {
                 return response;
             }
 
-            // 缓存中没有，则从网络获取并存储
+            // 缓存中没有，则从网络获取并存储 
             return fetch(request)
                 .then(networkResponse => {
                     if (networkResponse.status === 200) {
