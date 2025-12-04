@@ -3030,6 +3030,55 @@
         // Store the interval ID so we can clear it if needed
         state.youtubeProgressInterval = youtubeProgressInterval;
 
+        // Additional progress update function specifically for PWA compatibility
+        let pwaProgressInterval = null;
+
+        function startPWAProgressUpdates() {
+            if (pwaProgressInterval) {
+                clearInterval(pwaProgressInterval);
+            }
+
+            pwaProgressInterval = setInterval(() => {
+                if (state.youtubePlayer && state.isYouTubePlaying) {
+                    updateYouTubeProgress();
+                }
+            }, 800); // Slightly longer than the main interval to avoid conflicts
+        }
+
+        function stopPWAProgressUpdates() {
+            if (pwaProgressInterval) {
+                clearInterval(pwaProgressInterval);
+                pwaProgressInterval = null;
+            }
+        }
+
+        function updateYouTubeProgress() {
+            if (state.youtubePlayer) {
+                try {
+                    const currentTime = state.youtubePlayer.getCurrentTime();
+                    const duration = state.youtubePlayer.getDuration();
+
+                    if (!isNaN(duration) && !isNaN(currentTime) && duration > 0) {
+                        const pct = (currentTime / duration) * 100;
+                        $('progress-fill').style.width = pct + '%';
+                        $('current-time').textContent = formatTime(currentTime);
+                        $('total-time').textContent = formatTime(duration);
+
+                        // Update media session position state for background playback controls
+                        if ('setPositionState' in navigator.mediaSession) {
+                            navigator.mediaSession.setPositionState({
+                                duration: duration,
+                                playbackRate: 1.0,
+                                position: currentTime
+                            });
+                        }
+                    }
+                } catch (e) {
+                    // 如果 YouTube 播放器还没准备好，忽略错误
+                }
+            }
+        }
+
         // 停止弹幕系统
         function stopDanmaku() {
             if (state.danmakuInterval) {
@@ -3609,13 +3658,21 @@
                                             console.warn('Could not resume audio context in PLAYING state:', err);
                                         });
                                     }
+                                    // Start PWA progress updates when playing
+                                    startPWAProgressUpdates();
+                                    // Update progress immediately when playing starts
+                                    setTimeout(updateYouTubeProgress, 100);
                                 } else if (event.data === YT.PlayerState.PAUSED) {
                                     state.isYouTubePlaying = false;
                                     updatePlayState(false);
+                                    // Stop PWA-specific updates when paused
+                                    stopPWAProgressUpdates();
                                 } else if (event.data === YT.PlayerState.ENDED) {
                                     // 当 YouTube 歌曲播放结束时
                                     state.isYouTubePlaying = false;
                                     updatePlayState(false);
+                                    // Stop PWA-specific updates when ended
+                                    stopPWAProgressUpdates();
                                     // 延迟一点时间再播放下一首，确保状态更新完成
                                     setTimeout(() => {
                                         playNextForYouTube();
@@ -3635,6 +3692,8 @@
                                                 event.target.playVideo();
                                                 state.isYouTubePlaying = true;
                                                 updatePlayState(true);
+                                                // Start PWA progress updates
+                                                startPWAProgressUpdates();
                                             } catch (e) {
                                                 console.warn('Could not play from cued state:', e);
                                             }
@@ -3903,17 +3962,23 @@
                 if (state.isYouTubePlaying) {
                     state.youtubePlayer.pauseVideo();
                     state.isYouTubePlaying = false;
+                    // Stop PWA-specific progress updates when paused
+                    stopPWAProgressUpdates();
                 } else {
                     // Request user interaction to enable audio in background
                     requestAudioPlayback().then(() => {
                         state.youtubePlayer.playVideo();
                         state.isYouTubePlaying = true;
+                        // Start PWA progress updates when playing
+                        startPWAProgressUpdates();
                         updatePlayState(true);
                     }).catch(() => {
                         try {
                             // Try to play the video - this may fail due to browser autoplay policies
                             state.youtubePlayer.playVideo();
                             state.isYouTubePlaying = true;
+                            // Start PWA progress updates when playing
+                            startPWAProgressUpdates();
                             updatePlayState(true);
                         } catch (error) {
                             console.error('Failed to play YouTube video:', error);
@@ -4042,8 +4107,16 @@
                     setTimeout(() => {
                         if (state.youtubePlayer.getPlayerState() !== YT.PlayerState.PLAYING) {
                             toggleYouTubePlay();
+                        } else {
+                            // If already playing, make sure PWA updates are running
+                            startPWAProgressUpdates();
                         }
                     }, 100);
+                }
+            } else {
+                // When going to background, ensure PWA updates continue if needed
+                if (state.youtubePlayer && state.isYouTubePlaying) {
+                    // PWA updates should continue in background, so no need to stop them here
                 }
             }
         });
@@ -4094,8 +4167,18 @@
                         if (playerState !== YT.PlayerState.PLAYING) {
                             // Try to resume playback
                             state.youtubePlayer.playVideo();
+                            startPWAProgressUpdates(); // Ensure PWA updates start when resuming
+                        } else {
+                            // If already playing, make sure PWA updates are running
+                            startPWAProgressUpdates();
                         }
                     }, 500);
+                }
+            } else {
+                // When going to background, ensure PWA updates continue if playing
+                if (state.youtubePlayer && state.isYouTubePlaying) {
+                    // Ensure PWA updates are running when going to background
+                    startPWAProgressUpdates();
                 }
             }
         });
