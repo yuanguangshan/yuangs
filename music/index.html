@@ -7,7 +7,7 @@
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>广山音乐</title>
 
-    <!-- PWA  核心配置 -->
+    <!-- PWA  核心 配置 -->
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#0a0a0a">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -265,6 +265,19 @@
             opacity: 1;
         }
 
+        .song-duration {
+            position: absolute;
+            top: 8px;
+            right: 36px; /* 在选项按钮的左侧，避免重叠 */
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            z-index: 5;
+            pointer-events: none;
+        }
+
         .song-card:hover {
             background: var(--card-hover);
             transform: translateY(-4px);
@@ -401,6 +414,27 @@
             padding: 0 16px calc(16px + var(--safe-bottom));
             background: linear-gradient(to top, rgba(10, 10, 10, 1) 0%, rgba(10, 10, 10, 0.95) 50%, transparent 100%);
             pointer-events: none;
+        }
+
+        /* 嵌入式播放器模式 */
+        .player.embedded {
+            position: relative;
+            bottom: auto;
+            top: 0;
+            padding: 20px;
+            margin: 0 auto;
+            max-width: 400px; /* 设置最大宽度，适合嵌入式播放器 */
+            background: var(--bg);
+        }
+
+        .player.embedded .player-card {
+            border-radius: 16px;
+            margin: 0 auto;
+        }
+
+        body.embedded-mode {
+            background: var(--bg);
+            overflow: hidden; /* 隐藏滚动条 */
         }
 
         .player-card {
@@ -1922,7 +1956,88 @@
 
         // 初始化
         document.addEventListener('DOMContentLoaded', () => {
-            randomSearch();
+            // 检查URL参数，如果包含youtube_embed，则显示嵌入式播放器
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('youtube_embed') === 'true') {
+                // 显示嵌入式播放器
+                const videoId = urlParams.get('video_id');
+                const title = urlParams.get('title') || 'Unknown Title';
+                const artist = urlParams.get('artist') || 'Unknown Artist';
+
+                if (videoId) {
+                    // 添加嵌入式模式类到body
+                    document.body.classList.add('embedded-mode');
+                    // 隐藏不必要的UI元素
+                    document.querySelector('.header').style.display = 'none';
+                    document.querySelector('.content').style.display = 'none';
+                    const playerElement = document.querySelector('.player');
+                    playerElement.style.display = 'block';
+                    playerElement.classList.add('embedded'); // 添加嵌入式样式类
+                    document.querySelector('.bg-gradient').style.display = 'none';
+                    document.querySelector('.bg-album').style.display = 'none';
+                    $('danmaku').style.display = 'none';
+
+                    // 初始化播放器UI
+                    const cover = 'https://i.ytimg.com/img/no_thumbnail.jpg'; // 默认封面
+                    $('player-cover').src = cover;
+
+                    const titleTextEl = $('player-title-text');
+                    const artistTextEl = $('player-artist-text');
+
+                    titleTextEl.textContent = title;
+                    artistTextEl.textContent = artist;
+
+                    // 设置维基百科按钮
+                    const wikiBtn = $('player-wiki-btn');
+                    const cleanArtistName = artist.split(/&|,|feat\.|ft\./i)[0].trim();
+                    wikiBtn.style.display = 'flex';
+                    wikiBtn.onclick = () => {
+                        const wikiUrl = `https://zh.wikipedia.org/wiki/${encodeURIComponent(cleanArtistName)}`;
+                        window.open(wikiUrl, '_blank');
+                    };
+                    wikiBtn.title = `查看 ${cleanArtistName} 的维基百科`;
+
+                    // 设置标签推荐按钮
+                    const tagBtn = $('player-tag-btn');
+                    tagBtn.style.display = 'flex';
+                    tagBtn.onclick = () => {
+                        showCurrentSongTags();
+                    };
+                    tagBtn.title = '查看歌曲标签推荐';
+
+                    // 检查是否需要滚动
+                    const checkScroll = (el) => {
+                        el.classList.remove('scroll-text');
+                        el.style.transform = 'none';
+
+                        const containerWidth = el.parentElement.clientWidth;
+                        const textWidth = el.scrollWidth;
+
+                        if (textWidth > containerWidth) {
+                            const distance = containerWidth - textWidth;
+                            const duration = Math.abs(distance) / 30 + 2;
+
+                            el.style.setProperty('--scroll-distance', `${distance}px`);
+                            el.style.setProperty('--duration', `${duration}s`);
+                            el.classList.add('scroll-text');
+                        }
+                    };
+
+                    setTimeout(() => {
+                        checkScroll(titleTextEl);
+                        checkScroll(artistTextEl);
+                    }, 50);
+
+                    // 播放YouTube歌曲
+                    playYouTubeSong(videoId, title, artist, cover);
+                }
+            } else {
+                // 正常模式：执行搜索并显示界面
+                randomSearch();
+                // 确保body不包含嵌入式模式类
+                document.body.classList.remove('embedded-mode');
+            }
+
             const searchInput = $('search-input');
             const searchClearBtn = $('search-clear-btn');
             let searchTimeout;
@@ -2196,6 +2311,7 @@
                                     <div class="play-overlay-btn">▶</div>
                                 </div>
                                 ${song.trackId ? `<div class="song-options" onclick="event.stopPropagation(); toggleOptionsMenu(event, '${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}', '${coverUrl}', ${isYouTube})">⋯</div>` : ''}
+                                ${isYouTube && song.duration ? `<div class="song-duration">${escapeHtml(song.duration)}</div>` : ''}
                             </div>
                             <div class="song-title">${isYouTube ? '<span style="color: #ff6b6b;">▶</span> ' : ''}${escapeHtml(song.trackName)}</div>
                             <div class="song-artist">${escapeHtml(song.artistName)}</div>
@@ -2273,6 +2389,7 @@
                                 <div class="play-overlay-btn">▶</div>
                             </div>
                             ${song.trackId ? `<div class="song-options" onclick="event.stopPropagation(); toggleOptionsMenu(event, '${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}', '${coverUrl}', ${isYouTube})">⋯</div>` : ''}
+                            ${isYouTube && song.duration ? `<div class="song-duration">${escapeHtml(song.duration)}</div>` : ''}
                         </div>
                         <div class="song-title">${isYouTube ? '<span style="color: #ff6b6b;">▶</span> ' : ''}${escapeHtml(song.trackName)}</div>
                         <div class="song-artist">${escapeHtml(song.artistName)}</div>
@@ -3349,6 +3466,9 @@
                     <div class="option-item" onclick="openYouTubeApp('${trackId}', '${trackName}', '${artistName}'); this.closest('.song-options-menu').remove();">
                         <span>▶️ 打开 YouTube 应用</span>
                     </div>
+                    <div class="option-item" onclick="openEmbeddedYouTube('${trackId}', '${escapeHtml(trackName)}', '${escapeHtml(artistName)}'); this.closest('.song-options-menu').remove();">
+                        <span>📺 嵌入式播放器</span>
+                    </div>
                 `;
             } else {
                 menu.innerHTML = `
@@ -4181,6 +4301,14 @@
                 }
                 updatePlayState(state.isYouTubePlaying);
             }
+        }
+
+        // 打开嵌入式YouTube播放器
+        function openEmbeddedYouTube(videoId, trackName, artistName) {
+            // 构建嵌入式播放器页面的URL，带有所需参数
+            const embedUrl = `?youtube_embed=true&video_id=${encodeURIComponent(videoId)}&title=${encodeURIComponent(trackName)}&artist=${encodeURIComponent(artistName)}`;
+            // 在新标签页中打开嵌入式播放器
+            window.open(`./index.html${embedUrl}`, '_blank', 'width=400,height=600,resizable=yes,scrollbars=yes');
         }
 
         // Audio context for maintaining background audio across browsers
