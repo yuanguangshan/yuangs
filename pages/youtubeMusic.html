@@ -441,6 +441,51 @@
         .tag-chip:nth-child(3) { background: linear-gradient(135deg, rgba(240, 147, 251, 0.2) 0%, rgba(245, 87, 108, 0.2) 100%); border-color: rgba(240, 147, 251, 0.3); }
         .tag-chip:nth-child(4) { background: linear-gradient(135deg, rgba(52, 211, 153, 0.2) 0%, rgba(16, 185, 129, 0.2) 100%); border-color: rgba(52, 211, 153, 0.3); }
 
+        /* Pagination */
+        .pagination-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .pagination {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 20px;
+            background: var(--yt-card);
+            border: 1px solid var(--yt-border);
+            border-radius: 50px;
+        }
+
+        .page-btn {
+            padding: 8px 16px;
+            background: transparent;
+            border: 1px solid var(--yt-border);
+            border-radius: 8px;
+            color: var(--yt-text);
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 0.9rem;
+        }
+
+        .page-btn:hover:not(:disabled) {
+            background: var(--yt-card-hover);
+            border-color: var(--yt-accent);
+        }
+
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .page-info {
+            min-width: 120px;
+            text-align: center;
+            color: var(--yt-text);
+            font-size: 0.95rem;
+        }
+
         /* Skeleton Loading */
         .skeleton {
             background: var(--yt-card);
@@ -661,6 +706,13 @@
                 <div class="quick-tags" id="quickTags"></div>
             </div>
         </section>
+        <div id="pagination-container" class="pagination-container" style="display: none; text-align: center; margin-top: 20px;">
+            <div class="pagination">
+                <button id="prev-page" class="page-btn" disabled>&lt; 上一页</button>
+                <span id="page-info" class="page-info"></span>
+                <button id="next-page" class="page-btn" disabled>下一页 &gt;</button>
+            </div>
+        </div>
     </main>
 
     <script>
@@ -780,6 +832,11 @@
         const shuffleBtn = document.getElementById('shuffleBtn');
         const quickTags = document.getElementById('quickTags');
 
+        // Pagination variables
+        let currentPage = 1;
+        const itemsPerPage = 10;
+        let allSongs = []; // Store all fetched songs
+
         // URL参数获取
         function getUrlParameter(name) {
             const urlParams = new URLSearchParams(window.location.search);
@@ -787,7 +844,7 @@
         }
 
         const urlLimit = getUrlParameter('n');
-        let defaultLimit = 20;
+        let defaultLimit = 50;
         if (urlLimit && !isNaN(urlLimit)) {
             const numericLimit = parseInt(urlLimit);
             if (numericLimit >= 1 && numericLimit <= 50) {
@@ -815,11 +872,14 @@
                     </div>
                 </div>
             `;
+            // Hide pagination when showing suggestions
+            document.getElementById('pagination-container').style.display = 'none';
         }
 
         // 搜索标签
         function searchTag(tag) {
             document.getElementById('query').value = tag;
+            currentPage = 1; // Reset to first page on new search
             searchForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
         }
 
@@ -827,6 +887,7 @@
         shuffleBtn.addEventListener('click', () => {
             const randomTag = getRandomTag();
             document.getElementById('query').value = randomTag;
+            currentPage = 1; // Reset to first page on new search
             searchForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
         });
 
@@ -872,6 +933,7 @@
 
                 if (result.data.length === 0) {
                     showTagSuggestions();
+                    document.getElementById('pagination-container').style.display = 'none';
                     statusText.textContent = '没有找到匹配的歌曲';
                     statusText.className = 'status';
                 } else {
@@ -882,6 +944,7 @@
             } catch (error) {
                 statusText.textContent = `请求出错：${error.message}`;
                 statusText.className = 'status error';
+                document.getElementById('pagination-container').style.display = 'none';
                 showTagSuggestions();
             } finally {
                 searchBtn.disabled = false;
@@ -889,7 +952,20 @@
         });
 
         function renderResults(songs = []) {
-            resultsContainer.innerHTML = songs.map(song => {
+            // Store all songs for pagination
+            allSongs = songs;
+            currentPage = 1;
+
+            // Show first page of results
+            displayPage(currentPage);
+        }
+
+        function displayPage(page) {
+            const startIndex = (page - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const pageSongs = allSongs.slice(startIndex, endIndex);
+
+            resultsContainer.innerHTML = pageSongs.map(song => {
                 const artists = (song.artists || []).join('、') || '未知艺术家';
                 const album = song.album || '未知专辑';
                 const duration = song.duration || '--:--';
@@ -908,8 +984,8 @@
                 return `
                     <article class="song-card" data-video-id="${videoId}">
                         <div class="thumb-wrapper">
-                            ${thumbnail ? 
-                                `<img src="${thumbnail}" alt="${song.title}" onerror="this.style.display='none'">` : 
+                            ${thumbnail ?
+                                `<img src="${thumbnail}" alt="${song.title}" onerror="this.style.display='none'">` :
                                 ''
                             }
                             <div class="play-overlay">
@@ -946,6 +1022,27 @@
                     playVideo(this);
                 });
             });
+
+            // Update pagination controls
+            updatePaginationControls();
+        }
+
+        function updatePaginationControls() {
+            const totalPages = Math.ceil(allSongs.length / itemsPerPage);
+            const pageInfo = document.getElementById('page-info');
+            const prevBtn = document.getElementById('prev-page');
+            const nextBtn = document.getElementById('next-page');
+            const paginationContainer = document.getElementById('pagination-container');
+
+            // Update page info text
+            pageInfo.textContent = `第 ${currentPage} 页，共 ${totalPages} 页 (${allSongs.length} 首歌曲)`;
+
+            // Update button states
+            prevBtn.disabled = currentPage <= 1;
+            nextBtn.disabled = currentPage >= totalPages;
+
+            // Show/hide pagination based on whether we have results
+            paginationContainer.style.display = allSongs.length > itemsPerPage ? 'flex' : 'none';
         }
 
         function playVideo(cardElement) {
@@ -989,6 +1086,22 @@
 
         // 初始化
         initQuickTags();
+
+        // 设置分页按钮事件监听器
+        document.getElementById('prev-page').addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                displayPage(currentPage);
+            }
+        });
+
+        document.getElementById('next-page').addEventListener('click', () => {
+            const totalPages = Math.ceil(allSongs.length / itemsPerPage);
+            if (currentPage < totalPages) {
+                currentPage++;
+                displayPage(currentPage);
+            }
+        });
 
         // 页面加载时随机搜索
         window.addEventListener('load', () => {
