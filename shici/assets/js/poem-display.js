@@ -348,76 +348,47 @@ function renderArticleToHTML(content) {
   return html;
 }
 
-// 根据规则断句诗歌，优先断为 4 句
 export function formatPoemWithLineBreaks(content, poem) {
-  const normalized = normalizeContent(content);
+    const normalized = normalizeContent(content);
+    // 判断是否为规整五言/七言诗
+    const isRegular = isRegularPoemWithPunctuation(normalized);
+    const totalChars = normalized.replace(/\s/g, '').length;
 
-  // 若是规整诗（五言/七言）优先采用 4/8 规则
-  if (isRegularPoemWithPunctuation(normalized)) {
-    // 先按行
-    let lines = normalized.split("\n").filter((l) => l !== "");
-    if (lines.length === 4) {
-      return renderLinesToHTML(lines);
-    } else if (lines.length === 8) {
-      return renderLinesToHTML(mergeEveryTwo(lines));
-    } else if (lines.length > 8) {
-      return renderLinesToHTML(lines);
-    }
+    // 如果是规整诗，优先按4句处理
+    if (isRegular) {
+        // 尝试按换行分割
+        let lines = normalized.split("\n").filter(l => l.trim() !== "");
 
-    // 【新增】优先尝试按逗号和句末标点切分（针对绝句）
-    // 这样可以将"独在异乡为异客，每逢佳节倍思亲。遥知兄弟登高处，遍插茱萸少一人。"
-    // 拆分成四句显示
-    // 修复：使用捕获组保留标点符号，防止标点丢失
-    const rawParts = normalized.split(/([，。！？,.!?])/);
-    const halfSentences = [];
-    
-    for (let i = 0; i < rawParts.length; i++) {
-      const part = rawParts[i].trim();
-      if (!part) continue;
-      
-      // 如果是标点符号，且前一个元素存在，则追加到前一个元素
-      if (/^[，。！？,.!?]$/.test(part)) {
-        if (halfSentences.length > 0) {
-          halfSentences[halfSentences.length - 1] += part;
+        // 如果没有换行，尝试按标点分割
+        if (lines.length <= 1) {
+            const withPunct = normalized.replace(/([，。；？！])/g, "$1\n");
+            lines = withPunct.split("\n").filter(l => l.trim() !== "");
         }
-      } else {
-        // 否则作为新的一句
-        halfSentences.push(part);
-      }
+
+        // 如果还是只有一句，按固定字数分割
+        if (lines.length === 1 && (totalChars === 20 || totalChars === 28)) {
+            const charsPerLine = totalChars === 20 ? 5 : 7;
+            lines = [];
+            for (let i = 0; i < normalized.length; i += charsPerLine) {
+                lines.push(normalized.slice(i, i + charsPerLine));
+            }
+        }
+
+        // 确保显示4句
+        if (lines.length === 4) {
+            return renderLinesToHTML(lines);
+        } else if (lines.length === 8) {
+            // 合并为4句显示（每两句为一行）
+            const merged = [];
+            for (let i = 0; i < lines.length; i += 2) {
+                merged.push(lines[i] + (lines[i+1] || ""));
+            }
+            return renderLinesToHTML(merged);
+        }
     }
 
-    if (halfSentences.length === 4) {
-      return renderLinesToHTML(halfSentences);
-    } else if (halfSentences.length === 8) {
-      return renderLinesToHTML(mergeEveryTwo(halfSentences));
-    }
-
-    // 按句末切句
-    const sentences = splitBySentenceEnds(normalized);
-    if (sentences.length === 4) {
-      return renderLinesToHTML(sentences);
-    } else if (sentences.length === 8) {
-      return renderLinesToHTML(mergeEveryTwo(sentences));
-    } else if (sentences.length > 8) {
-      return renderLinesToHTML(sentences);
-    }
-
-    // 再尝试按半句靠近 4/8
-    const halves = sentences.flatMap(splitHalfByCommaOrPause);
-    if (halves.length === 4) {
-      return renderLinesToHTML(halves);
-    } else if (halves.length === 8) {
-      return renderLinesToHTML(mergeEveryTwo(halves));
-    } else if (halves.length > 8) {
-      return renderLinesToHTML(halves);
-    }
-
-    // 否则回退到通用
+    // 非规整诗，走原有逻辑
     return insertLineBreaksAtPunctuation(normalized);
-  }
-
-  // 非规整诗：使用通用逻辑
-  return insertLineBreaksAtPunctuation(normalized);
 }
 
 export function parseTagsForPoem(poem) {
