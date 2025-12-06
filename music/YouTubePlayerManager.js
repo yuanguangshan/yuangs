@@ -59,7 +59,7 @@ class YouTubePlayerManager {
             }
 
             return new Promise((resolve) => {
-                this.player = new YT.Player(elementId, {
+                const playerConfig = {
                     videoId: options.videoId,
                     playerVars: options.playerVars,
                     events: {
@@ -67,7 +67,16 @@ class YouTubePlayerManager {
                         'onStateChange': (event) => this.onPlayerStateChange(event),
                         'onError': (event) => this.onPlayerError(event)
                     }
-                });
+                };
+
+                // Add host if provided, or default to https://www.youtube.com for better PWA support
+                if (options.host) {
+                    playerConfig.host = options.host;
+                } else {
+                    playerConfig.host = 'https://www.youtube.com';
+                }
+
+                this.player = new YT.Player(elementId, playerConfig);
             });
 
         } catch (error) {

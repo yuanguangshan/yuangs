@@ -2747,149 +2747,6 @@
             }
         }
 
-        // 播放 YouTube 完整歌曲
-        async function playYouTubeSong(videoId, title, artist, coverUrl = '') {
-            if (!videoId) return;
-
-            // 创建 YouTube 音频流 URL
-            const audioUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
-            // 更新播放状态
-            state.currentTrack = {
-                trackId: videoId,
-                trackName: title,
-                artistName: artist,
-                artworkUrl100: coverUrl || 'https://i.ytimg.com/img/no_thumbnail.jpg',
-                previewUrl: audioUrl
-            };
-
-            // 更新播放器 UI
-            const cover = coverUrl || 'https://i.ytimg.com/img/no_thumbnail.jpg';
-            $('player-cover').src = cover;
-
-            const titleTextEl = $('player-title-text');
-            const artistTextEl = $('player-artist-text');
-
-            titleTextEl.textContent = title;
-            artistTextEl.textContent = artist;
-
-            // 更新顶部信息栏
-            $('player-cover').src = cover;
-            $('bg-album').style.backgroundImage = `url(${cover})`;
-            $('bg-album').classList.add('active');
-
-            // 设置维基百科按钮
-            const wikiBtn = $('player-wiki-btn');
-            const cleanArtistName = artist.split(/&|,|feat\.|ft\./i)[0].trim();
-            wikiBtn.style.display = 'flex';
-            wikiBtn.onclick = () => {
-                const wikiUrl = `https://zh.wikipedia.org/wiki/${encodeURIComponent(cleanArtistName)}`;
-                window.open(wikiUrl, '_blank');
-            };
-            wikiBtn.title = `查看 ${cleanArtistName} 的维基百科`;
-
-            // 设置标签推荐按钮
-            const tagBtn = $('player-tag-btn');
-            tagBtn.style.display = 'flex';
-            tagBtn.onclick = () => {
-                showCurrentSongTags();
-            };
-            tagBtn.title = '查看歌曲标签推荐';
-
-            // 检查是否需要滚动
-            const checkScroll = (el) => {
-                el.classList.remove('scroll-text');
-                el.style.transform = 'none';
-
-                const containerWidth = el.parentElement.clientWidth;
-                const textWidth = el.scrollWidth;
-
-                if (textWidth > containerWidth) {
-                    const distance = containerWidth - textWidth;
-                    const duration = Math.abs(distance) / 30 + 2;
-
-                    el.style.setProperty('--scroll-distance', `${distance}px`);
-                    el.style.setProperty('--duration', `${duration}s`);
-                    el.classList.add('scroll-text');
-                }
-            };
-
-            setTimeout(() => {
-                checkScroll(titleTextEl);
-                checkScroll(artistTextEl);
-            }, 50);
-
-            // 播放音频
-            audio.src = audioUrl;
-            audio.load(); // 加载新音频源
-            audio.play()
-                .then(() => updatePlayState(true))
-                .catch(error => {
-                    console.error('播放失败:', error);
-                    updatePlayState(false);
-
-                    // 尝试使用 YouTube URL as fallback
-                    const fallbackAudioUrl = `https://www.youtube.com/watch?v=${videoId}`;
-                    audio.src = fallbackAudioUrl;
-                    audio.load();
-                    audio.play()
-                        .then(() => updatePlayState(true))
-                        .catch(err => {
-                            console.error('YouTube 播放也失败:', err);
-                            showToast('即将准备就绪，别着急');
-                        });
-                });
-
-            // 弹幕
-            startDanmaku();
-
-            // 预加载歌词
-            $('lyrics-title').textContent = title;
-            $('lyrics-artist').textContent = artist;
-            setupWikipediaLink(artist);
-            $('lyrics-cover').src = cover;
-            $('lyrics-text').textContent = '加载中...';
-            $('lyrics-wiki').classList.remove('show');
-
-            fetchLyrics(artist, title);
-            fetchArtistWiki(artist);
-
-            // 添加到历史记录
-            HistoryManager.add({
-                trackId: videoId,
-                trackName: title,
-                artistName: artist,
-                artworkUrl100: cover
-            });
-
-            // 更新系统媒体中心控制 (Media Session API)
-            if ('mediaSession' in navigator) {
-                navigator.mediaSession.metadata = new MediaMetadata({
-                    title: title,
-                    artist: artist,
-                    album: 'YouTube Music',
-                    artwork: [
-                        { src: cover, sizes: '96x96', type: 'image/jpeg' },
-                        { src: cover, sizes: '128x128', type: 'image/jpeg' },
-                        { src: cover, sizes: '192x192', type: 'image/jpeg' },
-                        { src: cover, sizes: '256x256', type: 'image/jpeg' },
-                        { src: cover, sizes: '512x512', type: 'image/jpeg' }
-                    ]
-                });
-
-                navigator.mediaSession.setActionHandler('play', togglePlay);
-                navigator.mediaSession.setActionHandler('pause', togglePlay);
-                navigator.mediaSession.setActionHandler('previoustrack', playPrevious);
-                navigator.mediaSession.setActionHandler('nexttrack', () => playNext(false));
-            }
-
-            // 更新收藏按钮状态
-            updateFavoriteButton();
-
-            // 更新推荐标签
-            updateRecommendationTags(state.currentTrack);
-        }
-
         // 从 YouTube 搜索并播放歌曲
         async function searchAndPlayYouTubeSong(query) {
             const results = await searchYouTubeMusic(query);
@@ -3917,9 +3774,18 @@
                     if (!playerContainer) {
                         playerContainer = document.createElement('div');
                         playerContainer.id = 'youtube-player-container';
-                        playerContainer.style.display = 'none';
                         document.body.appendChild(playerContainer);
                     }
+                    
+                    // Always ensure correct styling to avoid display:none issues
+                    playerContainer.style.position = 'absolute';
+                    playerContainer.style.top = '-9999px';
+                    playerContainer.style.left = '-9999px';
+                    playerContainer.style.width = '1px';
+                    playerContainer.style.height = '1px';
+                    playerContainer.style.opacity = '0';
+                    playerContainer.style.pointerEvents = 'none';
+                    playerContainer.style.display = 'block'; // Explicitly override any display:none
 
                     // Configure player parameters
                     const playerOptions = {
