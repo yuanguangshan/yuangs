@@ -132,11 +132,31 @@
             font-size: 15px;
             outline: none;
             transition: all 0.3s ease;
+            -webkit-appearance: none;
+            -moz-appearance: textfield;
+            appearance: none;
+            /* Ensure it works properly in PWA mode */
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
         }
 
         .search-input:focus {
             border-color: var(--primary);
             background: rgba(29, 185, 84, 0.1);
+            outline: 2px solid var(--primary);
+            outline-offset: -1px;
+        }
+
+        /* Ensure the input container is also clickable */
+        .search-input-container {
+            position: relative;
+            cursor: text;
+        }
+
+        .search-input-container:focus-within {
+            z-index: 2;
         }
 
         .search-input::placeholder {
@@ -1281,7 +1301,7 @@
     <header class="header">
         <div class="search-box">
             <div class="search-input-container">
-                <input type="text" class="search-input" id="search-input" placeholder="歌手/歌曲...">
+                <input type="text" class="search-input" id="search-input" placeholder="歌手/歌曲..." inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
                 <button class="search-clear-btn" id="search-clear-btn" title="清空搜索" style="display: none;">✕</button>
             </div>
             <button class="btn btn-icon" onclick="searchMusic()" title="搜索">🔍</button>
@@ -2042,11 +2062,28 @@
             const searchClearBtn = $('search-clear-btn');
             let searchTimeout;
 
+            // Enhanced input handling for PWA mode
             searchInput.addEventListener('keypress', e => {
                 if (e.key === 'Enter') {
                     clearTimeout(searchTimeout);
                     searchMusic();
                 }
+            });
+
+            // Ensure input can be focused on mobile devices
+            searchInput.addEventListener('touchstart', () => {
+                // On touch devices, ensure the input field is focusable
+                setTimeout(() => {
+                    if (document.activeElement !== searchInput) {
+                        searchInput.focus();
+                    }
+                }, 100);
+            });
+
+            // Handle focus event to properly trigger keyboard
+            searchInput.addEventListener('focus', () => {
+                // Ensure the input remains focusable in PWA mode
+                searchInput.setAttribute('autofocus', 'true');
             });
 
             // Show/hide clear button based on input value and debounce search
@@ -2070,8 +2107,30 @@
                 clearTimeout(searchTimeout);
                 searchInput.value = '';
                 searchClearBtn.style.display = 'none';
-                searchInput.focus();
+                // Use a more aggressive focus method for PWA
+                setTimeout(() => {
+                    searchInput.focus();
+                    if (typeof searchInput.select === 'function') {
+                        searchInput.select();
+                    }
+                }, 50);
             });
+
+            // Add click handler to explicitly focus the search input
+            const searchInputContainer = document.querySelector('.search-input-container');
+            if (searchInputContainer) {
+                searchInputContainer.addEventListener('click', (e) => {
+                    if (e.target === searchInputContainer || e.target.closest('.search-input-container')) {
+                        // Prevent default to ensure focus works properly
+                        e.preventDefault();
+                        e.stopPropagation();
+                        // Focus the input with a slight delay to ensure it works in PWA
+                        setTimeout(() => {
+                            searchInput.focus();
+                        }, 100);
+                    }
+                });
+            }
 
             // 双击封面打开歌词
             $('player-cover').addEventListener('dblclick', openLyrics);
