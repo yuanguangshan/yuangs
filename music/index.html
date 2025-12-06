@@ -4,13 +4,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>广山音乐</title>
 
-    <!-- PWA核心配置 -->
+    <!-- PWA  核心配置 -->
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#0a0a0a">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="广山音乐">
 
@@ -41,6 +42,16 @@
             padding: 0;
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Ensure input elements work properly in PWA */
+        input, textarea, select {
+            -webkit-user-select: auto;
+            -moz-user-select: auto;
+            -ms-user-select: auto;
+            user-select: auto;
+            -webkit-touch-callout: default;
+            -webkit-tap-highlight-color: rgba(0,0,0,0.1);
         }
 
         /* 自定义滚动条 */
@@ -128,25 +139,49 @@
             border: 1px solid var(--glass-border);
             background: var(--glass);
             color: var(--text);
-            font-size: 15px;
+            font-size: 16px;
+            /* Minimum 16px to prevent iOS auto-zoom */
             outline: none;
             transition: all 0.3s ease;
+            -webkit-appearance: none;
+            -moz-appearance: textfield;
+            appearance: none;
+            /* Ensure it works properly in PWA mode */
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
+            /* Add important properties for mobile input */
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            /* Prevent double-tap zoom, ensure keyboard opens */
+            cursor: text;
         }
 
         .search-input:focus {
             border-color: var(--primary);
             background: rgba(29, 185, 84, 0.1);
+            outline: 2px solid var(--primary);
+            outline-offset: -1px;
+        }
+
+        /* Ensure the input container is also clickable */
+        .search-input-container {
+            position: relative;
+            cursor: text;
+            flex: 1;
+            min-width: 120px;
+            max-width: 300px;
+        }
+
+        .search-input-container:focus-within {
+            z-index: 2;
         }
 
         .search-input::placeholder {
             color: var(--text-secondary);
-        }
-
-        .search-input-container {
-            position: relative;
-            flex: 1;
-            min-width: 120px;
-            max-width: 300px;
         }
 
         .search-clear-btn {
@@ -262,6 +297,19 @@
 
         .song-card:hover .song-options {
             opacity: 1;
+        }
+
+        .song-duration {
+            position: absolute;
+            top: 8px;
+            right: 36px; /* 在选项按钮的左侧，避免重叠 */
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            z-index: 5;
+            pointer-events: none;
         }
 
         .song-card:hover {
@@ -400,6 +448,27 @@
             padding: 0 16px calc(16px + var(--safe-bottom));
             background: linear-gradient(to top, rgba(10, 10, 10, 1) 0%, rgba(10, 10, 10, 0.95) 50%, transparent 100%);
             pointer-events: none;
+        }
+
+        /* 嵌入式播放器模式 */
+        .player.embedded {
+            position: relative;
+            bottom: auto;
+            top: 0;
+            padding: 20px;
+            margin: 0 auto;
+            max-width: 400px; /* 设置最大宽度，适合嵌入式播放器 */
+            background: var(--bg);
+        }
+
+        .player.embedded .player-card {
+            border-radius: 16px;
+            margin: 0 auto;
+        }
+
+        body.embedded-mode {
+            background: var(--bg);
+            overflow: hidden; /* 隐藏滚动条 */
         }
 
         .player-card {
@@ -1245,11 +1314,11 @@
     <!-- 顶部搜索 -->
     <header class="header">
         <div class="search-box">
-            <div class="search-input-container">
-                <input type="text" class="search-input" id="search-input" placeholder="歌手/歌曲...">
+            <div class="search-input-container" id="search-input-container" style="display: none;">
+                <input type="search" class="search-input" id="search-input" placeholder="歌手/歌曲..." inputmode="text" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" required>
                 <button class="search-clear-btn" id="search-clear-btn" title="清空搜索" style="display: none;">✕</button>
             </div>
-            <button class="btn btn-icon" onclick="searchMusic()" title="搜索">🔍</button>
+            <button class="btn btn-icon" title="搜索" id="search-toggle-btn">🔍</button>
             <button class="btn btn-icon" onclick="searchByWeather()" title="看天听歌">🌤️</button>
             <button class="btn btn-icon" onclick="smartRandomSearch()" title="智能探索">🎲</button>
             <button class="btn btn-icon" onclick="openHistory()" title="播放历史">📖</button>
@@ -1389,8 +1458,8 @@
 
     <audio id="audio" crossorigin="anonymous"></audio>
 
-    <!-- YouTube Iframe API -->
-    <script src="https://www.youtube.com/iframe_api"></script>
+    <!-- YouTube Player Manager -->
+    <script src="YouTubePlayerManager.js"></script>
 
     <script>
         // 状态管理
@@ -1659,6 +1728,36 @@
         const $ = id => document.getElementById(id);
         const audio = $('audio');
 
+        // 绑定事件
+        $('search-toggle-btn').addEventListener('click', (e) => toggleSearchInput(e));
+        $('search-input-container').addEventListener('click', () => {
+            setTimeout(() => $('search-input').focus(), 150);
+        });
+
+        // 切换搜索框可见性
+        function toggleSearchInput(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            const searchContainer = $('search-input-container');
+            const searchInput = $('search-input');
+            const searchToggleBtn = $('search-toggle-btn');
+            const isVisible = searchContainer.style.display !== 'none';
+
+            if (isVisible) {
+                searchContainer.style.display = 'none';
+                searchToggleBtn.title = '搜索';
+            } else {
+                searchContainer.style.display = 'block';
+                setTimeout(() => {
+                    searchInput.focus();
+                }, 150); // 增加延迟
+                searchToggleBtn.title = '关闭搜索';
+            }
+        }
+
+
         // 层次化音乐标签系统
         const musicTags = {
             // 一级分类：音乐属性
@@ -1921,11 +2020,94 @@
 
         // 初始化
         document.addEventListener('DOMContentLoaded', () => {
-            randomSearch();
+            // 检查URL参数，如果包含youtube_embed，则显示嵌入式播放器
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('youtube_embed') === 'true') {
+                // 显示嵌入式播放器
+                const videoId = urlParams.get('video_id');
+                const title = urlParams.get('title') || 'Unknown Title';
+                const artist = urlParams.get('artist') || 'Unknown Artist';
+
+                if (videoId) {
+                    // 添加嵌入式模式类到body
+                    document.body.classList.add('embedded-mode');
+                    // 隐藏不必要的UI元素
+                    document.querySelector('.header').style.display = 'none';
+                    document.querySelector('.content').style.display = 'none';
+                    const playerElement = document.querySelector('.player');
+                    playerElement.style.display = 'block';
+                    playerElement.classList.add('embedded'); // 添加嵌入式样式类
+                    document.querySelector('.bg-gradient').style.display = 'none';
+                    document.querySelector('.bg-album').style.display = 'none';
+                    $('danmaku').style.display = 'none';
+
+                    // 初始化播放器UI
+                    const cover = 'https://i.ytimg.com/img/no_thumbnail.jpg'; // 默认封面
+                    $('player-cover').src = cover;
+
+                    const titleTextEl = $('player-title-text');
+                    const artistTextEl = $('player-artist-text');
+
+                    titleTextEl.textContent = title;
+                    artistTextEl.textContent = artist;
+
+                    // 设置维基百科按钮
+                    const wikiBtn = $('player-wiki-btn');
+                    const cleanArtistName = artist.split(/&|,|feat\.|ft\./i)[0].trim();
+                    wikiBtn.style.display = 'flex';
+                    wikiBtn.onclick = () => {
+                        const wikiUrl = `https://zh.wikipedia.org/wiki/${encodeURIComponent(cleanArtistName)}`;
+                        window.open(wikiUrl, '_blank');
+                    };
+                    wikiBtn.title = `查看 ${cleanArtistName} 的维基百科`;
+
+                    // 设置标签推荐按钮
+                    const tagBtn = $('player-tag-btn');
+                    tagBtn.style.display = 'flex';
+                    tagBtn.onclick = () => {
+                        showCurrentSongTags();
+                    };
+                    tagBtn.title = '查看歌曲标签推荐';
+
+                    // 检查是否需要滚动
+                    const checkScroll = (el) => {
+                        el.classList.remove('scroll-text');
+                        el.style.transform = 'none';
+
+                        const containerWidth = el.parentElement.clientWidth;
+                        const textWidth = el.scrollWidth;
+
+                        if (textWidth > containerWidth) {
+                            const distance = containerWidth - textWidth;
+                            const duration = Math.abs(distance) / 30 + 2;
+
+                            el.style.setProperty('--scroll-distance', `${distance}px`);
+                            el.style.setProperty('--duration', `${duration}s`);
+                            el.classList.add('scroll-text');
+                        }
+                    };
+
+                    setTimeout(() => {
+                        checkScroll(titleTextEl);
+                        checkScroll(artistTextEl);
+                    }, 50);
+
+                    // 播放YouTube歌曲
+                    playYouTubeSong(videoId, title, artist, cover);
+                }
+            } else {
+                // 正常模式：执行搜索并显示界面
+                randomSearch();
+                // 确保body不包含嵌入式模式类
+                document.body.classList.remove('embedded-mode');
+            }
+
             const searchInput = $('search-input');
             const searchClearBtn = $('search-clear-btn');
             let searchTimeout;
 
+            // Remove problematic event listeners and simplify focus handling
+            // Standard input handling for PWA mode
             searchInput.addEventListener('keypress', e => {
                 if (e.key === 'Enter') {
                     clearTimeout(searchTimeout);
@@ -1933,7 +2115,13 @@
                 }
             });
 
-            // Show/hide clear button based on input value and debounce search
+            // Handle focus event properly without forcing focus
+            searchInput.addEventListener('focus', () => {
+                // Do not prevent default or stop propagation here as it interferes with input method
+                console.log('Search input focused');
+            });
+
+            // Handle input event with debounce
             searchInput.addEventListener('input', () => {
                 searchClearBtn.style.display = searchInput.value ? 'flex' : 'none';
 
@@ -1954,8 +2142,28 @@
                 clearTimeout(searchTimeout);
                 searchInput.value = '';
                 searchClearBtn.style.display = 'none';
-                searchInput.focus();
+                // Simply focus input without interfering with input methods
+                setTimeout(() => {
+                    searchInput.focus();
+                    if (typeof searchInput.select === 'function') {
+                        searchInput.select();
+                    }
+                }, 50);
             });
+
+            // Simplified click handler on container
+            const searchInputContainer = document.querySelector('.search-input-container');
+            if (searchInputContainer) {
+                searchInputContainer.addEventListener('click', (e) => {
+                    // Do not prevent default or stop propagation to allow proper input method handling
+                    if (e.target === searchInputContainer || e.target.closest('.search-input-container')) {
+                        // Just ensure the input gets focus naturally
+                        setTimeout(() => {
+                            searchInput.focus();
+                        }, 0);
+                    }
+                });
+            }
 
             // 双击封面打开歌词
             $('player-cover').addEventListener('dblclick', openLyrics);
@@ -2093,7 +2301,7 @@
                     const youTubeRes = await fetch(`https://api.yuangs.cc/youtubeapi/search/song?q=${encodeURIComponent(query)}&limit=48`);
                     if (youTubeRes.ok) {
                         const youTubeJson = await youTubeRes.json();
-                        console.log('YouTube API 响应:', youTubeJson); // Debug log
+                        // console.log('YouTube API 响应:', youTubeJson); // Debug log
 
                         // Check if response has the expected structure
                         if (youTubeJson && youTubeJson.data) {
@@ -2195,6 +2403,7 @@
                                     <div class="play-overlay-btn">▶</div>
                                 </div>
                                 ${song.trackId ? `<div class="song-options" onclick="event.stopPropagation(); toggleOptionsMenu(event, '${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}', '${coverUrl}', ${isYouTube})">⋯</div>` : ''}
+                                ${isYouTube && song.duration ? `<div class="song-duration">${escapeHtml(song.duration)}</div>` : ''}
                             </div>
                             <div class="song-title">${isYouTube ? '<span style="color: #ff6b6b;">▶</span> ' : ''}${escapeHtml(song.trackName)}</div>
                             <div class="song-artist">${escapeHtml(song.artistName)}</div>
@@ -2206,7 +2415,7 @@
             // 根据URL参数决定渲染模式
             if (isAppleOnly || isYouTubeOnly) {
                 // 只显示一个来源，但让网格布局仍然显示歌曲为多列
-                const sourceName = isAppleOnly ? 'iTunes Music' : 'YouTube Music';
+                const sourceName = isAppleOnly ? 'Apple Music' : 'YouTube Music';
                 const songsToDisplay = isAppleOnly ? iTunesSongs : youTubeSongs;
 
                 $('results').innerHTML = `
@@ -2272,6 +2481,7 @@
                                 <div class="play-overlay-btn">▶</div>
                             </div>
                             ${song.trackId ? `<div class="song-options" onclick="event.stopPropagation(); toggleOptionsMenu(event, '${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}', '${coverUrl}', ${isYouTube})">⋯</div>` : ''}
+                            ${isYouTube && song.duration ? `<div class="song-duration">${escapeHtml(song.duration)}</div>` : ''}
                         </div>
                         <div class="song-title">${isYouTube ? '<span style="color: #ff6b6b;">▶</span> ' : ''}${escapeHtml(song.trackName)}</div>
                         <div class="song-artist">${escapeHtml(song.artistName)}</div>
@@ -2537,149 +2747,6 @@
             }
         }
 
-        // 播放 YouTube 完整歌曲
-        async function playYouTubeSong(videoId, title, artist, coverUrl = '') {
-            if (!videoId) return;
-
-            // 创建 YouTube 音频流 URL
-            const audioUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
-            // 更新播放状态
-            state.currentTrack = {
-                trackId: videoId,
-                trackName: title,
-                artistName: artist,
-                artworkUrl100: coverUrl || 'https://i.ytimg.com/img/no_thumbnail.jpg',
-                previewUrl: audioUrl
-            };
-
-            // 更新播放器 UI
-            const cover = coverUrl || 'https://i.ytimg.com/img/no_thumbnail.jpg';
-            $('player-cover').src = cover;
-
-            const titleTextEl = $('player-title-text');
-            const artistTextEl = $('player-artist-text');
-
-            titleTextEl.textContent = title;
-            artistTextEl.textContent = artist;
-
-            // 更新顶部信息栏
-            $('player-cover').src = cover;
-            $('bg-album').style.backgroundImage = `url(${cover})`;
-            $('bg-album').classList.add('active');
-
-            // 设置维基百科按钮
-            const wikiBtn = $('player-wiki-btn');
-            const cleanArtistName = artist.split(/&|,|feat\.|ft\./i)[0].trim();
-            wikiBtn.style.display = 'flex';
-            wikiBtn.onclick = () => {
-                const wikiUrl = `https://zh.wikipedia.org/wiki/${encodeURIComponent(cleanArtistName)}`;
-                window.open(wikiUrl, '_blank');
-            };
-            wikiBtn.title = `查看 ${cleanArtistName} 的维基百科`;
-
-            // 设置标签推荐按钮
-            const tagBtn = $('player-tag-btn');
-            tagBtn.style.display = 'flex';
-            tagBtn.onclick = () => {
-                showCurrentSongTags();
-            };
-            tagBtn.title = '查看歌曲标签推荐';
-
-            // 检查是否需要滚动
-            const checkScroll = (el) => {
-                el.classList.remove('scroll-text');
-                el.style.transform = 'none';
-
-                const containerWidth = el.parentElement.clientWidth;
-                const textWidth = el.scrollWidth;
-
-                if (textWidth > containerWidth) {
-                    const distance = containerWidth - textWidth;
-                    const duration = Math.abs(distance) / 30 + 2;
-
-                    el.style.setProperty('--scroll-distance', `${distance}px`);
-                    el.style.setProperty('--duration', `${duration}s`);
-                    el.classList.add('scroll-text');
-                }
-            };
-
-            setTimeout(() => {
-                checkScroll(titleTextEl);
-                checkScroll(artistTextEl);
-            }, 50);
-
-            // 播放音频
-            audio.src = audioUrl;
-            audio.load(); // 加载新音频源
-            audio.play()
-                .then(() => updatePlayState(true))
-                .catch(error => {
-                    console.error('播放失败:', error);
-                    updatePlayState(false);
-
-                    // 尝试使用 YouTube URL as fallback
-                    const fallbackAudioUrl = `https://www.youtube.com/watch?v=${videoId}`;
-                    audio.src = fallbackAudioUrl;
-                    audio.load();
-                    audio.play()
-                        .then(() => updatePlayState(true))
-                        .catch(err => {
-                            console.error('YouTube 播放也失败:', err);
-                            showToast('即将准备就绪，别着急');
-                        });
-                });
-
-            // 弹幕
-            startDanmaku();
-
-            // 预加载歌词
-            $('lyrics-title').textContent = title;
-            $('lyrics-artist').textContent = artist;
-            setupWikipediaLink(artist);
-            $('lyrics-cover').src = cover;
-            $('lyrics-text').textContent = '加载中...';
-            $('lyrics-wiki').classList.remove('show');
-
-            fetchLyrics(artist, title);
-            fetchArtistWiki(artist);
-
-            // 添加到历史记录
-            HistoryManager.add({
-                trackId: videoId,
-                trackName: title,
-                artistName: artist,
-                artworkUrl100: cover
-            });
-
-            // 更新系统媒体中心控制 (Media Session API)
-            if ('mediaSession' in navigator) {
-                navigator.mediaSession.metadata = new MediaMetadata({
-                    title: title,
-                    artist: artist,
-                    album: 'YouTube Music',
-                    artwork: [
-                        { src: cover, sizes: '96x96', type: 'image/jpeg' },
-                        { src: cover, sizes: '128x128', type: 'image/jpeg' },
-                        { src: cover, sizes: '192x192', type: 'image/jpeg' },
-                        { src: cover, sizes: '256x256', type: 'image/jpeg' },
-                        { src: cover, sizes: '512x512', type: 'image/jpeg' }
-                    ]
-                });
-
-                navigator.mediaSession.setActionHandler('play', togglePlay);
-                navigator.mediaSession.setActionHandler('pause', togglePlay);
-                navigator.mediaSession.setActionHandler('previoustrack', playPrevious);
-                navigator.mediaSession.setActionHandler('nexttrack', () => playNext(false));
-            }
-
-            // 更新收藏按钮状态
-            updateFavoriteButton();
-
-            // 更新推荐标签
-            updateRecommendationTags(state.currentTrack);
-        }
-
         // 从 YouTube 搜索并播放歌曲
         async function searchAndPlayYouTubeSong(query) {
             const results = await searchYouTubeMusic(query);
@@ -2883,9 +2950,9 @@
         function playNextForYouTube() {
             if (state.playMode === 'single') {
                 // 单曲循环，重新播放当前歌曲
-                if (state.youtubePlayer) {
-                    state.youtubePlayer.seekTo(0);
-                    state.youtubePlayer.playVideo();
+                if (youtubePlayerManager.getPlayer()) {
+                    youtubePlayerManager.seekTo(0);
+                    youtubePlayerManager.playVideo();
                 }
                 return;
             }
@@ -3000,10 +3067,10 @@
         // 为 YouTube 播放器创建定时器来更新进度 - 使用更频繁的更新
         // Using a more robust interval that can continue in background
         let youtubeProgressInterval = setInterval(() => {
-            if (state.youtubePlayer && state.isYouTubePlaying) {
+            if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
                 try {
-                    const currentTime = state.youtubePlayer.getCurrentTime();
-                    const duration = state.youtubePlayer.getDuration();
+                    const currentTime = youtubePlayerManager.getCurrentTime();
+                    const duration = youtubePlayerManager.getDuration();
 
                     if (!isNaN(duration) && !isNaN(currentTime) && duration > 0) {
                         const pct = (currentTime / duration) * 100;
@@ -3028,6 +3095,55 @@
 
         // Store the interval ID so we can clear it if needed
         state.youtubeProgressInterval = youtubeProgressInterval;
+
+        // Additional progress update function specifically for PWA compatibility
+        let pwaProgressInterval = null;
+
+        function startPWAProgressUpdates() {
+            if (pwaProgressInterval) {
+                clearInterval(pwaProgressInterval);
+            }
+
+            pwaProgressInterval = setInterval(() => {
+                if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
+                    updateYouTubeProgress();
+                }
+            }, 800); // Slightly longer than the main interval to avoid conflicts
+        }
+
+        function stopPWAProgressUpdates() {
+            if (pwaProgressInterval) {
+                clearInterval(pwaProgressInterval);
+                pwaProgressInterval = null;
+            }
+        }
+
+        function updateYouTubeProgress() {
+            if (youtubePlayerManager.getPlayer()) {
+                try {
+                    const currentTime = youtubePlayerManager.getCurrentTime();
+                    const duration = youtubePlayerManager.getDuration();
+
+                    if (!isNaN(duration) && !isNaN(currentTime) && duration > 0) {
+                        const pct = (currentTime / duration) * 100;
+                        $('progress-fill').style.width = pct + '%';
+                        $('current-time').textContent = formatTime(currentTime);
+                        $('total-time').textContent = formatTime(duration);
+
+                        // Update media session position state for background playback controls
+                        if ('setPositionState' in navigator.mediaSession) {
+                            navigator.mediaSession.setPositionState({
+                                duration: duration,
+                                playbackRate: 1.0,
+                                position: currentTime
+                            });
+                        }
+                    }
+                } catch (e) {
+                    // 如果 YouTube 播放器还没准备好，忽略错误
+                }
+            }
+        }
 
         // 停止弹幕系统
         function stopDanmaku() {
@@ -3079,7 +3195,7 @@
                 // Apple 设备：尝试打开 App
                 const startTime = Date.now();
 
-                // 使用 visibilitychange 检测是否成功跳转到 App
+                // 使用 visibilitychange 检测是否成功跳转到 App 
                 const handleVisibilityChange = () => {
                     if (document.hidden) {
                         // 页面被隐藏，说明成功打开了 App
@@ -3161,56 +3277,50 @@
             }
         }
 
-        // 打开 YouTube 歌曲在 YouTube 应用或网页中
-        function openYouTubeApp(videoId, trackName, artistName) {
-            const youTubeWebUrl = `https://www.youtube.com/watch?v=${videoId}`; // YouTube web URL
-            const youTubeAppUrl = `vnd.youtube:${videoId}`; // YouTube app scheme (iOS)
-            const youTubeAppAndroid = `youtube://watch?v=${videoId}`; // YouTube app scheme (Android)
+            // 打开 YouTube 歌曲在 YouTube 应用或网页中
+            function openYouTubeApp(videoId, trackName, artistName) {
+                const webUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        // Android Intent (Chrome 推荐方式)
+        // S.browser_fallback_url 指定了如果没安装 App 跳转的地址
+        const androidIntent = `intent://www.youtube.com/watch?v=${videoId}#Intent;package=com.google.android.youtube;scheme=https;S.browser_fallback_url=${encodeURIComponent(webUrl)};end`;
+        // iOS Scheme (不推荐，推荐直接用 webUrl，但在某些场景可用)
+        const iosScheme = `youtube://watch?v=${videoId}`;
 
-            // 检测设备类型
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-            const isAndroid = /Android/.test(navigator.userAgent);
-            const isMobile = isIOS || isAndroid;
+        // 1. 更精准的设备检测
+        const u = navigator.userAgent;
+        const isAndroid = u.indexOf('Android') > -1 || u.indexOf('Adr') > -1;
+        // 兼容 iPad Desktop Mode 的检测
+        const isIOS = !!u.match(/\(i[^;]+;( U;)? CPU.+Mac OS X/) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-            if (isMobile) {
-                // 移动设备：尝试打开 YouTube App
-                const startTime = Date.now();
+        showToast(`正在打开 "${trackName}" - ${artistName}`);
 
-                // 选择适合当前平台的 YouTube app scheme
-                let appUrl = youTubeAppUrl; // Default to iOS scheme
-                if (isAndroid) {
-                    appUrl = youTubeAppAndroid; // Use Android scheme
-                }
-
-                // 使用 iframe 方式尝试打开，这样不会被拦截
-                const iframe = document.createElement('iframe');
-                iframe.style.display = 'none';
-                iframe.src = appUrl;
-                document.body.appendChild(iframe);
-
-                // 设置降级定时器
-                setTimeout(() => {
-                    document.body.removeChild(iframe);
-
-                    // 如果还在当前页面，尝试打开网页版
-                    if (Date.now() - startTime < 2000) {
-                        window.open(youTubeWebUrl, '_blank');
-                        showToast(`正在打开 "${trackName}" - ${artistName}`);
-                    }
-                }, 1500);
-
-            } else {
-                // 桌面设备：直接打开网页版
-                window.open(youTubeWebUrl, '_blank');
-                showToast(`正在打开 "${trackName}" - ${artistName}`);
-            }
+        if (isAndroid) {
+            // Android 最佳实践: 使用 Intent
+            // 如果已安装 App，系统直接打开；没安装，Chrome 会自动处理 fallback 到网页
+            window.location.href = androidIntent;
+        } else if (isIOS) {
+            // iOS 最佳实践: 直接访问 Universal Link (HTTPS)
+            // iOS 系统会自动拦截这个链接并询问是否在 App 中打开
+            // 强行用 Scheme 往往体验不好，且很难准确判断是否安装
+            window.location.href = webUrl;
+            
+            // --- 如果你非要强行尝试 Scheme (不推荐) ---
+            // window.location.href = iosScheme; 
+            // setTimeout(() => {
+            //    // iOS 上不能在 timeout 里 window.open，只能改变 location
+            //    window.location.href = webUrl; 
+            // }, 2000);
+            // ----------------------------------------
+        } else {
+            // 桌面端
+            window.open(webUrl, '_blank');
         }
-
+    }
         // 打开 YouTube 歌曲在 YouTube Music 应用或网页中
         function openYouTubeMusic(videoId, trackName, artistName) {
             const webUrl = `https://music.youtube.com/watch?v=${videoId}`;
-            const ytmusicUrl = `ytmusic://music.youtube.com/watch?v=${videoId}`; // YouTube Music app scheme
-            const youtubemusicUrl = `youtubemusic://music.youtube.com/watch?v=${videoId}`; // Alternative scheme
+            const ytmusicUrl = `https://www.youtube.com/watch?v=${videoId}`; // YouTube Music app scheme
+            const youtubemusicUrl = `https://www.youtube.com/watch?v=${videoId}`; // Alternative scheme
 
             // 检测设备类型
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -3304,6 +3414,9 @@
                     </div>
                     <div class="option-item" onclick="openYouTubeApp('${trackId}', '${trackName}', '${artistName}'); this.closest('.song-options-menu').remove();">
                         <span>▶️ 打开 YouTube 应用</span>
+                    </div>
+                    <div class="option-item" onclick="openJumpLink('${escapeHtml(trackName)}', '${escapeHtml(artistName)}'); this.closest('.song-options-menu').remove();">
+                        <span>🔗 跳转链接</span>
                     </div>
                 `;
             } else {
@@ -3484,204 +3597,48 @@
             document.body.appendChild(modal);
         }
 
-        // YouTube Player functions
-        function onYouTubeIframeAPIReady() {
-            console.log('YouTube Iframe API ready');
-        }
+        // Initialize YouTube player manager
+        const youtubePlayerManager = new YouTubePlayerManager();
 
-        // Initialize YouTube player with better error handling and fallback
-        function initYouTubePlayer(videoId) {
-            return new Promise((resolve, reject) => {
-                // Initialize background audio context before creating player
-                aggressiveAudioContextInit();
+        // Set up event listeners for YouTube player events
+        document.addEventListener('youtubePlayerReady', (e) => {
+            console.log('Event caught: Player is ready.');
+            // Update UI and initialize PWA progress updates
+            updatePlayState(true);
+        });
 
-                // Create container for YouTube player if it doesn't exist
-                let playerContainer = document.getElementById('youtube-player-container');
-                if (!playerContainer) {
-                    playerContainer = document.createElement('div');
-                    playerContainer.id = 'youtube-player-container';
-                    playerContainer.style.display = 'none';
-                    document.body.appendChild(playerContainer);
-                }
+        document.addEventListener('youtubePlayerPlaying', (e) => {
+            console.log('Event caught: Player is playing.');
+            // Update global state
+            state.isYouTubePlaying = true;
+            updatePlayState(true);
+            // Start PWA progress updates
+            startPWAProgressUpdates();
+        });
 
-                // Prepare player parameters with better audio settings
-                const playerVars = {
-                    'playsinline': 1,
-                    'controls': 0,  // Hide controls to play audio only
-                    'disablekb': 1, // Disable keyboard controls
-                    'fs': 0,       // Disable fullscreen
-                    'iv_load_policy': 3, // Disable annotations
-                    'modestbranding': 1, // Reduce YouTube branding
-                    'rel': 0, // Don't show related videos at the end
-                    'autoplay': 0, // Don't autoplay, we'll control it
-                    'mute': 0, // Don't mute initially
-                    'enablejsapi': 1, // Enable API
-                    'origin': window.location.origin, // Important for security policy
-                    'widgetid': 'youtube-player'
-                };
+        document.addEventListener('youtubePlayerPaused', (e) => {
+            console.log('Event caught: Player is paused.');
+            state.isYouTubePlaying = false;
+            updatePlayState(false);
+            stopPWAProgressUpdates();
+        });
 
-                try {
-                    // Create the YouTube player
-                    const player = new YT.Player('youtube-player-container', {
-                        videoId: videoId,
-                        playerVars: playerVars,
-                        events: {
-                            'onReady': function (event) {
-                                console.log('YouTube player ready');
-                                // Ensure audio context is running when player is ready
-                                if (backgroundAudioContext) {
-                                    if (backgroundAudioContext.state === 'suspended') {
-                                        backgroundAudioContext.resume().catch(err => {
-                                            console.warn('Could not resume audio context:', err);
-                                        });
-                                    }
-                                }
+        document.addEventListener('youtubePlayerEnded', (e) => {
+            console.log('Event caught: Player has ended.');
+            state.isYouTubePlaying = false;
+            updatePlayState(false);
+            stopPWAProgressUpdates();
+            setTimeout(playNextForYouTube, 300);
+        });
 
-                                // Set initial position state with duration for MediaSession API
-                                // This ensures duration displays correctly in UI and lock screen
-                                try {
-                                    // Wait a bit to ensure duration is available
-                                    setTimeout(() => {
-                                        const duration = event.target.getDuration();
-                                        if (!isNaN(duration) && duration > 0) {
-                                            $('total-time').textContent = formatTime(duration);
-
-                                            if ('setPositionState' in navigator.mediaSession) {
-                                                navigator.mediaSession.setPositionState({
-                                                    duration: duration,
-                                                    playbackRate: 1.0,
-                                                    position: 0
-                                                });
-                                            }
-                                        }
-                                    }, 500); // Delay to ensure duration is loaded
-                                } catch (e) {
-                                    console.log('Could not get duration on ready:', e);
-                                }
-
-                                // Autoplay if requested - make sure to call this directly in response to user interaction
-                                if (state.shouldAutoplayYouTube) {
-                                    // Try to play immediately, but handle potential autoplay policy restrictions
-                                    requestAudioPlayback().then(() => {
-                                        // Try to play with error handling
-                                        try {
-                                            event.target.playVideo();
-                                            state.isYouTubePlaying = true;
-                                            updatePlayState(true);
-                                        } catch (playError) {
-                                            console.warn('Direct play failed, attempting alternative:', playError);
-                                            // Fallback: try to play after a microtask
-                                            Promise.resolve().then(() => {
-                                                try {
-                                                    event.target.playVideo();
-                                                    state.isYouTubePlaying = true;
-                                                    updatePlayState(true);
-                                                } catch (retryError) {
-                                                    console.error('Retry play also failed:', retryError);
-                                                    // Show user a message about needing to interact again
-                                                    showToast('需要再次点击播放按钮开始播放');
-                                                }
-                                            });
-                                        }
-                                        state.shouldAutoplayYouTube = false;
-                                    }).catch(audioError => {
-                                        console.warn('Audio context play failed:', audioError);
-                                        // Try to play anyway, as it might work from user interaction
-                                        try {
-                                            event.target.playVideo();
-                                            state.isYouTubePlaying = true;
-                                            updatePlayState(true);
-                                        } catch (playError) {
-                                            console.error('Playback failed:', playError);
-                                            // Show user a message about needing to interact again
-                                            showToast('需要再次点击播放按钮开始播放');
-                                        }
-                                        state.shouldAutoplayYouTube = false;
-                                    });
-                                }
-
-                                resolve(event.target);
-                            },
-                            'onStateChange': function (event) {
-                                console.log('YouTube player state:', event.data);
-                                // Update our state based on YouTube player state
-                                if (event.data === YT.PlayerState.PLAYING) {
-                                    state.isYouTubePlaying = true;
-                                    updatePlayState(true);
-                                    // Ensure audio context is running
-                                    if (backgroundAudioContext && backgroundAudioContext.state === 'suspended') {
-                                        backgroundAudioContext.resume().catch(err => {
-                                            console.warn('Could not resume audio context in PLAYING state:', err);
-                                        });
-                                    }
-                                } else if (event.data === YT.PlayerState.PAUSED) {
-                                    state.isYouTubePlaying = false;
-                                    updatePlayState(false);
-                                } else if (event.data === YT.PlayerState.ENDED) {
-                                    // 当 YouTube 歌曲播放结束时
-                                    state.isYouTubePlaying = false;
-                                    updatePlayState(false);
-                                    // 延迟一点时间再播放下一首，确保状态更新完成
-                                    setTimeout(() => {
-                                        playNextForYouTube();
-                                    }, 300);
-                                } else if (event.data === YT.PlayerState.BUFFERING) {
-                                    // Ensure audio context remains active during buffering
-                                    if (backgroundAudioContext && backgroundAudioContext.state === 'suspended') {
-                                        backgroundAudioContext.resume().catch(err => {
-                                            console.warn('Could not resume audio context in BUFFERING state:', err);
-                                        });
-                                    }
-                                } else if (event.data === YT.PlayerState.CUED) {
-                                    // Video is cued and ready to play - try to play if autoplay was requested
-                                    if (state.shouldAutoplayYouTube) {
-                                        requestAudioPlayback().then(() => {
-                                            try {
-                                                event.target.playVideo();
-                                                state.isYouTubePlaying = true;
-                                                updatePlayState(true);
-                                            } catch (e) {
-                                                console.warn('Could not play from cued state:', e);
-                                            }
-                                            state.shouldAutoplayYouTube = false;
-                                        });
-                                    }
-                                }
-                            },
-                            'onError': function (error) {
-                                console.error('YouTube player error:', error);
-
-                                // Try alternative video ID format or fallback
-                                if (error.data === 100 || error.data === 101 || error.data === 150) {
-                                    // Video not found or not allowed to play - try alternative approach
-                                    console.log('YouTube video issue, attempting fallback...');
-
-                                    // Create a backup method using direct YouTube URL for audio
-                                    const fallbackAudio = $('audio');
-                                    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
-                                    // Try to load this URL (this might work in some browsers)
-                                    // Note: This is a fallback and may not work due to CORS restrictions
-
-                                    // Return error for now, but keep trying to resolve with available player
-                                    reject(error);
-                                } else {
-                                    // Other errors - might be recoverable
-                                    console.log('YouTube player error, but continuing:', error);
-                                    // Don't reject for other errors, as the player might still work
-                                    // Resolve with the player instance anyway
-                                    resolve(event.target);
-                                }
-                            }
-                        }
-                    });
-                } catch (creationError) {
-                    console.error('Error creating YouTube player:', creationError);
-                    // Try fallback approach
-                    reject(creationError);
-                }
-            });
-        }
+        document.addEventListener('youtubePlayerError', (e) => {
+            console.log('Event caught: Player error.', e.detail.error);
+            // Handle error appropriately
+            state.isYouTubePlaying = false;
+            updatePlayState(false);
+            stopPWAProgressUpdates();
+            showToast('YouTube 播放出现错误，请稍后重试');
+        });
 
         // Update the playYouTubeSong function to use YouTube player
         async function playYouTubeSong(videoId, title, artist, coverUrl = '') {
@@ -3804,85 +3761,82 @@
                 // Update recommendation tags
                 updateRecommendationTags(state.currentTrack);
 
-                // Initialize or update YouTube player
-                if (!state.youtubePlayer) {
-                    // Set flag to autoplay when ready
-                    state.shouldAutoplayYouTube = true;
-                    try {
-                        state.youtubePlayer = await initYouTubePlayer(videoId);
-                    } catch (error) {
-                        console.error('YouTube player initialization failed:', error);
-                        showToast('YouTube 播放器初始化失败，正在重试...');
-                        // Retry with a slight delay
-                        setTimeout(async () => {
-                            try {
-                                state.youtubePlayer = await initYouTubePlayer(videoId);
-                                // Try to play after successful initialization
-                                if (state.shouldAutoplayYouTube && state.youtubePlayer) {
-                                    requestAudioPlayback().then(() => {
-                                        state.youtubePlayer.playVideo();
-                                        state.isYouTubePlaying = true;
-                                        updatePlayState(true);
-                                        state.shouldAutoplayYouTube = false;
-                                    });
-                                }
-                            } catch (retryError) {
-                                console.error('YouTube player retry also failed:', retryError);
-                                showToast('即将准备就绪，别着急');
-                            }
-                        }, 500);
-                    }
-                } else {
-                    state.youtubePlayer.loadVideoById(videoId);
-                    // For already-initialized player, try to play immediately after loading
-                    // Wait a bit for the video to load, then play it
-                    setTimeout(() => {
-                        if (state.youtubePlayer) {
-                            // Try to play the video directly from this context which should still be user-initiated
-                            requestAudioPlayback().then(() => {
-                                state.youtubePlayer.playVideo();
-                                state.isYouTubePlaying = true;
-                                updatePlayState(true);
-                            }).catch(() => {
-                                // If requestAudioPlayback fails, try to play anyway
-                                // Show helpful message for first-time playback
-                                const playerState = state.youtubePlayer.getPlayerState();
-                                if (playerState === -1 || playerState === YT.PlayerState.CUED) { // -1 is unstarted, 5 is cued
-                                    showToast('首次播放可能需要点击播放按钮');
-                                }
-                                state.youtubePlayer.playVideo();
-                                state.isYouTubePlaying = true;
-                                updatePlayState(true);
-                            });
-                        }
-                    }, 100); // Reduced timeout to be faster
-                }
+                // 检测是否为移动设备
+                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-                // For immediate playback after user interaction (in case user clicked to play)
-                if (state.youtubePlayer && state.youtubePlayer.getVideoUrl && state.youtubePlayer.getVideoUrl().includes(videoId)) {
-                    // If player is already ready and loaded with the right video, try to play now
-                    try {
-                        // Try to play immediately if available
-                        if (state.youtubePlayer && state.youtubePlayer.getPlayerState &&
-                            state.youtubePlayer.getPlayerState() !== YT.PlayerState.PLAYING) {
-                            requestAudioPlayback().then(() => {
-                                state.youtubePlayer.playVideo();
-                                state.isYouTubePlaying = true;
-                                updatePlayState(true);
-                            }).catch(() => {
-                                state.youtubePlayer.playVideo();
-                                state.isYouTubePlaying = true;
-                                updatePlayState(true);
-                            });
-                        }
-                    } catch (e) {
-                        console.log("Could not play immediately:", e);
-                    }
-                }
+                // Use the YouTubePlayerManager to initialize and play the video
+                try {
+                    // Ensure the YouTube API is loaded
+                    await youtubePlayerManager.loadAPI();
 
+                    // Set up container if it doesn't exist
+                    let playerContainer = document.getElementById('youtube-player-container');
+                    if (!playerContainer) {
+                        playerContainer = document.createElement('div');
+                        playerContainer.id = 'youtube-player-container';
+                        document.body.appendChild(playerContainer);
+                    }
+                    
+                    // Always ensure correct styling to avoid display:none issues
+                    playerContainer.style.position = 'absolute';
+                    playerContainer.style.top = '-9999px';
+                    playerContainer.style.left = '-9999px';
+                    playerContainer.style.width = '1px';
+                    playerContainer.style.height = '1px';
+                    playerContainer.style.opacity = '0';
+                    playerContainer.style.pointerEvents = 'none';
+                    playerContainer.style.display = 'block'; // Explicitly override any display:none
+
+                    // Configure player parameters
+                    const playerOptions = {
+                        videoId: videoId,
+                        playerVars: {
+                            'playsinline': 1,
+                            'controls': 0,
+                            'disablekb': 1,
+                            'fs': 0,
+                            'iv_load_policy': 3,
+                            'modestbranding': 1,
+                            'rel': 0,
+                            'autoplay': 1,
+                            'mute': 0,
+                            'enablejsapi': 1,
+                            'origin': window.location.origin
+                        }
+                    };
+
+                    // Initialize the player with the manager
+                    const player = await youtubePlayerManager.initPlayer('youtube-player-container', playerOptions);
+
+                    // Update state to indicate that YouTube player is being used
+                    youtubePlayerManager.setState({ shouldAutoplayYouTube: true });
+
+                    if (isMobile) {
+                        showToast('播放器已就绪...');
+                    }
+                } catch (error) {
+                    console.error('Error initializing YouTube player with manager:', error);
+                    showToast('YouTube 播放器初始化失败...');
+
+                    // Fallback: use the audio element with YouTube video URL (may not work in all browsers due to CORS)
+                    const audioUrl = `https://www.youtube.com/watch?v=${videoId}`;
+                    audio.src = audioUrl;
+                    audio.load();
+                    audio.play()
+                        .then(() => {
+                            updatePlayState(true);
+                            state.isYouTubePlaying = true;
+                        })
+                        .catch(err => {
+                            console.error('Fallback also failed:', err);
+                            showToast('即将准备就绪，别着急');
+                            updatePlayState(false);
+                            state.isYouTubePlaying = false;
+                        });
+                }
             } catch (error) {
                 console.error('Error initializing YouTube player:', error);
-                showToast('YouTube 播放器初始化失败，尝试使用备用方案...');
+                showToast('YouTube 播放器初始化失败...');
 
                 // Fallback: use the audio element with YouTube video URL (may not work in all browsers)
                 const audioUrl = `https://www.youtube.com/watch?v=${videoId}`;
@@ -3904,31 +3858,247 @@
 
         // Toggle play/pause for YouTube player
         function toggleYouTubePlay() {
-            if (state.youtubePlayer) {
-                if (state.isYouTubePlaying) {
-                    state.youtubePlayer.pauseVideo();
-                    state.isYouTubePlaying = false;
+            if (youtubePlayerManager && youtubePlayerManager.getPlayer()) {
+                if (youtubePlayerManager.isPlaying()) {
+                    // 暂停播放
+                    youtubePlayerManager.pauseVideo();
+                    // State will be updated via event listener
                 } else {
-                    // Request user interaction to enable audio in background
-                    requestAudioPlayback().then(() => {
-                        state.youtubePlayer.playVideo();
-                        state.isYouTubePlaying = true;
-                        updatePlayState(true);
-                    }).catch(() => {
-                        try {
-                            // Try to play the video - this may fail due to browser autoplay policies
-                            state.youtubePlayer.playVideo();
-                            state.isYouTubePlaying = true;
-                            updatePlayState(true);
-                        } catch (error) {
-                            console.error('Failed to play YouTube video:', error);
+                    // 开始播放 - 确保在用户交互上下文中
+                    // 检测是否为移动设备
+                    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+                    if (isMobile) {
+                        showToast('正在准备播放，请稍候...');
+                    }
+
+                    // 立即尝试播放（在用户交互的上下文中）
+                    try {
+                        // 确保音频上下文就绪
+                        requestAudioPlayback().then(() => {
+                            // 立即播放视频
+                            youtubePlayerManager.playVideo();
+                            // State will be updated via event listener
+                            if (isMobile) {
+                                showToast('开始播放');
+                            }
+                        }).catch(err => {
+                            console.warn('Audio context playback request failed:', err);
+                            // 即使音频上下文有问题，仍然尝试播放视频
+                            youtubePlayerManager.playVideo();
+                            // State will be updated via event listener
+                            if (isMobile) {
+                                showToast('开始播放');
+                            }
+                        });
+                    } catch (error) {
+                        console.error('Failed to play YouTube video:', error);
+
+                        // 检测是否为移动设备并提供更具体的提示
+                        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+                        if (isMobile) {
+                            // 对于移动设备，提供更多的等待时间
+                            setTimeout(() => {
+                                try {
+                                    youtubePlayerManager.playVideo();
+                                    // State will be updated via event listener
+                                    showToast('开始播放');
+                                } catch (retryError) {
+                                    console.error('重试播放失败:', retryError);
+                                    // Show more helpful message about browser autoplay restrictions
+                                    showToast('首次播放可能需要用户交互，请点击播放按钮重试');
+                                    updatePlayState(false);
+                                }
+                            }, 500); // 减少延迟时间
+                        } else {
                             // Show more helpful message about browser autoplay restrictions
                             showToast('首次播放可能需要用户交互，请点击播放按钮重试');
                             updatePlayState(false);
                         }
-                    });
+                    }
                 }
-                updatePlayState(state.isYouTubePlaying);
+            }
+        }
+
+        // 打开跳转链接，使用标题和作者作为查询参数
+        function openJumpLink(trackName, artistName) {
+            // 组合标题和作者，用空格分隔
+            const query = `${trackName} ${artistName}`;
+            // 创建目标URL，使用提供的格式
+            const jumpUrl = `https://wealth.want.biz/pages/youtubeMusic.html?query=${encodeURIComponent(query)}`;
+
+            // 检查是否已存在半屏模态框，如果存在则移除
+            const existingModal = document.querySelector('.half-screen-modal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+
+            // 创建半屏模态框
+            const modal = document.createElement('div');
+            modal.className = 'half-screen-modal';
+            modal.innerHTML = `
+                <div class="modal-overlay" onclick="closeHalfScreenModal()"></div>
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div class="modal-drag-bar"></div>
+                        <div class="modal-actions">
+                            <button class="modal-close-btn" onclick="closeHalfScreenModal()">✕</button>
+                        </div>
+                    </div>
+                    <iframe src="${jumpUrl}" class="modal-iframe" allow="autoplay; fullscreen"></iframe>
+                </div>
+            `;
+
+            // 添加模态框样式（如果尚未添加）
+            if (!document.querySelector('#half-screen-modal-styles')) {
+                const styles = document.createElement('style');
+                styles.id = 'half-screen-modal-styles';
+                styles.textContent = `
+                    .half-screen-modal {
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        z-index: 10000;
+                        display: flex;
+                        flex-direction: column;
+                    }
+
+                    .modal-overlay {
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: rgba(0, 0, 0, 0.6);
+                        z-index: 1;
+                        opacity: 0;
+                        animation: fadeIn 0.3s ease forwards;
+                    }
+
+                    .modal-content {
+                        position: absolute;
+                        bottom: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 50vh;
+                        background: var(--bg);
+                        border-top-left-radius: 20px;
+                        border-top-right-radius: 20px;
+                        z-index: 2;
+                        transform: translateY(100%);
+                        animation: slideUp 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+                        display: flex;
+                        flex-direction: column;
+                        overflow: hidden;
+                    }
+
+                    .modal-header {
+                        padding: 12px 16px 8px;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        position: relative;
+                        z-index: 3;
+                        background: var(--bg);
+                        border-bottom: 1px solid var(--glass-border);
+                    }
+
+                    .modal-drag-bar {
+                        position: absolute;
+                        top: 8px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        width: 40px;
+                        height: 4px;
+                        background: var(--text-secondary);
+                        border-radius: 2px;
+                    }
+
+                    .modal-actions {
+                        display: flex;
+                        gap: 8px;
+                        z-index: 4;
+                    }
+
+                    .modal-close-btn {
+                        width: 36px;
+                        height: 36px;
+                        border-radius: 50%;
+                        background: var(--glass);
+                        border: 1px solid var(--glass-border);
+                        color: var(--text);
+                        font-size: 18px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        transition: all 0.2s ease;
+                    }
+
+                    .modal-close-btn:hover {
+                        background: var(--glass-border);
+                        transform: scale(1.1);
+                    }
+
+                    .modal-iframe {
+                        flex: 1;
+                        border: none;
+                        width: 100%;
+                        height: calc(100% - 60px); /* Account for header height */
+                    }
+
+                    @keyframes slideUp {
+                        from {
+                            transform: translateY(100%);
+                        }
+                        to {
+                            transform: translateY(0);
+                        }
+                    }
+
+                    @keyframes fadeIn {
+                        from {
+                            opacity: 0;
+                        }
+                        to {
+                            opacity: 1;
+                        }
+                    }
+
+                    /* 响应式适配 */
+                    @media (min-width: 768px) {
+                        .modal-content {
+                            height: 60vh;
+                            max-height: 700px;
+                        }
+                    }
+                `;
+                document.head.appendChild(styles);
+            }
+
+            document.body.appendChild(modal);
+        }
+
+        // 关闭半屏模态框
+        function closeHalfScreenModal() {
+            const modal = document.querySelector('.half-screen-modal');
+            if (modal) {
+                // 添加关闭动画
+                const content = modal.querySelector('.modal-content');
+                const overlay = modal.querySelector('.modal-overlay');
+
+                content.style.animation = 'slideUp 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards';
+                content.style.animationDirection = 'reverse';
+
+                overlay.style.animation = 'fadeIn 0.3s ease forwards';
+                overlay.style.animationDirection = 'reverse';
+
+                setTimeout(() => {
+                    modal.remove();
+                }, 300);
             }
         }
 
@@ -4042,13 +4212,21 @@
         document.addEventListener('visibilitychange', function () {
             if (document.visibilityState === 'visible') {
                 // When returning to foreground, ensure audio is properly resumed
-                if (state.youtubePlayer && state.isYouTubePlaying) {
+                if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
                     // Small delay to ensure YouTube player is ready
                     setTimeout(() => {
-                        if (state.youtubePlayer.getPlayerState() !== YT.PlayerState.PLAYING) {
+                        if (youtubePlayerManager.getPlayerState() !== YT.PlayerState.PLAYING) {
                             toggleYouTubePlay();
+                        } else {
+                            // If already playing, make sure PWA updates are running
+                            startPWAProgressUpdates();
                         }
                     }, 100);
+                }
+            } else {
+                // When going to background, ensure PWA updates continue if needed
+                if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
+                    // PWA updates should continue in background, so no need to stop them here
                 }
             }
         });
@@ -4061,17 +4239,17 @@
             // Handle seek actions to maintain audio session
             try {
                 navigator.mediaSession.setActionHandler('seekbackward', () => {
-                    if (state.youtubePlayer) {
-                        const currentTime = state.youtubePlayer.getCurrentTime();
-                        state.youtubePlayer.seekTo(Math.max(0, currentTime - 10), true);
+                    if (youtubePlayerManager.getPlayer()) {
+                        const currentTime = youtubePlayerManager.getCurrentTime();
+                        youtubePlayerManager.seekTo(Math.max(0, currentTime - 10), true);
                     }
                 });
 
                 navigator.mediaSession.setActionHandler('seekforward', () => {
-                    if (state.youtubePlayer) {
-                        const currentTime = state.youtubePlayer.getCurrentTime();
-                        const duration = state.youtubePlayer.getDuration();
-                        state.youtubePlayer.seekTo(Math.min(duration, currentTime + 10), true);
+                    if (youtubePlayerManager.getPlayer()) {
+                        const currentTime = youtubePlayerManager.getCurrentTime();
+                        const duration = youtubePlayerManager.getDuration();
+                        youtubePlayerManager.seekTo(Math.min(duration, currentTime + 10), true);
                     }
                 });
             } catch (error) {
@@ -4082,9 +4260,9 @@
         // Additional event listeners to handle app lifecycle and backgrounding
         window.addEventListener('pagehide', function () {
             // Try to maintain audio when page is hidden (e.g., switching apps)
-            if (state.youtubePlayer && state.isYouTubePlaying) {
+            if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
                 // Store the current time to resume from when returning
-                state.lastPosition = state.youtubePlayer.getCurrentTime();
+                state.lastPosition = youtubePlayerManager.getCurrentTime();
             }
         });
 
@@ -4092,15 +4270,25 @@
         document.addEventListener('visibilitychange', function () {
             if (document.visibilityState === 'visible') {
                 // When returning to foreground, resume audio if needed
-                if (state.youtubePlayer && state.isYouTubePlaying) {
+                if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
                     // Small delay to ensure YouTube player is ready after page becomes visible
                     setTimeout(() => {
-                        const playerState = state.youtubePlayer.getPlayerState();
+                        const playerState = youtubePlayerManager.getPlayerState();
                         if (playerState !== YT.PlayerState.PLAYING) {
                             // Try to resume playback
-                            state.youtubePlayer.playVideo();
+                            youtubePlayerManager.playVideo();
+                            startPWAProgressUpdates(); // Ensure PWA updates start when resuming
+                        } else {
+                            // If already playing, make sure PWA updates are running
+                            startPWAProgressUpdates();
                         }
                     }, 500);
+                }
+            } else {
+                // When going to background, ensure PWA updates continue if playing
+                if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
+                    // Ensure PWA updates are running when going to background
+                    startPWAProgressUpdates();
                 }
             }
         });
@@ -4108,17 +4296,17 @@
         // Handle focus/blur events which can affect audio on mobile
         window.addEventListener('focus', function () {
             // On iOS Safari especially, audio may need to be resumed when window regains focus
-            if (state.youtubePlayer && state.isYouTubePlaying && state.youtubePlayer.getPlayerState() !== YT.PlayerState.PLAYING) {
+            if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying() && youtubePlayerManager.getPlayerState() !== YT.PlayerState.PLAYING) {
                 setTimeout(() => {
-                    state.youtubePlayer.playVideo();
+                    youtubePlayerManager.playVideo();
                 }, 100);
             }
         });
 
         window.addEventListener('blur', function () {
             // Store position when leaving the page
-            if (state.youtubePlayer && state.isYouTubePlaying) {
-                state.lastPosition = state.youtubePlayer.getCurrentTime();
+            if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
+                state.lastPosition = youtubePlayerManager.getCurrentTime();
             }
         });
 
@@ -4144,7 +4332,7 @@
             setTimeout(() => {
                 toast.style.animation = 'fadeOut 0.3s ease forwards';
                 setTimeout(() => toast.remove(), 300);
-            }, 2000);
+            }, 500);
         }
 
         // 歌词
@@ -5006,7 +5194,25 @@
                 });
             }
         }
-    </script>
-</body>
 
+        // 切换搜索输入框显示/隐藏 (重构后)
+        function toggleSearchInput() {
+            const searchContainer = document.getElementById('search-input-container');
+            const searchInput = document.getElementById('search-input');
+            const isVisible = searchContainer.style.display === 'flex';
+
+            if (isVisible) {
+                searchContainer.style.display = 'none';
+            } else {
+                searchContainer.style.display = 'flex';
+                // 延迟聚焦以解决PWA环境下的渲染问题
+        setTimeout(() => searchInput.focus(), 100); // 关键：延迟聚焦以解决PWA问题
+            }
+        }
+    </script>
+    
+
+
+
+</body>
 </html>
