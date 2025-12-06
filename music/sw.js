@@ -6,7 +6,8 @@ const DYNAMIC_CACHE_NAME = CACHE_VERSION + '-dynamic';
 
 const urlsToCache = [
     './index.html',
-    './manifest.json'
+    './manifest.json',
+    './YouTubePlayerManager.js'
 ];
 
 // 安装时缓存核心文件

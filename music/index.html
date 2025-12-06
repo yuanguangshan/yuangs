@@ -44,6 +44,16 @@
             -webkit-tap-highlight-color: transparent;
         }
 
+        /* Ensure input elements work properly in PWA */
+        input, textarea, select {
+            -webkit-user-select: auto;
+            -moz-user-select: auto;
+            -ms-user-select: auto;
+            user-select: auto;
+            -webkit-touch-callout: default;
+            -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+        }
+
         /* 自定义滚动条 */
         ::-webkit-scrollbar {
             width: 6px;
@@ -140,6 +150,11 @@
             -moz-user-select: text;
             -ms-user-select: text;
             user-select: text;
+            /* Add important properties for mobile input */
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+            -webkit-tap-highlight-color: transparent;
+            cursor: text;
         }
 
         .search-input:focus {
@@ -1297,7 +1312,7 @@
     <header class="header">
         <div class="search-box">
             <div class="search-input-container">
-                <input type="text" class="search-input" id="search-input" placeholder="歌手/歌曲..." inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+                <input type="search" class="search-input" id="search-input" placeholder="歌手/歌曲..." inputmode="text" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" required>
                 <button class="search-clear-btn" id="search-clear-btn" title="清空搜索" style="display: none;">✕</button>
             </div>
             <button class="btn btn-icon" onclick="searchMusic()" title="搜索">🔍</button>
@@ -2058,7 +2073,8 @@
             const searchClearBtn = $('search-clear-btn');
             let searchTimeout;
 
-            // Enhanced input handling for PWA mode
+            // Remove problematic event listeners and simplify focus handling
+            // Standard input handling for PWA mode
             searchInput.addEventListener('keypress', e => {
                 if (e.key === 'Enter') {
                     clearTimeout(searchTimeout);
@@ -2066,32 +2082,13 @@
                 }
             });
 
-            // Ensure input can be focused on mobile devices
-            searchInput.addEventListener('touchstart', () => {
-                // On touch devices, ensure the input field is focusable
-                setTimeout(() => {
-                    if (document.activeElement !== searchInput) {
-                        searchInput.focus();
-                    }
-                }, 100);
-            });
-
-            // Handle focus event to properly trigger keyboard
+            // Handle focus event properly without forcing focus
             searchInput.addEventListener('focus', () => {
-                // Ensure the input remains focusable in PWA mode
+                // Do not prevent default or stop propagation here as it interferes with input method
+                console.log('Search input focused');
             });
 
-            // Add mousedown event to ensure input works properly
-            searchInput.addEventListener('mousedown', (e) => {
-                if (e.target === searchInput) {
-                    // Only focus if directly clicking on the input element
-                    setTimeout(() => {
-                        searchInput.focus();
-                    }, 0);
-                }
-            });
-
-            // Show/hide clear button based on input value and debounce search
+            // Handle input event with debounce
             searchInput.addEventListener('input', () => {
                 searchClearBtn.style.display = searchInput.value ? 'flex' : 'none';
 
@@ -2112,7 +2109,7 @@
                 clearTimeout(searchTimeout);
                 searchInput.value = '';
                 searchClearBtn.style.display = 'none';
-                // Use a more aggressive focus method for PWA
+                // Simply focus input without interfering with input methods
                 setTimeout(() => {
                     searchInput.focus();
                     if (typeof searchInput.select === 'function') {
@@ -2121,18 +2118,16 @@
                 }, 50);
             });
 
-            // Add click handler to explicitly focus the search input
+            // Simplified click handler on container
             const searchInputContainer = document.querySelector('.search-input-container');
             if (searchInputContainer) {
                 searchInputContainer.addEventListener('click', (e) => {
+                    // Do not prevent default or stop propagation to allow proper input method handling
                     if (e.target === searchInputContainer || e.target.closest('.search-input-container')) {
-                        // Prevent default to ensure focus works properly
-                        e.preventDefault();
-                        e.stopPropagation();
-                        // Focus the input with a slight delay to ensure it works in PWA
+                        // Just ensure the input gets focus naturally
                         setTimeout(() => {
                             searchInput.focus();
-                        }, 100);
+                        }, 0);
                     }
                 });
             }
