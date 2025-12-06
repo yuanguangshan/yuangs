@@ -1268,6 +1268,70 @@
             opacity: 1;
         }
 
+        /* 全屏搜索模态框样式 */
+        .search-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 250;
+            background: rgba(10, 10, 10, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding-top: 20vh;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .search-modal.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .search-modal-content {
+            position: relative;
+            width: 90%;
+            max-width: 500px;
+        }
+
+        .search-modal-input {
+            width: 100%;
+            height: 50px;
+            padding: 0 50px 0 20px;
+            border-radius: 25px;
+            border: 1px solid var(--glass-border);
+            background: var(--glass);
+            color: var(--text);
+            font-size: 16px;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .search-modal-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px rgba(29, 185, 84, 0.4);
+        }
+
+        .search-modal-close {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
         /* 响应式 */
         @media (max-width: 767px) {
             .grid {
@@ -1447,6 +1511,14 @@
                 <div class="empty-title">暂无收藏</div>
                 <div class="empty-desc">点击播放器中的爱心按钮收藏歌曲</div>
             </div>
+        </div>
+    </div>
+
+    <!-- 全屏搜索模态框 -->
+    <div class="search-modal" id="search-modal">
+        <div class="search-modal-content">
+            <input type="search" class="search-modal-input" id="search-modal-input" placeholder="输入歌手或歌曲名..." autocomplete="off">
+            <button class="search-modal-close" id="search-modal-close">✕</button>
         </div>
     </div>
 
@@ -1722,37 +1794,59 @@
         };
 
         // DOM 元素
-        const $ = id => document.getElementById(id);
         const audio = $('audio');
 
-        // 绑定事件
-        $('search-toggle-btn').addEventListener('click', (e) => toggleSearchInput(e));
-        $('search-input-container').addEventListener('click', () => {
-            setTimeout(() => $('search-input').focus(), 150);
+        // 新的搜索模态框逻辑
+        const searchModal = $('search-modal');
+        const searchModalInput = $('search-modal-input');
+        const searchModalClose = $('search-modal-close');
+        const searchToggleBtn = $('search-toggle-btn');
+
+        function openSearchModal(e) {
+            if (e) e.preventDefault();
+            searchModal.classList.add('show');
+
+            const focusInput = () => {
+                searchModalInput.focus();
+            };
+
+            // Fallback in case transitionend doesn't fire
+            const fallbackTimeout = setTimeout(focusInput, 500);
+
+            searchModal.addEventListener('transitionend', () => {
+                clearTimeout(fallbackTimeout);
+                focusInput();
+            }, { once: true });
+        }
+
+        function closeSearchModal() {
+            searchModal.classList.remove('show');
+            // Don't clear input, user might want to see their last search
+        }
+
+        searchToggleBtn.addEventListener('click', openSearchModal);
+        searchModalClose.addEventListener('click', closeSearchModal);
+
+        searchModalInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const query = searchModalInput.value.trim();
+                if (query) {
+                    search(query);
+                    closeSearchModal();
+                }
+            }
         });
 
-        // 切换搜索框可见性
-        function toggleSearchInput(e) {
-            if (e) {
-                e.preventDefault();
-                e.stopPropagation();
+        // 点击模态框背景关闭
+        searchModal.addEventListener('click', (e) => {
+            if (e.target === searchModal) {
+                closeSearchModal();
             }
-            const searchContainer = $('search-input-container');
-            const searchInput = $('search-input');
-            const searchToggleBtn = $('search-toggle-btn');
-            const isVisible = searchContainer.style.display !== 'none';
+        });
 
-            if (isVisible) {
-                searchContainer.style.display = 'none';
-                searchToggleBtn.title = '搜索';
-            } else {
-                searchContainer.style.display = 'block';
-                setTimeout(() => {
-                    searchInput.focus();
-                }, 150); // 增加延迟
-                searchToggleBtn.title = '关闭搜索';
-            }
-        }
+        // 旧的顶部搜索框现在可以移除或隐藏
+        const topSearchContainer = $('search-input-container');
+        topSearchContainer.remove(); // 直接移除
 
 
         // 层次化音乐标签系统
@@ -2169,22 +2263,25 @@
         // 搜索艺术家
         function searchByArtist(artistName) {
             const cleanArtist = artistName.split(/&|,|feat\.|ft\./i)[0].trim();
-            $('search-input').value = cleanArtist;
-            searchMusic();
+            searchModalInput.value = cleanArtist;
+            searchMusic(cleanArtist);
+            closeSearchModal();
         }
 
         // 搜索歌曲
         function searchBySong(songName) {
             // Remove parentheses and brackets with their contents from song name
             let cleanSongName = songName.replace(/\([^)]*\)|\[[^\]]*\]/g, '').trim();
-            $('search-input').value = cleanSongName;
-            searchMusic();
+            searchModalInput.value = cleanSongName;
+            searchMusic(cleanSongName);
+            closeSearchModal();
         }
 
         // 随机搜索
         function randomSearch() {
-            $('search-input').value = keywords[Math.floor(Math.random() * keywords.length)];
-            searchMusic();
+            const randomKeyword = keywords[Math.floor(Math.random() * keywords.length)];
+            searchMusic(randomKeyword);
+            closeSearchModal();
         }
 
         // 智能随机搜索 - 基于标签层次结构
@@ -2210,8 +2307,8 @@
             if (Array.isArray(tagsInSubCategory) && tagsInSubCategory.length > 0) {
                 const randomTag = tagsInSubCategory[Math.floor(Math.random() * tagsInSubCategory.length)];
                 if (randomTag) {  // 确保标签不为undefined或null
-                    $('search-input').value = randomTag;
-                    searchMusic();
+                    searchMusic(randomTag);
+                    closeSearchModal();
                     showToast(`智能推荐：${randomTag} (${randomCategory} > ${randomSubCategory})`);
                 } else {
                     randomSearch(); // 回退到普通随机搜索
@@ -2225,8 +2322,8 @@
                     if (Array.isArray(tagsInDeeperCategory) && tagsInDeeperCategory.length > 0) {
                         const randomTag = tagsInDeeperCategory[Math.floor(Math.random() * tagsInDeeperCategory.length)];
                         if (randomTag) {  // 确保标签不为undefined或null
-                            $('search-input').value = randomTag;
-                            searchMusic();
+                            searchMusic(randomTag);
+                            closeSearchModal();
                             showToast(`智能推荐：${randomTag} (${randomCategory} > ${randomSubCategory} > ${randomDeeperCategory})`);
                         } else {
                             randomSearch(); // 回退到普通随机搜索
@@ -2243,9 +2340,12 @@
         }
 
         // 搜索音乐
-        async function searchMusic() {
-            const query = $('search-input').value?.trim();
-            if (!query) return;
+        async function searchMusic(query) {
+            if (!query || query.trim() === '') {
+                const modalQuery = searchModalInput.value.trim();
+                if (!modalQuery) return;
+                query = modalQuery;
+            }
 
             // 解析URL参数
             const urlParams = getUrlParams();
@@ -2908,8 +3008,8 @@
             if (!tag) {
                 return;
             }
-            $('search-input').value = tag;
-            searchMusic();
+            searchMusic(tag);
+            closeSearchModal();
         }
 
         // 显示当前播放歌曲的标签层次结构
