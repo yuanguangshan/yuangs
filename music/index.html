@@ -1424,8 +1424,8 @@
 
     <audio id="audio" crossorigin="anonymous"></audio>
 
-    <!-- YouTube Iframe API -->
-    <script src="https://www.youtube.com/iframe_api"></script>
+    <!-- YouTube Player Manager -->
+    <script src="YouTubePlayerManager.js"></script>
 
     <script>
         // 状态管理
@@ -3001,9 +3001,9 @@
         function playNextForYouTube() {
             if (state.playMode === 'single') {
                 // 单曲循环，重新播放当前歌曲
-                if (state.youtubePlayer) {
-                    state.youtubePlayer.seekTo(0);
-                    state.youtubePlayer.playVideo();
+                if (youtubePlayerManager.getPlayer()) {
+                    youtubePlayerManager.seekTo(0);
+                    youtubePlayerManager.playVideo();
                 }
                 return;
             }
@@ -3118,10 +3118,10 @@
         // 为 YouTube 播放器创建定时器来更新进度 - 使用更频繁的更新
         // Using a more robust interval that can continue in background
         let youtubeProgressInterval = setInterval(() => {
-            if (state.youtubePlayer && state.isYouTubePlaying) {
+            if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
                 try {
-                    const currentTime = state.youtubePlayer.getCurrentTime();
-                    const duration = state.youtubePlayer.getDuration();
+                    const currentTime = youtubePlayerManager.getCurrentTime();
+                    const duration = youtubePlayerManager.getDuration();
 
                     if (!isNaN(duration) && !isNaN(currentTime) && duration > 0) {
                         const pct = (currentTime / duration) * 100;
@@ -3156,7 +3156,7 @@
             }
 
             pwaProgressInterval = setInterval(() => {
-                if (state.youtubePlayer && state.isYouTubePlaying) {
+                if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
                     updateYouTubeProgress();
                 }
             }, 800); // Slightly longer than the main interval to avoid conflicts
@@ -3170,10 +3170,10 @@
         }
 
         function updateYouTubeProgress() {
-            if (state.youtubePlayer) {
+            if (youtubePlayerManager.getPlayer()) {
                 try {
-                    const currentTime = state.youtubePlayer.getCurrentTime();
-                    const duration = state.youtubePlayer.getDuration();
+                    const currentTime = youtubePlayerManager.getCurrentTime();
+                    const duration = youtubePlayerManager.getDuration();
 
                     if (!isNaN(duration) && !isNaN(currentTime) && duration > 0) {
                         const pct = (currentTime / duration) * 100;
@@ -3648,215 +3648,48 @@
             document.body.appendChild(modal);
         }
 
-        // YouTube Player functions
-        function onYouTubeIframeAPIReady() {
-            console.log('YouTube Iframe API ready');
-        }
+        // Initialize YouTube player manager
+        const youtubePlayerManager = new YouTubePlayerManager();
 
-        // Initialize YouTube player with better error handling and fallback
-        function initYouTubePlayer(videoId) {
-            return new Promise((resolve, reject) => {
-                // 检测是否为移动设备
-                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        // Set up event listeners for YouTube player events
+        document.addEventListener('youtubePlayerReady', (e) => {
+            console.log('Event caught: Player is ready.');
+            // Update UI and initialize PWA progress updates
+            updatePlayState(true);
+        });
 
-                // 在移动端，显示提示信息
-                if (isMobile) {
-                    showToast('正在初始化播放器...');
-                }
+        document.addEventListener('youtubePlayerPlaying', (e) => {
+            console.log('Event caught: Player is playing.');
+            // Update global state
+            state.isYouTubePlaying = true;
+            updatePlayState(true);
+            // Start PWA progress updates
+            startPWAProgressUpdates();
+        });
 
-                // Initialize background audio context before creating player
-                aggressiveAudioContextInit();
+        document.addEventListener('youtubePlayerPaused', (e) => {
+            console.log('Event caught: Player is paused.');
+            state.isYouTubePlaying = false;
+            updatePlayState(false);
+            stopPWAProgressUpdates();
+        });
 
-                // Create container for YouTube player if it doesn't exist
-                let playerContainer = document.getElementById('youtube-player-container');
-                if (!playerContainer) {
-                    playerContainer = document.createElement('div');
-                    playerContainer.id = 'youtube-player-container';
-                    playerContainer.style.display = 'none';
-                    document.body.appendChild(playerContainer);
-                }
+        document.addEventListener('youtubePlayerEnded', (e) => {
+            console.log('Event caught: Player has ended.');
+            state.isYouTubePlaying = false;
+            updatePlayState(false);
+            stopPWAProgressUpdates();
+            setTimeout(playNextForYouTube, 300);
+        });
 
-                // Prepare player parameters with better audio settings
-                const playerVars = {
-                    'playsinline': 1,
-                    'controls': 0,  // Hide controls to play audio only
-                    'disablekb': 1, // Disable keyboard controls
-                    'fs': 0,       // Disable fullscreen
-                    'iv_load_policy': 3, // Disable annotations
-                    'modestbranding': 1, // Reduce YouTube branding
-                    'rel': 0, // Don't show related videos at the end
-                    'autoplay': 1, // 启用自动播放，在用户交互上下文中初始化时会自动播放
-                    'mute': 0, // Don't mute initially
-                    'enablejsapi': 1, // Enable API
-                    'origin': window.location.origin, // Important for security policy
-                    'widgetid': 'youtube-player'
-                };
-
-                try {
-                    // Create the YouTube player
-                    const player = new YT.Player('youtube-player-container', {
-                        videoId: videoId,
-                        playerVars: playerVars,
-                        events: {
-                            'onReady': function (event) {
-                                console.log('YouTube player ready');
-                                // 在移动端，播放器准备就绪时更新提示
-                                if (isMobile) {
-                                    showToast('播放器已就绪...');
-                                }
-
-                                // Ensure audio context is running when player is ready
-                                if (backgroundAudioContext) {
-                                    if (backgroundAudioContext.state === 'suspended') {
-                                        backgroundAudioContext.resume().catch(err => {
-                                            console.warn('Could not resume audio context:', err);
-                                        });
-                                    }
-                                }
-
-                                // Set initial position state with duration for MediaSession API
-                                // This ensures duration displays correctly in UI and lock screen
-                                try {
-                                    // 在移动端增加等待时间以确保获取到时长
-                                    const durationCheckDelay = isMobile ? 1000 : 500;
-                                    // Wait a bit to ensure duration is available
-                                    setTimeout(() => {
-                                        const duration = event.target.getDuration();
-                                        if (!isNaN(duration) && duration > 0) {
-                                            $('total-time').textContent = formatTime(duration);
-
-                                            if ('setPositionState' in navigator.mediaSession) {
-                                                navigator.mediaSession.setPositionState({
-                                                    duration: duration,
-                                                    playbackRate: 1.0,
-                                                    position: 0
-                                                });
-                                            }
-                                        } else {
-                                            // 如果移动设备上没有立即获取到时长，再等一次
-                                            if (isMobile) {
-                                                setTimeout(() => {
-                                                    const duration = event.target.getDuration();
-                                                    if (!isNaN(duration) && duration > 0) {
-                                                        $('total-time').textContent = formatTime(duration);
-                                                        if ('setPositionState' in navigator.mediaSession) {
-                                                            navigator.mediaSession.setPositionState({
-                                                                duration: duration,
-                                                                playbackRate: 1.0,
-                                                                position: 0
-                                                            });
-                                                        }
-                                                    }
-                                                }, 800);
-                                            }
-                                        }
-                                    }, durationCheckDelay); // 延迟以确保时长加载完成
-                                } catch (e) {
-                                    console.log('Could not get duration on ready:', e);
-                                }
-
-                                // 由于已启用 autoplay: 1，播放器会自动播放
-                                // 我们只需要在这里更新状态
-                                if (state.shouldAutoplayYouTube) {
-                                    // 标记为正在播放
-                                    state.isYouTubePlaying = true;
-                                    updatePlayState(true);
-                                    state.shouldAutoplayYouTube = false;
-                                    console.log('YouTube 播放器已自动播放');
-                                }
-
-                                resolve(event.target);
-                            },
-                            'onStateChange': function (event) {
-                                console.log('YouTube player state:', event.data);
-                                // Update our state based on YouTube player state
-                                if (event.data === YT.PlayerState.PLAYING) {
-                                    state.isYouTubePlaying = true;
-                                    updatePlayState(true);
-                                    // Ensure audio context is running
-                                    if (backgroundAudioContext && backgroundAudioContext.state === 'suspended') {
-                                        backgroundAudioContext.resume().catch(err => {
-                                            console.warn('Could not resume audio context in PLAYING state:', err);
-                                        });
-                                    }
-                                    // Start PWA progress updates when playing
-                                    startPWAProgressUpdates();
-                                    // Update progress immediately when playing starts
-                                    setTimeout(updateYouTubeProgress, 100);
-                                } else if (event.data === YT.PlayerState.PAUSED) {
-                                    state.isYouTubePlaying = false;
-                                    updatePlayState(false);
-                                    // Stop PWA-specific updates when paused
-                                    stopPWAProgressUpdates();
-                                } else if (event.data === YT.PlayerState.ENDED) {
-                                    // 当 YouTube 歌曲播放结束时
-                                    state.isYouTubePlaying = false;
-                                    updatePlayState(false);
-                                    // Stop PWA-specific updates when ended
-                                    stopPWAProgressUpdates();
-                                    // 延迟一点时间再播放下一首，确保状态更新完成
-                                    setTimeout(() => {
-                                        playNextForYouTube();
-                                    }, 300);
-                                } else if (event.data === YT.PlayerState.BUFFERING) {
-                                    // Ensure audio context remains active during buffering
-                                    if (backgroundAudioContext && backgroundAudioContext.state === 'suspended') {
-                                        backgroundAudioContext.resume().catch(err => {
-                                            console.warn('Could not resume audio context in BUFFERING state:', err);
-                                        });
-                                    }
-                                } else if (event.data === YT.PlayerState.CUED) {
-                                    // Video is cued and ready to play - try to play if autoplay was requested
-                                    if (state.shouldAutoplayYouTube) {
-                                        requestAudioPlayback().then(() => {
-                                            try {
-                                                event.target.playVideo();
-                                                state.isYouTubePlaying = true;
-                                                updatePlayState(true);
-                                                // Start PWA progress updates
-                                                startPWAProgressUpdates();
-                                            } catch (e) {
-                                                console.warn('Could not play from cued state:', e);
-                                            }
-                                            state.shouldAutoplayYouTube = false;
-                                        });
-                                    }
-                                }
-                            },
-                            'onError': function (error) {
-                                console.error('YouTube player error:', error);
-
-                                // Try alternative video ID format or fallback
-                                if (error.data === 100 || error.data === 101 || error.data === 150) {
-                                    // Video not found or not allowed to play - try alternative approach
-                                    console.log('YouTube video issue, attempting fallback...');
-
-                                    // Create a backup method using direct YouTube URL for audio
-                                    const fallbackAudio = $('audio');
-                                    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
-                                    // Try to load this URL (this might work in some browsers)
-                                    // Note: This is a fallback and may not work due to CORS restrictions
-
-                                    // Return error for now, but keep trying to resolve with available player
-                                    reject(error);
-                                } else {
-                                    // 其他错误 - 可能可以恢复
-                                    console.log('YouTube player error, but continuing:', error);
-                                    // 不要因为其他错误而拒绝，因为播放器可能仍然可以工作
-                                    // 无论如何都要用播放器实例进行解析
-                                    resolve(event.target);
-                                }
-                            }
-                        }
-                    });
-                } catch (creationError) {
-                    console.error('Error creating YouTube player:', creationError);
-                    // Try fallback approach
-                    reject(creationError);
-                }
-            });
-        }
+        document.addEventListener('youtubePlayerError', (e) => {
+            console.log('Event caught: Player error.', e.detail.error);
+            // Handle error appropriately
+            state.isYouTubePlaying = false;
+            updatePlayState(false);
+            stopPWAProgressUpdates();
+            showToast('YouTube 播放出现错误，请稍后重试');
+        });
 
         // Update the playYouTubeSong function to use YouTube player
         async function playYouTubeSong(videoId, title, artist, coverUrl = '') {
@@ -3982,25 +3815,24 @@
                 // 检测是否为移动设备
                 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-                // 在用户交互的上下文中立即尝试初始化和播放
-                // 检查是否已经有YouTube播放器实例
-                if (!state.youtubePlayer) {
-                    // 没有现有播放器，创建新的
-                    try {
-                        // 在用户交互上下文中立即初始化音频上下文
-                        await requestAudioPlayback();
+                // Use the YouTubePlayerManager to initialize and play the video
+                try {
+                    // Ensure the YouTube API is loaded
+                    await youtubePlayerManager.loadAPI();
 
-                        // 设置播放器容器
-                        let playerContainer = document.getElementById('youtube-player-container');
-                        if (!playerContainer) {
-                            playerContainer = document.createElement('div');
-                            playerContainer.id = 'youtube-player-container';
-                            playerContainer.style.display = 'none';
-                            document.body.appendChild(playerContainer);
-                        }
+                    // Set up container if it doesn't exist
+                    let playerContainer = document.getElementById('youtube-player-container');
+                    if (!playerContainer) {
+                        playerContainer = document.createElement('div');
+                        playerContainer.id = 'youtube-player-container';
+                        playerContainer.style.display = 'none';
+                        document.body.appendChild(playerContainer);
+                    }
 
-                        // 使用更简化的参数配置
-                        const playerVars = {
+                    // Configure player parameters
+                    const playerOptions = {
+                        videoId: videoId,
+                        playerVars: {
                             'playsinline': 1,
                             'controls': 0,
                             'disablekb': 1,
@@ -4012,124 +3844,37 @@
                             'mute': 0,
                             'enablejsapi': 1,
                             'origin': window.location.origin
-                        };
+                        }
+                    };
 
-                        // 立即创建播放器实例（在用户交互的上下文中）
-                        state.youtubePlayer = new YT.Player('youtube-player-container', {
-                            videoId: videoId,
-                            playerVars: playerVars,
-                            events: {
-                                'onReady': function (event) {
-                                    console.log('YouTube player ready');
+                    // Initialize the player with the manager
+                    const player = await youtubePlayerManager.initPlayer('youtube-player-container', playerOptions);
 
-                                    // 确保音频上下文处于活动状态
-                                    if (backgroundAudioContext && backgroundAudioContext.state === 'suspended') {
-                                        backgroundAudioContext.resume().catch(err => {
-                                            console.warn('Could not resume audio context:', err);
-                                        });
-                                    }
+                    // Update state to indicate that YouTube player is being used
+                    youtubePlayerManager.setState({ shouldAutoplayYouTube: true });
 
-                                    // 立即尝试播放（在用户交互的上下文中）
-                                    requestAudioPlayback().then(() => {
-                                        event.target.playVideo();
-                                        state.isYouTubePlaying = true;
-                                        updatePlayState(true);
-                                        console.log('YouTube player started playing');
-                                    }).catch(err => {
-                                        console.warn('Could not play video:', err);
-                                        // 即使播放失败，也更新状态并稍后重试
-                                        state.isYouTubePlaying = true;
-                                        updatePlayState(true);
-                                    });
-                                },
-                                'onStateChange': function (event) {
-                                    console.log('YouTube player state:', event.data);
-                                    if (event.data === YT.PlayerState.PLAYING) {
-                                        state.isYouTubePlaying = true;
-                                        updatePlayState(true);
-                                        startPWAProgressUpdates();
-                                    } else if (event.data === YT.PlayerState.PAUSED) {
-                                        state.isYouTubePlaying = false;
-                                        updatePlayState(false);
-                                        stopPWAProgressUpdates();
-                                    } else if (event.data === YT.PlayerState.ENDED) {
-                                        state.isYouTubePlaying = false;
-                                        updatePlayState(false);
-                                        stopPWAProgressUpdates();
-                                        setTimeout(() => {
-                                            playNextForYouTube();
-                                        }, 300);
-                                    } else if (event.data === YT.PlayerState.BUFFERING) {
-                                        if (backgroundAudioContext && backgroundAudioContext.state === 'suspended') {
-                                            backgroundAudioContext.resume().catch(err => {
-                                                console.warn('Could not resume audio context:', err);
-                                            });
-                                        }
-                                    }
-                                },
-                                'onError': function (error) {
-                                    console.error('YouTube player error:', error);
-                                    // 尝试重试加载视频
-                                    try {
-                                        state.youtubePlayer.loadVideoById(videoId);
-                                    } catch (retryError) {
-                                        console.error('Retry also failed:', retryError);
-                                    }
-                                }
-                            }
+                    if (isMobile) {
+                        showToast('播放器已就绪...');
+                    }
+                } catch (error) {
+                    console.error('Error initializing YouTube player with manager:', error);
+                    showToast('YouTube 播放器初始化失败...');
+
+                    // Fallback: use the audio element with YouTube video URL (may not work in all browsers due to CORS)
+                    const audioUrl = `https://www.youtube.com/watch?v=${videoId}`;
+                    audio.src = audioUrl;
+                    audio.load();
+                    audio.play()
+                        .then(() => {
+                            updatePlayState(true);
+                            state.isYouTubePlaying = true;
+                        })
+                        .catch(err => {
+                            console.error('Fallback also failed:', err);
+                            showToast('即将准备就绪，别着急');
+                            updatePlayState(false);
+                            state.isYouTubePlaying = false;
                         });
-                    } catch (initError) {
-                        console.error('Failed to create YouTube player:', initError);
-                        showToast('YouTube 播放器创建失败');
-                    }
-                } else {
-                    // 使用现有播放器，加载新视频
-                    try {
-                        // 立即尝试加载和播放新视频
-                        state.youtubePlayer.loadVideoById(videoId);
-
-                        // 等待播放器加载视频后立即播放
-                        let attempts = 0;
-                        const maxAttempts = 15; // 增加尝试次数
-
-                        const waitForAndPlay = () => {
-                            if (attempts >= maxAttempts) {
-                                console.warn('Could not start playback after max attempts');
-                                updatePlayState(false);
-                                showToast('视频加载可能需要稍长时间，请稍候...');
-                                return;
-                            }
-
-                            const playerState = state.youtubePlayer.getPlayerState();
-
-                            if (playerState === YT.PlayerState.CUED || playerState === YT.PlayerState.BUFFERING || playerState === YT.PlayerState.UNSTARTED) {
-                                // 播放器已准备好，立即尝试播放
-                                requestAudioPlayback().then(() => {
-                                    state.youtubePlayer.playVideo();
-                                    state.isYouTubePlaying = true;
-                                    updatePlayState(true);
-                                    console.log('YouTube player started playing after loading new video');
-                                }).catch(err => {
-                                    console.warn('Could not play loaded video:', err);
-                                    attempts++;
-                                    setTimeout(waitForAndPlay, 300); // 等待后重试
-                                });
-                            } else if (playerState === YT.PlayerState.PLAYING) {
-                                // 已经在播放，更新状态
-                                state.isYouTubePlaying = true;
-                                updatePlayState(true);
-                            } else {
-                                // 播放器还未准备好，继续等待
-                                attempts++;
-                                setTimeout(waitForAndPlay, 300);
-                            }
-                        };
-
-                        waitForAndPlay();
-                    } catch (loadError) {
-                        console.error('Failed to load YouTube video:', loadError);
-                        showToast('加载视频失败，请重试');
-                    }
                 }
             } catch (error) {
                 console.error('Error initializing YouTube player:', error);
@@ -4155,13 +3900,11 @@
 
         // Toggle play/pause for YouTube player
         function toggleYouTubePlay() {
-            if (state.youtubePlayer) {
-                if (state.isYouTubePlaying) {
+            if (youtubePlayerManager && youtubePlayerManager.getPlayer()) {
+                if (youtubePlayerManager.isPlaying()) {
                     // 暂停播放
-                    state.youtubePlayer.pauseVideo();
-                    state.isYouTubePlaying = false;
-                    // Stop PWA-specific progress updates when paused
-                    stopPWAProgressUpdates();
+                    youtubePlayerManager.pauseVideo();
+                    // State will be updated via event listener
                 } else {
                     // 开始播放 - 确保在用户交互上下文中
                     // 检测是否为移动设备
@@ -4176,21 +3919,16 @@
                         // 确保音频上下文就绪
                         requestAudioPlayback().then(() => {
                             // 立即播放视频
-                            state.youtubePlayer.playVideo();
-                            state.isYouTubePlaying = true;
-                            // Start PWA progress updates when playing
-                            startPWAProgressUpdates();
-                            updatePlayState(true);
+                            youtubePlayerManager.playVideo();
+                            // State will be updated via event listener
                             if (isMobile) {
                                 showToast('开始播放');
                             }
                         }).catch(err => {
                             console.warn('Audio context playback request failed:', err);
                             // 即使音频上下文有问题，仍然尝试播放视频
-                            state.youtubePlayer.playVideo();
-                            state.isYouTubePlaying = true;
-                            startPWAProgressUpdates();
-                            updatePlayState(true);
+                            youtubePlayerManager.playVideo();
+                            // State will be updated via event listener
                             if (isMobile) {
                                 showToast('开始播放');
                             }
@@ -4205,11 +3943,8 @@
                             // 对于移动设备，提供更多的等待时间
                             setTimeout(() => {
                                 try {
-                                    state.youtubePlayer.playVideo();
-                                    state.isYouTubePlaying = true;
-                                    // Start PWA progress updates when playing
-                                    startPWAProgressUpdates();
-                                    updatePlayState(true);
+                                    youtubePlayerManager.playVideo();
+                                    // State will be updated via event listener
                                     showToast('开始播放');
                                 } catch (retryError) {
                                     console.error('重试播放失败:', retryError);
@@ -4225,7 +3960,6 @@
                         }
                     }
                 }
-                updatePlayState(state.isYouTubePlaying);
             }
         }
 
@@ -4520,10 +4254,10 @@
         document.addEventListener('visibilitychange', function () {
             if (document.visibilityState === 'visible') {
                 // When returning to foreground, ensure audio is properly resumed
-                if (state.youtubePlayer && state.isYouTubePlaying) {
+                if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
                     // Small delay to ensure YouTube player is ready
                     setTimeout(() => {
-                        if (state.youtubePlayer.getPlayerState() !== YT.PlayerState.PLAYING) {
+                        if (youtubePlayerManager.getPlayerState() !== YT.PlayerState.PLAYING) {
                             toggleYouTubePlay();
                         } else {
                             // If already playing, make sure PWA updates are running
@@ -4533,7 +4267,7 @@
                 }
             } else {
                 // When going to background, ensure PWA updates continue if needed
-                if (state.youtubePlayer && state.isYouTubePlaying) {
+                if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
                     // PWA updates should continue in background, so no need to stop them here
                 }
             }
@@ -4547,17 +4281,17 @@
             // Handle seek actions to maintain audio session
             try {
                 navigator.mediaSession.setActionHandler('seekbackward', () => {
-                    if (state.youtubePlayer) {
-                        const currentTime = state.youtubePlayer.getCurrentTime();
-                        state.youtubePlayer.seekTo(Math.max(0, currentTime - 10), true);
+                    if (youtubePlayerManager.getPlayer()) {
+                        const currentTime = youtubePlayerManager.getCurrentTime();
+                        youtubePlayerManager.seekTo(Math.max(0, currentTime - 10), true);
                     }
                 });
 
                 navigator.mediaSession.setActionHandler('seekforward', () => {
-                    if (state.youtubePlayer) {
-                        const currentTime = state.youtubePlayer.getCurrentTime();
-                        const duration = state.youtubePlayer.getDuration();
-                        state.youtubePlayer.seekTo(Math.min(duration, currentTime + 10), true);
+                    if (youtubePlayerManager.getPlayer()) {
+                        const currentTime = youtubePlayerManager.getCurrentTime();
+                        const duration = youtubePlayerManager.getDuration();
+                        youtubePlayerManager.seekTo(Math.min(duration, currentTime + 10), true);
                     }
                 });
             } catch (error) {
@@ -4568,9 +4302,9 @@
         // Additional event listeners to handle app lifecycle and backgrounding
         window.addEventListener('pagehide', function () {
             // Try to maintain audio when page is hidden (e.g., switching apps)
-            if (state.youtubePlayer && state.isYouTubePlaying) {
+            if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
                 // Store the current time to resume from when returning
-                state.lastPosition = state.youtubePlayer.getCurrentTime();
+                state.lastPosition = youtubePlayerManager.getCurrentTime();
             }
         });
 
@@ -4578,13 +4312,13 @@
         document.addEventListener('visibilitychange', function () {
             if (document.visibilityState === 'visible') {
                 // When returning to foreground, resume audio if needed
-                if (state.youtubePlayer && state.isYouTubePlaying) {
+                if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
                     // Small delay to ensure YouTube player is ready after page becomes visible
                     setTimeout(() => {
-                        const playerState = state.youtubePlayer.getPlayerState();
+                        const playerState = youtubePlayerManager.getPlayerState();
                         if (playerState !== YT.PlayerState.PLAYING) {
                             // Try to resume playback
-                            state.youtubePlayer.playVideo();
+                            youtubePlayerManager.playVideo();
                             startPWAProgressUpdates(); // Ensure PWA updates start when resuming
                         } else {
                             // If already playing, make sure PWA updates are running
@@ -4594,7 +4328,7 @@
                 }
             } else {
                 // When going to background, ensure PWA updates continue if playing
-                if (state.youtubePlayer && state.isYouTubePlaying) {
+                if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
                     // Ensure PWA updates are running when going to background
                     startPWAProgressUpdates();
                 }
@@ -4604,17 +4338,17 @@
         // Handle focus/blur events which can affect audio on mobile
         window.addEventListener('focus', function () {
             // On iOS Safari especially, audio may need to be resumed when window regains focus
-            if (state.youtubePlayer && state.isYouTubePlaying && state.youtubePlayer.getPlayerState() !== YT.PlayerState.PLAYING) {
+            if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying() && youtubePlayerManager.getPlayerState() !== YT.PlayerState.PLAYING) {
                 setTimeout(() => {
-                    state.youtubePlayer.playVideo();
+                    youtubePlayerManager.playVideo();
                 }, 100);
             }
         });
 
         window.addEventListener('blur', function () {
             // Store position when leaving the page
-            if (state.youtubePlayer && state.isYouTubePlaying) {
-                state.lastPosition = state.youtubePlayer.getCurrentTime();
+            if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
+                state.lastPosition = youtubePlayerManager.getCurrentTime();
             }
         });
 
