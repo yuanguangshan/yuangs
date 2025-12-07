@@ -2946,6 +2946,72 @@
             }
         }
 
+        // Helper function to find the next track by source type
+        // findYouTube: true to find YouTube tracks, false to find non-YouTube tracks
+        function findNextTrackBySource(currentIndex, findYouTube) {
+            if (state.playlist.length <= 1) return -1;
+
+            let index = (currentIndex + 1) % state.playlist.length;
+            let initialIndex = currentIndex;
+
+            // Loop through the playlist to find the next track of the desired source
+            while (index !== initialIndex) {
+                const track = state.playlist[index];
+                const isYouTubeTrack = track.kind === 'youtube' || (track.previewUrl && track.previewUrl.includes('youtube.com'));
+
+                if (findYouTube && isYouTubeTrack) {
+                    // Looking for YouTube track and found one
+                    return index;
+                } else if (!findYouTube && !isYouTubeTrack) {
+                    // Looking for non-YouTube track and found one
+                    return index;
+                }
+
+                index = (index + 1) % state.playlist.length;
+
+                // If we've looped back to the starting point, break to avoid infinite loop
+                if (index === initialIndex) {
+                    break;
+                }
+            }
+
+            // No track of the desired source was found
+            return -1;
+        }
+
+        // Helper function to find the previous track by source type
+        // findYouTube: true to find YouTube tracks, false to find non-YouTube tracks
+        function findPreviousTrackBySource(currentIndex, findYouTube) {
+            if (state.playlist.length <= 1) return -1;
+
+            let index = (currentIndex - 1 + state.playlist.length) % state.playlist.length;
+            let initialIndex = currentIndex;
+
+            // Loop through the playlist backwards to find the previous track of the desired source
+            while (index !== initialIndex) {
+                const track = state.playlist[index];
+                const isYouTubeTrack = track.kind === 'youtube' || (track.previewUrl && track.previewUrl.includes('youtube.com'));
+
+                if (findYouTube && isYouTubeTrack) {
+                    // Looking for YouTube track and found one
+                    return index;
+                } else if (!findYouTube && !isYouTubeTrack) {
+                    // Looking for non-YouTube track and found one
+                    return index;
+                }
+
+                index = (index - 1 + state.playlist.length) % state.playlist.length;
+
+                // If we've looped back to the starting point, break to avoid infinite loop
+                if (index === initialIndex) {
+                    break;
+                }
+            }
+
+            // No track of the desired source was found
+            return -1;
+        }
+
         // 在 YouTube 播放器中播放下一首
         function playNextForYouTube() {
             if (state.playMode === 'single') {
@@ -2967,7 +3033,23 @@
                     newIndex = (newIndex + 1) % state.playlist.length;
                 }
             } else {
-                newIndex = (state.currentIndex + 1) % state.playlist.length;
+                // 对于顺序播放，查找与当前歌曲相同来源的下一首歌曲
+                // 检查当前是否为YouTube源
+                const isCurrentYouTube = state.currentTrack && (state.currentTrack.kind === 'youtube' ||
+                    (state.currentTrack.previewUrl && state.currentTrack.previewUrl.includes('youtube.com')));
+
+                if (isCurrentYouTube) {
+                    // 如果当前是YouTube源，寻找下一个YouTube源
+                    newIndex = findNextTrackBySource(state.currentIndex, true); // true to find YouTube tracks
+                } else {
+                    // 如果当前是非YouTube源，寻找下一个非YouTube源
+                    newIndex = findNextTrackBySource(state.currentIndex, false); // false to find non-YouTube tracks
+                }
+
+                // 如果没找到同源的下一首，则按顺序播放下一首
+                if (newIndex === -1) {
+                    newIndex = (state.currentIndex + 1) % state.playlist.length;
+                }
             }
             playSong(newIndex);
         }
@@ -3007,7 +3089,23 @@
             if (state.playMode === 'random') {
                 newIndex = Math.floor(Math.random() * state.playlist.length);
             } else {
-                newIndex = (state.currentIndex - 1 + state.playlist.length) % state.playlist.length;
+                // 对于顺序播放，查找与当前歌曲相同来源的上一首歌曲
+                // 检查当前是否为YouTube源
+                const isCurrentYouTube = state.currentTrack && (state.currentTrack.kind === 'youtube' ||
+                    (state.currentTrack.previewUrl && state.currentTrack.previewUrl.includes('youtube.com')));
+
+                if (isCurrentYouTube) {
+                    // 如果当前是YouTube源，寻找上一个YouTube源
+                    newIndex = findPreviousTrackBySource(state.currentIndex, true); // true to find YouTube tracks
+                } else {
+                    // 如果当前是非YouTube源，寻找上一个非YouTube源
+                    newIndex = findPreviousTrackBySource(state.currentIndex, false); // false to find non-YouTube tracks
+                }
+
+                // 如果没找到同源的上一首，则按顺序播放上一首
+                if (newIndex === -1) {
+                    newIndex = (state.currentIndex - 1 + state.playlist.length) % state.playlist.length;
+                }
             }
             playSong(newIndex);
         }
@@ -3030,7 +3128,23 @@
                     newIndex = (newIndex + 1) % state.playlist.length;
                 }
             } else {
-                newIndex = (state.currentIndex + 1) % state.playlist.length;
+                // 对于顺序播放，查找与当前歌曲相同来源的下一首歌曲
+                // 检查当前是否为YouTube源
+                const isCurrentYouTube = state.currentTrack && (state.currentTrack.kind === 'youtube' ||
+                    (state.currentTrack.previewUrl && state.currentTrack.previewUrl.includes('youtube.com')));
+
+                if (isCurrentYouTube) {
+                    // 如果当前是YouTube源，寻找下一个YouTube源
+                    newIndex = findNextTrackBySource(state.currentIndex, true); // true to find YouTube tracks
+                } else {
+                    // 如果当前是非YouTube源，寻找下一个非YouTube源
+                    newIndex = findNextTrackBySource(state.currentIndex, false); // false to find non-YouTube tracks
+                }
+
+                // 如果没找到同源的下一首，则按顺序播放下一首
+                if (newIndex === -1) {
+                    newIndex = (state.currentIndex + 1) % state.playlist.length;
+                }
             }
             playSong(newIndex);
         }
