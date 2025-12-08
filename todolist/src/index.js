@@ -506,9 +506,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     // Set the due date if available
                     if (task.due_date) {
-                        // Format date as YYYYMMDDTHHMMSSZ
+                        // Format date as YYYYMMDDTHHMMSSZ (strict RFC 5545 format without milliseconds)
                         const date = new Date(task.due_date);
-                        const formattedDate = date.toISOString().replace(/[-:]/g, '').replace(/\\.\d{3}/, '') + 'Z';
+                        const isoString = date.toISOString();
+                        // Extract YYYY, MM, DD, HH, MM, SS parts and combine without milliseconds
+                        const year = isoString.substr(0, 4);
+                        const month = isoString.substr(5, 2);
+                        const day = isoString.substr(8, 2);
+                        const hour = isoString.substr(11, 2);
+                        const minute = isoString.substr(14, 2);
+                        const second = isoString.substr(17, 2);
+                        const formattedDate = \`\${year}\${month}\${day}T\${hour}\${minute}\${second}Z\`;
                         calendarContent += \`DTSTART:\${formattedDate}\\r\\n\`;
                         calendarContent += \`DTEND:\${formattedDate}\\r\\n\`;
                     }
@@ -518,7 +526,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     // Set creation date
                     const createdDate = new Date(task.created_at);
-                    const formattedCreated = createdDate.toISOString().replace(/[-:]/g, '').replace(/\\.\d{3}/, '') + 'Z';
+                    const createdIsoString = createdDate.toISOString();
+                    // Extract YYYY, MM, DD, HH, MM, SS parts and combine without milliseconds
+                    const createdYear = createdIsoString.substr(0, 4);
+                    const createdMonth = createdIsoString.substr(5, 2);
+                    const createdDay = createdIsoString.substr(8, 2);
+                    const createdHour = createdIsoString.substr(11, 2);
+                    const createdMinute = createdIsoString.substr(14, 2);
+                    const createdSecond = createdIsoString.substr(17, 2);
+                    const formattedCreated = \`\${createdYear}\${createdMonth}\${createdDay}T\${createdHour}\${createdMinute}\${createdSecond}Z\`;
                     calendarContent += \`DTSTAMP:\${formattedCreated}\\r\\n\`;
 
                     // Add description if available
