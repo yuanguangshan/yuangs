@@ -657,8 +657,97 @@ const MIME_TYPES = {
     'jpeg': 'image/jpeg',
     'gif': 'image/gif',
     'ico': 'image/x-icon',
-    'txt': 'text/plain; charset=utf-8'
+    'txt': 'text/plain; charset=utf-8',
+    'ics': 'text/calendar; charset=utf-8'
 };
+
+// Function to convert tasks to iCalendar format
+function tasksToICalendar(tasks) {
+    let calendarContent = 'BEGIN:VCALENDAR\r\n';
+    calendarContent += 'VERSION:2.0\r\n';
+    calendarContent += 'PRODID:-//Cloudflare Todo List//Calendar Export//EN\r\n';
+    calendarContent += 'METHOD:PUBLISH\r\n';      // 新增：声明发布方式
+    calendarContent += 'CALSCALE:GREGORIAN\r\n';  // 新增：声明历法
+
+    // 辅助函数：将 Date 对象格式化为 ICS 字符串 (YYYYMMDDTHHMMSSZ)
+    const formatICSDate = (date) => {
+        const year = String(date.getUTCFullYear()).padStart(4, '0');
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(date.getUTCDate()).padStart(2, '0');
+        const hour = String(date.getUTCHours()).padStart(2, '0');
+        const minute = String(date.getUTCMinutes()).padStart(2, '0');
+        const second = String(date.getUTCSeconds()).padStart(2, '0');
+        return `${year}${month}${day}T${hour}${minute}${second}Z`;
+    };
+
+    // 辅助函数：将 Date 对象格式化为 ICS 全天日期字符串 (YYYYMMDD)
+    const formatICSDateAllDay = (date) => {
+        const year = String(date.getUTCFullYear()).padStart(4, '0');
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(date.getUTCDate()).padStart(2, '0');
+        return `${year}${month}${day}`;
+    };
+
+    tasks.forEach(task => {
+        calendarContent += 'BEGIN:VEVENT\r\n';
+
+        // Format the task title
+        calendarContent += `SUMMARY:${task.title.replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n')}\r\n`;
+
+        // Set the due date if available
+        if (task.due_date) {
+            const startDate = new Date(task.due_date);
+            // 修正：结束时间 = 开始时间 + 30分钟 (30 * 60 * 1000 毫秒)
+            const endDate = new Date(startDate.getTime() + 30 * 60 * 1000);
+
+            calendarContent += `DTSTART:${formatICSDate(startDate)}\r\n`;
+            calendarContent += `DTEND:${formatICSDate(endDate)}\r\n`;
+        } else {
+            // If no due date is set, create an all-day event
+            const today = new Date();
+            const startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000); // +1 day for all-day event
+
+            calendarContent += `DTSTART;VALUE=DATE:${formatICSDateAllDay(startDate)}\r\n`;
+            calendarContent += `DTEND;VALUE=DATE:${formatICSDateAllDay(endDate)}\r\n`;
+        }
+
+        // Set unique ID for the event
+        calendarContent += `UID:${task.id}@todo.want.biz\r\n`;
+
+        // Set creation date
+        const createdDate = task.created_at ? new Date(task.created_at) : new Date();
+        calendarContent += `DTSTAMP:${formatICSDate(createdDate)}\r\n`;
+
+        // Set last modification date
+        const modifiedDate = task.created_at ? new Date(task.created_at) : new Date();
+        calendarContent += `LAST-MODIFIED:${formatICSDate(modifiedDate)}\r\n`;
+
+        // Add description if available
+        if (task.notes) {
+            calendarContent += `DESCRIPTION:${task.notes.replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n')}\r\n`;
+        }
+
+        // Add status - completed or not
+        if (task.completed) {
+            calendarContent += 'STATUS:COMPLETED\r\n';
+        } else {
+            calendarContent += 'STATUS:NEEDS-ACTION\r\n';
+        }
+
+        // Set priority (1-9, with 1 being highest)
+        let priority = 5; // default
+        if (task.priority === 'high') priority = 1;
+        else if (task.priority === 'low') priority = 9;
+        calendarContent += `PRIORITY:${priority}\r\n`;
+
+        calendarContent += 'END:VEVENT\r\n';
+    });
+
+    calendarContent += 'END:VCALENDAR';
+
+    return calendarContent;
+}
 
 export default {
     async fetch(request, env, ctx) {
@@ -677,7 +766,7 @@ export default {
                     }
                 });
             }
-            
+
             if (pathname === '/data/tasks') {
                 if (request.method === 'GET') {
                     // Get all tasks
@@ -712,22 +801,22 @@ export default {
                     try {
                         const body = await request.json();
                         const { title, dueDate, priority, notes, completed } = body;
-                        
+
                         const result = await env.DB.prepare(
                             "INSERT INTO tasks (title, due_date, priority, notes, completed) VALUES (?, ?, ?, ?, ?)"
                         )
                         .bind(title, dueDate, priority, notes, completed ? 1 : 0)
                         .run();
-                        
+
                         // Get the newly inserted task
                         const newTask = await env.DB.prepare(
                             "SELECT * FROM tasks WHERE id = ?"
                         )
                         .bind(result.meta.last_row_id)
                         .first();
-                        
+
                         return new Response(JSON.stringify(newTask), {
-                            headers: { 
+                            headers: {
                                 'Content-Type': 'application/json',
                                 'Access-Control-Allow-Origin': '*',
                                 'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
@@ -738,7 +827,7 @@ export default {
                         console.error('Error creating task:', error);
                         return new Response(JSON.stringify({ error: 'Error creating task' }), {
                             status: 500,
-                            headers: { 
+                            headers: {
                                 'Content-Type': 'application/json',
                                 'Access-Control-Allow-Origin': '*',
                                 'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
@@ -750,7 +839,7 @@ export default {
             } else if (pathname.match(/^\/data\/tasks\/\d+$/)) {
                 // Handle tasks by ID
                 const taskId = parseInt(pathname.split('/')[3]);
-                
+
                 if (request.method === 'GET') {
                     // Get specific task
                     try {
@@ -804,11 +893,11 @@ export default {
                     try {
                         const body = await request.json();
                         const { title, dueDate, priority, notes, completed } = body;
-                        
+
                         // Build dynamic update query based on provided fields
                         let query = "UPDATE tasks SET ";
                         const values = [];
-                        
+
                         if (title !== undefined) {
                             query += "title = ?, ";
                             values.push(title);
@@ -829,17 +918,17 @@ export default {
                             query += "completed = ?, ";
                             values.push(completed ? 1 : 0);
                         }
-                        
+
                         // Remove trailing comma and space
                         query = query.slice(0, -2);
                         query += " WHERE id = ?";
                         values.push(taskId);
-                        
+
                         await env.DB.prepare(query).bind(...values).run();
-                        
+
                         // Get the updated task
                         const updatedTask = await env.DB.prepare("SELECT * FROM tasks WHERE id = ?").bind(taskId).first();
-                        
+
                         return new Response(JSON.stringify(updatedTask), {
                             headers: {
                                 'Content-Type': 'application/json',
@@ -863,6 +952,38 @@ export default {
                 }
             } else {
                 return new Response('Not Found', { status: 404 });
+            }
+        }
+
+        // Handle the new /event route for ICS export
+        if (pathname === '/event' || pathname === '/events') {
+            if (request.method === 'GET') {
+                try {
+                    // Retrieve all tasks from database
+                    const { results } = await env.DB.prepare("SELECT * FROM tasks ORDER BY completed ASC, created_at DESC").all();
+
+                    // Convert tasks to iCalendar format
+                    const icsContent = tasksToICalendar(results);
+
+                    // Return the ICS content with appropriate headers
+                    return new Response(icsContent, {
+                        headers: {
+                            'Content-Type': 'text/calendar; charset=utf-8',
+                            'Content-Disposition': 'attachment; filename="todo-list.ics"',
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache',
+                            'Expires': '0'
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error generating ICS:', error);
+                    return new Response('Error generating ICS file', {
+                        status: 500,
+                        headers: {
+                            'Content-Type': 'text/plain'
+                        }
+                    });
+                }
             }
         }
 
