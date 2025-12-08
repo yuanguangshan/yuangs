@@ -75,7 +75,17 @@ const HTML_CONTENT = `<!DOCTYPE html>
             <div class="col s12">
                 <div class="card">
                     <div class="card-content">
-                        <span class="card-title">您的任务</span>
+                        <div class="row valign-wrapper">
+                            <div class="col s10">
+                                <span class="card-title">📋 您的任务</span>
+                            </div>
+                            <div class="col s2 right-align">
+                                <button id="syncCalendarBtnTop" class="btn-flat btn-small">
+                                    <i class="material-icons">calendar_today</i>
+                                    <span class="hide-on-med-and-down">同步</span>
+                                </button>
+                            </div>
+                        </div>
                         <div class="row">
                             <div class="col s12">
                                 <ul id="taskList" class="collection">
@@ -245,23 +255,23 @@ nav {
 }
 
 .task-actions {
-    position: absolute;
-    right: 15px;
-    top: 50%;
-    transform: translateY(-50%);
     display: flex;
-    gap: 8px;
+    gap: 10px;
+    margin-top: 10px;
+    justify-content: flex-start;
 }
 
 .btn-flat {
-    padding: 0 10px;
+    padding: 0 8px;
     min-width: auto;
     margin: 0;
     color: #666;
+    border-radius: 4px;
 }
 
 .btn-flat:hover {
     color: #000;
+    background-color: #f0f0f0;
 }
 
 .task-expand-btn {
@@ -399,7 +409,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Calendar sync functionality
     syncCalendarBtn.addEventListener('click', syncWithCalendar);
 
-    // Function to add a new task
+    // Top calendar sync button functionality
+    const syncCalendarBtnTop = document.getElementById('syncCalendarBtnTop');
+    if (syncCalendarBtnTop) {
+        syncCalendarBtnTop.addEventListener('click', syncWithCalendar);
+    }
+
+    // Function to add a new task or update existing task
     async function addTask() {
         const title = taskInput.value.trim();
         if (!title) return;
@@ -412,22 +428,50 @@ document.addEventListener('DOMContentLoaded', function() {
             dueDateTime = \`\${date}T\${time}\`;
         }
 
-        const newTask = {
+        // Check if we're editing an existing task
+        const taskId = document.getElementById('addTaskBtn').dataset.taskId;
+        const isEditing = taskId !== undefined && taskId !== '';
+
+        const taskData = {
             title: title,
             dueDate: dueDateTime || null,
             priority: priorityInput.value,
-            notes: notesInput.value.trim() || null,
-            completed: false
+            notes: notesInput.value.trim() || null
         };
 
         try {
-            const response = await fetch('/data/tasks', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(newTask)
-            });
+            let response;
+            if (isEditing) {
+                // Update existing task
+                response = await fetch(\`/data/tasks/\${taskId}\`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(taskData)
+                });
+
+                if (response.ok) {
+                    // Reset button to original state
+                    const addTaskBtn = document.getElementById('addTaskBtn');
+                    addTaskBtn.innerHTML = '<i class="material-icons left">add</i>添加任务';
+                    delete addTaskBtn.dataset.taskId;
+
+                    const hideTaskBtn = document.getElementById('hideTaskBtn');
+                    if (hideTaskBtn) {
+                        hideTaskBtn.innerHTML = '<i class="material-icons left">close</i>收起';
+                    }
+                }
+            } else {
+                // Add new task
+                response = await fetch('/data/tasks', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({...taskData, completed: false})
+                });
+            }
 
             if (response.ok) {
                 // Clear inputs
@@ -443,10 +487,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Reload tasks
                 loadTasks();
             } else {
-                console.error('Failed to add task');
+                console.error(isEditing ? 'Failed to update task' : 'Failed to add task');
             }
         } catch (error) {
-            console.error('Error adding task:', error);
+            console.error(isEditing ? 'Error updating task:' : 'Error adding task:', error);
         }
     }
 
@@ -497,18 +541,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="task-content">
                     <div class="task-title">\${escapeHtml(task.title)}</div>
                     <div class="task-details">
-                        \${task.due_date ? \`<span class="task-due-date">截止: \${formatDate(task.due_date)}</span>\` : ''}
-                        <span class="task-priority priority-\${task.priority}">\${getPriorityText(task.priority)}</span>
+                        \${task.due_date ? \`<span class="task-due-date"><i class="material-icons tiny">event</i> \${formatDate(task.due_date)}</span>\` : ''}
+                        <span class="task-priority priority-\${task.priority}"><i class="material-icons tiny">flag</i> \${getPriorityText(task.priority)}</span>
                     </div>
-                    \${task.notes ? \`<div class="task-notes">\${escapeHtml(task.notes)}</div>\` : ''}
-                </div>
-                <div class="task-actions">
-                    <button class="btn-flat task-edit-btn" data-id="\${task.id}">
-                        <i class="material-icons">edit</i>
-                    </button>
-                    <button class="btn-flat task-delete-btn" data-id="\${task.id}">
-                        <i class="material-icons">delete</i>
-                    </button>
+                    \${task.notes ? \`
+                        <div class="task-notes-container">
+                            <div class="task-notes-preview">\${escapeHtml(task.notes.substring(0, 60))}\${task.notes.length > 60 ? '...' : ''}</div>
+                            <div class="task-details-content">
+                                <div class="task-notes">\${escapeHtml(task.notes)}</div>
+                            </div>
+                        </div>
+                    \` : ''}
+                    <div class="task-actions">
+                        <button class="btn-flat task-expand-btn" data-task-id="\${task.id}">
+                            <i class="material-icons">expand_more</i>
+                        </button>
+                        <button class="btn-flat task-edit-btn" data-id="\${task.id}">
+                            <i class="material-icons">edit</i>
+                        </button>
+                        <button class="btn-flat task-delete-btn" data-id="\${task.id}">
+                            <i class="material-icons">delete</i>
+                        </button>
+                    </div>
                 </div>
             \`;
 
@@ -518,10 +572,45 @@ document.addEventListener('DOMContentLoaded', function() {
             const checkbox = taskItem.querySelector(\`#task-\${task.id}\`);
             const editBtn = taskItem.querySelector('.task-edit-btn');
             const deleteBtn = taskItem.querySelector('.task-delete-btn');
+            const expandBtn = taskItem.querySelector('.task-expand-btn');
+            const notesContainer = taskItem.querySelector('.task-notes-container');
+            const notesPreview = taskItem.querySelector('.task-notes-preview');
+            const notesContent = taskItem.querySelector('.task-details-content');
 
             checkbox.addEventListener('change', () => toggleTask(task.id));
             editBtn.addEventListener('click', () => editTask(task.id));
             deleteBtn.addEventListener('click', () => deleteTask(task.id));
+
+            if (notesContainer) {
+                expandBtn.addEventListener('click', () => {
+                    const isExpanded = notesContent.classList.contains('expanded');
+                    if (isExpanded) {
+                        // Collapse
+                        notesContent.classList.remove('expanded');
+                        expandBtn.innerHTML = '<i class="material-icons">expand_more</i>';
+                    } else {
+                        // Expand
+                        notesContent.classList.add('expanded');
+                        expandBtn.innerHTML = '<i class="material-icons">expand_less</i>';
+                    }
+                });
+
+                // If task has notes, make the preview clickable too
+                if (notesPreview) {
+                    notesPreview.addEventListener('click', () => {
+                        const isExpanded = notesContent.classList.contains('expanded');
+                        if (isExpanded) {
+                            // Collapse
+                            notesContent.classList.remove('expanded');
+                            expandBtn.innerHTML = '<i class="material-icons">expand_more</i>';
+                        } else {
+                            // Expand
+                            notesContent.classList.add('expanded');
+                            expandBtn.innerHTML = '<i class="material-icons">expand_less</i>';
+                        }
+                    });
+                }
+            }
         });
     }
 
@@ -576,35 +665,82 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Function to edit task
+    // Function to edit task - populate form with existing values
     async function editTask(id) {
-        const taskElement = Array.from(taskList.children).find(
-            el => el.querySelector('.task-edit-btn')?.dataset.id === String(id)
-        );
-        
-        if (!taskElement) return;
+        try {
+            const response = await fetch(\`/data/tasks/\${id}\`);
+            if (response.ok) {
+                const task = await response.json();
 
-        const currentTitle = taskElement.querySelector('.task-title').textContent;
-        const newTitle = prompt('编辑任务:', currentTitle);
-        
-        if (newTitle !== null && newTitle.trim() !== '') {
-            try {
-                const response = await fetch(\`/data/tasks/\${id}\`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ title: newTitle.trim() })
-                });
+                // Populate the form fields with task data
+                document.getElementById('taskInput').value = task.title;
+                document.getElementById('priorityInput').value = task.priority;
 
-                if (response.ok) {
-                    loadTasks(); // Reload tasks after update
+                // Handle due date and time
+                if (task.due_date) {
+                    const dueDate = new Date(task.due_date);
+                    // Format date to YYYY-MM-DD for input
+                    const dateStr = dueDate.toISOString().split('T')[0];
+                    // Format time to HH:MM for input
+                    const timeStr = dueDate.toTimeString().substring(0, 5);
+
+                    document.getElementById('dueDateInput').value = dateStr;
+                    document.getElementById('dueTimeInput').value = timeStr;
                 } else {
-                    console.error('Failed to update task');
+                    document.getElementById('dueDateInput').value = '';
+                    document.getElementById('dueTimeInput').value = '';
                 }
-            } catch (error) {
-                console.error('Error updating task:', error);
+
+                document.getElementById('notesInput').value = task.notes || '';
+
+                // Show the form if it's hidden
+                const addTaskCard = document.getElementById('addTaskCard');
+                if (addTaskCard && (addTaskCard.style.display === 'none' || addTaskCard.style.display === '')) {
+                    addTaskCard.style.display = 'block';
+                }
+
+                // Focus on title input
+                document.getElementById('taskInput').focus();
+
+                // Change button text to "更新任务" and set data-task-id
+                const addTaskBtn = document.getElementById('addTaskBtn');
+                addTaskBtn.innerHTML = '<i class="material-icons left">edit</i>更新任务';
+                addTaskBtn.dataset.taskId = task.id;
+
+                // Change cancel button text
+                const hideTaskBtn = document.getElementById('hideTaskBtn');
+                if (hideTaskBtn) {
+                    hideTaskBtn.innerHTML = '<i class="material-icons left">close</i>取消';
+                    hideTaskBtn.onclick = function() {
+                        // Reset button to original state
+                        const addTaskBtn = document.getElementById('addTaskBtn');
+                        addTaskBtn.innerHTML = '<i class="material-icons left">add</i>添加任务';
+                        delete addTaskBtn.dataset.taskId;
+
+                        // Clear the form and reset to default values
+                        document.getElementById('taskInput').value = '';
+                        document.getElementById('dueDateInput').value = '';
+                        document.getElementById('dueTimeInput').value = '';
+                        document.getElementById('priorityInput').value = 'medium';
+                        document.getElementById('notesInput').value = '';
+
+                        // Reinitialize Materialize select
+                        M.FormSelect.init(priorityInput, {});
+
+                        // Change button text back to "收起"
+                        hideTaskBtn.innerHTML = '<i class="material-icons left">close</i>收起';
+                    };
+                }
+
+                // Update Materialize select to show correct priority
+                M.FormSelect.init(priorityInput, {});
+                document.getElementById('priorityInput').value = task.priority;
+                M.FormSelect.init(priorityInput, {});
+            } else {
+                console.error('Failed to fetch task for editing');
             }
+        } catch (error) {
+            console.error('Error fetching task for editing:', error);
         }
     }
 
