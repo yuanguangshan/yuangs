@@ -35,11 +35,11 @@ const HTML_CONTENT = `<!DOCTYPE html>
                             </div>
                         </div>
                         <div class="row">
-                            <div class="input-field col s12 m6">
+                            <div class="input-field col s6">
                                 <input type="date" id="dueDateInput">
                                 <label for="dueDateInput">截止日期</label>
                             </div>
-                            <div class="input-field col s12 m6">
+                            <div class="input-field col s6">
                                 <input type="time" id="dueTimeInput">
                                 <label for="dueTimeInput">截止时间</label>
                             </div>
@@ -112,7 +112,9 @@ const HTML_CONTENT = `<!DOCTYPE html>
 const CSS_CONTENT = `/* General Styles */
 body {
     background-color: #f5f5f5;
-    padding-top: 20px;
+    padding-top: 0px;
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
 }
 
 /* Card Styles */
@@ -123,17 +125,19 @@ card {
 
 /* Navigation Styles */
 nav {
-    border-radius: 8px;
-    margin-bottom: 20px;
+    border-radius: 0px;
+    margin-bottom: 5px;
 }
 
 /* Task List Styles */
 .collection {
     border: none;
+    margin: 5px 0;
 }
 
 .collection-item {
     border-bottom: 1px solid #e0e0e0;
+    padding: 10px 15px !important;
 }
 
 .collection-item:last-child {
@@ -159,18 +163,53 @@ nav {
 
 /* Button Styles */
 .btn {
-    margin-right: 10px;
+    margin-right: 5px;
+    margin-bottom: 5px;
     border-radius: 4px;
+}
+
+/* Card Content */
+.card-content {
+    padding: 15px;
+}
+
+.card-title {
+    font-size: 1.2rem;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee;
+}
+
+/* Input fields */
+.input-field {
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+/* Row spacing */
+.row {
+    margin-bottom: 10px;
+}
+
+/* Container */
+.container {
+    margin: 0 auto;
+    padding: 5px;
 }
 
 /* Responsive Styles */
 @media (max-width: 600px) {
     .container {
-        margin: 0 10px;
+        margin: 0 5px;
+        padding: 2px;
     }
 
     .input-field {
-        margin-bottom: 15px;
+        margin-bottom: 10px;
+    }
+
+    .collection-item {
+        padding: 8px 12px !important;
     }
 }
 
