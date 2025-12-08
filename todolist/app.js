@@ -52,17 +52,26 @@ class TodoApp {
     addTask() {
         const taskInput = document.getElementById('taskInput');
         const dueDateInput = document.getElementById('dueDateInput');
+        const dueTimeInput = document.getElementById('dueTimeInput');
         const priorityInput = document.getElementById('priorityInput');
         const notesInput = document.getElementById('notesInput');
 
         const title = taskInput.value.trim();
         if (!title) return;
 
+        let dueDateTime = null;
+        if (dueDateInput.value) {
+            // Combine date and time inputs
+            const date = dueDateInput.value;
+            const time = dueTimeInput.value || '00:00'; // Default to 00:00 if no time is selected
+            dueDateTime = `${date}T${time}`;
+        }
+
         const newTask = {
             id: Date.now(),
             title: title,
             completed: false,
-            dueDate: dueDateInput.value || null,
+            dueDate: dueDateTime || null,
             priority: priorityInput.value,
             notes: notesInput.value.trim() || null,
             createdAt: new Date().toISOString()
@@ -75,9 +84,10 @@ class TodoApp {
         // Reset form
         taskInput.value = '';
         dueDateInput.value = '';
+        dueTimeInput.value = '';
         priorityInput.value = 'medium';
         notesInput.value = '';
-        
+
         // Reinitialize Materialize components after DOM update
         this.initializeMaterializeComponents();
     }
@@ -112,7 +122,24 @@ class TodoApp {
     formatDate(dateString) {
         if (!dateString) return '';
         const date = new Date(dateString);
-        return date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' });
+        // Check if the date string includes time information
+        if (dateString.includes('T')) {
+            // Include both date and time
+            return date.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } else {
+            // Only date
+            return date.toLocaleDateString('zh-CN', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        }
     }
 
     renderTasks() {
