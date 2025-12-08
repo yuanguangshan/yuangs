@@ -41,12 +41,18 @@ const HTML_CONTENT = `<!DOCTYPE html>
                                 <label for="dueDateInput">截止日期</label>
                             </div>
                             <div class="input-field col s12 m6">
+                                <input type="time" id="dueTimeInput">
+                                <label for="dueTimeInput">截止时间</label>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="input-field col s12 m6">
                                 <select id="priorityInput">
                                     <option value="low">低</option>
                                     <option value="medium" selected>中</option>
                                     <option value="high">高</option>
                                 </select>
-                                <label for="priorityInput">优先级</label>
+                                <label>优先级</label>
                             </div>
                         </div>
                         <div class="row">
@@ -181,225 +187,319 @@ nav {
 }`;
 
 const JS_CONTENT = `// Todo List Application
-document.addEventListener('DOMContentLoaded', function() {
-    // DOM Elements
-    const taskInput = document.getElementById('taskInput');
-    const dueDateInput = document.getElementById('dueDateInput');
-    const priorityInput = document.getElementById('priorityInput');
-    const notesInput = document.getElementById('notesInput');
-    const addTaskBtn = document.getElementById('addTaskBtn');
-    const syncCalendarBtn = document.getElementById('syncCalendarBtn');
-    const taskList = document.getElementById('taskList');
-
-    // Initialize Materialize components
-    M.AutoInit();
-
-    // Specifically initialize the select dropdowns if they exist
-    if (priorityInput) {
-        M.FormSelect.init(priorityInput, {});
+class TodoApp {
+    constructor() {
+        this.tasks = this.loadTasks();
+        this.init();
     }
 
-    // Load tasks from localStorage
-    let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+    init() {
+        this.bindEvents();
+        this.renderTasks();
+        this.initializeMaterializeComponents();
+    }
 
-    // Render tasks
-    function renderTasks() {
+    bindEvents() {
+        // Add task button
+        document.getElementById('addTaskBtn').addEventListener('click', () => {
+            this.addTask();
+        });
+
+        // Input field enter key
+        document.getElementById('taskInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.addTask();
+            }
+        });
+
+        // Sync with calendar button
+        document.getElementById('syncCalendarBtn').addEventListener('click', () => {
+            this.syncWithCalendar();
+        });
+
+        // Due date input - set min date to today
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('dueDateInput').min = today;
+    }
+
+    initializeMaterializeComponents() {
+        // Initialize Materialize selects
+        const elems = document.querySelectorAll('select');
+        M.FormSelect.init(elems);
+    }
+
+    loadTasks() {
+        const tasks = localStorage.getItem('todoTasks');
+        return tasks ? JSON.parse(tasks) : [];
+    }
+
+    saveTasks() {
+        localStorage.setItem('todoTasks', JSON.stringify(this.tasks));
+    }
+
+    addTask() {
+        const taskInput = document.getElementById('taskInput');
+        const dueDateInput = document.getElementById('dueDateInput');
+        const dueTimeInput = document.getElementById('dueTimeInput');
+        const priorityInput = document.getElementById('priorityInput');
+        const notesInput = document.getElementById('notesInput');
+
+        const title = taskInput.value.trim();
+        if (!title) return;
+
+        let dueDateTime = null;
+        if (dueDateInput.value) {
+            // Combine date and time inputs
+            const date = dueDateInput.value;
+            const time = dueTimeInput.value || '00:00'; // Default to 00:00 if no time is selected
+            dueDateTime = \`\${date}T\${time}\`;
+        }
+
+        const newTask = {
+            id: Date.now(),
+            title: title,
+            completed: false,
+            dueDate: dueDateTime || null,
+            priority: priorityInput.value,
+            notes: notesInput.value.trim() || null,
+            createdAt: new Date().toISOString()
+        };
+
+        this.tasks.unshift(newTask);
+        this.saveTasks();
+        this.renderTasks();
+
+        // Reset form
+        taskInput.value = '';
+        dueDateInput.value = '';
+        dueTimeInput.value = '';
+        priorityInput.value = 'medium';
+        notesInput.value = '';
+
+        // Reinitialize Materialize components after DOM update
+        this.initializeMaterializeComponents();
+    }
+
+    toggleTask(id) {
+        const task = this.tasks.find(t => t.id === id);
+        if (task) {
+            task.completed = !task.completed;
+            this.saveTasks();
+            this.renderTasks();
+        }
+    }
+
+    deleteTask(id) {
+        this.tasks = this.tasks.filter(t => t.id !== id);
+        this.saveTasks();
+        this.renderTasks();
+    }
+
+    editTask(id) {
+        const task = this.tasks.find(t => t.id === id);
+        if (task) {
+            const newTitle = prompt('编辑任务:', task.title);
+            if (newTitle !== null && newTitle.trim() !== '') {
+                task.title = newTitle.trim();
+                this.saveTasks();
+                this.renderTasks();
+            }
+        }
+    }
+
+    formatDate(dateString) {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        // Check if the date string includes time information
+        if (dateString.includes('T')) {
+            // Include both date and time
+            return date.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } else {
+            // Only date
+            return date.toLocaleDateString('zh-CN', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        }
+    }
+
+    renderTasks() {
+        const taskList = document.getElementById('taskList');
         taskList.innerHTML = '';
 
-        tasks.forEach((task, index) => {
-            const li = document.createElement('li');
-            li.className = 'collection-item task-item';
-
-            // Determine priority class
-            let priorityClass = '';
-            switch(task.priority) {
-                case 'high':
-                    priorityClass = 'priority-high';
-                    break;
-                case 'medium':
-                    priorityClass = 'priority-medium';
-                    break;
-                case 'low':
-                    priorityClass = 'priority-low';
-                    break;
-            }
-
-            // Format date for display
-            const formattedDate = task.dueDate ? new Date(task.dueDate).toLocaleDateString() : '';
-
-            li.innerHTML = \`
-                <div class="\${priorityClass}">
-                    <div class="task-info">
-                        <strong>\${task.text}</strong>
-                        \${task.dueDate ? '<br><small>截止: ' + formattedDate + '</small>' : ''}
-                        \${task.notes ? '<br><small>备注: ' + task.notes + '</small>' : ''}
-                    </div>
-                    <div class="task-actions right-align">
-                        <input type="checkbox" id="complete_\${index}" \${task.completed ? 'checked' : ''}>
-                        <label for="complete_\${index}">完成</label>
-                        <button class="btn-small waves-effect waves-light red delete-btn" data-index="\${index}">
-                            <i class="material-icons">delete</i>
-                        </button>
-                    </div>
-                </div>
-            \`;
-
-            if (task.completed) {
-                li.querySelector('.task-info').classList.add('task-completed');
-            }
-
-            // Add event listener for completion
-            const checkbox = li.querySelector('input[type="checkbox"]');
-            checkbox.addEventListener('change', function() {
-                tasks[index].completed = this.checked;
-                if (tasks[index].completed) {
-                    li.querySelector('.task-info').classList.add('task-completed');
-                } else {
-                    li.querySelector('.task-info').classList.remove('task-completed');
-                }
-                saveTasks();
-            });
-
-            // Add event listener for delete
-            const deleteBtn = li.querySelector('.delete-btn');
-            deleteBtn.addEventListener('click', function() {
-                tasks.splice(index, 1);
-                saveTasks();
-                renderTasks();
-            });
-
-            taskList.appendChild(li);
-        });
-    }
-
-    // Save tasks to localStorage
-    function saveTasks() {
-        localStorage.setItem('tasks', JSON.stringify(tasks));
-    }
-
-    // Add task
-    addTaskBtn.addEventListener('click', function() {
-        const text = taskInput.value.trim();
-        if (text) {
-            const newTask = {
-                text: text,
-                dueDate: dueDateInput.value,
-                priority: priorityInput.value,
-                notes: notesInput.value.trim(),
-                completed: false,
-                createdAt: new Date()
-            };
-
-            tasks.push(newTask);
-            saveTasks();
-            renderTasks();
-
-            // Clear inputs
-            taskInput.value = '';
-            dueDateInput.value = '';
-            priorityInput.value = 'medium';
-            notesInput.value = '';
-
-            // Reinitialize Materialize components
-            M.AutoInit();
-            // Specifically reinitialize the select dropdown
-            M.FormSelect.init(priorityInput, {});
-        }
-    });
-
-    // Allow adding task with Enter key
-    taskInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            addTaskBtn.click();
-        }
-    });
-
-    // Helper function to format Date object to ICS string (YYYYMMDDThhmmssZ)
-    // Ensures no milliseconds and includes Z
-    function formatICSDate(date) {
-        return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-    }
-
-    // Helper function to escape text values for iCalendar format
-    function escapeICalText(text) {
-        if (!text) return '';
-        return text
-            .replace(/\\\\/g, '\\\\\\\\') 
-            .replace(/,/g, '\\\\,')
-            .replace(/;/g, '\\\\;')
-            .replace(/\\n/g, '\\\\n')
-            .replace(/\\r/g, '');
-    }
-
-    // Calendar sync functionality
-    syncCalendarBtn.addEventListener('click', function() {
-        const tasksToExport = tasks.filter(t => t.dueDate && !t.completed);
-        
-        if (tasksToExport.length === 0) {
-            alert('没有带日期的未完成任务可以同步');
+        if (this.tasks.length === 0) {
+            taskList.innerHTML = '<li class="collection-item center">暂无任务。添加您的第一个任务！</li>';
             return;
         }
 
-        // Generate iCalendar file content
-        let icalContent = 'BEGIN:VCALENDAR\\r\\n';
-        icalContent += 'VERSION:2.0\\r\\n';
-        icalContent += 'PRODID:-//Todo List App//CN\\r\\n';
-        icalContent += 'CALSCALE:GREGORIAN\\r\\n';
-        icalContent += 'METHOD:PUBLISH\\r\\n';
-
-        tasksToExport.forEach((task, index) => {
-            // 1. Generate Start and End Times
-            // Assuming task.dueDate is YYYY-MM-DD
-            // Set Start at 09:00 UTC
-            const cleanDateStr = task.dueDate.replace(/-/g, '');
-            const dtStart = cleanDateStr + 'T090000Z';
-            // Set End at 10:00 UTC (1 hour duration) - Crucial for Mac
-            const dtEnd = cleanDateStr + 'T100000Z';
-            
-            // 2. Generate DTSTAMP (Current time)
-            const dtStamp = formatICSDate(new Date());
-
-            // 3. Generate UID
-            // Use timestamp + index to avoid "empty UID" errors for Chinese text
-            const uid = 'todo-' + Date.now() + '-' + index + '@todo-list-app';
-
-            icalContent += 'BEGIN:VEVENT\\r\\n';
-            icalContent += 'UID:' + uid + '\\r\\n';
-            icalContent += 'DTSTAMP:' + dtStamp + '\\r\\n';
-            icalContent += 'DTSTART:' + dtStart + '\\r\\n';
-            icalContent += 'DTEND:' + dtEnd + '\\r\\n'; // Added DTEND
-
-            // Escape special characters
-            const escapedSummary = escapeICalText(task.text);
-            icalContent += 'SUMMARY:' + escapedSummary + '\\r\\n';
-
-            if (task.notes) {
-                const escapedDescription = escapeICalText(task.notes);
-                icalContent += 'DESCRIPTION:' + escapedDescription + '\\r\\n';
+        // Sort tasks: incomplete first, then by due date
+        const sortedTasks = [...this.tasks].sort((a, b) => {
+            if (a.completed !== b.completed) {
+                return a.completed ? 1 : -1;
             }
-
-            // Priority
-            icalContent += 'PRIORITY:' + (task.priority === 'high' ? '1' : task.priority === 'medium' ? '5' : '9') + '\\r\\n';
-            icalContent += 'END:VEVENT\\r\\n';
+            if (a.dueDate && b.dueDate) {
+                return new Date(a.dueDate) - new Date(b.dueDate);
+            }
+            if (a.dueDate) return -1;
+            if (b.dueDate) return 1;
+            return 0;
         });
 
-        icalContent += 'END:VCALENDAR';
+        sortedTasks.forEach(task => {
+            const taskItem = document.createElement('li');
+            taskItem.className = \`collection-item task-item \${task.completed ? 'task-completed completed-task' : ''}\`;
+            taskItem.innerHTML = \`
+                <div class="task-checkbox">
+                    <input type="checkbox" id="task-\${task.id}" \${task.completed ? 'checked' : ''}>
+                </div>
+                <div class="task-content">
+                    <div class="task-title">\${this.escapeHtml(task.title)}</div>
+                    <div class="task-details">
+                        \${task.dueDate ? \`<span class="task-due-date">截止: \${this.formatDate(task.dueDate)}</span>\` : ''}
+                        <span class="task-priority priority-\${task.priority}">\${this.getPriorityText(task.priority)}</span>
+                    </div>
+                    \${task.notes ? \`<div class="task-notes">\${this.escapeHtml(task.notes)}</div>\` : ''}
+                </div>
+                <div class="task-actions">
+                    <button class="btn-flat task-edit-btn" data-id="\${task.id}">
+                        <i class="material-icons">edit</i>
+                    </button>
+                    <button class="btn-flat task-delete-btn" data-id="\${task.id}">
+                        <i class="material-icons">delete</i>
+                    </button>
+                </div>
+            \`;
 
-        // Create and download the file
-        const blob = new Blob([icalContent], { type: 'text/calendar;charset=utf-8' });
+            taskList.appendChild(taskItem);
+
+            // Add event listeners for the new elements
+            const checkbox = taskItem.querySelector(\`#task-\${task.id}\`);
+            const editBtn = taskItem.querySelector('.task-edit-btn');
+            const deleteBtn = taskItem.querySelector('.task-delete-btn');
+
+            checkbox.addEventListener('change', () => this.toggleTask(task.id));
+            editBtn.addEventListener('click', () => this.editTask(task.id));
+            deleteBtn.addEventListener('click', () => this.deleteTask(task.id));
+        });
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    getPriorityText(priority) {
+        switch (priority) {
+            case 'high':
+                return '高';
+            case 'medium':
+                return '中';
+            case 'low':
+                return '低';
+            default:
+                return priority;
+        }
+    }
+
+    // Calendar sync functionality - Export to iCalendar format
+    syncWithCalendar() {
+        // Get all incomplete tasks
+        const incompleteTasks = this.tasks.filter(task => !task.completed);
+
+        if (incompleteTasks.length === 0) {
+            M.toast({html: '没有可导出的任务！'});
+            return;
+        }
+
+        // Create iCalendar content for each task
+        let calendarContent = 'BEGIN:VCALENDAR\\n';
+        calendarContent += 'VERSION:2.0\\n';
+        calendarContent += 'PRODID:-//Cloudflare Todo List//Calendar Export//EN\\n';
+
+        incompleteTasks.forEach(task => {
+            calendarContent += 'BEGIN:VEVENT\\n';
+
+            // Format the task title
+            calendarContent += \`SUMMARY:\${task.title}\\n\`;
+
+            // Set the due date if available
+            if (task.dueDate) {
+                // Format date as YYYYMMDDTHHMMSSZ
+                const date = new Date(task.dueDate);
+                const formattedDate = date.toISOString().replace(/[-:]/g, '').replace(/\\.\d{3}/, '');
+                calendarContent += \`DTSTART:\${formattedDate}\\n\`;
+                calendarContent += \`DTEND:\${formattedDate}\\n\`;
+            }
+
+            // Set unique ID for the event
+            calendarContent += \`UID:\${task.id}@cloudflare-todo-list\\n\`;
+
+            // Set creation date
+            const createdDate = new Date(task.createdAt);
+            const formattedCreated = createdDate.toISOString().replace(/[-:]/g, '').replace(/\\.\d{3}/, '');
+            calendarContent += \`DTSTAMP:\${formattedCreated}\\n\`;
+
+            // Add description if available
+            if (task.notes) {
+                calendarContent += \`DESCRIPTION:\${task.notes}\\n\`;
+            }
+
+            // Set priority (1-9, with 1 being highest)
+            let priority = 5; // default
+            if (task.priority === 'high') priority = 1;
+            else if (task.priority === 'low') priority = 9;
+            calendarContent += \`PRIORITY:\${priority}\\n\`;
+
+            calendarContent += 'END:VEVENT\\n';
+        });
+
+        calendarContent += 'END:VCALENDAR';
+
+        // Create a Blob with the calendar data
+        const blob = new Blob([calendarContent], { type: 'text/calendar;charset=utf-8' });
+
+        // Create a download link
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'todolist.ics';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    });
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'todo-list.ics';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
 
-    // Initial render
-    renderTasks();
+        M.toast({html: '任务已导出到日历！'});
+    }
+}
+
+// Initialize the app when the DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    new TodoApp();
 });
+
+// Service worker registration (will be moved to a separate file)
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+        if ('/sw.js' in navigator.serviceWorker.controller?.scriptURL) {
+            // Already registered
+        } else {
+            navigator.serviceWorker.register('/sw.js')
+                .then(function(registration) {
+                    console.log('ServiceWorker registration successful');
+                })
+                .catch(function(err) {
+                    console.log('ServiceWorker registration failed');
+                });
+        }
+    });
+}
 `;
 
 const MANIFEST_CONTENT = `{
