@@ -9,6 +9,8 @@ class TodoApp {
         this.bindEvents();
         this.renderTasks();
         this.initializeMaterializeComponents();
+        this.requestNotificationPermission();
+        this.checkForDueTasks();
     }
 
     bindEvents() {
@@ -32,12 +34,119 @@ class TodoApp {
         // Due date input - set min date to today
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('dueDateInput').min = today;
+
+        // Notification permission button
+        document.getElementById('notificationBtn').addEventListener('click', () => {
+            this.requestNotificationPermission();
+        });
     }
 
     initializeMaterializeComponents() {
         // Initialize Materialize selects
         const elems = document.querySelectorAll('select');
         M.FormSelect.init(elems);
+    }
+
+    // Request notification permission from user
+    async requestNotificationPermission() {
+        if (!('Notification' in window)) {
+            console.log('This browser does not support desktop notification');
+            return;
+        }
+
+        if (Notification.permission === 'granted') {
+            console.log('Notification permission already granted');
+            return;
+        }
+
+        if (Notification.permission !== 'denied') {
+            const permission = await Notification.requestPermission();
+            if (permission === 'granted') {
+                console.log('Notification permission granted');
+            }
+        }
+    }
+
+    // Show notification for a task
+    showNotification(task) {
+        if (Notification.permission === 'granted') {
+            const options = {
+                body: `任务: ${task.title}`,
+                icon: '/icon-512x512.svg',
+                badge: '/icon-512x512.svg',
+                tag: `task-${task.id}`
+            };
+
+            // Check if a notification for this task is already displayed
+            if ('getNotifications' in ServiceWorkerRegistration.prototype) {
+                navigator.serviceWorker.getRegistrations().then(registrations => {
+                    for (let registration of registrations) {
+                        registration.getNotifications({tag: options.tag}).then(notifications => {
+                            if (notifications.length === 0) {
+                                // Only show notification if not already shown
+                                new Notification(`任务提醒`, options);
+                            }
+                        });
+                    }
+                });
+            } else {
+                new Notification(`任务提醒`, options);
+            }
+        }
+    }
+
+    // Check for tasks that are due soon and notify user
+    checkForDueTasks() {
+        const now = new Date();
+        const soon = new Date(now.getTime() + 5 * 60000); // 5 minutes from now
+
+        this.tasks.forEach(task => {
+            if (task.dueDate && !task.completed && !task.notified) {
+                const dueDate = new Date(task.dueDate);
+
+                // Check if task is due in the next 5 minutes
+                if (dueDate > now && dueDate <= soon) {
+                    this.showNotification(task);
+
+                    // Update task to mark as notified
+                    task.notified = true;
+                    this.saveTasks();
+
+                    // Show a toast message as well
+                    M.toast({html: `任务即将到期：${task.title}`, classes: 'red'});
+                }
+            }
+        });
+
+        // Schedule next check in 1 minute
+        setTimeout(() => this.checkForDueTasks(), 60000);
+    }
+
+    // Schedule notifications for tasks when they are added
+    scheduleTaskNotification(task) {
+        if (task.dueDate) {
+            const dueDate = new Date(task.dueDate);
+            const now = new Date();
+
+            if (dueDate > now) {
+                const timeUntilDue = dueDate - now;
+
+                // Set a timeout to notify the user when the task is due
+                setTimeout(() => {
+                    this.showNotification(task);
+
+                    // Mark as notified in the task
+                    const foundTask = this.tasks.find(t => t.id === task.id);
+                    if (foundTask) {
+                        foundTask.notified = true;
+                        this.saveTasks();
+                    }
+
+                    // Show a toast message as well
+                    M.toast({html: `任务已到期：${task.title}`, classes: 'red'});
+                }, timeUntilDue);
+            }
+        }
     }
 
     loadTasks() {
@@ -74,12 +183,18 @@ class TodoApp {
             dueDate: dueDateTime || null,
             priority: priorityInput.value,
             notes: notesInput.value.trim() || null,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            notified: false  // Track if notification has been sent
         };
 
         this.tasks.unshift(newTask);
         this.saveTasks();
         this.renderTasks();
+
+        // Schedule notification if due date is set
+        if (dueDateTime) {
+            this.scheduleTaskNotification(newTask);
+        }
 
         // Reset form
         taskInput.value = '';
