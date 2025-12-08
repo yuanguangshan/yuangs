@@ -1,5 +1,5 @@
 /*
-  JSBox 脚本：从URL获取ICS并写入系统日历
+  JSBox 脚本：从URL获取ICS并写入系统日历 (修复版)
   功能：定期获取ICS文件内容，解析事件，直接写入日历
 */
 
@@ -19,26 +19,32 @@ function main() {
 }
 
 function fetchAndParseICS() {
-  // 使用你的端点URL
+  // 您的 Cloudflare Worker 地址
   let icsUrl = "https://todo.want.biz/event";
-  
+
   $ui.loading("正在获取ICS数据...");
-  
+
   $http.get({
     url: icsUrl,
     timeout: 30,
+    header: {
+      "Accept": "text/calendar, text/plain, */*"
+    },
     handler: function(resp) {
       $ui.loading(false);
       if (resp.error) {
+        console.log("网络请求错误:", resp.error);
         $ui.error("获取ICS数据失败: " + resp.error.localizedDescription);
         return;
       }
-      
+
       let icsContent = resp.data;
-      if (icsContent && icsContent.includes("BEGIN:VCALENDAR")) {
+      // 简单的有效性检查
+      if (icsContent && typeof icsContent === "string" && icsContent.includes("BEGIN:VCALENDAR")) {
         parseAndImport(icsContent);
       } else {
-        $ui.error("获取的ICS内容无效");
+        $ui.error("获取的ICS内容无效或格式错误");
+        console.log("接收到的内容:", icsContent);
       }
     }
   });
@@ -46,213 +52,184 @@ function fetchAndParseICS() {
 
 function pickFile() {
   $drive.open({
-    types: ["public.item"], // 允许选择所有类型，避免过滤掉 .ics
+    types: ["public.item"],
     handler: function(data) {
       if (data) {
-        let content = data.string;
-        if (content) {
-          parseAndImport(content);
-        } else {
-          $ui.error("无法读取文件内容");
-        }
+        parseAndImport(data.string);
       }
     }
   });
 }
 
 function parseAndImport(icsContent) {
-  if (!icsContent || !icsContent.includes("BEGIN:VCALENDAR")) {
-    $ui.error("无效的 ICS 内容");
-    return;
-  }
+  if (!icsContent) return;
 
-  // 简单的正则表达式解析 ICS
-  // 注意：ICS 格式很复杂，这里只提取核心信息 (标题、开始时间、结束时间、描述)
   const events = [];
+  // 兼容各种换行符
   const lines = icsContent.split(/\r\n|\n|\r/);
   
   let currentEvent = null;
   
-  for (let line of lines) {
-    if (line.startsWith("BEGIN:VEVENT")) {
+  for (let rawLine of lines) {
+    // 关键修复：去除首尾空格和回车符
+    let line = rawLine.trim();
+    if (!line) continue;
+
+    if (line === "BEGIN:VEVENT") {
       currentEvent = {};
-    } else if (line.startsWith("END:VEVENT")) {
+    } else if (line === "END:VEVENT") {
       if (currentEvent) events.push(currentEvent);
       currentEvent = null;
     } else if (currentEvent) {
       // 解析字段
-      if (line.startsWith("SUMMARY:")) currentEvent.title = unescapeICSText(line.substring(8));
-      else if (line.startsWith("DESCRIPTION:")) currentEvent.notes = unescapeICSText(line.substring(12));
-      else if (line.startsWith("LOCATION:")) currentEvent.location = unescapeICSText(line.substring(9));
-      else if (line.startsWith("DTSTART:")) currentEvent.startDate = parseICSTime(line.substring(8));
-      // 处理带时区的格式 DTSTART;TZID=Asia/Shanghai:2023...
-      else if (line.startsWith("DTSTART;")) currentEvent.startDate = parseICSTime(line.split(":")[1]);
-      
-      else if (line.startsWith("DTEND:")) currentEvent.endDate = parseICSTime(line.substring(6));
-      else if (line.startsWith("DTEND;")) currentEvent.endDate = parseICSTime(line.split(":")[1]);
-      
-      // 处理状态字段
-      else if (line.startsWith("STATUS:")) currentEvent.status = line.substring(7);
-      
-      // 处理优先级字段
-      else if (line.startsWith("PRIORITY:")) currentEvent.priority = line.substring(9);
+      if (line.startsWith("SUMMARY:")) {
+        currentEvent.title = unescapeICSText(line.substring(8));
+      } else if (line.startsWith("DESCRIPTION:")) {
+        currentEvent.notes = unescapeICSText(line.substring(12));
+      } else if (line.startsWith("LOCATION:")) {
+        currentEvent.location = unescapeICSText(line.substring(9));
+      } else if (line.startsWith("DTSTART")) {
+        // 处理 DTSTART: 和 DTSTART;TZID=...:
+        let timePart = line.includes(":") ? line.split(":").slice(1).join(":") : "";
+        currentEvent.startDate = parseICSTime(timePart);
+      } else if (line.startsWith("DTEND")) {
+        let timePart = line.includes(":") ? line.split(":").slice(1).join(":") : "";
+        currentEvent.endDate = parseICSTime(timePart);
+      }
     }
   }
 
   if (events.length === 0) {
-    $ui.error("未在ICS内容中找到事件");
+    $ui.error("未找到有效事件");
     return;
   }
 
-  $ui.alert({
-    title: "确认导入",
-    message: `解析到 ${events.length} 个事件，是否导入系统日历？\n(首个事件: ${events[0].title || '无标题'})`,
-    actions: [
+  // 预览第一个事件的时间，帮助确认是否解析正确
+  let firstEventDate = events[0].startDate ? events[0].startDate.toLocaleString() : "未知时间";
+
+  $ui.render({
+    props: { title: "确认导入" },
+    views: [
       {
-        title: "导入",
-        handler: function() {
-          batchCreateEvents(events);
+        type: "label",
+        props: {
+          text: `解析到 ${events.length} 个事件\n\n首个事件: ${events[0].title}\n时间: ${firstEventDate}\n\n注意：请检查年份是否正确！`,
+          lines: 0,
+          align: $align.center
+        },
+        layout: function(make, view) {
+          make.top.inset(20);
+          make.left.right.inset(20);
         }
       },
       {
-        title: "查看列表",
-        handler: function() {
-          showEventList(events);
+        type: "button",
+        props: { title: "导入系统日历", bgcolor: $color("systemBlue") },
+        layout: function(make, view) {
+          make.top.equalTo(view.prev.bottom).offset(30);
+          make.centerX.equalTo(view.super);
+          make.width.equalTo(200);
+          make.height.equalTo(44);
+        },
+        events: {
+          tapped: function() {
+            $ui.pop();
+            batchCreateEvents(events);
+          }
         }
-      },
-      {
-        title: "取消",
-        style: "Cancel"
       }
     ]
   });
 }
 
-// 辅助函数：解析 ICS 时间字符串 (例如 20231027T080000Z)
+// 修复后的时间解析函数
 function parseICSTime(timeStr) {
   if (!timeStr) return new Date();
   
-  // 简单的格式清理
-  let cleanStr = timeStr.replace("Z", ""); 
+  // 清理多余字符
+  let clean = timeStr.trim().replace("Z", "");
   
-  // 提取年月日时分秒
-  // 格式通常是 YYYYMMDDTHHMMSS
-  if (cleanStr.length >= 15) {
-    let year = parseInt(cleanStr.substring(0, 4));
-    let month = parseInt(cleanStr.substring(4, 6)) - 1;
-    let day = parseInt(cleanStr.substring(6, 8));
-    let hour = parseInt(cleanStr.substring(9, 11));
-    let minute = parseInt(cleanStr.substring(11, 13));
-    let second = parseInt(cleanStr.substring(13, 15));
-    // 创建UTC时间然后转换为本地时间
-    return new Date(Date.UTC(year, month, day, hour, minute, second));
-  } else if (cleanStr.length === 8) {
-    // 仅日期 YYYYMMDD
-    let year = parseInt(cleanStr.substring(0, 4));
-    let month = parseInt(cleanStr.substring(4, 6)) - 1;
-    let day = parseInt(cleanStr.substring(6, 8));
-    return new Date(year, month, day);
+  // 格式: YYYYMMDD (全天)
+  if (clean.length === 8) {
+    let y = parseInt(clean.substring(0, 4));
+    let m = parseInt(clean.substring(4, 6)) - 1;
+    let d = parseInt(clean.substring(6, 8));
+    return new Date(y, m, d);
   }
   
-  return new Date();
-}
-
-// 辅助函数：解码ICS文本中的转义字符
-function unescapeICSText(text) {
-  if (!text) return text;
-  return text
-    .replace(/\\,/g, ',')
-    .replace(/\\;/g, ';')
-    .replace(/\\n/g, '\n')
-    .replace(/\\\\/g, '\\');
-}
-
-function showEventList(events) {
-  let items = events.map((event, index) => {
-    let title = event.title || "无标题";
-    let date = event.startDate ? event.startDate.toLocaleString() : "无日期";
-    return `${index + 1}. ${title} - ${date}`;
-  });
+  // 格式: YYYYMMDDTHHMMSS
+  // 关键修复：确保索引正确，即使前面有空格
+  if (clean.includes("T")) {
+    let parts = clean.split("T");
+    let datePart = parts[0];
+    let timePart = parts[1];
+    
+    if (datePart.length === 8 && timePart.length >= 6) {
+      let y = parseInt(datePart.substring(0, 4));
+      let m = parseInt(datePart.substring(4, 6)) - 1;
+      let d = parseInt(datePart.substring(6, 8));
+      
+      let h = parseInt(timePart.substring(0, 2));
+      let min = parseInt(timePart.substring(2, 4));
+      let s = parseInt(timePart.substring(4, 6));
+      
+      // 这里假设是 UTC 时间 (因为 ICS 通常是 Z 结尾)
+      // 创建 UTC 时间戳，然后转为本地 Date 对象
+      return new Date(Date.UTC(y, m, d, h, min, s));
+    }
+  }
   
-  $ui.push({
-    props: {
-      title: "事件列表"
-    },
-    views: [
-      {
-        type: "list",
-        props: {
-          data: items,
-          rowHeight: 50
-        },
-        layout: $layout.fill
-      }
-    ]
-  });
+  console.log("无法解析时间:", timeStr);
+  return new Date(); // 默认当前时间
+}
+
+function unescapeICSText(text) {
+  if (!text) return "";
+  return text.replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
 }
 
 function batchCreateEvents(events) {
-  let successCount = 0;
-  let errorCount = 0;
-  
-  $ui.loading(`正在导入 ${events.length} 个事件...`);
-  
-  // 使用 Promise 确保所有事件都已处理
-  let promises = events.map(evt => {
-    return new Promise((resolve, reject) => {
-      $calendar.create({
-        title: evt.title || "无标题事件",
-        startDate: evt.startDate || new Date(),
-        endDate: evt.endDate || new Date(new Date().getTime() + 30 * 60000), // 默认30分钟
-        notes: evt.notes || "",
-        location: evt.location || "",
-        handler: function(resp) {
-          if (resp.success) {
-            successCount++;
-          } else {
-            errorCount++;
-            console.log("创建事件失败:", resp.error);
-          }
-          resolve();
-        }
-      });
-    });
-  });
+  if (!$calendar) {
+    $ui.error("无日历权限");
+    return;
+  }
 
-  Promise.all(promises).then(() => {
-    $ui.loading(false);
-    $ui.alert({
-      title: "导入完成",
-      message: `成功导入 ${successCount} 个事件，${errorCount} 个失败`,
-      actions: [
-        {
-          title: "确定"
-        }
-      ]
-    });
-  });
-}
+  $ui.loading("正在写入日历...");
+  
+  let success = 0;
+  let total = events.length;
+  let processed = 0;
 
-// 自动获取模式 - 可选功能
-function autoFetchMode() {
-  $ui.alert({
-    title: "自动获取模式",
-    message: "是否开启自动获取模式？每10分钟会自动从服务器获取最新的ICS数据并导入。",
-    actions: [
-      {
-        title: "开启",
-        handler: function() {
-          setInterval(function() {
-            fetchAndParseICS();
-          }, 10 * 60 * 1000); // 10分钟
-          $ui.toast("自动获取已开启，每10分钟更新一次");
+  events.forEach(evt => {
+    let start = evt.startDate || new Date();
+    let end = evt.endDate;
+    
+    // 默认时长 30 分钟
+    if (!end || end <= start) {
+      end = new Date(start.getTime() + 30 * 60000);
+    }
+
+    $calendar.create({
+      title: evt.title || "无标题任务",
+      startDate: start,
+      endDate: end,
+      notes: evt.notes || "",
+      location: evt.location || "",
+      handler: function(resp) {
+        processed++;
+        // JSBox 的 resp 结构可能因版本而异，通常检查 error 字段
+        if (resp && !resp.error) {
+          success++;
+        } else {
+          console.log(`创建失败 [${evt.title}]:`, resp ? resp.error : "未知错误");
         }
-      },
-      {
-        title: "取消",
-        style: "Cancel"
+
+        if (processed === total) {
+          $ui.loading(false);
+          $ui.alert(`导入完成\n成功: ${success}\n失败: ${total - success}`);
+        }
       }
-    ]
+    });
   });
 }
 
