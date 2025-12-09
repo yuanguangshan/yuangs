@@ -1,6 +1,6 @@
 /*
   JSBox 脚本：ICS 完整解析展示工具
-  功能：从URL获取ICS文件，解析并展示所有内容（北京时间）
+  功能：正确处理时区的 ICS 解析器
 */
 
 function main() {
@@ -81,12 +81,14 @@ function parseAndShowAll(icsContent) {
 function parseICSComplete(icsContent) {
   try {
     const events = [];
+    const todos = [];
     const calendar = {};
     const rawLines = [];
     
     const lines = icsContent.split(/\r\n|\n|\r/);
     
     let currentEvent = null;
+    let currentTodo = null;
     
     for (let rawLine of lines) {
       let line = rawLine.trim();
@@ -110,68 +112,113 @@ function parseICSComplete(icsContent) {
       } else if (line === "END:VEVENT") {
         if (currentEvent) events.push(currentEvent);
         currentEvent = null;
+      } else if (line === "BEGIN:VTODO") {
+        currentTodo = {};
+      } else if (line === "END:VTODO") {
+        if (currentTodo) todos.push(currentTodo);
+        currentTodo = null;
       } else if (currentEvent) {
-        // 解析字段
-        if (line.startsWith("SUMMARY:")) {
-          currentEvent.title = unescapeICSText(line.substring(8));
-        } else if (line.startsWith("DESCRIPTION:")) {
-          currentEvent.description = unescapeICSText(line.substring(12));
-        } else if (line.startsWith("LOCATION:")) {
-          currentEvent.location = unescapeICSText(line.substring(9));
-        } else if (line.startsWith("DTSTART")) {
-          let timePart = line.includes(":") ? line.split(":").slice(1).join(":") : "";
-          currentEvent.startDate = parseICSTime(timePart);
-        } else if (line.startsWith("DTEND")) {
-          let timePart = line.includes(":") ? line.split(":").slice(1).join(":") : "";
-          currentEvent.endDate = parseICSTime(timePart);
-        } else if (line.startsWith("UID:")) {
-          currentEvent.uid = line.substring(4);
-        } else if (line.startsWith("DTSTAMP:")) {
-          currentEvent.timestamp = parseICSTime(line.substring(8));
-        } else if (line.startsWith("LAST-MODIFIED:")) {
-          currentEvent.lastModified = parseICSTime(line.substring(14));
-        } else if (line.startsWith("STATUS:")) {
-          currentEvent.status = line.substring(7);
-        } else if (line.startsWith("PRIORITY:")) {
-          currentEvent.priority = line.substring(9);
-        } else if (line.startsWith("CATEGORIES:")) {
-          currentEvent.categories = line.substring(11);
-        } else if (line.startsWith("CLASS:")) {
-          currentEvent.class = line.substring(6);
-        } else if (line.startsWith("TRANSP:")) {
-          currentEvent.transp = line.substring(7);
-        }
+        parseEventLine(line, currentEvent);
+      } else if (currentTodo) {
+        parseTodoLine(line, currentTodo);
       }
     }
 
     return {
       calendar: calendar,
       events: events,
+      todos: todos,
       rawLines: rawLines,
-      totalEvents: events.length
+      totalEvents: events.length,
+      totalTodos: todos.length
     };
   } catch (e) {
     return { error: e.message };
   }
 }
 
-function parseICSTime(timeStr) {
-  if (!timeStr) return null;
+function parseEventLine(line, currentEvent) {
+  if (line.startsWith("SUMMARY:")) {
+    currentEvent.title = unescapeICSText(line.substring(8));
+  } else if (line.startsWith("DESCRIPTION:")) {
+    currentEvent.description = unescapeICSText(line.substring(12));
+  } else if (line.startsWith("LOCATION:")) {
+    currentEvent.location = unescapeICSText(line.substring(9));
+  } else if (line.startsWith("DTSTART")) {
+    currentEvent.startDate = parseICSDateTime(line);
+  } else if (line.startsWith("DTEND")) {
+    currentEvent.endDate = parseICSDateTime(line);
+  } else if (line.startsWith("UID:")) {
+    currentEvent.uid = line.substring(4);
+  } else if (line.startsWith("DTSTAMP:")) {
+    currentEvent.timestamp = parseICSDateTime(line);
+  } else if (line.startsWith("LAST-MODIFIED:")) {
+    currentEvent.lastModified = parseICSDateTime(line);
+  } else if (line.startsWith("STATUS:")) {
+    currentEvent.status = line.substring(7);
+  } else if (line.startsWith("PRIORITY:")) {
+    currentEvent.priority = line.substring(9);
+  } else if (line.startsWith("CATEGORIES:")) {
+    currentEvent.categories = line.substring(11);
+  } else if (line.startsWith("CLASS:")) {
+    currentEvent.class = line.substring(6);
+  } else if (line.startsWith("TRANSP:")) {
+    currentEvent.transp = line.substring(7);
+  } else if (line.startsWith("RRULE:")) {
+    currentEvent.rrule = line.substring(6);
+  } else if (line.startsWith("SEQUENCE:")) {
+    currentEvent.sequence = line.substring(9);
+  }
+}
+
+function parseTodoLine(line, currentTodo) {
+  if (line.startsWith("SUMMARY:")) {
+    currentTodo.title = unescapeICSText(line.substring(8));
+  } else if (line.startsWith("DESCRIPTION:")) {
+    currentTodo.description = unescapeICSText(line.substring(12));
+  } else if (line.startsWith("DUE")) {
+    currentTodo.dueDate = parseICSDateTime(line);
+  } else if (line.startsWith("UID:")) {
+    currentTodo.uid = line.substring(4);
+  } else if (line.startsWith("DTSTAMP:")) {
+    currentTodo.timestamp = parseICSDateTime(line);
+  } else if (line.startsWith("STATUS:")) {
+    currentTodo.status = line.substring(7);
+  } else if (line.startsWith("PRIORITY:")) {
+    currentTodo.priority = line.substring(9);
+  } else if (line.startsWith("PERCENT-COMPLETE:")) {
+    currentTodo.percentComplete = line.substring(17);
+  }
+}
+
+// 解析 ICS 日期时间（关键修复）
+function parseICSDateTime(line) {
+  // 提取时间值和参数
+  let colonIndex = line.indexOf(":");
+  if (colonIndex === -1) return null;
   
-  let clean = timeStr.trim().replace("Z", "");
+  let params = line.substring(0, colonIndex);
+  let timeValue = line.substring(colonIndex + 1).trim();
   
-  // 格式: YYYYMMDD (全天)
-  if (clean.length === 8) {
-    let y = parseInt(clean.substring(0, 4));
-    let m = parseInt(clean.substring(4, 6)) - 1;
-    let d = parseInt(clean.substring(6, 8));
-    // 全天事件使用北京时间午夜
+  // 检查是否有 TZID 参数
+  let hasTZID = params.includes("TZID=");
+  let isUTC = timeValue.endsWith("Z");
+  let isDateOnly = params.includes("VALUE=DATE");
+  
+  // 清理时间值
+  timeValue = timeValue.replace("Z", "");
+  
+  // 全天事件（仅日期）
+  if (isDateOnly || timeValue.length === 8) {
+    let y = parseInt(timeValue.substring(0, 4));
+    let m = parseInt(timeValue.substring(4, 6)) - 1;
+    let d = parseInt(timeValue.substring(6, 8));
     return new Date(y, m, d, 0, 0, 0);
   }
   
-  // 格式: YYYYMMDDTHHMMSS
-  if (clean.includes("T")) {
-    let parts = clean.split("T");
+  // 带时间的日期
+  if (timeValue.includes("T")) {
+    let parts = timeValue.split("T");
     let datePart = parts[0];
     let timePart = parts[1];
     
@@ -179,14 +226,21 @@ function parseICSTime(timeStr) {
       let y = parseInt(datePart.substring(0, 4));
       let m = parseInt(datePart.substring(4, 6)) - 1;
       let d = parseInt(datePart.substring(6, 8));
-      
       let h = parseInt(timePart.substring(0, 2));
       let min = parseInt(timePart.substring(2, 4));
       let s = parseInt(timePart.substring(4, 6));
       
-      // UTC时间转北京时间（+8小时）
-      let utcDate = new Date(Date.UTC(y, m, d, h, min, s));
-      return new Date(utcDate.getTime() + 8 * 3600 * 1000);
+      if (isUTC) {
+        // UTC 时间（带 Z 后缀）-> 转北京时间（+8）
+        let utcDate = new Date(Date.UTC(y, m, d, h, min, s));
+        return new Date(utcDate.getTime() + 8 * 3600 * 1000);
+      } else if (hasTZID) {
+        // 已经是本地时区时间（如 Asia/Shanghai）-> 直接使用
+        return new Date(y, m, d, h, min, s);
+      } else {
+        // 浮动时间（没有时区信息）-> 当作本地时间
+        return new Date(y, m, d, h, min, s);
+      }
     }
   }
   
@@ -195,7 +249,10 @@ function parseICSTime(timeStr) {
 
 function unescapeICSText(text) {
   if (!text) return "";
-  return text.replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
+  return text.replace(/\\,/g, ',')
+              .replace(/\\;/g, ';')
+              .replace(/\\n/g, '\n')
+              .replace(/\\\\/g, '\\');
 }
 
 function formatDate(date) {
@@ -214,91 +271,69 @@ function formatDate(date) {
 // 显示完整内容视图
 function showCompleteView(result) {
   const events = result.events;
+  const todos = result.todos;
   const calendar = result.calendar;
   
-  // 构建显示数据
   let sections = [];
   
-  // 第一部分：统计信息
+  // 统计信息
   sections.push({
     title: "📊 解析统计",
     rows: [
       { title: "事件总数", detail: events.length + " 个" },
-      { title: "待处理事件", detail: events.filter(e => e.status === "NEEDS-ACTION").length + " 个" },
-      { title: "有描述的事件", detail: events.filter(e => e.description).length + " 个" }
+      { title: "待办事项", detail: todos.length + " 个" },
+      { title: "待确认事件", detail: events.filter(e => e.status === "CONFIRMED").length + " 个" }
     ]
   });
 
-  // 第二部分：日历信息
+  // 日历信息
   sections.push({
     title: "📅 日历信息",
     rows: [
       { title: "版本", detail: calendar.version || "未知" },
       { title: "生产者", detail: calendar.prodId || "未知" },
-      { title: "方法", detail: calendar.method || "未知" },
       { title: "日历刻度", detail: calendar.calScale || "未知" }
     ]
   });
 
-  // 第三部分：每个事件
+  // 事件
   events.forEach((evt, idx) => {
     let eventRows = [];
     
-    if (evt.title) {
-      eventRows.push({ title: "标题", detail: evt.title });
-    }
-    
-    if (evt.description) {
-      eventRows.push({ title: "描述", detail: evt.description });
-    }
-    
-    if (evt.location) {
-      eventRows.push({ title: "地点", detail: evt.location });
-    }
-    
-    if (evt.startDate) {
-      eventRows.push({ title: "开始时间", detail: formatDate(evt.startDate) + " (北京时间)" });
-    }
-    
-    if (evt.endDate) {
-      eventRows.push({ title: "结束时间", detail: formatDate(evt.endDate) + " (北京时间)" });
-    }
-    
-    if (evt.status) {
-      eventRows.push({ title: "状态", detail: evt.status });
-    }
-    
-    if (evt.priority) {
-      eventRows.push({ title: "优先级", detail: evt.priority });
-    }
-    
-    if (evt.categories) {
-      eventRows.push({ title: "分类", detail: evt.categories });
-    }
-    
-    if (evt.class) {
-      eventRows.push({ title: "类别", detail: evt.class });
-    }
-    
-    if (evt.transp) {
-      eventRows.push({ title: "透明度", detail: evt.transp });
-    }
-    
-    if (evt.uid) {
-      eventRows.push({ title: "UID", detail: evt.uid });
-    }
-    
-    if (evt.timestamp) {
-      eventRows.push({ title: "时间戳", detail: formatDate(evt.timestamp) + " (北京时间)" });
-    }
-    
-    if (evt.lastModified) {
-      eventRows.push({ title: "最后修改", detail: formatDate(evt.lastModified) + " (北京时间)" });
-    }
+    if (evt.title) eventRows.push({ title: "标题", detail: evt.title });
+    if (evt.description) eventRows.push({ title: "描述", detail: evt.description });
+    if (evt.location) eventRows.push({ title: "地点", detail: evt.location });
+    if (evt.startDate) eventRows.push({ title: "开始时间", detail: formatDate(evt.startDate) + " (北京时间)" });
+    if (evt.endDate) eventRows.push({ title: "结束时间", detail: formatDate(evt.endDate) + " (北京时间)" });
+    if (evt.status) eventRows.push({ title: "状态", detail: evt.status });
+    if (evt.rrule) eventRows.push({ title: "重复规则", detail: evt.rrule });
+    if (evt.priority) eventRows.push({ title: "优先级", detail: evt.priority });
+    if (evt.class) eventRows.push({ title: "类别", detail: evt.class });
+    if (evt.sequence) eventRows.push({ title: "序列号", detail: evt.sequence });
+    if (evt.uid) eventRows.push({ title: "UID", detail: evt.uid });
+    if (evt.timestamp) eventRows.push({ title: "时间戳", detail: formatDate(evt.timestamp) + " (北京时间)" });
     
     sections.push({
       title: `🎯 事件 #${idx + 1}: ${evt.title || "无标题"}`,
       rows: eventRows
+    });
+  });
+
+  // 待办事项
+  todos.forEach((todo, idx) => {
+    let todoRows = [];
+    
+    if (todo.title) todoRows.push({ title: "标题", detail: todo.title });
+    if (todo.description) todoRows.push({ title: "描述", detail: todo.description });
+    if (todo.dueDate) todoRows.push({ title: "截止时间", detail: formatDate(todo.dueDate) + " (北京时间)" });
+    if (todo.status) todoRows.push({ title: "状态", detail: todo.status });
+    if (todo.priority) todoRows.push({ title: "优先级", detail: todo.priority });
+    if (todo.percentComplete) todoRows.push({ title: "完成百分比", detail: todo.percentComplete + "%" });
+    if (todo.uid) todoRows.push({ title: "UID", detail: todo.uid });
+    
+    sections.push({
+      title: `✅ 待办 #${idx + 1}: ${todo.title || "无标题"}`,
+      rows: todoRows
     });
   });
 
@@ -366,7 +401,6 @@ function showCompleteView(result) {
         layout: $layout.fill,
         events: {
           didSelect: function(sender, indexPath, data) {
-            // 点击复制内容
             let section = sections[indexPath.section];
             let row = section.rows[indexPath.row];
             $clipboard.text = row.title + ": " + row.detail;
@@ -390,9 +424,7 @@ function showRawData(rawLines) {
           $ui.toast("已复制原始数据");
         }
       },
-      {
-        title: "关闭"
-      }
+      { title: "关闭" }
     ]
   });
 }
