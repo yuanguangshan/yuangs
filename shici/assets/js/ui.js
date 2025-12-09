@@ -1428,10 +1428,7 @@ async function requestJSON(method, path, payload) {
     try {
         const response = await fetch(url, {
             method: method,
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json',
-                        "CF-Access-Client-Id": "ab3dfabfc32f6a520441a8110db26021.access",
-                        "CF-Access-Client-Secret": "3b754092a3820bbdab6f4960121a8ea36aedece969dd87c906ef8633bc50afb3"
-                    },
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json'},
             body: payload ? JSON.stringify(payload) : null,
             signal: controller.signal
         });
