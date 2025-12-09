@@ -6,7 +6,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>云端待办事项</title>
+    <title>YGS云端待办事项</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#2196f3">
@@ -18,7 +18,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
 <body>
     <nav>
         <div class="nav-wrapper blue">
-            <a href="#" class="brand-logo center">待办事项</a>
+            <a href="#" class="brand-logo center">YGS待办事项</a>
         </div>
     </nav>
 
@@ -887,7 +887,7 @@ document.addEventListener('DOMContentLoaded', function() {
 `;
 
 const MANIFEST_CONTENT = `{
-    "name": "云端待办事项",
+    "name": "YGS云端待办事项",
     "short_name": "待办事项",
     "start_url": "/",
     "display": "standalone",
