@@ -2017,7 +2017,7 @@ def youtube_get_song_details(video_id):
     """获取歌曲完整信息接口（包括歌词）"""
     if not YOUTUBE_SERVICE_AVAILABLE:
         return jsonify({'success': False, 'error': 'YouTube Music 服务不可用'}), 503
-    
+
     try:
         result = get_song_details(video_id)
         return jsonify(result)
