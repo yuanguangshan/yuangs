@@ -22,9 +22,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
         <nav class="navbar z-depth-0">
             <div class="custom-nav-container">
                 <a href="#" class="brand-logo-custom">
-                    <div class="logo-icon-wrapper">
-                        <i class="material-icons-round">check_circle</i>
-                    </div>
+                    <i class="material-icons-round brand-icon">check_circle</i>
                     <span class="brand-text">YGS记事本</span>
                 </a>
                 
@@ -215,32 +213,28 @@ nav.navbar {
 .brand-logo-custom {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px; /* Reduced gap for tighter look */
     text-decoration: none;
     height: 48px;
 }
 
-.logo-icon-wrapper {
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
+.brand-icon {
+    font-size: 32px;
     background: var(--primary-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-}
-
-.logo-icon-wrapper i {
-    color: white;
-    font-size: 24px;
 }
 
 .brand-text {
-    font-size: 1.25rem;
+    font-size: 1.4rem; /* Slightly larger match original */
     font-weight: 800;
     color: var(--text-primary);
     letter-spacing: -0.5px;
+    line-height: 1;
 }
 
 .nav-actions {
