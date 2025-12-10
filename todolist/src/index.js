@@ -509,45 +509,46 @@ nav.navbar {
 /* 标签 - 统一设计 */
 .chip-custom {
     font-size: 0.75rem;
-    padding: 4px 10px;
-    border-radius: 8px; /* Slightly squared */
+    padding: 3px 8px;
+    border-radius: 6px;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-weight: 600;
+    gap: 4px;
+    font-weight: 500;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    border: 1px solid transparent;
-    height: 28px;
+    border: 1px solid transparent; /* Prepare for border */
+    height: 24px;
+    line-height: 1;
 }
 
 .chip-custom i {
     font-size: 14px;
 }
 
-/* 优先级特定样式 - 弱化背景，强调文字和边框 */
+/* 优先级特定样式 - 弱化背景，强调文字 */
 .chip-priority.high {
-    background: rgba(245, 87, 108, 0.1);
-    color: #f5576c;
-    border-color: rgba(245, 87, 108, 0.2);
+    background: rgba(244, 67, 54, 0.1);
+    color: #f44336;
+    border: 1px solid rgba(244, 67, 54, 0.2);
 }
 
 .chip-priority.medium {
     background: rgba(255, 152, 0, 0.1);
     color: #ff9800;
-    border-color: rgba(255, 152, 0, 0.2);
+    border: 1px solid rgba(255, 152, 0, 0.2);
 }
 
 .chip-priority.low {
-    background: rgba(79, 172, 254, 0.1);
-    color: #4facfe;
-    border-color: rgba(79, 172, 254, 0.2);
+    background: rgba(76, 175, 80, 0.1);
+    color: #4caf50;
+    border: 1px solid rgba(76, 175, 80, 0.2);
 }
 
 /* 日期样式 - 保持一致 */
 .chip-date {
-    background: rgba(102, 126, 234, 0.08);
-    color: #667eea;
-    border-color: rgba(102, 126, 234, 0.15);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-light);
 }
 
 .chip-custom:hover {
