@@ -25,7 +25,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
                     <div class="nav-content-left">
                         <a href="#" class="brand-logo">
                             <i class="material-icons-round brand-icon">check_circle</i>
-                            <span class="brand-text">YGS云端待办</span>
+                            <span class="brand-text">YGS记事本</span>
                         </a>
                     </div>
                     <div class="nav-content-right">
