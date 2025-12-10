@@ -22,16 +22,16 @@ const HTML_CONTENT = `<!DOCTYPE html>
         <nav class="navbar z-depth-0">
             <div class="nav-wrapper container">
                 <div class="nav-wrapper-flex">
-                    <div class="brand-container">
+                    <div class="nav-content-left">
                         <a href="#" class="brand-logo">
                             <i class="material-icons-round brand-icon">check_circle</i>
                             <span class="brand-text">YGS云端待办</span>
                         </a>
                     </div>
-                    <ul class="nav-buttons">
-                        <li><a href="javascript:void(0)" id="themeToggle" class="waves-effect waves-circle nav-icon-btn"><i class="material-icons-round">dark_mode</i></a></li>
-                        <li><a href="javascript:void(0)" id="syncCalendarBtn" class="waves-effect waves-circle nav-icon-btn"><i class="material-icons-round">calendar_month</i></a></li>
-                    </ul>
+                    <div class="nav-content-right">
+                        <a href="javascript:void(0)" id="themeToggle" class="waves-effect waves-circle nav-icon-btn"><i class="material-icons-round">dark_mode</i></a>
+                        <a href="javascript:void(0)" id="syncCalendarBtn" class="waves-effect waves-circle nav-icon-btn"><i class="material-icons-round">calendar_month</i></a>
+                    </div>
                 </div>
             </div>
         </nav>
@@ -41,8 +41,10 @@ const HTML_CONTENT = `<!DOCTYPE html>
             <div class="container">
                 <!-- Header Stats -->
                 <div class="header-info">
-                    <h4 id="greeting">你好</h4>
-                    <p class="text-secondary">让我们开启高效的一天</p>
+                    <div class="greeting-container">
+                        <h4 id="greeting">你好</h4>
+                        <p class="text-secondary">让我们开启高效的一天</p>
+                    </div>
                 </div>
 
                 <!-- Loading Spinner -->
@@ -195,11 +197,12 @@ nav.navbar {
     border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05) !important;
     height: 70px;
+    line-height: 70px;
     position: sticky;
     top: 0;
     z-index: 1000;
     display: flex;
-    align-items: center;
+    align-items: center; /* Use center alignment */
 }
 
 [data-theme="dark"] nav.navbar {
@@ -213,11 +216,20 @@ nav.navbar {
     align-items: center;
     width: 100%;
     padding: 0 10px;
+    height: 70px;
 }
 
-.brand-container {
+.nav-content-left {
     display: flex;
     align-items: center;
+    height: 70px; /* Explicitly set height */
+}
+
+.nav-content-right {
+    display: flex;
+    align-items: center;
+    height: 70px; /* Explicitly set height */
+    gap: 8px;
 }
 
 nav .brand-logo {
@@ -229,11 +241,12 @@ nav .brand-logo {
     background-clip: text;
     display: flex !important;
     align-items: center;
-    gap: 10px;
-    letter-spacing: -0.5px;
+    justify-content: flex-start;
+    height: 70px; /* Match navbar height */
+    padding: 0 5px;
     margin: 0;
-    height: 70px;
-    line-height: 70px;
+    gap: 10px;
+    white-space: nowrap; /* Prevent wrapping */
 }
 
 .brand-icon {
@@ -242,27 +255,26 @@ nav .brand-logo {
     -webkit-text-fill-color: transparent;
     font-size: 32px;
     animation: float 3s ease-in-out infinite;
+    height: 25px; /* Match navbar height */
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 32px;
+    margin: 0;
+    padding: 0;
+    min-width: 40px;
+    flex-shrink: 0; /* Prevent shrinking */
 }
 
 .brand-text {
-    vertical-align: middle;
-}
-
-.nav-buttons {
-    display: flex;
-    align-items: center;
+    font-size: 1.4rem;
     margin: 0;
     padding: 0;
-    list-style: none;
-}
-
-.nav-buttons li {
-    list-style: none;
-    margin-left: 8px;
+    height: 70px; /* Match navbar height */
+    display: flex;
+    align-items: center; /* Vertically align text */
+    line-height: 1;
+    white-space: nowrap; /* Prevent wrapping */
+    flex-shrink: 0; /* Prevent shrinking */
 }
 
 .nav-icon-btn {
@@ -276,6 +288,10 @@ nav .brand-logo {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     margin: 0 !important;
     text-decoration: none;
+    padding: 0;
+    line-height: normal;
+    min-height: 42px; /* Ensure consistent height */
+    min-width: 42px;
 }
 
 .nav-icon-btn:hover {
@@ -288,6 +304,18 @@ nav .brand-logo {
     color: white !important;
 }
 
+/* Override Materialize CSS default icon styles that interfere with our layout for buttons only */
+.nav-icon-btn i {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 24px !important;
+    height: 25px !important;
+    width: 25px !important;
+    line-height: 25px !important;
+    margin: 0 !important;
+}
+
 @keyframes float {
     0%, 100% { transform: translateY(0px); }
     50% { transform: translateY(-5px); }
@@ -296,8 +324,14 @@ nav .brand-logo {
 /* 头部信息区 */
 .header-info {
     padding: 40px 0 30px;
-    text-align: center;
+    text-align: left; /* 居左对齐 */
     animation: fadeInDown 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.greeting-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start; /* 居左对齐 */
 }
 
 .header-info h4 {
@@ -315,6 +349,7 @@ nav .brand-logo {
     color: var(--text-secondary);
     font-size: 1.1rem;
     font-weight: 500;
+    margin: 0;
 }
 
 /* 任务卡片 - 现代化设计 */
