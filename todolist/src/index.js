@@ -10,24 +10,29 @@ const HTML_CONTENT = `<!DOCTYPE html>
     <link rel="stylesheet" href="styles.css">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ffffff">
-    <link href="https://fonts.loli.net/icon?family=Material+Icons+Round" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/materialize/1.0.0/css/materialize.min.css">
-    <link rel="preconnect" href="https://fonts.loli.net">
-    <link href="https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="app-container">
         <!-- Navbar -->
         <nav class="navbar z-depth-0">
             <div class="nav-wrapper container">
-                <a href="#" class="brand-logo left">
-                    <i class="material-icons-round">check_circle</i>
-                    <span>YGS云端待办</span>
-                </a>
-                <ul class="right">
-                    <li><a href="javascript:void(0)" id="themeToggle" class="waves-effect waves-circle"><i class="material-icons-round">dark_mode</i></a></li>
-                    <li><a href="javascript:void(0)" id="syncCalendarBtn" class="waves-effect waves-circle"><i class="material-icons-round">calendar_month</i></a></li>
-                </ul>
+                <div class="nav-wrapper-flex">
+                    <div class="brand-container">
+                        <a href="#" class="brand-logo">
+                            <i class="material-icons-round brand-icon">check_circle</i>
+                            <span class="brand-text">YGS云端待办</span>
+                        </a>
+                    </div>
+                    <ul class="nav-buttons">
+                        <li><a href="javascript:void(0)" id="themeToggle" class="waves-effect waves-circle nav-icon-btn"><i class="material-icons-round">dark_mode</i></a></li>
+                        <li><a href="javascript:void(0)" id="syncCalendarBtn" class="waves-effect waves-circle nav-icon-btn"><i class="material-icons-round">calendar_month</i></a></li>
+                    </ul>
+                </div>
             </div>
         </nav>
 
@@ -122,7 +127,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
         </div>
     </div>
 
-    <script src="https://cdn.bootcdn.net/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
     <script src="app.js"></script>
     <script>
         if ('serviceWorker' in navigator) {
@@ -190,15 +195,29 @@ nav.navbar {
     border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05) !important;
     height: 70px;
-    line-height: 70px;
     position: sticky;
     top: 0;
     z-index: 1000;
+    display: flex;
+    align-items: center;
 }
 
 [data-theme="dark"] nav.navbar {
     background: rgba(45, 55, 72, 0.8) !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.nav-wrapper-flex {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 0 10px;
+}
+
+.brand-container {
+    display: flex;
+    align-items: center;
 }
 
 nav .brand-logo {
@@ -212,22 +231,41 @@ nav .brand-logo {
     align-items: center;
     gap: 10px;
     letter-spacing: -0.5px;
+    margin: 0;
+    height: 70px;
+    line-height: 70px;
 }
 
-nav .brand-logo i {
+.brand-icon {
     background: var(--primary-gradient);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     font-size: 32px;
     animation: float 3s ease-in-out infinite;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
 }
 
-@keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-5px); }
+.brand-text {
+    vertical-align: middle;
 }
 
-nav ul a {
+.nav-buttons {
+    display: flex;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.nav-buttons li {
+    list-style: none;
+    margin-left: 8px;
+}
+
+.nav-icon-btn {
     color: var(--text-secondary) !important;
     width: 42px;
     height: 42px;
@@ -236,17 +274,23 @@ nav ul a {
     align-items: center;
     justify-content: center;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    margin: 0 4px;
+    margin: 0 !important;
+    text-decoration: none;
 }
 
-nav ul a:hover {
+.nav-icon-btn:hover {
     background: var(--primary-gradient) !important;
     transform: translateY(-2px) scale(1.05);
     box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
 }
 
-nav ul a:hover i {
+.nav-icon-btn:hover i {
     color: white !important;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-5px); }
 }
 
 /* 头部信息区 */
@@ -276,7 +320,7 @@ nav ul a:hover i {
 /* 任务卡片 - 现代化设计 */
 .task-item {
     background: var(--bg-secondary) !important;
-    border: 2px solid var(--border-light) !important;
+    border: none !important;
     border-radius: var(--radius-lg) !important;
     margin-bottom: 20px !important;
     padding: 24px !important;
@@ -300,12 +344,12 @@ nav ul a:hover i {
     background: var(--primary-gradient);
     opacity: 0;
     transition: opacity 0.3s ease;
+    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
 }
 
 .task-item:hover {
     transform: translateY(-8px) scale(1.02);
     box-shadow: var(--shadow-hover);
-    border-color: transparent !important;
 }
 
 .task-item:hover::before {
@@ -323,6 +367,7 @@ nav ul a:hover i {
     opacity: 0;
     transition: opacity 0.4s ease;
     pointer-events: none;
+    border-radius: var(--radius-lg);
 }
 
 .task-item:hover::after {
@@ -423,6 +468,8 @@ nav ul a:hover i {
 .task-content {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .task-title {
@@ -446,6 +493,31 @@ nav ul a:hover i {
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.task-notes-content {
+    margin: 8px 0 12px 0;
+    padding: 12px;
+    background: var(--bg-primary);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--primary-gradient);
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.task-notes-content i.note-icon {
+    color: var(--text-tertiary);
+    font-size: 1.2rem;
+    margin-top: 2px;
+}
+
+.task-notes-content span {
+    flex: 1;
+    word-break: break-word;
 }
 
 /* 标签 - 渐变设计 */
@@ -500,6 +572,9 @@ nav ul a:hover i {
     gap: 6px;
     opacity: 0;
     transition: opacity 0.3s ease;
+    margin-top: 12px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-light);
 }
 
 .task-item:hover .task-actions {
@@ -861,8 +936,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    const selectElems = document.querySelectorAll('select');
-    M.FormSelect.init(selectElems);
+    // Initialize select elements properly
+    const priorityInput = document.getElementById('priorityInput');
+    if (priorityInput) {
+        M.FormSelect.init(priorityInput, {});
+    }
 
     // Character Counter for textarea
     M.CharacterCounter.init(document.querySelectorAll('textarea[data-length]'));
@@ -930,19 +1008,22 @@ document.addEventListener('DOMContentLoaded', function() {
     function resetForm() {
         document.getElementById('taskInput').value = '';
         document.getElementById('notesInput').value = '';
-        document.getElementById('priorityInput').value = 'medium';
         document.getElementById('dueDateInput').value = today;
         document.getElementById('dueTimeInput').value = '';
+
+        // Reset priority to medium and reinitialize
+        const priorityInput = document.getElementById('priorityInput');
+        priorityInput.value = 'medium';
 
         // Reset button state
         saveBtn.removeAttribute('data-edit-id');
         saveBtn.innerHTML = '<i class="material-icons-round left">save</i>保存任务';
         document.querySelector('.modal-header-title span').textContent = '新任务';
 
-        // Update Materialize components
-        M.FormSelect.init(document.querySelectorAll('select'));
+        // Update Materialize components - reinitialize the select properly
         M.updateTextFields();
         M.textareaAutoResize(document.getElementById('notesInput'));
+        M.FormSelect.init(priorityInput, {});
     }
 
     function updateGreeting() {
@@ -984,7 +1065,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const dueDate = document.getElementById('dueDateInput').value;
         const dueTime = document.getElementById('dueTimeInput').value;
-        const priority = document.getElementById('priorityInput').value;
+        // Get the actual selected value from the Materialize select
+        const prioritySelect = document.getElementById('priorityInput');
+        const priority = prioritySelect.value || prioritySelect.options[prioritySelect.selectedIndex].value;
         const notes = document.getElementById('notesInput').value.trim();
         const editId = saveBtn.getAttribute('data-edit-id');
 
@@ -1070,6 +1153,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const priorityLabels = { high: '高', medium: '中', low: '低' };
             const priorityHtml = \`<span class="chip-custom chip-priority \${task.priority}">\${priorityLabels[task.priority]}</span>\`;
 
+            // Show notes content directly if available
+            const notesDisplay = task.notes ? \`<div class="task-notes-content"><i class="material-icons-round note-icon">description</i><span>\${escapeHtml(task.notes)}</span></div>\` : '';
+
             li.innerHTML = \`
                 <label class="task-checkbox-wrapper">
                     <input type="checkbox" \${task.completed ? 'checked' : ''}>
@@ -1080,12 +1166,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="task-meta">
                         \${priorityHtml}
                         \${dateDisplay}
-                        \${task.notes ? '<span class="chip-custom"><i class="material-icons-round">description</i>备注</span>' : ''}
                     </div>
-                </div>
-                <div class="task-actions">
-                    <button class="action-btn edit-btn waves-effect waves-light"><i class="material-icons-round">edit</i></button>
-                    <button class="action-btn delete delete-btn waves-effect waves-light"><i class="material-icons-round">delete_outline</i></button>
+                    \${notesDisplay}
+                    <div class="task-actions">
+                        <button class="action-btn edit-btn waves-effect waves-light"><i class="material-icons-round">edit</i></button>
+                        <button class="action-btn delete delete-btn waves-effect waves-light"><i class="material-icons-round">delete_outline</i></button>
+                    </div>
                 </div>
             \`;
 
@@ -1158,7 +1244,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         M.updateTextFields();
         M.textareaAutoResize(document.getElementById('notesInput'));
-        M.FormSelect.init(document.getElementById('priorityInput'));
+
+        // Reinitialize the select element properly
+        const prioritySelect = document.getElementById('priorityInput');
+        M.FormSelect.init(prioritySelect, {});
+
+        // Update the selected value after reinitializing
+        prioritySelect.value = task.priority;
+        M.updateTextFields(); // Re-trigger Materialize updates
+        M.FormSelect.init(prioritySelect, {}); // Reinit after setting value
 
         modal.open();
     }
@@ -1187,17 +1281,17 @@ const MANIFEST_CONTENT = `{
     ]
 }`;
 
-const SW_CONTENT = `const CACHE_NAME = 'todo-list-v4';
+const SW_CONTENT = `const CACHE_NAME = 'todo-list-v5';
 const urlsToCache = [
   '/',
   '/index.html',
   '/styles.css',
   '/app.js',
   '/manifest.json',
-  'https://cdn.bootcdn.net/ajax/libs/materialize/1.0.0/css/materialize.min.css',
-  'https://cdn.bootcdn.net/ajax/libs/materialize/1.0.0/js/materialize.min.js',
-  'https://fonts.loli.net/icon?family=Material+Icons+Round',
-  'https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap'
+  'https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css',
+  'https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js',
+  'https://fonts.googleapis.com/icon?family=Material+Icons+Round',
+  'https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap'
 ];
 
 self.addEventListener('install', event => {
