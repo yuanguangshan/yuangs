@@ -20,25 +20,28 @@ const HTML_CONTENT = `<!DOCTYPE html>
     <div class="app-container">
         <!-- Navbar -->
         <nav class="navbar z-depth-0">
-            <div class="nav-wrapper container">
-                <div class="nav-wrapper-flex">
-                    <div class="nav-content-left">
-                        <a href="#" class="brand-logo">
-                            <i class="material-icons-round brand-icon">check_circle</i>
-                            <span class="brand-text">YGS记事本</span>
-                        </a>
+            <div class="custom-nav-container">
+                <a href="#" class="brand-logo-custom">
+                    <div class="logo-icon-wrapper">
+                        <i class="material-icons-round">check_circle</i>
                     </div>
-                    <div class="nav-content-right">
-                        <a href="javascript:void(0)" id="themeToggle" class="waves-effect waves-circle nav-icon-btn"><i class="material-icons-round">dark_mode</i></a>
-                        <a href="javascript:void(0)" id="syncCalendarBtn" class="waves-effect waves-circle nav-icon-btn"><i class="material-icons-round">calendar_month</i></a>
-                    </div>
+                    <span class="brand-text">YGS记事本</span>
+                </a>
+                
+                <div class="nav-actions">
+                    <a href="javascript:void(0)" id="themeToggle" class="waves-effect waves-circle nav-icon-btn">
+                        <i class="material-icons-round">dark_mode</i>
+                    </a>
+                    <a href="javascript:void(0)" id="syncCalendarBtn" class="waves-effect waves-circle nav-icon-btn">
+                        <i class="material-icons-round">calendar_month</i>
+                    </a>
                 </div>
             </div>
         </nav>
 
         <!-- Main Content -->
         <main>
-            <div class="container">
+            <div class="container main-content-container">
                 <!-- Header Stats -->
                 <div class="header-info">
                     <div class="greeting-container">
@@ -73,14 +76,14 @@ const HTML_CONTENT = `<!DOCTYPE html>
                 </div>
             </div>
         </main>
-
+    
         <!-- Floating Action Button -->
         <div class="fixed-action-btn">
             <a class="btn-floating btn-large pulse modal-trigger" href="#addTaskModal" id="fabButton">
                 <i class="large material-icons-round">add</i>
             </a>
         </div>
-
+        
         <!-- Add/Edit Task Modal -->
         <div id="addTaskModal" class="modal modal-fixed-footer">
             <div class="modal-content">
@@ -149,207 +152,154 @@ const CSS_CONTENT = `
     --text-primary: #1a202c;
     --text-secondary: #4a5568;
     --text-tertiary: #a0aec0;
-    --bg-primary: #f7fafc;
+    --bg-primary: #f8fafc;
     --bg-secondary: #ffffff;
     --border-light: #e2e8f0;
-    --shadow-soft: 0 10px 40px rgba(0, 0, 0, 0.08);
-    --shadow-hover: 0 20px 60px rgba(0, 0, 0, 0.15);
-    --radius-lg: 20px;
-    --radius-md: 12px;
+    --shadow-soft: 0 10px 30px -10px rgba(0, 0, 0, 0.08);
+    --shadow-hover: 0 20px 40px -10px rgba(0, 0, 0, 0.12);
+    --radius-lg: 24px;
+    --radius-md: 16px;
     --radius-sm: 8px;
+    --nav-height: 80px;
 }
 
 [data-theme="dark"] {
-    --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --accent-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-    --text-primary: #f7fafc;
-    --text-secondary: #cbd5e0;
-    --text-tertiary: #718096;
-    --bg-primary: #1a202c;
-    --bg-secondary: #2d3748;
-    --border-light: #4a5568;
-    --shadow-soft: 0 10px 40px rgba(0, 0, 0, 0.3);
-    --shadow-hover: 0 20px 60px rgba(0, 0, 0, 0.5);
+    --primary-gradient: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-tertiary: #64748b;
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --border-light: #334155;
+    --shadow-soft: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    --shadow-hover: 0 20px 40px -10px rgba(0, 0, 0, 0.6);
 }
 
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
 }
 
 body {
     background: var(--bg-primary);
     color: var(--text-primary);
-    font-family: "Noto Sans SC", system-ui, -apple-system, sans-serif;
+    font-family: "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     line-height: 1.6;
     overflow-x: hidden;
-    transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    min-height: 100vh;
 }
 
-/* 导航栏 - 玻璃态效果 */
+/* 导航栏 - 全新设计 */
 nav.navbar {
-    background: rgba(255, 255, 255, 0.8) !important;
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border: none !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05) !important;
-    height: 70px;
-    line-height: 70px;
-    position: sticky;
-    top: 0;
-    z-index: 1000;
-    display: flex;
-    align-items: center; /* Use center alignment */
+    background: transparent !important;
+    box-shadow: none !important;
+    height: auto !important;
+    line-height: normal !important;
+    padding-top: 10px;
+    position: relative;
+    z-index: 100;
 }
 
-[data-theme="dark"] nav.navbar {
-    background: rgba(45, 55, 72, 0.8) !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
-}
-
-.nav-wrapper-flex {
+.custom-nav-container {
     display: flex;
     justify-content: space-between;
     align-items: center;
     width: 100%;
-    padding: 0 10px;
-    height: 70px;
+    padding: 10px 24px;
+    max-width: 1200px;
+    margin: 0 auto;
 }
 
-.nav-content-left {
+.brand-logo-custom {
     display: flex;
     align-items: center;
-    height: 70px; /* Explicitly set height */
+    gap: 12px;
+    text-decoration: none;
+    height: 48px;
 }
 
-.nav-content-right {
-    display: flex;
-    align-items: center;
-    height: 70px; /* Explicitly set height */
-    gap: 8px;
-}
-
-nav .brand-logo {
-    font-size: 1.4rem !important;
-    font-weight: 800;
+.logo-icon-wrapper {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
     background: var(--primary-gradient);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    display: flex !important;
-    align-items: center;
-    justify-content: flex-start;
-    height: 70px; /* Match navbar height */
-    padding: 0 5px;
-    margin: 0;
-    gap: 10px;
-    white-space: nowrap; /* Prevent wrapping */
-}
-
-.brand-icon {
-    background: var(--primary-gradient);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    font-size: 32px;
-    animation: float 3s ease-in-out infinite;
-    height: 25px; /* Match navbar height */
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0;
-    padding: 0;
-    min-width: 40px;
-    flex-shrink: 0; /* Prevent shrinking */
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.logo-icon-wrapper i {
+    color: white;
+    font-size: 24px;
 }
 
 .brand-text {
-    font-size: 1.4rem;
-    margin: 0;
-    padding: 0;
-    height: 70px; /* Match navbar height */
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    letter-spacing: -0.5px;
+}
+
+.nav-actions {
     display: flex;
-    align-items: center; /* Vertically align text */
-    line-height: 1;
-    white-space: nowrap; /* Prevent wrapping */
-    flex-shrink: 0; /* Prevent shrinking */
+    align-items: center;
+    gap: 8px;
 }
 
 .nav-icon-btn {
-    color: var(--text-secondary) !important;
-    width: 42px;
-    height: 42px;
+    width: 44px;
+    height: 44px;
     border-radius: 12px;
     display: flex !important;
     align-items: center;
     justify-content: center;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    margin: 0 !important;
-    text-decoration: none;
-    padding: 0;
-    line-height: normal;
-    min-height: 42px; /* Ensure consistent height */
-    min-width: 42px;
+    background: var(--bg-secondary) !important;
+    color: var(--text-secondary) !important;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: var(--shadow-soft);
+    border: 1px solid var(--border-light);
 }
 
 .nav-icon-btn:hover {
-    background: var(--primary-gradient) !important;
-    transform: translateY(-2px) scale(1.05);
-    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    transform: translateY(-2px);
+    color: var(--text-primary) !important;
+    background: var(--bg-secondary) !important;
+    box-shadow: var(--shadow-hover);
 }
 
-.nav-icon-btn:hover i {
-    color: white !important;
-}
-
-/* Override Materialize CSS default icon styles that interfere with our layout for buttons only */
 .nav-icon-btn i {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    font-size: 24px !important;
-    height: 25px !important;
-    width: 25px !important;
-    line-height: 25px !important;
-    margin: 0 !important;
+    font-size: 22px !important;
+    line-height: 1 !important;
+    height: auto !important;
 }
 
-@keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-5px); }
+/* 页面主体 */
+.main-content-container {
+    padding: 0 24px 100px;
+    max-width: 800px !important;
+    width: 100% !important;
+    margin: 0 auto;
 }
 
-/* 头部信息区 */
 .header-info {
-    padding: 40px 0 30px;
-    text-align: left; /* 居左对齐 */
-    animation: fadeInDown 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.greeting-container {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start; /* 居左对齐 */
+    margin: 30px 0 40px;
 }
 
 .header-info h4 {
-    font-size: 2.5rem;
+    font-size: 2rem;
     font-weight: 800;
-    margin-bottom: 12px;
-    background: var(--primary-gradient);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    letter-spacing: -1px;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    line-height: 1.2;
 }
 
 .header-info p {
+    font-size: 1rem;
     color: var(--text-secondary);
-    font-size: 1.1rem;
     font-weight: 500;
-    margin: 0;
 }
 
 /* 任务卡片 - 现代化设计 */
