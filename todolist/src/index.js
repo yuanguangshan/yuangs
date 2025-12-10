@@ -506,50 +506,52 @@ nav.navbar {
     word-break: break-word;
 }
 
-/* 标签 - 渐变设计 */
+/* 标签 - 统一设计 */
 .chip-custom {
-    font-size: 0.8rem;
-    padding: 6px 14px;
-    border-radius: 20px;
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    border-radius: 8px; /* Slightly squared */
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     font-weight: 600;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    border: 2px solid transparent;
+    border: 1px solid transparent;
+    height: 28px;
 }
 
 .chip-custom i {
-    font-size: 16px;
+    font-size: 14px;
 }
 
+/* 优先级特定样式 - 弱化背景，强调文字和边框 */
 .chip-priority.high {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    color: white;
-    box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3);
+    background: rgba(245, 87, 108, 0.1);
+    color: #f5576c;
+    border-color: rgba(245, 87, 108, 0.2);
 }
 
 .chip-priority.medium {
-    background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
-    color: #8b4513;
-    box-shadow: 0 4px 15px rgba(252, 182, 159, 0.3);
+    background: rgba(255, 152, 0, 0.1);
+    color: #ff9800;
+    border-color: rgba(255, 152, 0, 0.2);
 }
 
 .chip-priority.low {
-    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-    color: white;
-    box-shadow: 0 4px 15px rgba(79, 172, 254, 0.3);
+    background: rgba(79, 172, 254, 0.1);
+    color: #4facfe;
+    border-color: rgba(79, 172, 254, 0.2);
 }
 
-.chip-custom:not(.chip-priority) {
-    background: rgba(102, 126, 234, 0.1);
+/* 日期样式 - 保持一致 */
+.chip-date {
+    background: rgba(102, 126, 234, 0.08);
     color: #667eea;
-    border-color: rgba(102, 126, 234, 0.2);
+    border-color: rgba(102, 126, 234, 0.15);
 }
 
 .chip-custom:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
 }
 
 /* 操作按钮 */
@@ -571,25 +573,25 @@ nav.navbar {
     background: transparent;
     border: none;
     cursor: pointer;
-    padding: 10px;
-    border-radius: 10px;
+    padding: 8px;
+    border-radius: 8px;
     color: var(--text-secondary);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 .action-btn:hover {
-    background: var(--primary-gradient);
-    color: white;
-    transform: scale(1.15) rotate(5deg);
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    transform: scale(1.1);
 }
 
 .action-btn.delete:hover {
-    background: var(--accent-gradient);
-    box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
+    color: #f5576c;
+    background: rgba(245, 87, 108, 0.1);
+    box-shadow: none;
 }
 
 /* 浮动按钮 - 炫酷设计 */
