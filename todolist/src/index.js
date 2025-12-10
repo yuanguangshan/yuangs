@@ -220,6 +220,8 @@ nav.navbar {
 
 .brand-icon {
     font-size: 32px;
+    width: 32px;
+    height: 32px;
     background: var(--primary-gradient);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -227,14 +229,19 @@ nav.navbar {
     display: flex;
     align-items: center;
     justify-content: center;
+    line-height: 1;
+    animation: float 3s ease-in-out infinite;
 }
 
 .brand-text {
-    font-size: 1.4rem; /* Slightly larger match original */
+    font-size: 1.4rem;
     font-weight: 800;
     color: var(--text-primary);
     letter-spacing: -0.5px;
     line-height: 1;
+    position: relative;
+    top: -4px; /* More aggressive correction for visual center */
+    text-shadow: 0 2px 10px rgba(102, 126, 234, 0.1);
 }
 
 .nav-actions {
