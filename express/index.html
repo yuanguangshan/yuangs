@@ -1,103 +1,142 @@
 <!DOCTYPE html>
 <html lang="zh">
-
 <head>
     <meta charset="UTF-8">
-    <title>我的全栈应用</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的全栈应用 Pro</title>
+    <!-- 1. 引入 Bootstrap CSS (无需下载，直接用 CDN) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body {
-            font-family: sans-serif;
-            padding: 20px;
-        }
-
-        .user-item {
-            background: #f0f0f0;
-            margin: 5px 0;
-            padding: 10px;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        button {
-            cursor: pointer;
-        }
-
-        .del-btn {
-            background: red;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-        }
+        body { background-color: #f8f9fa; }
+        .user-card { transition: transform 0.2s; }
+        .user-card:hover { transform: translateY(-5px); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .loading { display: none; }
     </style>
 </head>
-
 <body>
 
-    <h1>用户管理系统</h1>
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            
+            <!-- 标题区 -->
+            <div class="text-center mb-5">
+                <h1 class="display-5 fw-bold text-primary">✨ 用户管理系统 Pro</h1>
+                <p class="text-muted">Node.js + Express + MongoDB Atlas</p>
+            </div>
 
-    <!-- 新增用户的区域 -->
-    <div>
-        <input type="text" id="nameInput" placeholder="输入名字">
-        <button onclick="addUser()">添加用户</button>
+            <!-- 输入区 -->
+            <div class="card shadow-sm mb-4 border-0">
+                <div class="card-body p-4">
+                    <div class="input-group input-group-lg">
+                        <input type="text" id="nameInput" class="form-control" placeholder="输入新用户的名字...">
+                        <button class="btn btn-primary px-4" onclick="addUser()">
+                            <span class="d-inline-block">➕ 添加</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 加载动画 -->
+            <div id="loading" class="text-center py-4 loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+
+            <!-- 列表区 -->
+            <div id="userList" class="row g-3">
+                <!-- 数据会渲染在这里 -->
+            </div>
+
+        </div>
     </div>
+</div>
 
-    <!-- 显示列表的区域 -->
-    <div id="userList" style="margin-top: 20px;">
-        <!-- 数据会加载到这里 -->
-    </div>
+<script>
+    const API_URL = 'http://localhost:3000/users';
+    const loadingEl = document.getElementById('loading');
+    const listEl = document.getElementById('userList');
 
-    <script>
-        const API_URL = 'http://localhost:3000/users';
+    // 显示/隐藏加载圈
+    const toggleLoading = (show) => loadingEl.style.display = show ? 'block' : 'none';
 
-        // 1. 查：获取列表
-        async function loadUsers() {
+    // 1. 查：获取列表
+    async function loadUsers() {
+        toggleLoading(true);
+        listEl.innerHTML = '';
+        
+        try {
             const res = await fetch(API_URL);
             const json = await res.json();
-            const listDiv = document.getElementById('userList');
-
-            listDiv.innerHTML = '';
+            
+            // 延时一点点，让你看清加载动画（实际开发不需要）
+            // await new Promise(r => setTimeout(r, 500)); 
 
             json.data.forEach(user => {
-                const div = document.createElement('div');
-                div.className = 'user-item';
-                // 注意下面的 _id 和 单引号
-                div.innerHTML = `
-                    <span>ID: ${user._id} - <strong>${user.name}</strong></span>
-                    <button class="del-btn" onclick="deleteUser('${user._id}')">删除</button>
+                const col = document.createElement('div');
+                col.className = 'col-12';
+                // 使用 Bootstrap 的卡片样式
+                // 注意：这里使用了 user._id (适配 MongoDB)
+                col.innerHTML = `
+                    <div class="card user-card border-0 shadow-sm">
+                        <div class="card-body d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="mb-0 fw-bold text-dark">${user.name}</h5>
+                                <small class="text-muted" style="font-size: 0.8rem">ID: ${user._id}</small>
+                            </div>
+                            <button class="btn btn-outline-danger btn-sm rounded-pill px-3" onclick="deleteUser('${user._id}')">
+                                🗑 删除
+                            </button>
+                        </div>
+                    </div>
                 `;
-                listDiv.appendChild(div);
+                listEl.appendChild(col);
             });
+        } catch (err) {
+            alert('加载失败: ' + err.message);
+        } finally {
+            toggleLoading(false);
         }
-        // 2. 增：添加用户
-        async function addUser() {
-            const nameInput = document.getElementById('nameInput');
-            const name = nameInput.value;
-            if (!name) return;
+    }
 
+    // 2. 增：添加用户
+    async function addUser() {
+        const input = document.getElementById('nameInput');
+        const name = input.value.trim();
+        if(!name) return;
+
+        toggleLoading(true);
+        try {
             await fetch(API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name })
+                body: JSON.stringify({ name })
             });
-
-            nameInput.value = ''; // 清空输入框
-            loadUsers(); // 重新加载列表
+            input.value = '';
+            loadUsers();
+        } catch (err) {
+            alert('添加失败');
         }
+    }
 
-        // 3. 删：删除用户
-        async function deleteUser(id) {
-            if (!confirm('确定删除吗？')) return;
-
-            await fetch(`${API_URL}/${id}`, {
-                method: 'DELETE'
-            });
-
-            loadUsers(); // 重新加载列表
+    // 3. 删：删除用户
+    async function deleteUser(id) {
+        if(!confirm('确定要把这位朋友移出数据库吗？')) return;
+        
+        // 乐观UI更新：先在界面上把卡片移除，让体验更丝滑
+        // (这里为了演示简单，我们还是重新加载列表)
+        toggleLoading(true);
+        try {
+            await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+            loadUsers();
+        } catch (err) {
+            alert('删除失败');
         }
+    }
 
-        // 页面一打开就加载数据
-        loadUsers();
-    </script>
+    // 初始化
+    loadUsers();
+</script>
 </body>
-
 </html>
