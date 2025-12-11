@@ -146,8 +146,10 @@ function parseEventLine(line, currentEvent) {
     currentEvent.location = unescapeICSText(line.substring(9));
   } else if (line.startsWith("DTSTART")) {
     currentEvent.startDate = parseICSDateTime(line);
+    currentEvent.startDateRaw = line;
   } else if (line.startsWith("DTEND")) {
     currentEvent.endDate = parseICSDateTime(line);
+    currentEvent.endDateRaw = line;
   } else if (line.startsWith("UID:")) {
     currentEvent.uid = line.substring(4);
   } else if (line.startsWith("DTSTAMP:")) {
@@ -178,6 +180,7 @@ function parseTodoLine(line, currentTodo) {
     currentTodo.description = unescapeICSText(line.substring(12));
   } else if (line.startsWith("DUE")) {
     currentTodo.dueDate = parseICSDateTime(line);
+    currentTodo.dueDateRaw = line;
   } else if (line.startsWith("UID:")) {
     currentTodo.uid = line.substring(4);
   } else if (line.startsWith("DTSTAMP:")) {
@@ -191,7 +194,8 @@ function parseTodoLine(line, currentTodo) {
   }
 }
 
-// 解析 ICS 日期时间（关键修复）
+// 解析 ICS 日期时间
+// 你的服务器返回的时间是北京时间（不带Z后缀表示本地时间）
 function parseICSDateTime(line) {
   // 提取时间值和参数
   let colonIndex = line.indexOf(":");
@@ -200,25 +204,24 @@ function parseICSDateTime(line) {
   let params = line.substring(0, colonIndex);
   let timeValue = line.substring(colonIndex + 1).trim();
   
-  // 检查是否有 TZID 参数
-  let hasTZID = params.includes("TZID=");
+  // 检查是否是 UTC 时间（带 Z 后缀）
   let isUTC = timeValue.endsWith("Z");
   let isDateOnly = params.includes("VALUE=DATE");
   
   // 清理时间值
-  timeValue = timeValue.replace("Z", "");
+  let cleanTimeValue = timeValue.replace("Z", "");
   
   // 全天事件（仅日期）
-  if (isDateOnly || timeValue.length === 8) {
-    let y = parseInt(timeValue.substring(0, 4));
-    let m = parseInt(timeValue.substring(4, 6)) - 1;
-    let d = parseInt(timeValue.substring(6, 8));
+  if (isDateOnly || cleanTimeValue.length === 8) {
+    let y = parseInt(cleanTimeValue.substring(0, 4));
+    let m = parseInt(cleanTimeValue.substring(4, 6)) - 1;
+    let d = parseInt(cleanTimeValue.substring(6, 8));
     return new Date(y, m, d, 0, 0, 0);
   }
   
   // 带时间的日期
-  if (timeValue.includes("T")) {
-    let parts = timeValue.split("T");
+  if (cleanTimeValue.includes("T")) {
+    let parts = cleanTimeValue.split("T");
     let datePart = parts[0];
     let timePart = parts[1];
     
@@ -231,14 +234,10 @@ function parseICSDateTime(line) {
       let s = parseInt(timePart.substring(4, 6));
       
       if (isUTC) {
-        // UTC 时间（带 Z 后缀）-> 转北京时间（+8）
-        let utcDate = new Date(Date.UTC(y, m, d, h, min, s));
-        return new Date(utcDate.getTime() + 8 * 3600 * 1000);
-      } else if (hasTZID) {
-        // 已经是本地时区时间（如 Asia/Shanghai）-> 直接使用
-        return new Date(y, m, d, h, min, s);
+        // UTC 时间（带 Z 后缀），需要转换为本地时间
+        return new Date(Date.UTC(y, m, d, h, min, s));
       } else {
-        // 浮动时间（没有时区信息）-> 当作本地时间
+        // 北京时间（不带 Z 后缀），直接作为本地时间使用
         return new Date(y, m, d, h, min, s);
       }
     }
@@ -303,15 +302,17 @@ function showCompleteView(result) {
     if (evt.title) eventRows.push({ title: "标题", detail: evt.title });
     if (evt.description) eventRows.push({ title: "描述", detail: evt.description });
     if (evt.location) eventRows.push({ title: "地点", detail: evt.location });
-    if (evt.startDate) eventRows.push({ title: "开始时间", detail: formatDate(evt.startDate) + " (北京时间)" });
-    if (evt.endDate) eventRows.push({ title: "结束时间", detail: formatDate(evt.endDate) + " (北京时间)" });
+    if (evt.startDate) eventRows.push({ title: "开始时间", detail: formatDate(evt.startDate) });
+    
+    if (evt.endDate) eventRows.push({ title: "结束时间", detail: formatDate(evt.endDate) });
+    
     if (evt.status) eventRows.push({ title: "状态", detail: evt.status });
     if (evt.rrule) eventRows.push({ title: "重复规则", detail: evt.rrule });
     if (evt.priority) eventRows.push({ title: "优先级", detail: evt.priority });
     if (evt.class) eventRows.push({ title: "类别", detail: evt.class });
     if (evt.sequence) eventRows.push({ title: "序列号", detail: evt.sequence });
     if (evt.uid) eventRows.push({ title: "UID", detail: evt.uid });
-    if (evt.timestamp) eventRows.push({ title: "时间戳", detail: formatDate(evt.timestamp) + " (北京时间)" });
+    if (evt.timestamp) eventRows.push({ title: "时间戳", detail: formatDate(evt.timestamp) });
     
     sections.push({
       title: `🎯 事件 #${idx + 1}: ${evt.title || "无标题"}`,
@@ -325,7 +326,8 @@ function showCompleteView(result) {
     
     if (todo.title) todoRows.push({ title: "标题", detail: todo.title });
     if (todo.description) todoRows.push({ title: "描述", detail: todo.description });
-    if (todo.dueDate) todoRows.push({ title: "截止时间", detail: formatDate(todo.dueDate) + " (北京时间)" });
+    if (todo.dueDate) todoRows.push({ title: "截止时间", detail: formatDate(todo.dueDate) });
+    if (todo.dueDateRaw) todoRows.push({ title: "原始截止", detail: todo.dueDateRaw });
     if (todo.status) todoRows.push({ title: "状态", detail: todo.status });
     if (todo.priority) todoRows.push({ title: "优先级", detail: todo.priority });
     if (todo.percentComplete) todoRows.push({ title: "完成百分比", detail: todo.percentComplete + "%" });
@@ -340,7 +342,7 @@ function showCompleteView(result) {
   // 渲染界面
   $ui.render({
     props: {
-      title: "ICS 完整解析 (北京时间)",
+      title: "待办事项",
       navButtons: [
         {
           title: "原始数据",
@@ -413,18 +415,20 @@ function showCompleteView(result) {
 }
 
 function showRawData(rawLines) {
-  $ui.alert({
-    title: "原始ICS数据",
-    message: rawLines.join("\n"),
-    actions: [
+  $ui.push({
+    props: {
+      title: "原始ICS数据"
+    },
+    views: [
       {
-        title: "复制",
-        handler: function() {
-          $clipboard.text = rawLines.join("\n");
-          $ui.toast("已复制原始数据");
-        }
-      },
-      { title: "关闭" }
+        type: "text",
+        props: {
+          text: rawLines.join("\n"),
+          editable: false,
+          font: $font("Menlo", 12)
+        },
+        layout: $layout.fill
+      }
     ]
   });
 }
