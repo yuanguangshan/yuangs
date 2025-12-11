@@ -584,7 +584,7 @@ nav.navbar {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    margin-top: 5px;
+    margin-top: 35px;  /* Increased margin to accommodate label */
 }
 
 .priority-radio-group p {
