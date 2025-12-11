@@ -1017,6 +1017,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update Materialize components - reinitialize the select properly
         M.updateTextFields();
         M.textareaAutoResize(document.getElementById('notesInput'));
+        // Reinitialize the select element after setting the value
         M.FormSelect.init(priorityInput, {});
     }
 
@@ -1061,7 +1062,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const dueTime = document.getElementById('dueTimeInput').value;
         // Get the actual selected value from the Materialize select
         const prioritySelect = document.getElementById('priorityInput');
-        const priority = prioritySelect.value || prioritySelect.options[prioritySelect.selectedIndex].value;
+        const priority = prioritySelect.value ? prioritySelect.value : prioritySelect.options[prioritySelect.selectedIndex]?.value || 'medium';
         const notes = document.getElementById('notesInput').value.trim();
         const editId = saveBtn.getAttribute('data-edit-id');
 
@@ -1294,14 +1295,12 @@ document.addEventListener('DOMContentLoaded', function() {
         M.updateTextFields();
         M.textareaAutoResize(document.getElementById('notesInput'));
 
-        // Reinitialize the select element properly
+        // Update the selected value first
         const prioritySelect = document.getElementById('priorityInput');
-        M.FormSelect.init(prioritySelect, {});
-
-        // Update the selected value after reinitializing
         prioritySelect.value = task.priority;
-        M.updateTextFields(); // Re-trigger Materialize updates
-        M.FormSelect.init(prioritySelect, {}); // Reinit after setting value
+
+        // Reinitialize the select element properly after setting the value
+        M.FormSelect.init(prioritySelect, {});
 
         modal.open();
     }
