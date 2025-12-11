@@ -107,11 +107,26 @@ const HTML_CONTENT = `<!DOCTYPE html>
                     </div>
                     <div class="input-field col s12">
                         <i class="material-icons-round prefix">flag</i>
-                        <select id="priorityInput">
-                            <option value="low">低优先级</option>
-                            <option value="medium" selected>中优先级</option>
-                            <option value="high">高优先级</option>
-                        </select>
+                        <div class="priority-radio-group">
+                            <p>
+                                <label>
+                                    <input name="priorityInput" type="radio" id="priorityLow" value="low" checked />
+                                    <span>低优先级</span>
+                                </label>
+                            </p>
+                            <p>
+                                <label>
+                                    <input name="priorityInput" type="radio" id="priorityMedium" value="medium" />
+                                    <span>中优先级</span>
+                                </label>
+                            </p>
+                            <p>
+                                <label>
+                                    <input name="priorityInput" type="radio" id="priorityHigh" value="high" />
+                                    <span>高优先级</span>
+                                </label>
+                            </p>
+                        </div>
                         <label>优先级</label>
                     </div>
                     <div class="input-field col s12">
@@ -564,6 +579,44 @@ nav.navbar {
     transform: translateY(-1px);
 }
 
+/* Priority Radio Group Styling */
+.priority-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 5px;
+}
+
+.priority-radio-group p {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.priority-radio-group label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    user-select: none;
+}
+
+.priority-radio-group label:hover {
+    background: var(--bg-primary);
+}
+
+.priority-radio-group input[type="radio"] {
+    margin: 0;
+}
+
+.priority-radio-group input[type="radio"]:checked + span {
+    font-weight: 600;
+}
+
 /* 操作按钮 */
 .task-actions {
     display: flex;
@@ -934,17 +987,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Initialize select elements properly
-    const priorityInput = document.getElementById('priorityInput');
-    if (priorityInput) {
-        // Get any existing instance and destroy it, then reinitialize
-        const existingInstance = M.FormSelect.getInstance(priorityInput);
-        if (existingInstance) {
-            existingInstance.destroy();
-        }
-        M.FormSelect.init(priorityInput, {});
-    }
-
     // Character Counter for textarea
     M.CharacterCounter.init(document.querySelectorAll('textarea[data-length]'));
 
@@ -1010,27 +1052,20 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('dueDateInput').value = today;
         document.getElementById('dueTimeInput').value = '';
 
-        // Reset priority to medium and reinitialize
-        const priorityInput = document.getElementById('priorityInput');
-        priorityInput.value = 'medium';
+        // Reset priority to medium - check the medium radio button
+        const mediumRadio = document.getElementById('priorityMedium');
+        if (mediumRadio) {
+            mediumRadio.checked = true;
+        }
 
         // Reset button state
         saveBtn.removeAttribute('data-edit-id');
         saveBtn.innerHTML = '<i class="material-icons-round left">save</i>保存任务';
         document.querySelector('.modal-header-title span').textContent = '新任务';
 
-        // Update Materialize components - reinitialize the select properly
+        // Update Materialize components
         M.updateTextFields();
         M.textareaAutoResize(document.getElementById('notesInput'));
-
-        // Get any existing instance and destroy it, then reinitialize
-        const existingInstance = M.FormSelect.getInstance(priorityInput);
-        if (existingInstance) {
-            existingInstance.destroy();
-        }
-
-        // Reinitialize the select element after setting the value
-        M.FormSelect.init(priorityInput, {});
     }
 
     function updateGreeting() {
@@ -1072,9 +1107,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const dueDate = document.getElementById('dueDateInput').value;
         const dueTime = document.getElementById('dueTimeInput').value;
-        // Get the actual selected value from the Materialize select
-        const prioritySelect = document.getElementById('priorityInput');
-        const priority = prioritySelect.value ? prioritySelect.value : prioritySelect.options[prioritySelect.selectedIndex]?.value || 'medium';
+        // Get the selected priority from radio buttons
+        const selectedPriorityRadio = document.querySelector('input[name="priorityInput"]:checked');
+        const priority = selectedPriorityRadio ? selectedPriorityRadio.value : 'medium';
         const notes = document.getElementById('notesInput').value.trim();
         const editId = saveBtn.getAttribute('data-edit-id');
 
@@ -1290,7 +1325,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         document.getElementById('taskInput').value = task.title;
         document.getElementById('notesInput').value = task.notes || '';
-        document.getElementById('priorityInput').value = task.priority;
 
         if (task.due_date) {
             const parts = task.due_date.split('T');
@@ -1307,18 +1341,12 @@ document.addEventListener('DOMContentLoaded', function() {
         M.updateTextFields();
         M.textareaAutoResize(document.getElementById('notesInput'));
 
-        // Update the selected value and properly handle the Materialize select
-        const prioritySelect = document.getElementById('priorityInput');
-        prioritySelect.value = task.priority;
-
-        // Get any existing instance and destroy it, then reinitialize
-        const existingInstance = M.FormSelect.getInstance(prioritySelect);
-        if (existingInstance) {
-            existingInstance.destroy();
+        // Set the correct priority radio button based on the task priority
+        const priorityRadioId = 'priority' + task.priority.charAt(0).toUpperCase() + task.priority.slice(1);
+        const priorityRadio = document.getElementById(priorityRadioId);
+        if (priorityRadio) {
+            priorityRadio.checked = true;
         }
-
-        // Reinitialize the select element properly after setting the value
-        M.FormSelect.init(prioritySelect, {});
 
         modal.open();
     }
