@@ -937,6 +937,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize select elements properly
     const priorityInput = document.getElementById('priorityInput');
     if (priorityInput) {
+        // Get any existing instance and destroy it, then reinitialize
+        const existingInstance = M.FormSelect.getInstance(priorityInput);
+        if (existingInstance) {
+            existingInstance.destroy();
+        }
         M.FormSelect.init(priorityInput, {});
     }
 
@@ -1017,6 +1022,13 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update Materialize components - reinitialize the select properly
         M.updateTextFields();
         M.textareaAutoResize(document.getElementById('notesInput'));
+
+        // Get any existing instance and destroy it, then reinitialize
+        const existingInstance = M.FormSelect.getInstance(priorityInput);
+        if (existingInstance) {
+            existingInstance.destroy();
+        }
+
         // Reinitialize the select element after setting the value
         M.FormSelect.init(priorityInput, {});
     }
@@ -1295,9 +1307,15 @@ document.addEventListener('DOMContentLoaded', function() {
         M.updateTextFields();
         M.textareaAutoResize(document.getElementById('notesInput'));
 
-        // Update the selected value first
+        // Update the selected value and properly handle the Materialize select
         const prioritySelect = document.getElementById('priorityInput');
         prioritySelect.value = task.priority;
+
+        // Get any existing instance and destroy it, then reinitialize
+        const existingInstance = M.FormSelect.getInstance(prioritySelect);
+        if (existingInstance) {
+            existingInstance.destroy();
+        }
 
         // Reinitialize the select element properly after setting the value
         M.FormSelect.init(prioritySelect, {});
