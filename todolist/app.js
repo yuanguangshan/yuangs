@@ -1,11 +1,12 @@
 // Todo List Application
 class TodoApp {
     constructor() {
-        this.tasks = this.loadTasks();
+        this.tasks = [];
         this.init();
     }
 
-    init() {
+    async init() {
+        this.tasks = await this.loadTasks();
         this.bindEvents();
         this.renderTasks();
         this.initializeMaterializeComponents();
@@ -109,8 +110,7 @@ class TodoApp {
                     this.showNotification(task);
 
                     // Update task to mark as notified
-                    task.notified = true;
-                    this.saveTasks();
+                    this.markAsNotified(task.id);
 
                     // Show a toast message as well
                     M.toast({html: `任务即将到期：${task.title}`, classes: 'red'});
@@ -136,11 +136,7 @@ class TodoApp {
                     this.showNotification(task);
 
                     // Mark as notified in the task
-                    const foundTask = this.tasks.find(t => t.id === task.id);
-                    if (foundTask) {
-                        foundTask.notified = true;
-                        this.saveTasks();
-                    }
+                    this.markAsNotified(task.id);
 
                     // Show a toast message as well
                     M.toast({html: `任务已到期：${task.title}`, classes: 'red'});
@@ -149,16 +145,33 @@ class TodoApp {
         }
     }
 
-    loadTasks() {
-        const tasks = localStorage.getItem('todoTasks');
-        return tasks ? JSON.parse(tasks) : [];
+    async loadTasks() {
+        try {
+            const response = await fetch('/data/tasks');
+            if (response.ok) {
+                let tasks = await response.json();
+                // Ensure all tasks have a 'notified' field
+                tasks = tasks.map(task => ({
+                    ...task,
+                    notified: task.notified || false
+                }));
+                this.tasks = tasks;
+                return this.tasks;
+            } else {
+                console.error('Failed to load tasks from database');
+                return [];
+            }
+        } catch (error) {
+            console.error('Error loading tasks from database:', error);
+            return [];
+        }
     }
 
-    saveTasks() {
-        localStorage.setItem('todoTasks', JSON.stringify(this.tasks));
+    async saveTasks() {
+        // This method is no longer needed since each operation updates the database individually
     }
 
-    addTask() {
+    async addTask() {
         const taskInput = document.getElementById('taskInput');
         const dueDateInput = document.getElementById('dueDateInput');
         const dueTimeInput = document.getElementById('dueTimeInput');
@@ -176,60 +189,125 @@ class TodoApp {
             dueDateTime = `${date}T${time}`;
         }
 
-        const newTask = {
-            id: Date.now(),
+        const payload = {
             title: title,
-            completed: false,
             dueDate: dueDateTime || null,
             priority: priorityInput.value,
             notes: notesInput.value.trim() || null,
-            createdAt: new Date().toISOString(),
-            notified: false  // Track if notification has been sent
+            completed: false
         };
 
-        this.tasks.unshift(newTask);
-        this.saveTasks();
-        this.renderTasks();
+        try {
+            const response = await fetch('/data/tasks', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
 
-        // Schedule notification if due date is set
-        if (dueDateTime) {
-            this.scheduleTaskNotification(newTask);
+            if (response.ok) {
+                const newTask = await response.json();
+                // Ensure the new task has the notified field
+                if (!('notified' in newTask)) {
+                    newTask.notified = false;
+                }
+                this.tasks.unshift(newTask);
+                this.renderTasks();
+
+                // Schedule notification if due date is set
+                if (dueDateTime) {
+                    this.scheduleTaskNotification(newTask);
+                }
+
+                // Reset form
+                taskInput.value = '';
+                dueDateInput.value = '';
+                dueTimeInput.value = '';
+                priorityInput.value = 'medium';
+                notesInput.value = '';
+
+                // Reinitialize Materialize components after DOM update
+                this.initializeMaterializeComponents();
+
+                return newTask;
+            } else {
+                console.error('Failed to add task to database');
+            }
+        } catch (error) {
+            console.error('Error adding task to database:', error);
         }
-
-        // Reset form
-        taskInput.value = '';
-        dueDateInput.value = '';
-        dueTimeInput.value = '';
-        priorityInput.value = 'medium';
-        notesInput.value = '';
-
-        // Reinitialize Materialize components after DOM update
-        this.initializeMaterializeComponents();
     }
 
-    toggleTask(id) {
+    async toggleTask(id) {
         const task = this.tasks.find(t => t.id === id);
         if (task) {
-            task.completed = !task.completed;
-            this.saveTasks();
-            this.renderTasks();
+            const completed = !task.completed;
+            try {
+                const response = await fetch(`/data/tasks/${id}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ completed })
+                });
+
+                if (response.ok) {
+                    const updatedTask = await response.json();
+                    // Update the task in the local array with the updated object from the server
+                    Object.assign(task, updatedTask);
+                    this.renderTasks();
+                } else {
+                    console.error('Failed to toggle task in database');
+                }
+            } catch (error) {
+                console.error('Error toggling task in database:', error);
+            }
         }
     }
 
-    deleteTask(id) {
-        this.tasks = this.tasks.filter(t => t.id !== id);
-        this.saveTasks();
-        this.renderTasks();
+    async deleteTask(id) {
+        try {
+            const response = await fetch(`/data/tasks/${id}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                this.tasks = this.tasks.filter(t => t.id !== id);
+                this.renderTasks();
+            } else {
+                console.error('Failed to delete task from database');
+            }
+        } catch (error) {
+            console.error('Error deleting task from database:', error);
+        }
     }
 
-    editTask(id) {
+    async editTask(id) {
         const task = this.tasks.find(t => t.id === id);
         if (task) {
             const newTitle = prompt('编辑任务:', task.title);
             if (newTitle !== null && newTitle.trim() !== '') {
-                task.title = newTitle.trim();
-                this.saveTasks();
-                this.renderTasks();
+                try {
+                    const response = await fetch(`/data/tasks/${id}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ title: newTitle.trim() })
+                    });
+
+                    if (response.ok) {
+                        const updatedTask = await response.json();
+                        // Update the task in the local array with the updated object from the server
+                        Object.assign(task, updatedTask);
+                        this.renderTasks();
+                    } else {
+                        console.error('Failed to edit task in database');
+                    }
+                } catch (error) {
+                    console.error('Error editing task in database:', error);
+                }
             }
         }
     }
@@ -317,6 +395,31 @@ class TodoApp {
         });
     }
 
+    async markAsNotified(taskId) {
+        const task = this.tasks.find(t => t.id === taskId);
+        if (task && !task.notified) {
+            try {
+                const response = await fetch(`/data/tasks/${taskId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ notified: true })
+                });
+
+                if (response.ok) {
+                    const updatedTask = await response.json();
+                    // Update the task in the local array with the updated object from the server
+                    Object.assign(task, updatedTask);
+                } else {
+                    console.error('Failed to mark task as notified in database');
+                }
+            } catch (error) {
+                console.error('Error marking task as notified in database:', error);
+            }
+        }
+    }
+
     escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
@@ -338,71 +441,9 @@ class TodoApp {
 
     // Calendar sync functionality - Export to iCalendar format
     syncWithCalendar() {
-        // Get all incomplete tasks
-        const incompleteTasks = this.tasks.filter(task => !task.completed);
-
-        if (incompleteTasks.length === 0) {
-            M.toast({html: '没有可导出的任务！'});
-            return;
-        }
-
-        // Create iCalendar content for each task
-        let calendarContent = 'BEGIN:VCALENDAR\n';
-        calendarContent += 'VERSION:2.0\n';
-        calendarContent += 'PRODID:-//Cloudflare Todo List//Calendar Export//EN\n';
-
-        incompleteTasks.forEach(task => {
-            calendarContent += 'BEGIN:VEVENT\n';
-
-            // Format the task title
-            calendarContent += `SUMMARY:${task.title}\n`;
-
-            // Set the due date if available
-            if (task.dueDate) {
-                // Format date as YYYYMMDDTHHMMSSZ
-                const date = new Date(task.dueDate);
-                const formattedDate = date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-                calendarContent += `DTSTART:${formattedDate}\n`;
-                calendarContent += `DTEND:${formattedDate}\n`;
-            }
-
-            // Set unique ID for the event
-            calendarContent += `UID:${task.id}@cloudflare-todo-list\n`;
-
-            // Set creation date
-            const createdDate = new Date(task.createdAt);
-            const formattedCreated = createdDate.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-            calendarContent += `DTSTAMP:${formattedCreated}\n`;
-
-            // Add description if available
-            if (task.notes) {
-                calendarContent += `DESCRIPTION:${task.notes}\n`;
-            }
-
-            // Set priority (1-9, with 1 being highest)
-            let priority = 5; // default
-            if (task.priority === 'high') priority = 1;
-            else if (task.priority === 'low') priority = 9;
-            calendarContent += `PRIORITY:${priority}\n`;
-
-            calendarContent += 'END:VEVENT\n';
-        });
-
-        calendarContent += 'END:VCALENDAR';
-
-        // Create a Blob with the calendar data
-        const blob = new Blob([calendarContent], { type: 'text/calendar;charset=utf-8' });
-
-        // Create a download link
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'todo-list.ics';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        M.toast({html: '任务已导出到日历！'});
+        // Redirect to the iCal export endpoint instead of generating locally
+        window.location.href = '/event';
+        M.toast({html: '正在导出任务到日历...'});
     }
 }
 

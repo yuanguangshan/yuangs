@@ -1506,9 +1506,9 @@ export default {
                         const { title, dueDate, priority, notes, completed } = body;
 
                         const result = await env.DB.prepare(
-                            "INSERT INTO tasks (title, due_date, priority, notes, completed) VALUES (?, ?, ?, ?, ?)"
+                            "INSERT INTO tasks (title, due_date, priority, notes, completed, notified) VALUES (?, ?, ?, ?, ?, ?)"
                         )
-                        .bind(title, dueDate, priority, notes, completed ? 1 : 0)
+                        .bind(title, dueDate, priority, notes, completed ? 1 : 0, 0) // notified defaults to 0 (false)
                         .run();
 
                         // Get the newly inserted task
@@ -1620,6 +1620,10 @@ export default {
                         if (completed !== undefined) {
                             query += "completed = ?, ";
                             values.push(completed ? 1 : 0);
+                        }
+                        if (body.notified !== undefined) {
+                            query += "notified = ?, ";
+                            values.push(body.notified ? 1 : 0);
                         }
 
                         // Remove trailing comma and space
