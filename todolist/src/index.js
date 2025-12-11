@@ -1395,8 +1395,28 @@ function tasksToICalendar(tasks) {
     calendarContent += 'PRODID:-//Cloudflare Todo List//Calendar Export//EN\r\n';
     calendarContent += 'METHOD:PUBLISH\r\n';
     calendarContent += 'CALSCALE:GREGORIAN\r\n';
+    calendarContent += 'X-WR-TIMEZONE:Asia/Shanghai\r\n';
 
-    const formatICSDate = (date) => {
+    // 格式化为本地时间（不带Z后缀，带时区标识）
+    const formatICSDateLocal = (date) => {
+        const year = String(date.getFullYear()).padStart(4, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hour = String(date.getHours()).padStart(2, '0');
+        const minute = String(date.getMinutes()).padStart(2, '0');
+        const second = String(date.getSeconds()).padStart(2, '0');
+        return `${year}${month}${day}T${hour}${minute}${second}`;
+    };
+
+    const formatICSDateAllDay = (date) => {
+        const year = String(date.getFullYear()).padStart(4, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}${month}${day}`;
+    };
+
+    // 获取当前时间戳（UTC格式，用于DTSTAMP）
+    const formatICSDateUTC = (date) => {
         const year = String(date.getUTCFullYear()).padStart(4, '0');
         const month = String(date.getUTCMonth() + 1).padStart(2, '0');
         const day = String(date.getUTCDate()).padStart(2, '0');
@@ -1406,44 +1426,64 @@ function tasksToICalendar(tasks) {
         return `${year}${month}${day}T${hour}${minute}${second}Z`;
     };
 
-    const formatICSDateAllDay = (date) => {
-        const year = String(date.getUTCFullYear()).padStart(4, '0');
-        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(date.getUTCDate()).padStart(2, '0');
-        return `${year}${month}${day}`;
-    };
-
     tasks.forEach(task => {
         if (!task.completed) {
             calendarContent += 'BEGIN:VEVENT\r\n';
             calendarContent += `SUMMARY:${task.title.replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n')}\r\n`;
 
             if (task.due_date) {
-                const startDate = new Date(task.due_date);
-                const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
-                calendarContent += `DTSTART:${formatICSDate(startDate)}\r\n`;
-                calendarContent += `DTEND:${formatICSDate(endDate)}\r\n`;
+                // 解析存储的日期时间字符串
+                // 格式可能是 "2025-12-11" 或 "2025-12-11T14:00"
+                const hasTime = task.due_date.includes('T');
+                
+                if (hasTime) {
+                    // 有具体时间，解析为本地时间
+                    const startDate = new Date(task.due_date);
+                    const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // 1小时后
+                    
+                    // 使用带时区的本地时间格式
+                    calendarContent += `DTSTART;TZID=Asia/Shanghai:${formatICSDateLocal(startDate)}\r\n`;
+                    calendarContent += `DTEND;TZID=Asia/Shanghai:${formatICSDateLocal(endDate)}\r\n`;
+                } else {
+                    // 只有日期，全天事件
+                    const dateParts = task.due_date.split('-');
+                    const year = dateParts[0];
+                    const month = dateParts[1];
+                    const day = dateParts[2];
+                    
+                    // 计算第二天日期
+                    const startDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                    const endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
+                    
+                    calendarContent += `DTSTART;VALUE=DATE:${year}${month}${day}\r\n`;
+                    calendarContent += `DTEND;VALUE=DATE:${formatICSDateAllDay(endDate)}\r\n`;
+                }
             } else {
+                // 没有设置日期，使用今天作为全天事件
                 const today = new Date();
-                const startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                const endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
-                calendarContent += `DTSTART;VALUE=DATE:${formatICSDateAllDay(startDate)}\r\n`;
-                calendarContent += `DTEND;VALUE=DATE:${formatICSDateAllDay(endDate)}\r\n`;
+                const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+                
+                calendarContent += `DTSTART;VALUE=DATE:${formatICSDateAllDay(today)}\r\n`;
+                calendarContent += `DTEND;VALUE=DATE:${formatICSDateAllDay(tomorrow)}\r\n`;
             }
 
             calendarContent += `UID:${task.id}@todo.want.biz\r\n`;
-            const createdDate = task.created_at ? new Date(task.created_at) : new Date();
-            calendarContent += `DTSTAMP:${formatICSDate(createdDate)}\r\n`;
+            
+            // DTSTAMP 使用 UTC 时间（这是ICS规范要求的）
+            const now = new Date();
+            calendarContent += `DTSTAMP:${formatICSDateUTC(now)}\r\n`;
 
             if (task.notes) {
                 calendarContent += `DESCRIPTION:${task.notes.replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n')}\r\n`;
             }
 
-            calendarContent += 'STATUS:NEEDS-ACTION\r\n';
+            calendarContent += 'STATUS:CONFIRMED\r\n';
+            
             let priority = 5;
             if (task.priority === 'high') priority = 1;
             else if (task.priority === 'low') priority = 9;
             calendarContent += `PRIORITY:${priority}\r\n`;
+            
             calendarContent += 'END:VEVENT\r\n';
         }
     });
