@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <title>我的全栈应用</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+        }
+
+        .user-item {
+            background: #f0f0f0;
+            margin: 5px 0;
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        .del-btn {
+            background: red;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>用户管理系统</h1>
+
+    <!-- 新增用户的区域 -->
+    <div>
+        <input type="text" id="nameInput" placeholder="输入名字">
+        <button onclick="addUser()">添加用户</button>
+    </div>
+
+    <!-- 显示列表的区域 -->
+    <div id="userList" style="margin-top: 20px;">
+        <!-- 数据会加载到这里 -->
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000/users';
+
+        // 1. 查：获取列表
+        async function loadUsers() {
+            const res = await fetch(API_URL);
+            const json = await res.json();
+            const listDiv = document.getElementById('userList');
+
+            listDiv.innerHTML = '';
+
+            json.data.forEach(user => {
+                const div = document.createElement('div');
+                div.className = 'user-item';
+                // 注意下面的 _id 和 单引号
+                div.innerHTML = `
+                    <span>ID: ${user._id} - <strong>${user.name}</strong></span>
+                    <button class="del-btn" onclick="deleteUser('${user._id}')">删除</button>
+                `;
+                listDiv.appendChild(div);
+            });
+        }
+        // 2. 增：添加用户
+        async function addUser() {
+            const nameInput = document.getElementById('nameInput');
+            const name = nameInput.value;
+            if (!name) return;
+
+            await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name })
+            });
+
+            nameInput.value = ''; // 清空输入框
+            loadUsers(); // 重新加载列表
+        }
+
+        // 3. 删：删除用户
+        async function deleteUser(id) {
+            if (!confirm('确定删除吗？')) return;
+
+            await fetch(`${API_URL}/${id}`, {
+                method: 'DELETE'
+            });
+
+            loadUsers(); // 重新加载列表
+        }
+
+        // 页面一打开就加载数据
+        loadUsers();
+    </script>
+</body>
+
+</html>
