@@ -220,6 +220,8 @@ nav.navbar {
 
 .brand-icon {
     font-size: 32px;
+    width: 32px;
+    height: 32px;
     background: var(--primary-gradient);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -227,14 +229,19 @@ nav.navbar {
     display: flex;
     align-items: center;
     justify-content: center;
+    line-height: 1;
+    animation: float 3s ease-in-out infinite;
 }
 
 .brand-text {
-    font-size: 1.4rem; /* Slightly larger match original */
+    font-size: 1.4rem;
     font-weight: 800;
     color: var(--text-primary);
     letter-spacing: -0.5px;
     line-height: 1;
+    position: relative;
+    top: -4px; /* More aggressive correction for visual center */
+    text-shadow: 0 2px 10px rgba(102, 126, 234, 0.1);
 }
 
 .nav-actions {
@@ -294,6 +301,15 @@ nav.navbar {
     font-size: 1rem;
     color: var(--text-secondary);
     font-weight: 500;
+}
+
+/* 列表去除默认边框 */
+.collection.task-list {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    overflow: visible !important;
 }
 
 /* 任务卡片 - 现代化设计 */
@@ -499,50 +515,53 @@ nav.navbar {
     word-break: break-word;
 }
 
-/* 标签 - 渐变设计 */
+/* 标签 - 统一设计 */
 .chip-custom {
-    font-size: 0.8rem;
-    padding: 6px 14px;
-    border-radius: 20px;
+    font-size: 0.75rem;
+    padding: 3px 8px;
+    border-radius: 6px;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    font-weight: 600;
+    gap: 4px;
+    font-weight: 500;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    border: 2px solid transparent;
+    border: 1px solid transparent; /* Prepare for border */
+    height: 24px;
+    line-height: 1;
 }
 
 .chip-custom i {
-    font-size: 16px;
+    font-size: 14px;
 }
 
+/* 优先级特定样式 - 弱化背景，强调文字 */
 .chip-priority.high {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    color: white;
-    box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3);
+    background: rgba(244, 67, 54, 0.1);
+    color: #f44336;
+    border: 1px solid rgba(244, 67, 54, 0.2);
 }
 
 .chip-priority.medium {
-    background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
-    color: #8b4513;
-    box-shadow: 0 4px 15px rgba(252, 182, 159, 0.3);
+    background: rgba(255, 152, 0, 0.1);
+    color: #ff9800;
+    border: 1px solid rgba(255, 152, 0, 0.2);
 }
 
 .chip-priority.low {
-    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-    color: white;
-    box-shadow: 0 4px 15px rgba(79, 172, 254, 0.3);
+    background: rgba(76, 175, 80, 0.1);
+    color: #4caf50;
+    border: 1px solid rgba(76, 175, 80, 0.2);
 }
 
-.chip-custom:not(.chip-priority) {
-    background: rgba(102, 126, 234, 0.1);
-    color: #667eea;
-    border-color: rgba(102, 126, 234, 0.2);
+/* 日期样式 - 保持一致 */
+.chip-date {
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-light);
 }
 
 .chip-custom:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
 }
 
 /* 操作按钮 */
@@ -564,25 +583,25 @@ nav.navbar {
     background: transparent;
     border: none;
     cursor: pointer;
-    padding: 10px;
-    border-radius: 10px;
+    padding: 8px;
+    border-radius: 8px;
     color: var(--text-secondary);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 .action-btn:hover {
-    background: var(--primary-gradient);
-    color: white;
-    transform: scale(1.15) rotate(5deg);
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    transform: scale(1.1);
 }
 
 .action-btn.delete:hover {
-    background: var(--accent-gradient);
-    box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
+    color: #f5576c;
+    background: rgba(245, 87, 108, 0.1);
+    box-shadow: none;
 }
 
 /* 浮动按钮 - 炫酷设计 */
@@ -969,19 +988,15 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Calendar Sync
-    document.getElementById('syncCalendarBtn').addEventListener('click', async () => {
-        M.toast({html: '<i class="material-icons-round left">cloud_download</i>正在生成日历...', classes: 'rounded'});
-        try {
-            const a = document.createElement('a');
-            a.href = '/event';
-            a.download = 'todo-list.ics';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            M.toast({html: '<i class="material-icons-round left">check_circle</i>日历已生成', classes: 'rounded green'});
-        } catch (e) {
-            M.toast({html: '<i class="material-icons-round left">error</i>生成失败', classes: 'rounded red'});
-        }
+    // Calendar Sync
+    document.getElementById('syncCalendarBtn').addEventListener('click', () => {
+        M.toast({html: '<i class="material-icons-round left">cloud_download</i>正在跳转日历订阅...', classes: 'rounded'});
+        // iOS Safari handles direct location change better for ICS files (it opens Calendar app import)
+        window.location.href = '/event'; 
+        // Small delay to allow toast to show before navigation (if it navigates away)
+        setTimeout(() => {
+             M.toast({html: '<i class="material-icons-round left">check_circle</i>请求已发送', classes: 'rounded green'});
+        }, 1000);
     });
 
     function resetForm() {
@@ -1097,10 +1112,32 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Save error:', e);
             M.toast({html: '<i class="material-icons-round left">error</i>保存失败', classes: 'rounded red'});
         } finally {
-            saveBtn.disabled = false;
-            saveBtn.innerHTML = '<i class="material-icons-round left">save</i>保存任务';
         }
     }
+
+    // Color Palette based on #007AFF
+    const CARD_COLORS = [
+        '#007AFF', '#FF8500', '#00FAFF', '#0500FF', '#FF007A', '#7AFF00',
+        '#FF00FA', '#00FF05', '#4592E6', '#268EFF', '#006EE6', '#0062CC',
+        '#FF0500', '#FAFF00', '#807f00', '#0085bf', '#a15be3', '#db432c',
+        '#008e5d', '#ea1d6c', '#008b84', '#004aa0', '#0061ce', '#6893ff',
+        '#97aeff', '#ae6c00', '#368d00', '#ffffff', '#d5dcff', '#a8baff',
+        '#7399ff'
+    ];
+
+    function getContrastColor(hex) {
+        if (!hex) return '#1a202c';
+        if (hex.indexOf('#') === 0) hex = hex.slice(1);
+        if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+        if (hex.length !== 6) return '#1a202c';
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+        return (yiq >= 128) ? '#1a202c' : '#ffffff';
+    }
+
+
 
     function renderTasks(tasks) {
         if (tasks.length === 0) {
@@ -1117,6 +1154,39 @@ document.addEventListener('DOMContentLoaded', function() {
         tasks.forEach(task => {
             const li = document.createElement('li');
             li.className = \`collection-item task-item \${task.completed ? 'task-completed' : ''}\`;
+            
+            // Random Color Logic
+            const randomColor = CARD_COLORS[Math.floor(Math.random() * CARD_COLORS.length)];
+            const textColor = getContrastColor(randomColor);
+            const secondaryColor = textColor === '#ffffff' ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.6)';
+            
+            li.style.setProperty('background', randomColor, 'important');
+            li.style.setProperty('--text-primary', textColor);
+            li.style.setProperty('--text-secondary', secondaryColor);
+            li.style.color = textColor;
+            
+            // Adjust checkbox border and gradient if needed based on background lightness
+            if (textColor === '#ffffff') {
+                li.style.setProperty('--border-light', 'rgba(255, 255, 255, 0.3)');
+                li.style.setProperty('--bg-secondary', 'transparent'); 
+                li.style.setProperty('--bg-primary', 'rgba(0,0,0,0.1)'); 
+            } else {
+                 li.style.setProperty('--border-light', 'rgba(0, 0, 0, 0.1)');
+                 li.style.setProperty('--bg-primary', 'rgba(0,0,0,0.05)');
+            }
+
+
+            // Adjust checkbox border and gradient if needed based on background lightness
+            // Simple hack: if text is white (dark bg), make checkbox border white/transparent
+            if (textColor === '#ffffff') {
+                li.style.setProperty('--border-light', 'rgba(255, 255, 255, 0.3)');
+                li.style.setProperty('--bg-secondary', 'transparent'); // For inner elements
+                li.style.setProperty('--bg-primary', 'rgba(0,0,0,0.1)'); // For notes
+            } else {
+                 // For light backgrounds (like white), default vars might work, but let's ensure text contrast
+                 li.style.setProperty('--border-light', 'rgba(0, 0, 0, 0.1)');
+                 li.style.setProperty('--bg-primary', 'rgba(0,0,0,0.05)');
+            }
 
             let dateDisplay = '';
             if (task.due_date) {
