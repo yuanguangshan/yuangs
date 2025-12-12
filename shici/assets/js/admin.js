@@ -281,16 +281,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     <br>
                     <small style="color:#999;">${poem.tags ? poem.tags.join(', ') : ''}</small>
                 </div>
+                <button class="edit-btn" data-idx="${originalIndex}">编辑</button>
                 <button class="delete-btn" data-idx="${originalIndex}">删除</button>
             `;
             listEl.appendChild(item);
         });
 
-        // 重新绑定删除按钮事件
+        // 重新绑定删除和编辑按钮事件
         document.querySelectorAll('.delete-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const idx = e.target.getAttribute('data-idx');
                 deletePoem(idx);
+            });
+        });
+
+        document.querySelectorAll('.edit-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = e.target.getAttribute('data-idx');
+                editPoem(idx);
             });
         });
 
@@ -394,6 +402,114 @@ document.addEventListener('DOMContentLoaded', () => {
         // 确保筛选数据同步更新
         filteredData = [...currentData];
     }
+
+    // Define save functionality that can handle both adding new and updating existing
+    function savePoem() {
+        const saveBtn = document.getElementById('save-btn');
+        const editIndex = parseInt(saveBtn.dataset.editIndex);
+
+        // 获取输入框的值
+        const titleVal = document.getElementById('title').value.trim(); // 对应 rhythmic
+        const authorVal = document.getElementById('author').value.trim();
+        const tagsVal = document.getElementById('dynasty').value.trim(); // 对应 tags (借用朝代输入框)
+        const contentVal = document.getElementById('content').value.trim(); // 对应 paragraphs
+
+        // 简单校验
+        if (!titleVal || !contentVal) {
+            alert('标题(rhythmic) 和 内容(paragraphs) 必填');
+            return;
+        }
+
+        // ✅ 构造符合你新 JSON 结构的对象
+        const poemData = {
+            author: authorVal || '佚名',
+
+            // 1. 标题映射到 rhythmic
+            rhythmic: titleVal,
+
+            // 2. 内容按换行符分割成数组，映射到 paragraphs
+            paragraphs: contentVal.split('\n').filter(line => line.trim() !== ''),
+
+            // 3. 将"朝代"输入框的内容，按逗号分割成 tags 数组
+            // 输入示例："道德经, 先秦" -> ["道德经", "先秦"]
+            tags: tagsVal ? tagsVal.split(/[,，]/).map(t => t.trim()) : []
+        };
+
+        if (!isNaN(editIndex)) {
+            // 更新现有条目
+            // Check for duplicate entries (excluding the current item being edited) before updating to prevent potential duplication
+            const isDuplicate = currentData.some((existingPoem, idx) =>
+                idx !== editIndex && // Exclude the item being edited
+                existingPoem.rhythmic === poemData.rhythmic &&
+                existingPoem.author === poemData.author &&
+                JSON.stringify(existingPoem.paragraphs) === JSON.stringify(poemData.paragraphs) &&
+                JSON.stringify(existingPoem.tags) === JSON.stringify(poemData.tags)
+            );
+
+            if (isDuplicate) {
+                alert('该诗词已存在，无法重复添加！');
+                return;
+            }
+
+            // 更新数组中的特定项
+            currentData[editIndex] = poemData;
+
+            // 同步到云端
+            syncToCloud().then(() => {
+                // 重置按钮文本和功能
+                saveBtn.textContent = '✨ 保存并发布到云端';
+                delete saveBtn.dataset.editIndex;
+            });
+        } else {
+            // 添加新条目
+            // Check for duplicate entries before adding to prevent potential duplication
+            const isDuplicate = currentData.some(existingPoem =>
+                existingPoem.rhythmic === poemData.rhythmic &&
+                existingPoem.author === poemData.author &&
+                JSON.stringify(existingPoem.paragraphs) === JSON.stringify(poemData.paragraphs) &&
+                JSON.stringify(existingPoem.tags) === JSON.stringify(poemData.tags)
+            );
+
+            if (isDuplicate) {
+                alert('该诗词已存在，无法重复添加！');
+                return;
+            }
+
+            // 添加到本地数组
+            currentData.push(poemData);
+
+            // 同步到云端
+            syncToCloud().then(() => {
+                // 清空表单
+                document.getElementById('title').value = '';
+                document.getElementById('author').value = '';
+                document.getElementById('dynasty').value = ''; // 清空 tags
+                document.getElementById('content').value = '';
+            });
+        }
+    }
+
+    function editPoem(index) {
+        // 获取要编辑的诗
+        const poem = currentData[index];
+
+        // 将数据填充到表单中
+        document.getElementById('title').value = poem.rhythmic || poem.title || '';
+        document.getElementById('author').value = poem.author || '';
+        document.getElementById('dynasty').value = poem.tags ? poem.tags.join(', ') : ''; // tags are in the dynasty field
+        document.getElementById('content').value = poem.paragraphs ? poem.paragraphs.join('\n') : ''; // paragraphs are joined with newlines
+
+        // 滚动到表单位置以便用户看到
+        document.getElementById('manager-section').scrollIntoView({ behavior: 'smooth' });
+
+        // Change the save button text to indicate update mode
+        const saveBtn = document.getElementById('save-btn');
+        saveBtn.textContent = '更新并保存';
+        saveBtn.dataset.editIndex = index; // Store the index being edited
+    }
+
+    // Set up a single event listener for the save button that handles both add and edit
+    document.getElementById('save-btn').addEventListener('click', savePoem);
 
     async function syncToCloud() {
         const btn = document.getElementById('save-btn');
