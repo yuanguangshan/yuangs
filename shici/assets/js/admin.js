@@ -413,10 +413,13 @@ document.getElementById('save-btn').addEventListener('click', async () => {
 // ============================================================
 async function deletePoem(index) {
     if(!confirm('确定要删除这首吗？')) return;
-    
+
     // 从数组移除
     currentData.splice(index, 1);
     await syncToCloud();
+
+    // 确保筛选数据同步更新
+    filteredData = [...currentData];
 }
 
 // ============================================================
@@ -456,19 +459,4 @@ async function syncToCloud() {
         btn.textContent = originalText;
         btn.disabled = false;
     }
-}
-
-// ============================================================
-// 7. 数据更新后保持搜索筛选状态
-// ============================================================
-// 在删除操作后也应用筛选，以防删除的是当前显示的最后一个项目
-async function deletePoem(index) {
-    if(!confirm('确定要删除这首吗？')) return;
-
-    // 从数组移除
-    currentData.splice(index, 1);
-    await syncToCloud();
-
-    // 确保筛选数据同步更新
-    filteredData = [...currentData];
 }
