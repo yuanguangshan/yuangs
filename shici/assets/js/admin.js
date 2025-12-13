@@ -283,8 +283,8 @@ document.addEventListener('DOMContentLoaded', () => {
           <small style="color:#999;">${escapeHtml(poem.tags ? poem.tags.join(', ') : '')}</small>
         </div>
         <div class="btn-group">
-          <button class="edit-btn" data-idx="${originalIndex}">编辑</button>
-          <button class="delete-btn" data-idx="${originalIndex}">删</button>
+          <button class="edit-btn" data-idx="${originalIndex}">✏️</button>
+          <button class="delete-btn" data-idx="${originalIndex}">🗑️</button>
         </div>
       `;
       listEl.appendChild(item);
