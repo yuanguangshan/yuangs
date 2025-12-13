@@ -333,41 +333,70 @@ document.addEventListener('DOMContentLoaded', () => {
         controlsDiv.appendChild(prevButton);
       }
 
-      const startPage = Math.max(1, currentPage - 2);
-      const endPage = Math.min(totalPages, currentPage + 2);
+      const maxVisiblePages = 3;
+      let pagesToShow = [];
 
-      // 第一页按钮
-      if (startPage > 1) {
+      // Calculate which pages to show
+      if (totalPages <= maxVisiblePages) {
+        // If total pages is less than or equal to max, show all
+        for (let i = 1; i <= totalPages; i++) {
+          pagesToShow.push(i);
+        }
+      } else {
+        // Show current page and up to 1 page on each side, making sure we have 3 pages total centered around current page
+        const leftPages = Math.floor((maxVisiblePages - 1) / 2);
+        const rightPages = Math.ceil((maxVisiblePages - 1) / 2);
+
+        let startToShow = Math.max(1, currentPage - leftPages);
+        let endToShow = Math.min(totalPages, currentPage + rightPages);
+
+        // Adjust if we're at the beginning or end
+        if (endToShow - startToShow + 1 < maxVisiblePages) {
+          if (startToShow === 1) {
+            endToShow = Math.min(totalPages, startToShow + maxVisiblePages - 1);
+          } else if (endToShow === totalPages) {
+            startToShow = Math.max(1, endToShow - maxVisiblePages + 1);
+          }
+        }
+
+        for (let i = startToShow; i <= endToShow; i++) {
+          pagesToShow.push(i);
+        }
+      }
+
+      // 第一页按钮 and ellipsis if needed
+      if (pagesToShow[0] > 1) {
         const firstPageBtn = document.createElement('button');
         firstPageBtn.className = 'pagination-btn page-btn';
         firstPageBtn.setAttribute('data-page', '0');
         firstPageBtn.textContent = '1';
         controlsDiv.appendChild(firstPageBtn);
 
-        if (startPage > 2) {
+        if (pagesToShow[0] > 2) {
           const ellipsis1 = document.createElement('span');
           ellipsis1.className = 'pagination-ellipsis';
-          ellipsis1.textContent = '...';
+          ellipsis1.textContent = '.';
           controlsDiv.appendChild(ellipsis1);
         }
       }
 
-      // 中间页码按钮
-      for (let i = startPage; i <= endPage; i++) {
-        const isActive = i === currentPage;
-        const pageNum = i - 1;
+      // 中间页码按钮 (the limited 3 pages)
+      for (let i = 0; i < pagesToShow.length; i++) {
+        const pageNumVal = pagesToShow[i];
+        const isActive = pageNumVal === currentPage;
+        const pageNum = pageNumVal - 1;
 
         const pageButton = document.createElement('button');
         pageButton.className = isActive ? 'pagination-btn current-page' : 'pagination-btn page-btn';
         pageButton.setAttribute('data-page', pageNum);
-        pageButton.textContent = i;
+        pageButton.textContent = pageNumVal;
 
         controlsDiv.appendChild(pageButton);
       }
 
-      // 最后一页按钮
-      if (endPage < totalPages) {
-        if (endPage < totalPages - 1) {
+      // 最后一页按钮 and ellipsis if needed
+      if (pagesToShow[pagesToShow.length - 1] < totalPages) {
+        if (pagesToShow[pagesToShow.length - 1] < totalPages - 1) {
           const ellipsis2 = document.createElement('span');
           ellipsis2.className = 'pagination-ellipsis';
           ellipsis2.textContent = '...';
