@@ -31,7 +31,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const tagFilter = document.getElementById('tag-filter');
   const searchBtn = document.getElementById('search-btn');
   const clearSearchBtn = document.getElementById('clear-search-btn');
-  const searchResultsCount = document.getElementById('search-results-count');
 
   // ============================================================
   // 1. 登录逻辑
@@ -214,10 +213,6 @@ document.addEventListener('DOMContentLoaded', () => {
       return matchesSearch && matchesAuthor && matchesTag;
     });
 
-    // 更新搜索结果计数
-    const hasAnyFilter = !!(searchTerm || selectedAuthor || selectedTag);
-    searchResultsCount.textContent = hasAnyFilter ? `找到 ${filteredData.length} 条结果` : '';
-
     // 使用过滤后的数据渲染，回到第一页
     renderList(0, true);
   }
@@ -226,7 +221,6 @@ document.addEventListener('DOMContentLoaded', () => {
     searchInput.value = '';
     authorFilter.value = '';
     tagFilter.value = '';
-    searchResultsCount.textContent = '';
 
     filteredData = [...currentData];
     renderList(0, true);
