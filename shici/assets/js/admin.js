@@ -399,7 +399,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (pagesToShow[pagesToShow.length - 1] < totalPages - 1) {
           const ellipsis2 = document.createElement('span');
           ellipsis2.className = 'pagination-ellipsis';
-          ellipsis2.textContent = '...';
+          ellipsis2.textContent = '.';
           controlsDiv.appendChild(ellipsis2);
         }
 
