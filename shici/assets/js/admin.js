@@ -454,7 +454,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // ============================================================
   async function deletePoem(index) {
     if (!Number.isInteger(index) || index < 0 || index >= currentData.length) return;
-    if (!confirm('确定要删除这首吗？')) return;
+    const poem = currentData[index];
+    const title = poem.rhythmic || poem.title || '无标题';
+    const author = poem.author || '佚名';
+    if (!confirm(`确定要删除《${title}》(${author})吗？此操作不可撤销！`)) return;
 
     currentData.splice(index, 1);
     await syncToCloud();
