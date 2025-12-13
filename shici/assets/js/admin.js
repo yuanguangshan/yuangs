@@ -116,7 +116,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       // 先尝试不带 token（公开读）
-      res = await fetch(READ_URL + '?t=' + Date.now());
+      res = await fetch(READ_URL + '?t=' + Date.now(), {
+  headers: { 'X-Admin-Token': currentToken }
+});
     } catch (fetchError) {
       console.warn('Public fetch failed, trying with token:', fetchError);
       // 公共读失败再带 token
