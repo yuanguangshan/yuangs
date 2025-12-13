@@ -317,7 +317,7 @@ document.addEventListener('DOMContentLoaded', () => {
       paginationHTML += '<div style="display: flex; justify-content: center; gap: 5px; flex-wrap: wrap;">';
 
       if (currentPage > 1) {
-        paginationHTML += `<button id="prev-page" style="padding: 5px 10px; margin: 0 2px;">&lt; 上一页</button>`;
+        paginationHTML += `<button id="prev-page" style="padding: 5px 10px; margin: 0 2px;">&lt; </button>`;
       }
 
       const startPage = Math.max(1, currentPage - 2);
@@ -345,7 +345,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (currentPage < totalPages) {
-        paginationHTML += `<button id="next-page" style="padding: 5px 10px; margin: 0 2px;">下一页 &gt;</button>`;
+        paginationHTML += `<button id="next-page" style="padding: 5px 10px; margin: 0 2px;">&gt;</button>`;
       }
 
       paginationHTML += '</div>';
