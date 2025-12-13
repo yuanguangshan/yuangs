@@ -115,16 +115,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let res;
 
     try {
-      // 先尝试不带 token（公开读）
-      res = await fetch(READ_URL + '?t=' + Date.now(), {
-  headers: { 'X-Admin-Token': currentToken }
-});
-    } catch (fetchError) {
-      console.warn('Public fetch failed, trying with token:', fetchError);
-      // 公共读失败再带 token
+      // 使用 token 请求数据
       res = await fetch(READ_URL + '?t=' + Date.now(), {
         headers: { 'X-Admin-Token': currentToken }
       });
+    } catch (fetchError) {
+      console.error('Failed to fetch data:', fetchError);
+      throw fetchError;
     }
 
     if (!res.ok) {
