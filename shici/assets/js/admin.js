@@ -284,7 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="btn-group">
           <button class="edit-btn" data-idx="${originalIndex}">编辑</button>
-          <button class="delete-btn" data-idx="${originalIndex}">删除</button>
+          <button class="delete-btn" data-idx="${originalIndex}">删</button>
         </div>
       `;
       listEl.appendChild(item);
