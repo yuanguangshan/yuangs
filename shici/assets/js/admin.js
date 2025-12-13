@@ -282,8 +282,10 @@ document.addEventListener('DOMContentLoaded', () => {
           <br>
           <small style="color:#999;">${escapeHtml(poem.tags ? poem.tags.join(', ') : '')}</small>
         </div>
-        <button class="edit-btn" data-idx="${originalIndex}">编辑</button>
-        <button class="delete-btn" data-idx="${originalIndex}">删除</button>
+        <div class="btn-group">
+          <button class="edit-btn" data-idx="${originalIndex}">编辑</button>
+          <button class="delete-btn" data-idx="${originalIndex}">删除</button>
+        </div>
       `;
       listEl.appendChild(item);
     });
@@ -305,53 +307,91 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 分页控件
     if (dataToUse.length > itemsToShow) {
-      const paginationDiv = document.createElement('div');
-      paginationDiv.style.textAlign = 'center';
-      paginationDiv.style.marginTop = '15px';
-      paginationDiv.style.color = '#666';
+      const paginationContainer = document.createElement('div');
+      paginationContainer.className = 'pagination-container';
 
       const totalPages = Math.ceil(dataToUse.length / itemsToShow);
       const currentPage = Math.floor(actualStartIndex / itemsToShow) + 1;
 
-      let paginationHTML = `<div style="margin-bottom: 10px">显示 ${actualStartIndex + 1} - ${Math.min(actualStartIndex + itemsToShow, dataToUse.length)} 条，共 ${dataToUse.length} 条</div>`;
-      paginationHTML += '<div style="display: flex; justify-content: center; gap: 5px; flex-wrap: wrap;">';
+      // 信息文本
+      const infoDiv = document.createElement('div');
+      infoDiv.className = 'pagination-info';
+      infoDiv.textContent = `显示 ${actualStartIndex + 1} - ${Math.min(actualStartIndex + itemsToShow, dataToUse.length)} 条，共 ${dataToUse.length} 条`;
+      paginationContainer.appendChild(infoDiv);
 
+      // 控制按钮容器
+      const controlsDiv = document.createElement('div');
+      controlsDiv.className = 'pagination-controls';
+      paginationContainer.appendChild(controlsDiv);
+
+      // 上一页按钮
       if (currentPage > 1) {
-        paginationHTML += `<button id="prev-page" style="padding: 5px 10px; margin: 0 2px;">&lt; </button>`;
+        const prevButton = document.createElement('button');
+        prevButton.id = 'prev-page';
+        prevButton.className = 'pagination-btn pagination-prev-next';
+        prevButton.innerHTML = '&lt;'; // Left arrow
+        controlsDiv.appendChild(prevButton);
       }
 
       const startPage = Math.max(1, currentPage - 2);
       const endPage = Math.min(totalPages, currentPage + 2);
 
+      // 第一页按钮
       if (startPage > 1) {
-        paginationHTML += `<button class="page-btn" data-page="0" style="padding: 5px 10px; margin: 0 2px;">1</button>`;
+        const firstPageBtn = document.createElement('button');
+        firstPageBtn.className = 'pagination-btn page-btn';
+        firstPageBtn.setAttribute('data-page', '0');
+        firstPageBtn.textContent = '1';
+        controlsDiv.appendChild(firstPageBtn);
+
         if (startPage > 2) {
-          paginationHTML += `<span style="padding: 5px 10px; margin: 0 2px;">...</span>`;
+          const ellipsis1 = document.createElement('span');
+          ellipsis1.className = 'pagination-ellipsis';
+          ellipsis1.textContent = '...';
+          controlsDiv.appendChild(ellipsis1);
         }
       }
 
+      // 中间页码按钮
       for (let i = startPage; i <= endPage; i++) {
         const isActive = i === currentPage;
         const pageNum = i - 1;
-        paginationHTML += `<button class="${isActive ? 'current-page' : 'page-btn'}" data-page="${pageNum}"
-          style="padding: 5px 10px; margin: 0 2px; ${isActive ? 'font-weight: bold; background-color: #007bff; color: white;' : ''}">${i}</button>`;
+
+        const pageButton = document.createElement('button');
+        pageButton.className = isActive ? 'pagination-btn current-page' : 'pagination-btn page-btn';
+        pageButton.setAttribute('data-page', pageNum);
+        pageButton.textContent = i;
+
+        controlsDiv.appendChild(pageButton);
       }
 
+      // 最后一页按钮
       if (endPage < totalPages) {
         if (endPage < totalPages - 1) {
-          paginationHTML += `<span style="padding: 5px 10px; margin: 0 2px;">...</span>`;
+          const ellipsis2 = document.createElement('span');
+          ellipsis2.className = 'pagination-ellipsis';
+          ellipsis2.textContent = '...';
+          controlsDiv.appendChild(ellipsis2);
         }
-        paginationHTML += `<button class="page-btn" data-page="${totalPages - 1}" style="padding: 5px 10px; margin: 0 2px;">${totalPages}</button>`;
+
+        const lastPageBtn = document.createElement('button');
+        lastPageBtn.className = 'pagination-btn page-btn';
+        lastPageBtn.setAttribute('data-page', totalPages - 1);
+        lastPageBtn.textContent = totalPages;
+        controlsDiv.appendChild(lastPageBtn);
       }
 
+      // 下一页按钮
       if (currentPage < totalPages) {
-        paginationHTML += `<button id="next-page" style="padding: 5px 10px; margin: 0 2px;">&gt;</button>`;
+        const nextButton = document.createElement('button');
+        nextButton.id = 'next-page';
+        nextButton.className = 'pagination-btn pagination-prev-next';
+        nextButton.innerHTML = '&gt;'; // Right arrow
+        controlsDiv.appendChild(nextButton);
       }
 
-      paginationHTML += '</div>';
-
-      paginationDiv.innerHTML = paginationHTML;
-      listEl.appendChild(paginationDiv);
+      paginationContainer.appendChild(controlsDiv);
+      listEl.appendChild(paginationContainer);
 
       // 绑定分页按钮事件
       const prev = document.getElementById('prev-page');
