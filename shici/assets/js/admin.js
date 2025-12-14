@@ -50,15 +50,19 @@ document.addEventListener('DOMContentLoaded', () => {
     currentToken = token;
 
     try {
-      // 直接切换到管理界面（你这里是用“能否加载数据”来间接验证 token）
+      // 直接切换到管理界面（你这里是用"能否加载数据"来间接验证 token）
       loginSection.classList.add('hidden');
       managerSection.classList.remove('hidden');
 
       // 绑定搜索和筛选事件监听器（只绑定一次，避免重复登录导致叠加）
       bindSearchEventListeners();
 
-      // 异步加载数据
-      await loadData();
+      // 异步加载数据，设置超时避免界面长时间卡住
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('加载数据超时')), 90000); // 30秒超时
+      });
+
+      await Promise.race([loadData(), timeoutPromise]);
 
       showLoginMessage('登录成功！', 'success');
     } catch (error) {
@@ -114,16 +118,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let res;
 
     try {
-      // 先尝试不带 token（公开读）
-      res = await fetch(READ_URL + '?t=' + Date.now(), {
-  headers: { 'X-Admin-Token': currentToken }
-});
-    } catch (fetchError) {
-      console.warn('Public fetch failed, trying with token:', fetchError);
-      // 公共读失败再带 token
+      // 使用 token 请求数据
       res = await fetch(READ_URL + '?t=' + Date.now(), {
         headers: { 'X-Admin-Token': currentToken }
       });
+    } catch (fetchError) {
+      console.error('Failed to fetch data:', fetchError);
+      throw fetchError;
     }
 
     if (!res.ok) {
@@ -564,6 +565,11 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.textContent = '正在保存到云端...';
     btn.disabled = true;
 
+    // 添加调试信息
+    console.log('SyncToCloud - Token length:', currentToken ? currentToken.length : 0);
+    console.log('SyncToCloud - Token value first 5 chars:', currentToken ? currentToken.substring(0, 5) + '...' : 'undefined');
+    console.log('SyncToCloud - Data length:', currentData.length);
+
     try {
       const res = await fetch(WRITE_URL, {
         method: 'PUT',
@@ -573,6 +579,9 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         body: JSON.stringify(currentData)
       });
+
+      console.log('SyncToCloud - Response status:', res.status);
+      console.log('SyncToCloud - Response headers:', [...res.headers.entries()]);
 
       if (res.status === 403) {
         alert('保存失败：密钥错误！(Error 403)');
@@ -587,8 +596,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       alert('保存失败，状态码: ' + res.status);
     } catch (e) {
-      console.error(e);
-      alert('网络错误，请检查控制台日志');
+      console.error('SyncToCloud error:', e);
+      alert('网络错误，请检查控制台日志: ' + e.message);
     } finally {
       btn.textContent = originalText;
       btn.disabled = false;
