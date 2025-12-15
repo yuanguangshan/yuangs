@@ -1,0 +1,6715 @@
+# Project Documentation for go-music
+## 统计摘要
+- **扫描目录:** `/Users/ygs/ygs/yuangs/go-music`
+- **文件总数:** 31
+- **包含文件数:** 5 (将被写入本文档)
+- **排除文件数:** 26
+- **项目总大小:** 13.97 MB
+
+<details>
+<summary>点击展开/折叠完整文件列表 (31 个文件)</summary>
+
+### **包含的文件 (5):**
+- `README.md` (4.17 KB)
+- `assets/YouTubePlayerManager.js` (5.89 KB)
+- `assets/index.html` (239.51 KB)
+- `assets/manifest.json` (763 Bytes)
+- `assets/sw.js` (8.84 KB)
+
+### **排除的文件 (26):**
+- `.gitignore` (34 Bytes)
+- `assets/icon/android-chrome-512x512.png` (254.12 KB)
+- `assets/icon/apple-touch-icon.png` (44.51 KB)
+- `assets/icon/favicon.ico` (15.04 KB)
+- `assets/icon/icon-16x16.png` (875 Bytes)
+- `assets/icon/icon-192x192.png` (49.81 KB)
+- `assets/icon/icon-32x32.png` (2.39 KB)
+- `cmd/server/main.go` (3.44 KB)
+- `go.mod` (1.34 KB)
+- `go.sum` (11.68 KB)
+- `handlers/additional_handlers.go` (740 Bytes)
+- `handlers/cache_handler.go` (2.49 KB)
+- `handlers/favorites_history_handler.go` (5.85 KB)
+- `handlers/lyrics_handler.go` (2.73 KB)
+- `handlers/search_handler.go` (7.62 KB)
+- `handlers/theme_handler.go` (2.08 KB)
+- `main` (13.25 MB)
+- `server.log` (10.14 KB)
+- `services/cache_service.go` (3.24 KB)
+- `services/favorites_service.go` (3.72 KB)
+- `services/history_service.go` (4.34 KB)
+- `services/itunes_service.go` (3.41 KB)
+- `services/lyrics_service.go` (2.68 KB)
+- `services/theme_service.go` (7.79 KB)
+- `services/youtube_service.go` (28.91 KB)
+- `services/youtube_utils.go` (2.16 KB)
+
+</details>
+
+---
+
+---
+
+## assets/index.html
+
+```html
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="default">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>广山音乐</title>
+
+    <!-- PWA  核心配置 -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#0a0a0a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="广山音乐">
+
+    <!-- 图标配置 -->
+    <link rel="icon" type="image/x-icon" href="./icon/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="./icon/icon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="./icon/icon-16x16.png">
+    <link rel="apple-touch-icon" href="./icon/apple-touch-icon.png">
+
+    <style>
+        :root {
+            /* 默认主题 (Dark Green) */
+            --primary: #1db954;
+            --primary-dark: #1aa34a;
+            --accent: #ff6b6b;
+            --bg: #0a0a0a;
+            --card: #161616;
+            --card-hover: #1f1f1f;
+            --text: #ffffff;
+            --text-secondary: #a0a0a0;
+            --glass: rgba(255, 255, 255, 0.08);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --player-bg: rgba(10, 10, 10, 0.95);
+            --player-gradient: linear-gradient(to top, rgba(10, 10, 10, 1) 0%, rgba(10, 10, 10, 0.95) 50%, transparent 100%);
+            --header-bg: rgba(10, 10, 10, 0.8);
+            --grad-1: var(--primary);
+            --grad-2: #6366f1;
+            --grad-3: #ec4899;
+            
+            --safe-top: env(safe-area-inset-top);
+            --safe-bottom: env(safe-area-inset-bottom);
+        }
+
+        /* 极简白 (Light) */
+        [data-theme="light"] {
+            --primary: #fa233b;
+            --primary-dark: #d61e32;
+            --accent: #5e5ce6;
+            --bg: #f2f2f7;
+            --card: #ffffff;
+            --card-hover: #f9f9f9;
+            --text: #1d1d1f;
+            --text-secondary: #86868b;
+            --glass: rgba(255, 255, 255, 0.75);
+            --glass-border: rgba(0, 0, 0, 0.05);
+            --player-bg: rgba(255, 255, 255, 0.9);
+            --player-gradient: linear-gradient(to top, rgba(242, 242, 247, 1) 0%, rgba(242, 242, 247, 0.95) 50%, transparent 100%);
+            --header-bg: rgba(242, 242, 247, 0.8);
+            --grad-1: rgba(250, 35, 59, 0.3);
+            --grad-2: rgba(94, 92, 230, 0.3);
+            --grad-3: rgba(255, 149, 0, 0.3);
+        }
+
+        /* 深海蓝 (Ocean) */
+        [data-theme="ocean"] {
+            --primary: #00d2ff;
+            --primary-dark: #00a8cc;
+            --accent: #3a7bd5;
+            --bg: #0f172a;
+            --card: #1e293b;
+            --card-hover: #334155;
+            --text: #f8fafc;
+            --text-secondary: #94a3b8;
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --player-bg: rgba(15, 23, 42, 0.95);
+            --player-gradient: linear-gradient(to top, rgba(15, 23, 42, 1) 0%, rgba(15, 23, 42, 0.95) 50%, transparent 100%);
+            --header-bg: rgba(15, 23, 42, 0.8);
+            --grad-1: #3a7bd5;
+            --grad-2: #00d2ff;
+            --grad-3: #8e2de2;
+        }
+
+        /* 赛博紫 (Cyber) */
+        [data-theme="cyber"] {
+            --primary: #d946ef;
+            --primary-dark: #c026d3;
+            --accent: #22d3ee;
+            --bg: #120b18;
+            --card: #271a33;
+            --card-hover: #362247;
+            --text: #fae8ff;
+            --text-secondary: #d8b4fe;
+            --glass: rgba(217, 70, 239, 0.1);
+            --glass-border: rgba(217, 70, 239, 0.2);
+            --player-bg: rgba(18, 11, 24, 0.95);
+            --player-gradient: linear-gradient(to top, rgba(18, 11, 24, 1) 0%, rgba(18, 11, 24, 0.95) 50%, transparent 100%);
+            --header-bg: rgba(18, 11, 24, 0.8);
+            --grad-1: #d946ef;
+            --grad-2: #8b5cf6;
+            --grad-3: #22d3ee;
+        }
+
+        /* 日落橙 (Sunset) */
+        [data-theme="sunset"] {
+            --primary: #ff6b35;
+            --primary-dark: #e85d2a;
+            --accent: #ff9f1c;
+            --bg: #1a0b08;
+            --card: #2d140f;
+            --card-hover: #3d1c15;
+            --text: #fff5f2;
+            --text-secondary: #dcbab4;
+            --glass: rgba(255, 107, 53, 0.08);
+            --glass-border: rgba(255, 107, 53, 0.15);
+            --player-bg: rgba(26, 11, 8, 0.95);
+            --player-gradient: linear-gradient(to top, rgba(26, 11, 8, 1) 0%, rgba(26, 11, 8, 0.95) 50%, transparent 100%);
+            --header-bg: rgba(26, 11, 8, 0.8);
+            --grad-1: #ff6b35;
+            --grad-2: #ff9f1c;
+            --grad-3: #d62828;
+        }
+
+        /* 午夜黑 (Midnight) */
+        [data-theme="midnight"] {
+            --primary: #ffffff;
+            --primary-dark: #e0e0e0;
+            --accent: #ffd700;
+            --bg: #000000;
+            --card: #111111;
+            --card-hover: #222222;
+            --text: #ffffff;
+            --text-secondary: #888888;
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --player-bg: rgba(0, 0, 0, 0.95);
+            --player-gradient: linear-gradient(to top, #000000 0%, rgba(0, 0, 0, 0.95) 50%, transparent 100%);
+            --header-bg: rgba(0, 0, 0, 0.8);
+            --grad-1: #333333;
+            --grad-2: #666666;
+            --grad-3: #000000;
+        }
+
+        /* 森林绿 (Forest) */
+        [data-theme="forest"] {
+            --primary: #4ade80;
+            --primary-dark: #22c55e;
+            --accent: #a3e635;
+            --bg: #052e16;
+            --card: #064e3b;
+            --card-hover: #065f46;
+            --text: #f0fdf4;
+            --text-secondary: #86efac;
+            --glass: rgba(74, 222, 128, 0.05);
+            --glass-border: rgba(74, 222, 128, 0.1);
+            --player-bg: rgba(5, 46, 22, 0.95);
+            --player-gradient: linear-gradient(to top, rgba(5, 46, 22, 1) 0%, rgba(5, 46, 22, 0.95) 50%, transparent 100%);
+            --header-bg: rgba(5, 46, 22, 0.8);
+            --grad-1: #166534;
+            --grad-2: #15803d;
+            --grad-3: #14532d;
+        }
+
+        /* 复古金 (Retro) */
+        [data-theme="retro"] {
+            --primary: #d4af37;
+            --primary-dark: #aa8c2c;
+            --accent: #c5a028;
+            --bg: #2c241b;
+            --card: #3e3226;
+            --card-hover: #4e4033;
+            --text: #e8dcc5;
+            --text-secondary: #a89f91;
+            --glass: rgba(212, 175, 55, 0.08);
+            --glass-border: rgba(212, 175, 55, 0.15);
+            --player-bg: rgba(44, 36, 27, 0.95);
+            --player-gradient: linear-gradient(to top, rgba(44, 36, 27, 1) 0%, rgba(44, 36, 27, 0.95) 50%, transparent 100%);
+            --header-bg: rgba(44, 36, 27, 0.8);
+            --grad-1: #d4af37;
+            --grad-2: #8b4513;
+            --grad-3: #cd853f;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Ensure input elements work properly in PWA */
+        input, textarea, select {
+            -webkit-user-select: auto;
+            -moz-user-select: auto;
+            -ms-user-select: auto;
+            user-select: auto;
+            -webkit-touch-callout: default;
+            -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+        }
+
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(128, 128, 128, 0.2);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(128, 128, 128, 0.4);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            min-height: 100dvh;
+            overflow-x: hidden;
+            position: relative;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        /* 动态背景 */
+        .bg-gradient {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            opacity: 0.6;
+            transition: opacity 0.8s ease;
+            background: radial-gradient(ellipse at 50% 0%, var(--grad-1) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 50%, var(--grad-2) 0%, transparent 40%),
+                radial-gradient(ellipse at 20% 80%, var(--grad-3) 0%, transparent 40%);
+            filter: blur(80px) saturate(150%);
+        }
+
+        .bg-album {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background-size: cover;
+            background-position: center;
+            opacity: 0;
+            transition: opacity 1s ease;
+            filter: blur(60px) brightness(0.4) saturate(120%);
+        }
+
+        /* 亮色模式下减弱专辑背景的亮度影响 */
+        [data-theme="light"] .bg-album {
+            filter: blur(60px) brightness(1.2) saturate(120%) opacity(0.3);
+        }
+
+        .bg-album.active {
+            opacity: 0.7;
+        }
+
+        /* 顶部搜索栏  */
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: calc(8px + var(--safe-top)) 16px 8px;
+            background: linear-gradient(to bottom, var(--header-bg) 0%, rgba(var(--bg), 0.8) 70%, transparent 100%);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        .search-box {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .search-input {
+            width: 100%;
+            height: 40px;
+            padding: 0 40px 0 18px;
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            background: var(--glass);
+            color: var(--text);
+            font-size: 16px;
+            outline: none;
+            transition: all 0.3s ease;
+            -webkit-appearance: none;
+            -moz-appearance: textfield;
+            appearance: none;
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            cursor: text;
+        }
+
+        .search-input:focus {
+            border-color: var(--primary);
+            background: var(--card);
+            outline: 2px solid var(--primary);
+            outline-offset: -1px;
+        }
+
+        .search-input-container {
+            position: relative;
+            cursor: text;
+            flex: 1;
+            min-width: 120px;
+            max-width: 500px;
+        }
+
+        .search-input-container:focus-within {
+            z-index: 2;
+        }
+
+        .search-input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .search-clear-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 16px;
+            padding: 4px;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+
+        .more-menu-btn {
+            background: transparent;
+            border: none;
+            color: var(--text);
+            cursor: pointer;
+            font-size: 18px;
+            padding: 8px;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+
+        .more-menu-btn:hover {
+            background: var(--glass-border);
+        }
+
+        .more-menu {
+            position: absolute;
+            top: 45px;
+            right: 0;
+            background: var(--card);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            padding: 8px 0;
+            min-width: 160px;
+            z-index: 1000;
+            display: none;
+        }
+
+        .more-menu.visible {
+            display: block;
+        }
+
+        .more-menu-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            color: var(--text);
+            text-decoration: none;
+            font-size: 14px;
+            gap: 10px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .more-menu-item:hover {
+            background: var(--card-hover);
+        }
+
+        .search-clear-btn:hover {
+            background: var(--glass-border);
+            color: var(--text);
+        }
+
+        .btn {
+            height: 40px;
+            padding: 0 18px;
+            border-radius: 20px;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-icon {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            color: var(--text);
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .btn-icon:hover {
+            background: var(--glass-border);
+            color: var(--primary);
+        }
+
+        /* 内容区 */
+        .content {
+            position: relative;
+            z-index: 1;
+            padding: calc(72px + var(--safe-top)) 16px calc(200px + var(--safe-bottom));
+            min-height: 100vh;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 16px;
+        }
+
+        /* 歌曲卡片 */
+        .song-card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+            position: relative;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .song-options {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .song-card:hover .song-options {
+            opacity: 1;
+        }
+
+        .song-duration {
+            position: absolute;
+            top: 8px;
+            right: 36px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        .song-card:hover {
+            background: var(--card-hover);
+            transform: translateY(-4px);
+            border-color: var(--glass-border);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+        .song-card:active {
+            transform: scale(0.98);
+        }
+
+        .song-card.playing {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px rgba(var(--primary), 0.3);
+        }
+        
+        /* Fix for box-shadow color parsing if primary is hex */
+        [data-theme="default"] .song-card.playing { box-shadow: 0 0 20px rgba(29, 185, 84, 0.3); }
+        [data-theme="light"] .song-card.playing { box-shadow: 0 0 20px rgba(250, 35, 59, 0.3); }
+        [data-theme="ocean"] .song-card.playing { box-shadow: 0 0 20px rgba(0, 210, 255, 0.3); }
+        [data-theme="cyber"] .song-card.playing { box-shadow: 0 0 20px rgba(217, 70, 239, 0.3); }
+        [data-theme="sunset"] .song-card.playing { box-shadow: 0 0 20px rgba(255, 107, 53, 0.3); }
+        [data-theme="midnight"] .song-card.playing { box-shadow: 0 0 20px rgba(255, 255, 255, 0.2); }
+        [data-theme="forest"] .song-card.playing { box-shadow: 0 0 20px rgba(74, 222, 128, 0.3); }
+        [data-theme="retro"] .song-card.playing { box-shadow: 0 0 20px rgba(212, 175, 55, 0.3); }
+
+        .song-cover {
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 12px;
+            object-fit: cover;
+            background: #222;
+            margin-bottom: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .song-cover img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .song-card:hover .song-cover img {
+            transform: scale(1.05);
+        }
+
+        .play-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .song-card:hover .play-overlay,
+        .song-card.playing .play-overlay {
+            opacity: 1;
+        }
+
+        .play-overlay-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        .song-title {
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 2px;
+            color: var(--text);
+        }
+
+        .song-artist {
+            font-size: 11px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* 两列结果布局 */
+        .results-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            width: 100%;
+        }
+
+        .results-column {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .simple-header {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            padding-left: 4px;
+        }
+
+        .empty-message {
+            grid-column: 1/-1;
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        @media (max-width: 768px) {
+            .results-columns {
+                gap: 12px;
+            }
+            .results-column .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* 底部播放器 - 全新设计 */
+        .player {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 0 16px calc(16px + var(--safe-bottom));
+            background: var(--player-gradient);
+            pointer-events: none;
+        }
+
+        /* 嵌入式播放器模式 */
+        .player.embedded {
+            position: relative;
+            bottom: auto;
+            top: 0;
+            padding: 20px;
+            margin: 0 auto;
+            max-width: 400px;
+            background: var(--bg);
+        }
+
+        .player.embedded .player-card {
+            border-radius: 16px;
+            margin: 0 auto;
+        }
+
+        body.embedded-mode {
+            background: var(--bg);
+            overflow: hidden;
+        }
+
+        .player-card {
+            background: var(--card);
+            border-radius: 24px;
+            padding: 12px 16px 16px;
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            pointer-events: auto;
+        }
+
+        /* 顶部信息栏 */
+        .player-info-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 12px;
+            padding: 8px 12px;
+            background: var(--glass);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .player-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        .player-text-wrapper {
+            overflow: hidden;
+            white-space: nowrap;
+            flex-shrink: 1;
+            min-width: 0;
+            position: relative;
+        }
+
+        .title-wrapper {
+            max-width: 200px;
+        }
+
+        .artist-wrapper {
+            max-width: 150px;
+        }
+
+        .player-title-text {
+            display: inline-block;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text);
+            cursor: pointer;
+            transition: color 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .player-title-text:hover {
+            color: var(--primary);
+        }
+
+        .player-separator {
+            font-size: 12px;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        .player-artist-text {
+            display: inline-block;
+            font-size: 13px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: color 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .player-artist-text:hover {
+            color: var(--primary);
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 767px) {
+            .title-wrapper {
+                max-width: 120px;
+            }
+
+            .artist-wrapper {
+                max-width: 100px;
+            }
+        }
+
+        .player-wiki-btn {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            color: var(--text-secondary);
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+            padding: 0;
+            margin-left: auto;
+        }
+
+        .player-wiki-btn:hover {
+            background: var(--primary);
+            color: white;
+            transform: scale(1.1);
+        }
+
+        /* 滚动动画 */
+        .scroll-text {
+            animation: scroll-left var(--duration, 10s) linear infinite alternate;
+        }
+
+        @keyframes scroll-left {
+            0%, 10% { transform: translateX(0); }
+            90%, 100% { transform: translateX(var(--scroll-distance, -50%)); }
+        }
+
+        /* 主控制区 */
+        .player-main {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .player-cover {
+            width: 56px;
+            height: 56px;
+            border-radius: 12px;
+            object-fit: cover;
+            background: #222;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+        }
+
+        .player-cover.spinning {
+            animation: spin 8s linear infinite;
+            border-radius: 50%;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(-360deg); }
+        }
+
+        .player-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+            margin-left: auto;
+        }
+
+        .ctrl-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: none;
+            background: transparent;
+            color: var(--text);
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            opacity: 0.8;
+            border: 1px solid transparent;
+        }
+        
+        [data-theme="default"] .ctrl-btn { border-color: rgba(255,255,255,0.1); }
+        [data-theme="light"] .ctrl-btn { border-color: rgba(0,0,0,0.05); }
+
+        .ctrl-btn:hover {
+            background: var(--glass);
+            color: var(--primary);
+            opacity: 1;
+            transform: scale(1.1);
+        }
+
+        .ctrl-btn:active {
+            transform: scale(0.95);
+        }
+
+        .ctrl-btn.play {
+            width: 56px;
+            height: 56px;
+            background: var(--primary);
+            color: white;
+            font-size: 24px;
+            opacity: 1;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .ctrl-btn.play:hover {
+            background: var(--primary-dark);
+            transform: scale(1.08);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
+        /* 进度条 */
+        .progress-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .time {
+            font-size: 11px;
+            color: var(--text-secondary);
+            min-width: 36px;
+            text-align: center;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 4px;
+            background: var(--glass-border);
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        [data-theme="default"] .progress-bar { background: rgba(255,255,255,0.1); }
+        [data-theme="light"] .progress-bar { background: rgba(0,0,0,0.1); }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            width: 0%;
+            border-radius: 2px;
+            transition: width 0.1s linear;
+        }
+
+        /* 歌词详情页 */
+        .lyrics-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 200;
+            background: var(--bg);
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            overflow-y: auto;
+            padding: calc(60px + var(--safe-top)) 24px calc(24px + var(--safe-bottom));
+        }
+
+        .lyrics-modal.show {
+            transform: translateY(0);
+        }
+
+        .lyrics-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: calc(16px + var(--safe-top)) 24px 16px;
+            background: linear-gradient(to bottom, var(--bg) 0%, transparent 100%);
+            z-index: 10;
+        }
+
+        .lyrics-close {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--glass);
+            border: none;
+            color: var(--text);
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .lyrics-cover {
+            width: 200px;
+            height: 200px;
+            border-radius: 20px;
+            margin: 0 auto 24px;
+            display: block;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .lyrics-title {
+            font-size: 24px;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+
+        .lyrics-artist {
+            font-size: 16px;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-bottom: 32px;
+            display: inline-block;
+        }
+
+        .lyrics-artist-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 32px;
+        }
+
+        .lyrics-artist.clickable:hover {
+            color: var(--primary);
+        }
+
+        .lyrics-wiki {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 24px;
+            border-left: 3px solid var(--primary);
+            display: none;
+        }
+
+        .lyrics-wiki.show {
+            display: block;
+        }
+
+        .lyrics-wiki-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+
+        .lyrics-wiki-text {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .lyrics-text {
+            font-size: 18px;
+            line-height: 2;
+            color: var(--text-secondary);
+            text-align: center;
+            white-space: pre-wrap;
+        }
+
+        /* 弹幕 */
+        .danmaku {
+            position: fixed;
+            top: calc(100px + var(--safe-top));
+            left: 0;
+            right: 0;
+            height: 200px;
+            z-index: 50;
+            pointer-events: none;
+            overflow: hidden;
+            mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
+            -webkit-mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
+            display: none;
+        }
+
+        .danmaku.show {
+            display: block;
+        }
+
+        .danmaku-item {
+            position: absolute;
+            left: 100%;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            white-space: nowrap;
+            animation: danmaku-slide linear forwards;
+        }
+        
+        [data-theme="light"] .danmaku-item {
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(0,0,0,0.05);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .danmaku-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+        }
+
+        .danmaku-name {
+            color: var(--primary);
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .danmaku-text {
+            font-size: 13px;
+            color: white;
+        }
+        
+        [data-theme="light"] .danmaku-text { color: #333; }
+
+        @keyframes danmaku-slide {
+            from { transform: translateX(0); }
+            to { transform: translateX(calc(-100% - 100vw)); }
+        }
+
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .empty-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+
+        .empty-desc {
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        /* 加载状态 */
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--glass-border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: loading-spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes loading-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 推荐标签样式 */
+        .recommendation-tag {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            color: var(--text);
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .recommendation-tag:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            transform: scale(1.05);
+        }
+
+        /* 收藏和历史弹窗 */
+        .collection-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 200;
+            background: var(--bg);
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .collection-modal.show {
+            transform: translateY(0);
+        }
+
+        .collection-header {
+            position: sticky;
+            top: 0;
+            padding: calc(20px + var(--safe-top)) 24px 20px;
+            background: linear-gradient(to bottom, var(--bg) 0%, var(--header-bg) 100%);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            z-index: 10;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .collection-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .collection-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .btn-action {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            color: var(--text);
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .btn-action:hover {
+            background: var(--glass-border);
+            transform: scale(1.1);
+        }
+
+        .collection-close {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--glass);
+            border: none;
+            color: var(--text);
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .collection-close:hover {
+            background: var(--accent);
+            color: white;
+        }
+
+        .collection-content {
+            flex: 1;
+            padding: 24px;
+            padding-bottom: calc(24px + var(--safe-bottom));
+        }
+
+        .collection-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 16px;
+        }
+
+        .collection-item {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+            position: relative;
+        }
+
+        .collection-item:hover {
+            background: var(--card-hover);
+            transform: translateY(-4px);
+            border-color: var(--glass-border);
+        }
+
+        .collection-item-cover {
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 12px;
+            object-fit: cover;
+            background: #222;
+            margin-bottom: 8px;
+        }
+
+        .collection-item-title {
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 2px;
+            color: var(--text);
+        }
+
+        .collection-item-artist {
+            font-size: 11px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .collection-item-time {
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .collection-item-remove {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(255, 107, 107, 0.9);
+            color: white;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .collection-item:hover .collection-item-remove {
+            opacity: 1;
+        }
+
+        /* 主题切换弹窗 */
+        .theme-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            background: var(--card);
+            padding: 24px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+            z-index: 1000;
+            min-width: 300px;
+            border: 1px solid var(--glass-border);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        
+        .theme-modal.visible {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .theme-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+        
+        .theme-overlay.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .theme-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            text-align: center;
+            color: var(--text);
+        }
+
+        .theme-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .theme-btn {
+            padding: 12px;
+            border-radius: 12px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            background: var(--glass);
+            transition: all 0.2s ease;
+        }
+
+        .theme-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .theme-btn.active {
+            border-color: var(--primary);
+            background: var(--glass-border);
+        }
+
+        .theme-preview {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.2);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        .theme-name {
+            font-size: 13px;
+            color: var(--text);
+        }
+
+        /* 响应式 */
+        @media (max-width: 767px) {
+            .grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px;
+            }
+
+            .song-card {
+                padding: 6px;
+                width: 100%;
+                min-width: 0;
+            }
+
+            .content {
+                padding-left: 12px;
+                padding-right: 12px;
+            }
+        }
+
+        @media (min-width: 768px) {
+            .grid {
+                grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            }
+
+            .player-card {
+                max-width: 600px;
+                margin: 0 auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- 背景 -->
+    <div class="bg-gradient"></div>
+    <div class="bg-album" id="bg-album"></div>
+
+    <!-- 顶部搜索 -->
+    <header class="header">
+        <div class="search-box">
+            <div class="search-input-container" id="search-input-container" style="display: none;">
+                <input type="search" class="search-input" id="search-input" placeholder="歌手/歌曲..." inputmode="text" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" required>
+                <button class="search-clear-btn" id="search-clear-btn" title="清空搜索" style="display: none;">✕</button>
+            </div>
+            <button class="btn btn-icon" onclick="smartRandomSearch()" title="智能探索">🎲</button>
+            <button class="btn btn-icon" onclick="openHistory()" title="播放历史">📖</button>
+            <button class="btn btn-icon" onclick="openFavorites()" title="我的收藏">❤️</button>
+            <button class="btn btn-icon" onclick="openThemeModal()" title="切换主题">🎨</button>
+            <button class="more-menu-btn" id="more-menu-btn" title="更多功能">⋯</button>
+            <div class="more-menu" id="more-menu">
+                <div class="more-menu-item" onclick="toggleSearchInput(event)" title="搜索">
+                    <span>🔍</span>
+                    <span>搜索</span>
+                </div>
+                <div class="more-menu-item" onclick="searchByWeather()" title="看天听歌">
+                    <span>🌤️</span>
+                    <span>看天听歌</span>
+                </div>
+                <div class="more-menu-item" onclick="showAianalysis()" title="AI音乐分析">
+                    <span>🤖</span>
+                    <span>AI音乐分析</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 内容区 -->
+    <main class="content">
+        <div class="grid" id="results">
+            <div class="empty-state" style="grid-column: 1/-1;">
+                <div class="empty-icon">🎧</div>
+                <div class="empty-title">发现音乐</div>
+                <div class="empty-desc">点击 🎲 随机探索，或搜索你喜欢的歌曲</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 弹幕 -->
+    <div class="danmaku" id="danmaku"></div>
+
+    <!-- 底部播放器 -->
+    <div class="player">
+        <div class="player-card">
+            <!-- 顶部歌曲信息栏 -->
+            <div class="player-info-bar">
+                <span class="player-label">正在播放：</span>
+                <div class="player-text-wrapper title-wrapper">
+                    <span class="player-title-text" id="player-title-text">广山音乐</span>
+                </div>
+                <span class="player-separator">-</span>
+                <div class="player-text-wrapper artist-wrapper">
+                    <span class="player-artist-text" id="player-artist-text">等待播放</span>
+                </div>
+                <button class="player-wiki-btn" id="player-tag-btn" title="查看歌曲标签推荐"
+                    style="display: none; margin-right: 8px;">🏷️</button>
+                <button class="player-wiki-btn" id="player-wiki-btn" title="查看艺术家维基百科"
+                    style="display: none;">📖</button>
+            </div>
+
+            <!-- 主控制区 -->
+            <div class="player-main">
+                <img class="player-cover" id="player-cover"
+                    src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%23222' width='100' height='100'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%23333' stroke-width='2'/%3E%3Ccircle cx='50' cy='50' r='10' fill='%23333'/%3E%3C/svg%3E"
+                    alt="Cover">
+                <button class="ctrl-btn favorite-btn" id="favorite-btn" onclick="toggleFavorite()"
+                    title="收藏">🤍</button>
+                <div class="player-controls">
+                    <button class="ctrl-btn" id="mode-btn" onclick="togglePlayMode()" title="列表循环">🔁</button>
+                    <button class="ctrl-btn" onclick="playPrevious()">⏮</button>
+                    <button class="ctrl-btn play" id="play-btn" onclick="togglePlay()">▶</button>
+                    <button class="ctrl-btn" onclick="playNext()">⏭</button>
+                </div>
+            </div>
+
+            <!-- 进度条 -->
+            <div class="progress-container">
+                <span class="time" id="current-time">0:00</span>
+                <div class="progress-bar" id="progress-bar" onclick="seek(event)">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <span class="time" id="total-time">0:30</span>
+            </div>
+
+            <!-- 推荐标签区 -->
+            <div class="recommendation-tags" id="recommendation-tags" style="margin-top: 12px; display: none;">
+                <div class="player-label" style="margin-bottom: 6px;">相关推荐：</div>
+                <div class="recommendation-tags-container" id="recommendation-tags-container"
+                    style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 40px; overflow-y: auto;"></div>
+                <div class="show-more-recommendations" id="show-more-recommendations"
+                    style="margin-top: 6px; color: var(--primary); font-size: 12px; cursor: pointer; display: none;">
+                    展开更多推荐</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 歌词详情 -->
+    <div class="lyrics-modal" id="lyrics-modal">
+        <div class="lyrics-header">
+            <button class="lyrics-close" onclick="closeLyrics()">✕</button>
+        </div>
+        <img class="lyrics-cover" id="lyrics-cover" src="" alt="">
+        <h2 class="lyrics-title" id="lyrics-title"></h2>
+        <div class="lyrics-artist-container">
+            <p class="lyrics-artist clickable" id="lyrics-artist" style="cursor: pointer; text-decoration: underline;"
+                title="点击访问维基百科"></p>
+        </div>
+        <div class="lyrics-wiki" id="lyrics-wiki">
+            <div class="lyrics-wiki-title" id="wiki-title"></div>
+            <div class="lyrics-wiki-text" id="wiki-text"></div>
+        </div>
+        <div class="lyrics-text" id="lyrics-text">加载中...</div>
+    </div>
+
+    <!-- 历史记录弹窗 -->
+    <div class="collection-modal" id="history-modal">
+        <div class="collection-header">
+            <h2 class="collection-title">📖 播放历史</h2>
+            <div class="collection-actions">
+                <button class="btn-action" onclick="exportHistory()" title="导出历史">📤</button>
+                <button class="btn-action" onclick="importHistory()" title="导入历史">📥</button>
+                <button class="btn-action" onclick="clearHistory()" title="清空历史">🗑️</button>
+                <button class="collection-close" onclick="closeHistory()">✕</button>
+            </div>
+        </div>
+        <div class="collection-content" id="history-content">
+            <div class="empty-state">
+                <div class="empty-icon">📖</div>
+                <div class="empty-title">暂无播放历史</div>
+                <div class="empty-desc">开始播放音乐后会自动记录</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 收藏列表弹窗 -->
+    <div class="collection-modal" id="favorites-modal">
+        <div class="collection-header">
+            <h2 class="collection-title">❤️ 我的收藏</h2>
+            <div class="collection-actions">
+                <button class="btn-action" onclick="exportFavorites()" title="导出收藏">📤</button>
+                <button class="btn-action" onclick="importFavorites()" title="导入收藏">📥</button>
+                <button class="btn-action" onclick="clearFavorites()" title="清空收藏">🗑️</button>
+                <button class="collection-close" onclick="closeFavorites()">✕</button>
+            </div>
+        </div>
+        <div class="collection-content" id="favorites-content">
+            <div class="empty-state">
+                <div class="empty-icon">❤️</div>
+                <div class="empty-title">暂无收藏</div>
+                <div class="empty-desc">点击播放器中的爱心按钮收藏歌曲</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主题切换弹窗 -->
+    <div class="theme-overlay" id="theme-overlay" onclick="closeThemeModal()"></div>
+    <div class="theme-modal" id="theme-modal">
+        <div class="theme-title">选择主题</div>
+        <div class="theme-grid">
+            <div class="theme-btn" onclick="changeTheme('default')" data-theme-btn="default">
+                <div class="theme-preview" style="background: linear-gradient(135deg, #0a0a0a, #1db954);"></div>
+                <span class="theme-name">暗夜绿</span>
+            </div>
+            <div class="theme-btn" onclick="changeTheme('light')" data-theme-btn="light">
+                <div class="theme-preview" style="background: linear-gradient(135deg, #ffffff, #fa233b);"></div>
+                <span class="theme-name">极简白</span>
+            </div>
+            <div class="theme-btn" onclick="changeTheme('ocean')" data-theme-btn="ocean">
+                <div class="theme-preview" style="background: linear-gradient(135deg, #0f172a, #00d2ff);"></div>
+                <span class="theme-name">深海蓝</span>
+            </div>
+            <div class="theme-btn" onclick="changeTheme('cyber')" data-theme-btn="cyber">
+                <div class="theme-preview" style="background: linear-gradient(135deg, #120b18, #d946ef);"></div>
+                <span class="theme-name">赛博紫</span>
+            </div>
+            <div class="theme-btn" onclick="changeTheme('sunset')" data-theme-btn="sunset">
+                <div class="theme-preview" style="background: linear-gradient(135deg, #1a0b08, #ff6b35);"></div>
+                <span class="theme-name">日落橙</span>
+            </div>
+            <div class="theme-btn" onclick="changeTheme('midnight')" data-theme-btn="midnight">
+                <div class="theme-preview" style="background: linear-gradient(135deg, #000000, #ffffff);"></div>
+                <span class="theme-name">午夜黑</span>
+            </div>
+            <div class="theme-btn" onclick="changeTheme('forest')" data-theme-btn="forest">
+                <div class="theme-preview" style="background: linear-gradient(135deg, #052e16, #4ade80);"></div>
+                <span class="theme-name">森林绿</span>
+            </div>
+            <div class="theme-btn" onclick="changeTheme('retro')" data-theme-btn="retro">
+                <div class="theme-preview" style="background: linear-gradient(135deg, #2c241b, #d4af37);"></div>
+                <span class="theme-name">复古金</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 隐藏的文件输入框 -->
+    <input type="file" id="import-file-input" accept=".json" style="display: none;">
+
+    <audio id="audio" crossorigin="anonymous"></audio>
+
+    <!-- YouTube Player Manager -->
+    <script src="YouTubePlayerManager.js"></script>
+
+    <script>
+        // 状态管理
+        const state = {
+            currentTrack: null,
+            playlist: [],
+            currentIndex: -1,
+            isPlaying: false,
+            playMode: 'sequence', // sequence, random, single
+            danmakuInterval: null,
+            danmakuCache: [],
+            tracks: [false, false, false, false, false],
+            displayedDanmaku: new Set(),  // Track currently displayed danmaku content to prevent duplicates
+            youtubePlayer: null,  // YouTube player instance
+            isYouTubePlaying: false,  // Track if YouTube player is currently playing
+            youtubeProgressInterval: null,  // Interval for YouTube progress updates
+            lastPosition: 0  // Store last playback position when app goes to background
+        };
+
+        // URL参数解析函数
+        function getUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                apple: params.get('apple') === 'true',
+                youtube: params.get('youtube') === 'true'
+            };
+        }
+
+        // 主题管理器
+        const ThemeManager = {
+            STORAGE_KEY: 'music_theme',
+            
+            init: () => {
+                const savedTheme = localStorage.getItem(ThemeManager.STORAGE_KEY) || 'default';
+                ThemeManager.set(savedTheme);
+            },
+            
+            set: (theme) => {
+                document.documentElement.setAttribute('data-theme', theme);
+                localStorage.setItem(ThemeManager.STORAGE_KEY, theme);
+                
+                // 更新选中状态
+                document.querySelectorAll('.theme-btn').forEach(btn => {
+                    if (btn.dataset.themeBtn === theme) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                });
+            },
+            
+            get: () => {
+                return localStorage.getItem(ThemeManager.STORAGE_KEY) || 'default';
+            }
+        };
+
+        // 缓存系统
+        const CacheManager = {
+            // 获取缓存的数据
+            get: (key) => {
+                try {
+                    const cached = localStorage.getItem(key);
+                    if (!cached) return null;
+
+                    const parsed = JSON.parse(cached);
+                    const now = Date.now();
+
+                    // 检查是否过期
+                    if (parsed.expiry && now > parsed.expiry) {
+                        localStorage.removeItem(key);
+                        return null;
+                    }
+
+                    return parsed.data;
+                } catch (e) {
+                    console.warn('Cache get error:', e);
+                    return null;
+                }
+            },
+
+            // 设置缓存数据
+            set: (key, data, expiryHours = 24) => {
+                try {
+                    const expiry = Date.now() + (expiryHours * 60 * 60 * 1000);
+                    const cacheObj = {
+                        data: data,
+                        expiry: expiry
+                    };
+                    localStorage.setItem(key, JSON.stringify(cacheObj));
+                } catch (e) {
+                    console.warn('Cache set error:', e);
+                }
+            },
+
+            // 删除缓存数据
+            remove: (key) => {
+                try {
+                    localStorage.removeItem(key);
+                } catch (e) {
+                    console.warn('Cache remove error:', e);
+                }
+            }
+        };
+
+        // 收藏管理器
+        const FavoritesManager = {
+            STORAGE_KEY: 'music_favorites',
+
+            // 获取所有收藏
+            getAll: () => {
+                try {
+                    const data = localStorage.getItem(FavoritesManager.STORAGE_KEY);
+                    return data ? JSON.parse(data) : [];
+                } catch (e) {
+                    console.error('Failed to get favorites:', e);
+                    return [];
+                }
+            },
+
+            // 保存收藏
+            save: (favorites) => {
+                try {
+                    localStorage.setItem(FavoritesManager.STORAGE_KEY, JSON.stringify(favorites));
+                } catch (e) {
+                    console.error('Failed to save favorites:', e);
+                }
+            },
+
+            // 添加收藏
+            add: (song) => {
+                const favorites = FavoritesManager.getAll();
+                const exists = favorites.some(f => f.trackId === song.trackId);
+                if (!exists) {
+                    favorites.unshift({
+                        ...song,
+                        favoritedAt: Date.now()
+                    });
+                    FavoritesManager.save(favorites);
+                    return true;
+                }
+                return false;
+            },
+
+            // 移除收藏
+            remove: (trackId) => {
+                const favorites = FavoritesManager.getAll();
+                const filtered = favorites.filter(f => f.trackId !== trackId);
+                FavoritesManager.save(filtered);
+            },
+
+            // 检查是否已收藏
+            isFavorited: (trackId) => {
+                const favorites = FavoritesManager.getAll();
+                return favorites.some(f => f.trackId === trackId);
+            },
+
+            // 清空收藏
+            clear: () => {
+                FavoritesManager.save([]);
+            },
+
+            // 导出收藏
+            export: () => {
+                const favorites = FavoritesManager.getAll();
+                const dataStr = JSON.stringify(favorites, null, 2);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `music-favorites-${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            },
+
+            // 导入收藏
+            import: (file) => {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const data = JSON.parse(e.target.result);
+                            if (Array.isArray(data)) {
+                                FavoritesManager.save(data);
+                                resolve(data.length);
+                            } else {
+                                reject(new Error('Invalid format'));
+                            }
+                        } catch (err) {
+                            reject(err);
+                        }
+                    };
+                    reader.onerror = reject;
+                    reader.readAsText(file);
+                });
+            }
+        };
+
+        // 历史记录管理器
+        const HistoryManager = {
+            STORAGE_KEY: 'music_history',
+            MAX_ITEMS: 100,
+
+            // 获取所有历史
+            getAll: () => {
+                try {
+                    const data = localStorage.getItem(HistoryManager.STORAGE_KEY);
+                    return data ? JSON.parse(data) : [];
+                } catch (e) {
+                    console.error('Failed to get history:', e);
+                    return [];
+                }
+            },
+
+            // 保存历史
+            save: (history) => {
+                try {
+                    localStorage.setItem(HistoryManager.STORAGE_KEY, JSON.stringify(history));
+                } catch (e) {
+                    console.error('Failed to save history:', e);
+                }
+            },
+
+            // 添加历史记录
+            add: (song) => {
+                let history = HistoryManager.getAll();
+                // 移除重复项
+                history = history.filter(h => h.trackId !== song.trackId);
+                // 添加到开头
+                history.unshift({
+                    ...song,
+                    playedAt: Date.now()
+                });
+                // 限制数量
+                if (history.length > HistoryManager.MAX_ITEMS) {
+                    history = history.slice(0, HistoryManager.MAX_ITEMS);
+                }
+                HistoryManager.save(history);
+            },
+
+            // 移除历史记录
+            remove: (trackId) => {
+                const history = HistoryManager.getAll();
+                const filtered = history.filter(h => h.trackId !== trackId);
+                HistoryManager.save(filtered);
+            },
+
+            // 清空历史
+            clear: () => {
+                HistoryManager.save([]);
+            },
+
+            // 导出历史
+            export: () => {
+                const history = HistoryManager.getAll();
+                const dataStr = JSON.stringify(history, null, 2);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `music-history-${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            },
+
+            // 导入历史
+            import: (file) => {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const data = JSON.parse(e.target.result);
+                            if (Array.isArray(data)) {
+                                HistoryManager.save(data);
+                                resolve(data.length);
+                            } else {
+                                reject(new Error('Invalid format'));
+                            }
+                        } catch (err) {
+                            reject(err);
+                        }
+                    };
+                    reader.onerror = reject;
+                    reader.readAsText(file);
+                });
+            }
+        };
+
+        // 生成缓存键
+        const generateCacheKey = (artist, title) => {
+            return `song_${encodeURIComponent(artist)}_${encodeURIComponent(title)}`;
+        };
+
+        // DOM 元素
+        const $ = id => document.getElementById(id);
+        const audio = $('audio');
+
+        // 绑定事件
+        $('search-input-container').addEventListener('click', () => {
+            setTimeout(() => $('search-input').focus(), 150);
+        });
+
+        // 更多菜单功能
+        const moreMenuBtn = document.getElementById('more-menu-btn');
+        const moreMenu = document.getElementById('more-menu');
+
+        moreMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            moreMenu.classList.toggle('visible');
+        });
+
+        // 点击页面其他地方关闭菜单
+        document.addEventListener('click', (e) => {
+            if (!moreMenu.contains(e.target) && e.target !== moreMenuBtn) {
+                moreMenu.classList.remove('visible');
+            }
+        });
+
+        // 切换搜索框可见性
+        function toggleSearchInput(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            const searchContainer = $('search-input-container');
+            const searchInput = $('search-input');
+            const isVisible = searchContainer.style.display !== 'none';
+
+            if (isVisible) {
+                searchContainer.style.display = 'none';
+            } else {
+                searchContainer.style.display = 'block';
+                setTimeout(() => {
+                    searchInput.focus();
+                }, 150); // 增加延迟
+            }
+
+            // Close the more menu after opening/closing search
+            const moreMenu = document.getElementById('more-menu');
+            if (moreMenu) {
+                moreMenu.classList.remove('visible');
+            }
+        }
+
+
+        // 层次化音乐标签系统
+        const musicTags = {
+            // 一级分类：音乐属性
+            attributes: {
+                // 二级分类：情绪与氛围 (Vibes & Moods)
+                moods: {
+                    positive: ["Happy", "Joy", "Cheerful", "Uplifting", "Energetic", "Upbeat", "Euphoria", "Peaceful", "Calm", "Serene", "Chill", "Relax", "Cozy", "Mellow", "Groovy", "Cool", "Fresh"],
+                    romantic: ["Love", "Romantic", "Heart", "Kiss", "Miss", "Baby", "Intimate", "Affection", "Passion", "Sensual", "Sexy"],
+                    melancholy: ["Sad", "Melancholy", "Nostalgia", "Sentimental", "Blue", "Tears", "Lonely", "Gloomy", "Melancholic", "Heartbreak"],
+                    intense: ["Drama", "Intense", "Power", "Epic", "Cinematic", "Dark", "Mystery", "Mysterious", "Heavy", "Spooky", "Creepy", "Mysterious", "Supernatural"],
+                    spiritual: ["Faith", "Believe", "Angels", "Heaven", "Paradise", "Divine", "Sacred", "Spiritual", "Transcendent", "Soulful"]
+                },
+                // 二级分类：音乐风格 (Stylistic Elements)
+                styles: {
+                    sonic: ["Acoustic", "Electric", "Instrumental", "Acapella", "Live", "Studio", "Remix", "Cover", "Original"],
+                    aesthetic: ["Vintage", "Retro", "Classic", "Modern", "Futuristic", "Cyberpunk", "Aesthetic", "Pastel", "Neon", "Funky"]
+                }
+            },
+            // 一级分类：音乐类型
+            genres: {
+                // 二级分类：主要流派 (Main Genres)
+                main: {
+                    pop: ["Pop", "Mandopop", "Cantopop", "K-Pop", "J-Pop", "Jazz", "Soul", "R&B"],
+                    rock: ["Rock", "Alternative", "Indie", "Punk", "Grunge", "Emo", "Metal", "Heavy Metal"],
+                    electronic: ["EDM", "House", "Techno", "Trance", "Dubstep", "Drum and Bass", "Garage", "Ambient"],
+                    hip_hop: ["Hip Hop", "Rap", "Trap", "R&B"],
+                    traditional: ["Country", "Folk", "Classical", "Opera", "Blues"],
+                    world: ["Latin", "Reggae", "Dancehall", "Salsa", "Bachata", "Reggaeton", "Anime", "Ghibli"]
+                },
+                // 三级分类：衍生流派 (Sub-Genres)
+                sub_genres: {
+                    pop_sub: ["Synthpop", "Electropop", "Dance-pop", "Indie Pop", "Art Pop"],
+                    rock_sub: ["Glam Rock", "Progressive Rock", "Punk Rock", "Hard Rock", "Grunge Rock", "Alternative Rock"],
+                    electronic_sub: ["Lo-Fi", "Lofi Hip Hop", "Synthwave", "Vaporwave", "Retrowave", "Deep House", "Future Bass"],
+                    hip_hop_sub: ["Old School Hip Hop", "Trap", "Drill", "Conscious Rap", "Mumble Rap"],
+                    traditional_sub: ["Bluegrass", "Folk Rock", "Baroque", "Chamber Music", "Contemporary Classical"]
+                }
+            },
+            // 一级分类：场景活动
+            scenarios: {
+                // 二级分类：时间场景 (Time-based)
+                time_based: {
+                    daily_routine: ["Morning", "Wake Up", "Afternoon", "Evening", "Late Night", "Midnight", "Sunrise", "Sunset"],
+                    weekly: ["Weekend", "Friday", "Sunday", "Monday", "Workday"],
+                    seasonal: ["Spring", "Summer", "Autumn", "Winter", "Holiday", "New Year", "Valentine", "Christmas", "Halloween"],
+                    special_occasions: ["Birthday", "Wedding", "Graduation", "Travel", "Vacation", "Beach", "Camping", "Festival"]
+                },
+                // 二级分类：活动场景 (Activity-based)
+                activity_based: {
+                    exercise: ["Workout", "Gym", "Running", "Jogging", "Yoga", "Meditation", "Stretching"],
+                    work_study: ["Study", "Coding", "Reading", "Focus", "Background", "Concentration", "Deep Work"],
+                    travel: ["Driving", "Road Trip", "Car Music", "Commuting", "Long Drive"],
+                    social: ["Party", "Club", "Bar", "Lounge", "Dinner", "Cooking", "Cleaning"],
+                    relaxation: ["Sleep", "Meditation", "Spa", "Shower", "Bath", "Coffee Shop", "Cafe"]
+                }
+            },
+            // 一级分类：文化元素
+            culture: {
+                // 二级分类：地域文化 (Regional Culture)
+                regional: {
+                    western: ["American", "British", "European", "African", "Caribbean"],
+                    asian: ["Chinese", "Korean", "Japanese", "Taiwanese", "Hong Kong", "Southeast Asian"],
+                    latin: ["Latin America", "Brazil", "Mexico", "Caribbean"]
+                },
+                // 二级分类：艺术家与作品 (Artists & Works)
+                artists: {
+                    western_mainstream: [
+                        "Taylor Swift", "Ed Sheeran", "Ariana Grande", "Justin Bieber", "The Weeknd", "Dua Lipa",
+                        "Billie Eilish", "Harry Styles", "Bruno Mars", "Adele", "Rihanna", "Beyonce", "Lady Gaga",
+                        "Katy Perry", "Miley Cyrus", "Post Malone", "Coldplay", "Imagine Dragons", "OneRepublic",
+                        "Drake", "Kendrick Lamar", "Eminem", "Jay-Z", "Travis Scott", "Kanye West", "J. Cole",
+                        "Beatles", "Queen", "Pink Floyd", "Led Zeppelin", "AC/DC", "Red Hot Chili Peppers",
+                        "Linkin Park", "Arctic Monkeys", "Tame Impala", "Oasis", "David Bowie", "Prince",
+                        "Elton John", "Bob Dylan", "Beyoncé", "Alicia Keys", "John Legend"
+                    ],
+                    korean: ["BTS", "Blackpink", "Twice", "EXO", "Big Bang", "NewJeans", "Stray Kids", "IU", "SEVENTEEN"],
+                    chinese: ["周杰伦", "林俊杰", "陈奕迅", "王力宏", "陶喆", "蔡依林", "孙燕姿", "梁静茹", "五月天",
+                        "Beyond", "邓丽君", "张国荣", "王菲", "张学友", "刘德华", "黎明", "郭富城", "罗大佑",
+                        "李宗盛", "崔健", "窦唯", "伍佰", "张雨生", "邓紫棋", "李荣浩", "薛之谦", "周深",
+                        "毛不易", "华晨宇", "张杰", "许嵩", "告五人", "痛仰", "陈粒", "赵雷"],
+                    japanese: ["安室奈美恵", "宇多田ヒカル", "米津玄師", "RADWIMPS", "YOASOBI"],
+                    instrumental: ["Hans Zimmer", "John Williams", "Joe Hisaishi", "Ennio Morricone", "Ludwig Göransson"]
+                },
+                // 二级分类：影视文化 (Media Culture)
+                media: {
+                    franchises: ["Marvel", "DC", "Star Wars", "Harry Potter", "Lord of the Rings", "Game of the Thrones"],
+                    shows: ["Stranger Things", "Friends", "Simpsons", "Breaking Bad", "The Office"],
+                    games: ["Cyberpunk 2077", "GTA", "FIFA", "Mario", "Zelda", "Pokemon", "Fortnite"],
+                    other: ["Disney", "Musical", "Broadway", "Anime OST", "Video Game Music"]
+                }
+            },
+            // 一级分类：自然与抽象
+            nature_abstract: {
+                // 二级分类：自然元素 (Natural Elements)
+                nature: {
+                    weather: ["Rain", "Storm", "Thunder", "Snow", "Wind", "Sun", "Moon", "Stars"],
+                    landscapes: ["Ocean", "Sea", "River", "Forest", "Jungle", "Mountain", "Desert"],
+                    locations: ["California", "New York", "London", "Paris", "Tokyo", "Seoul", "Hong Kong", "Shanghai", "Miami", "Ibiza", "Hawaii", "Space", "Galaxy", "Universe", "City", "Street", "Highway"]
+                },
+                // 二级分类：抽象概念 (Abstract Concepts)
+                abstract: {
+                    transcendental: ["Dream", "Night", "Fire", "Gold", "Wild", "Free", "Magic", "Legend", "Hero", "Angel", "Devil", "King", "Queen", "Life", "Time", "Eternity"],
+                    emotions: ["Hope", "Smile", "Believe", "Together", "Alone", "Lost", "Forever", "Secret", "Promise"]
+                }
+            }
+        };
+
+        // 从层次化标签系统中提取所有标签词，用于随机搜索
+        function getAllKeywords() {
+            const keywords = [];
+
+            function collectKeywords(obj) {
+                for (const key in obj) {
+                    if (Array.isArray(obj[key])) {
+                        // 先检查是否为数组
+                        obj[key].forEach(item => keywords.push(item));
+                    } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                        // 再检查是否为对象（排除null）
+                        collectKeywords(obj[key]);
+                    }
+                }
+            }
+
+            collectKeywords(musicTags);
+            return keywords;
+        }
+
+        // 获取标签推荐
+        function getRecommendationsByTag(tag, limit = 20) {
+            const recommendations = [];
+
+            function findRelatedTags(obj, currentPath = []) {
+                for (const key in obj) {
+                    if (typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+                        findRelatedTags(obj[key], [...currentPath, key]);
+                    } else if (Array.isArray(obj[key])) {
+                        // 检查当前标签是否在数组中
+                        if (obj[key].includes(tag)) {
+                            // 添加同级的其他标签
+                            obj[key].forEach(item => {
+                                if (item !== tag && !recommendations.includes(item)) {
+                                    recommendations.push(item);
+                                }
+                            });
+
+                            // 添加同组的其他标签（如果有）
+                            if (currentPath.length > 0) {
+                                const parentPath = currentPath.slice(0, -1);
+                                const parentObj = getParentObject(musicTags, parentPath);
+
+                                for (const parentKey in parentObj) {
+                                    if (Array.isArray(parentObj[parentKey]) && parentObj[parentKey] !== obj[key]) {
+                                        parentObj[parentKey].forEach(item => {
+                                            if (!recommendations.includes(item)) {
+                                                recommendations.push(item);
+                                            }
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            function getParentObject(obj, path) {
+                let current = obj;
+                for (const key of path) {
+                    current = current[key];
+                }
+                return current;
+            }
+
+            findRelatedTags(musicTags);
+
+            // 只返回指定数量的推荐
+            return recommendations.slice(0, limit);
+        }
+
+        // 获取标签的层次信息
+        function getTagHierarchy(tag) {
+            const hierarchy = [];
+
+            function findTag(obj, currentPath = []) {
+                for (const key in obj) {
+                    if (typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+                        if (findTag(obj[key], [...currentPath, key])) {
+                            return true;
+                        }
+                    } else if (Array.isArray(obj[key])) {
+                        if (obj[key].includes(tag)) {
+                            hierarchy.push(...currentPath, key);
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+
+            findTag(musicTags);
+            return hierarchy;
+        }
+
+        // 获取当前播放歌曲的相关标签推荐
+        function getSongRecommendations(song) {
+            // 检查歌曲对象是否有效
+            if (!song || !song.artistName || !song.trackName) {
+                return [];
+            }
+
+            // 确保字符串属性存在且不为空
+            const artistName = song.artistName || '';
+            const trackName = song.trackName || '';
+
+            // 基于艺术家的推荐
+            const artistRecommendations = [];
+            for (const category in musicTags.culture.artists) {
+                if (musicTags.culture.artists[category].includes(artistName)) {
+                    // 添加同类型艺术家
+                    musicTags.culture.artists[category].forEach(artist => {
+                        if (artist !== artistName && !artistRecommendations.includes(artist)) {
+                            artistRecommendations.push(artist);
+                        }
+                    });
+                }
+            }
+
+            // 基于流派的推荐
+            const genreRecommendations = [];
+            for (const category in musicTags.genres.main) {
+                if (musicTags.genres.main[category].some(genre =>
+                    trackName.toLowerCase().includes(genre.toLowerCase()) ||
+                    artistName.toLowerCase().includes(genre.toLowerCase()))) {
+                    // 添加同类流派
+                    musicTags.genres.main[category].forEach(genre => {
+                        if (!genreRecommendations.includes(genre) &&
+                            !artistRecommendations.includes(genre)) {
+                            genreRecommendations.push(genre);
+                        }
+                    });
+
+                    // 添加子流派
+                    if (musicTags.genres.sub_genres[`${category}_sub`]) {
+                        musicTags.genres.sub_genres[`${category}_sub`].forEach(subGenre => {
+                            if (!genreRecommendations.includes(subGenre)) {
+                                genreRecommendations.push(subGenre);
+                            }
+                        });
+                    }
+                }
+            }
+
+            // 合并所有推荐并限制数量
+            const allRecommendations = [...artistRecommendations, ...genreRecommendations];
+            return [...new Set(allRecommendations)].slice(0, 10);
+        }
+
+        // 从层次化标签中获取所有关键词
+        const keywords = getAllKeywords();
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            // 初始化主题
+            ThemeManager.init();
+
+            // 检查URL参数，如果包含youtube_embed，则显示嵌入式播放器
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('youtube_embed') === 'true') {
+                // 显示嵌入式播放器
+                const videoId = urlParams.get('video_id');
+                const title = urlParams.get('title') || 'Unknown Title';
+                const artist = urlParams.get('artist') || 'Unknown Artist';
+
+                if (videoId) {
+                    // 添加嵌入式模式类到body
+                    document.body.classList.add('embedded-mode');
+                    // 隐藏不必要的UI元素
+                    document.querySelector('.header').style.display = 'none';
+                    document.querySelector('.content').style.display = 'none';
+                    const playerElement = document.querySelector('.player');
+                    playerElement.style.display = 'block';
+                    playerElement.classList.add('embedded'); // 添加嵌入式样式类
+                    document.querySelector('.bg-gradient').style.display = 'none';
+                    document.querySelector('.bg-album').style.display = 'none';
+                    $('danmaku').style.display = 'none';
+
+                    // 初始化播放器UI
+                    const cover = 'https://i.ytimg.com/img/no_thumbnail.jpg'; // 默认封面
+                    $('player-cover').src = cover;
+
+                    const titleTextEl = $('player-title-text');
+                    const artistTextEl = $('player-artist-text');
+
+                    titleTextEl.textContent = title;
+                    artistTextEl.textContent = artist;
+
+                    // 设置维基百科按钮
+                    const wikiBtn = $('player-wiki-btn');
+                    const cleanArtistName = artist.split(/&|,|feat\.|ft\./i)[0].trim();
+                    wikiBtn.style.display = 'flex';
+                    wikiBtn.onclick = () => {
+                        const wikiUrl = `https://zh.wikipedia.org/wiki/${encodeURIComponent(cleanArtistName)}`;
+                        window.open(wikiUrl, '_blank');
+                    };
+                    wikiBtn.title = `查看 ${cleanArtistName} 的维基百科`;
+
+                    // 设置标签推荐按钮
+                    const tagBtn = $('player-tag-btn');
+                    tagBtn.style.display = 'flex';
+                    tagBtn.onclick = () => {
+                        showCurrentSongTags();
+                    };
+                    tagBtn.title = '查看歌曲标签推荐';
+
+                    // 检查是否需要滚动
+                    const checkScroll = (el) => {
+                        el.classList.remove('scroll-text');
+                        el.style.transform = 'none';
+
+                        const containerWidth = el.parentElement.clientWidth;
+                        const textWidth = el.scrollWidth;
+
+                        if (textWidth > containerWidth) {
+                            const distance = containerWidth - textWidth;
+                            const duration = Math.abs(distance) / 30 + 2;
+
+                            el.style.setProperty('--scroll-distance', `${distance}px`);
+                            el.style.setProperty('--duration', `${duration}s`);
+                            el.classList.add('scroll-text');
+                        }
+                    };
+
+                    setTimeout(() => {
+                        checkScroll(titleTextEl);
+                        checkScroll(artistTextEl);
+                    }, 50);
+
+                    // 播放YouTube歌曲
+                    playYouTubeSong(videoId, title, artist, cover);
+                }
+            } else {
+                // 正常模式：执行搜索并显示界面
+                randomSearch();
+                // 确保body不包含嵌入式模式类
+                document.body.classList.remove('embedded-mode');
+            }
+
+            const searchInput = $('search-input');
+            const searchClearBtn = $('search-clear-btn');
+            let searchTimeout;
+
+            // Remove problematic event listeners and simplify focus handling
+            // Standard input handling for PWA mode
+            searchInput.addEventListener('keypress', e => {
+                if (e.key === 'Enter') {
+                    clearTimeout(searchTimeout);
+                    searchMusic();
+                }
+            });
+
+            // Handle focus event properly without forcing focus
+            searchInput.addEventListener('focus', () => {
+                // Do not prevent default or stop propagation here as it interferes with input method
+                console.log('Search input focused');
+            });
+
+            // Handle input event with debounce
+            searchInput.addEventListener('input', () => {
+                searchClearBtn.style.display = searchInput.value ? 'flex' : 'none';
+
+                // 防抖搜索
+                clearTimeout(searchTimeout);
+                if (searchInput.value.trim()) {
+                    searchTimeout = setTimeout(() => {
+                        searchMusic();
+                    }, 800);
+                }
+            });
+
+            // Show clear button if search input already has value on load
+            searchClearBtn.style.display = searchInput.value ? 'flex' : 'none';
+
+            // Clear search input when clear button is clicked
+            searchClearBtn.addEventListener('click', () => {
+                clearTimeout(searchTimeout);
+                searchInput.value = '';
+                searchClearBtn.style.display = 'none';
+                // Simply focus input without interfering with input methods
+                setTimeout(() => {
+                    searchInput.focus();
+                    if (typeof searchInput.select === 'function') {
+                        searchInput.select();
+                    }
+                }, 50);
+            });
+
+            // Simplified click handler on container
+            const searchInputContainer = document.querySelector('.search-input-container');
+            if (searchInputContainer) {
+                searchInputContainer.addEventListener('click', (e) => {
+                    // Do not prevent default or stop propagation to allow proper input method handling
+                    if (e.target === searchInputContainer || e.target.closest('.search-input-container')) {
+                        // Just ensure the input gets focus naturally
+                        setTimeout(() => {
+                            searchInput.focus();
+                        }, 0);
+                    }
+                });
+            }
+
+            // 双击封面打开歌词
+            $('player-cover').addEventListener('dblclick', openLyrics);
+        });
+
+        // 搜索艺术家
+        function searchByArtist(artistName) {
+            const cleanArtist = artistName.split(/&|,|feat\.|ft\./i)[0].trim();
+            $('search-input').value = cleanArtist;
+            searchMusic();
+        }
+
+        // 搜索歌曲
+        function searchBySong(songName) {
+            // Remove parentheses and brackets with their contents from song name
+            let cleanSongName = songName.replace(/\([^)]*\)|\[[^\]]*\]/g, '').trim();
+            $('search-input').value = cleanSongName;
+            searchMusic();
+        }
+
+        // 随机搜索
+        function randomSearch() {
+            $('search-input').value = keywords[Math.floor(Math.random() * keywords.length)];
+            searchMusic();
+        }
+
+        // 智能随机搜索 - 基于标签层次结构
+        function smartRandomSearch() {
+            // 从标签的顶层类别中随机选择一个
+            const topLevelCategories = Object.keys(musicTags);
+            if (topLevelCategories.length === 0) {
+                randomSearch(); // 回退到普通随机搜索
+                return;
+            }
+            const randomCategory = topLevelCategories[Math.floor(Math.random() * topLevelCategories.length)];
+
+            // 从该类别中随机选择一个子类别
+            const subCategories = Object.keys(musicTags[randomCategory]);
+            if (subCategories.length === 0) {
+                randomSearch(); // 回退到普通随机搜索
+                return;
+            }
+            const randomSubCategory = subCategories[Math.floor(Math.random() * subCategories.length)];
+
+            // 从子类别中随机选择一个标签
+            const tagsInSubCategory = musicTags[randomCategory][randomSubCategory];
+            if (Array.isArray(tagsInSubCategory) && tagsInSubCategory.length > 0) {
+                const randomTag = tagsInSubCategory[Math.floor(Math.random() * tagsInSubCategory.length)];
+                if (randomTag) {  // 确保标签不为undefined或null
+                    $('search-input').value = randomTag;
+                    searchMusic();
+                    showToast(`智能推荐：${randomTag} (${randomCategory} > ${randomSubCategory})`);
+                } else {
+                    randomSearch(); // 回退到普通随机搜索
+                }
+            } else {
+                // 如果子类别不是数组而是更深层结构，则继续深入
+                const deeperCategories = Object.keys(musicTags[randomCategory][randomSubCategory]);
+                if (deeperCategories && deeperCategories.length > 0) {
+                    const randomDeeperCategory = deeperCategories[Math.floor(Math.random() * deeperCategories.length)];
+                    const tagsInDeeperCategory = musicTags[randomCategory][randomSubCategory][randomDeeperCategory];
+                    if (Array.isArray(tagsInDeeperCategory) && tagsInDeeperCategory.length > 0) {
+                        const randomTag = tagsInDeeperCategory[Math.floor(Math.random() * tagsInDeeperCategory.length)];
+                        if (randomTag) {  // 确保标签不为undefined或null
+                            $('search-input').value = randomTag;
+                            searchMusic();
+                            showToast(`智能推荐：${randomTag} (${randomCategory} > ${randomSubCategory} > ${randomDeeperCategory})`);
+                        } else {
+                            randomSearch(); // 回退到普通随机搜索
+                        }
+                    } else {
+                        // 回退到普通随机搜索
+                        randomSearch();
+                    }
+                } else {
+                    // 回退到普通随机搜索
+                    randomSearch();
+                }
+            }
+        }
+
+        // 搜索音乐
+        async function searchMusic() {
+            const query = $('search-input').value?.trim();
+            if (!query) return;
+
+            // 解析URL参数
+            const urlParams = getUrlParams();
+            const isAppleOnly = urlParams.apple && !urlParams.youtube;
+            const isYouTubeOnly = urlParams.youtube && !urlParams.apple;
+            const isBoth = !isAppleOnly && !isYouTubeOnly; // 默认情况，显示两个来源
+
+            // 尝试从缓存获取搜索结果
+            const cacheKey = `search_${query}`;
+            let cachedResults = CacheManager.get(cacheKey);
+
+            if (cachedResults) {
+                console.log('Using cached search results for:', query);
+                // 检查缓存数据格式，如果是对象格式，则组合两个数组
+                if (cachedResults.itunes !== undefined && cachedResults.youtube !== undefined) {
+                    // 旧格式：{ itunes: [], youtube: [] }
+                    const combinedResults = [...cachedResults.itunes, ...cachedResults.youtube];
+                    state.playlist = combinedResults;
+                    renderResults(combinedResults);
+                } else {
+                    // 新格式：直接是结果数组
+                    state.playlist = cachedResults;
+                    renderResults(cachedResults);
+                }
+                return;
+            }
+
+            $('results').innerHTML = `
+                <div class="loading" style="grid-column: 1/-1;">
+                    <div class="loading-spinner"></div>
+                    <div>正在搜索...</div>
+                </div>
+            `;
+
+            let iTunesResults = [];
+            let youTubeResults = [];
+
+            // 根据URL参数决定搜索哪个来源
+            if (!isYouTubeOnly) {
+                // 搜索 iTunes API (如果未指定只用YouTube)
+                try {
+                    // 使用 Go backend 代理 iTunes API (same endpoint for compatibility)
+                    const res = await fetch(`/api/music/search/song?q=${encodeURIComponent(query)}&limit=48`);
+                    if (res.ok) {
+                        const iTunesData = await res.json();
+                        iTunesResults = iTunesData.results || [];
+                    } else {
+                        console.error('iTunes API 请求失败，状态码:', res.status);
+                        iTunesResults = [];
+                    }
+                } catch (e) {
+                    console.error('iTunes API 搜索失败:', e);
+                    iTunesResults = [];
+                }
+            }
+
+            if (!isAppleOnly) {
+                // 搜索 YouTube through Go backend
+                try {
+                    const youTubeRes = await fetch(`/api/youtubeapi/search/song?q=${encodeURIComponent(query)}&limit=48`);
+                    if (youTubeRes.ok) {
+                        const youTubeJson = await youTubeRes.json();
+                        // console.log('YouTube API 响应:', youTubeJson); // Debug log
+
+                        // Check if response has the expected structure - backend returns 'results' not 'data'
+                        if (youTubeJson && youTubeJson.results) {
+                            // If the API returns data in the expected format
+                            youTubeResults = youTubeJson.results.map(item => ({
+                                // 将 YouTube 数据转换为 iTunes 格式
+                                trackId: item.trackId || item.video_id || item.id,
+                                trackName: item.trackName || item.title || item.name,
+                                artistName: item.artistName || (Array.isArray(item.artists) ? item.artists.join(', ') : (item.artist || item.author || 'Unknown Artist')),
+                                collectionName: item.collectionName || item.album || 'YouTube Music',
+                                artworkUrl100: item.artworkUrl100 || item.thumbnail || item.thumbnails?.[1]?.url || item.image || 'https://i.ytimg.com/img/no_thumbnail.jpg',
+                                previewUrl: item.previewUrl || `https://www.youtube.com/watch?v=${item.video_id || item.id}`,
+                                kind: item.kind || 'youtube',  // 标记为 YouTube 来源
+                                genre: item.primaryGenreName || item.genre || 'YouTube',
+                                releaseDate: item.releaseDate || item.publish_date || item.publishedAt || new Date().toISOString(),
+                                duration: item.duration || 'Unknown Duration'  // 添加时长信息
+                            }));
+                        } else {
+                            console.warn('YouTube API 响应格式不正确:', youTubeJson);
+                        }
+                    } else {
+                        console.error('YouTube API 请求失败，状态码:', youTubeRes.status);
+                    }
+                } catch (e) {
+                    console.error('YouTube API 搜索失败:', e);
+                    // 可能是 CORS 或网络问题，不中断整个搜索流程
+                }
+            }
+
+            // 根据URL参数决定最终展示的歌曲数量（总共48首）
+            if (isAppleOnly) {
+                // 只展示iTunes来源，取前48首
+                iTunesResults = iTunesResults.slice(0, 48);
+                youTubeResults = [];
+            } else if (isYouTubeOnly) {
+                // 只展示YouTube来源，取前48首
+                youTubeResults = youTubeResults.slice(0, 48);
+                iTunesResults = [];
+            } else {
+                // 默认情况，每个来源展示24首（总共48首）
+                iTunesResults = iTunesResults.slice(0, 24);
+                youTubeResults = youTubeResults.slice(0, 24);
+            }
+
+            // 组合结果用于播放列表和渲染
+            const combinedResults = [...iTunesResults, ...youTubeResults];
+
+            // 缓存组合后的结果（新格式）
+            CacheManager.set(cacheKey, combinedResults, 1); // 新格式用于 renderResults
+
+            // 保存到 state，用于播放
+            state.playlist = combinedResults;
+
+            // 渲染两列结果 - 从组合结果中分离iTunes和YouTube
+            const separatediTunesResults = combinedResults.filter(song => song.kind !== 'youtube');
+            const separatedYouTubeResults = combinedResults.filter(song => song.kind === 'youtube');
+
+            // 渲染两列结果
+            renderSeparateResults(separatediTunesResults, separatedYouTubeResults);
+
+            // 同时缓存每个歌曲的元数据
+            combinedResults.forEach(song => {
+                const songCacheKey = generateCacheKey(song.artistName, song.trackName);
+                CacheManager.set(songCacheKey, {
+                    trackName: song.trackName,
+                    artistName: song.artistName,
+                    artworkUrl: song.artworkUrl100,
+                    previewUrl: song.previewUrl,
+                    collectionName: song.collectionName,
+                    kind: song.kind  // 保存来源类型
+                }, 24); // 24小时有效期
+            });
+        }
+
+        // 渲染分离的结果（iTunes 和 YouTube 分列显示）
+        function renderSeparateResults(iTunesSongs, youTubeSongs) {
+            if (iTunesSongs.length === 0 && youTubeSongs.length === 0) {
+                $('results').innerHTML = `
+                    <div class="empty-state" style="grid-column: 1/-1;">
+                        <div class="empty-icon">🔍</div>
+                        <div class="empty-title">未找到结果</div>
+                        <div class="empty-desc">换个关键词试试</div>
+                    </div>
+                `;
+                return;
+            }
+
+            // 解析URL参数来确定显示模式
+            const urlParams = getUrlParams();
+            const isAppleOnly = urlParams.apple && !urlParams.youtube;
+            const isYouTubeOnly = urlParams.youtube && !urlParams.apple;
+
+            const renderSongList = (songs, startIndex) => {
+                return songs.map((song, index) => {
+                    const actualIndex = startIndex + index;
+                    const songCacheKey = generateCacheKey(song.artistName, song.trackName);
+                    const cachedSong = CacheManager.get(songCacheKey);
+                    const coverUrl = (cachedSong?.artworkUrl || song.artworkUrl100).replace('100x100bb', '300x300bb');
+                    const isYouTube = song.kind === 'youtube' || song.previewUrl?.includes('youtube.com');
+
+                    return `
+                        <div class="song-card" data-index="${actualIndex}" onclick="playSong(${actualIndex})">
+                            <div class="song-cover">
+                                <img src="${coverUrl}" loading="lazy" alt="">
+                                <div class="play-overlay">
+                                    <div class="play-overlay-btn">▶</div>
+                                </div>
+                                ${song.trackId ? `<div class="song-options" onclick="event.stopPropagation(); toggleOptionsMenu(event, '${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}', '${coverUrl}', ${isYouTube})">⋯</div>` : ''}
+                                ${isYouTube && song.duration ? `<div class="song-duration">${escapeHtml(song.duration)}</div>` : ''}
+                            </div>
+                            <div class="song-title">${isYouTube ? '<span style="color: var(--accent);">▶</span> ' : ''}${escapeHtml(song.trackName)}</div>
+                            <div class="song-artist">${escapeHtml(song.artistName)}</div>
+                        </div>
+                    `;
+                }).join('');
+            };
+
+            // 根据URL参数决定渲染模式
+            if (isAppleOnly || isYouTubeOnly) {
+                // 只显示一个来源，但让网格布局仍然显示歌曲为多列
+                const sourceName = isAppleOnly ? 'Apple Music' : 'YouTube Music';
+                const songsToDisplay = isAppleOnly ? iTunesSongs : youTubeSongs;
+
+                $('results').innerHTML = `
+                    <div class="results-columns" style="grid-column: 1 / -1;">
+                        <div class="results-column" style="grid-column: 1 / -1;"> <!-- Use full width -->
+                            <div class="simple-header">${sourceName}</div>
+                            <div class="grid">
+                                ${songsToDisplay.length > 0 ? renderSongList(songsToDisplay, 0) : '<div class="empty-message">暂无结果</div>'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // 默认显示两个来源
+                $('results').innerHTML = `
+                    <div class="results-columns" style="grid-column: 1 / -1;">
+                        <div class="results-column">
+                            <div class="simple-header">Apple</div>
+                            <div class="grid">
+                                ${iTunesSongs.length > 0 ? renderSongList(iTunesSongs, 0) : '<div class="empty-message">暂无结果</div>'}
+                            </div>
+                        </div>
+                        <div class="results-column">
+                            <div class="simple-header">YouTube</div>
+                            <div class="grid">
+                                ${youTubeSongs.length > 0 ? renderSongList(youTubeSongs, iTunesSongs.length) : '<div class="empty-message">暂无结果</div>'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // 渲染结果
+        function renderResults(songs) {
+            if (songs.length === 0) {
+                $('results').innerHTML = `
+                    <div class="empty-state" style="grid-column: 1/-1;">
+                        <div class="empty-icon">🔍</div>
+                        <div class="empty-title">未找到结果</div>
+                        <div class="empty-desc">换个关键词试试</div>
+                    </div>
+                `;
+                return;
+            }
+
+            $('results').innerHTML = songs.map((song, index) => {
+                // 检查是否有缓存的元数据
+                const songCacheKey = generateCacheKey(song.artistName, song.trackName);
+                const cachedSong = CacheManager.get(songCacheKey);
+
+                // 使用缓存的或原始的封面URL
+                const coverUrl = (cachedSong?.artworkUrl || song.artworkUrl100).replace('100x100bb', '300x300bb');
+
+                // 检查是否是 YouTube 来源
+                const isYouTube = song.kind === 'youtube' || song.previewUrl?.includes('youtube.com');
+
+                return `
+                    <div class="song-card" data-index="${index}" onclick="playSong(${index})">
+                        <div class="song-cover">
+                            <img src="${coverUrl}" loading="lazy" alt="">
+                            <div class="play-overlay">
+                                <div class="play-overlay-btn">▶</div>
+                            </div>
+                            ${song.trackId ? `<div class="song-options" onclick="event.stopPropagation(); toggleOptionsMenu(event, '${song.trackId}', '${escapeHtml(song.trackName)}', '${escapeHtml(song.artistName)}', '${coverUrl}', ${isYouTube})">⋯</div>` : ''}
+                            ${isYouTube && song.duration ? `<div class="song-duration">${escapeHtml(song.duration)}</div>` : ''}
+                        </div>
+                        <div class="song-title">${isYouTube ? '<span style="color: var(--accent);">▶</span> ' : ''}${escapeHtml(song.trackName)}</div>
+                        <div class="song-artist">${escapeHtml(song.artistName)}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // HTML 转义
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 播放歌曲
+        function playSong(index) {
+            const song = state.playlist[index];
+            if (!song) return;
+
+            // 检查是否是 YouTube 来源的歌曲
+            const isYouTube = song.kind === 'youtube' || song.previewUrl?.includes('youtube.com');
+
+            if (isYouTube) {
+                // 如果是 YouTube 歌曲，使用 YouTube 播放函数
+                // 先设置状态，确保 state.currentIndex 正确更新
+                state.currentTrack = song;
+                state.currentIndex = index;
+
+                playYouTubeSong(
+                    song.trackId,
+                    song.trackName || '未知歌曲',
+                    song.artistName || '未知艺术家',
+                    song.artworkUrl100 || song.thumbnails?.[1]?.url || 'https://i.ytimg.com/img/no_thumbnail.jpg'
+                );
+                return;
+            }
+
+            state.currentTrack = song;
+            state.currentIndex = index;
+
+            // 从缓存获取完整数据，如果有的话
+            const songCacheKey = generateCacheKey(song.artistName, song.trackName);
+            const cachedSong = CacheManager.get(songCacheKey);
+
+            // 使用缓存数据或原始数据
+            const trackName = cachedSong?.trackName || song.trackName;
+            const artistName = cachedSong?.artistName || song.artistName;
+            const artworkUrl = cachedSong?.artworkUrl || song.artworkUrl100;
+            const previewUrl = cachedSong?.previewUrl || song.previewUrl;
+            const collectionName = cachedSong?.collectionName || song.collectionName || song.collectionName;
+
+            const cover = artworkUrl.replace('100x100bb', '600x600bb');
+
+            // 更新顶部信息栏
+            const titleTextEl = $('player-title-text');
+            const artistTextEl = $('player-artist-text');
+            const wikiBtn = $('player-wiki-btn');
+
+            titleTextEl.textContent = trackName;
+            artistTextEl.textContent = artistName;
+            $('player-cover').src = cover;
+
+            // 添加点击事件到标题（搜索歌曲名）
+            titleTextEl.onclick = () => {
+                searchBySong(trackName);
+            };
+            titleTextEl.title = '点击搜索该歌曲';
+
+            // 添加点击事件到艺术家名称（搜索艺术家）
+            artistTextEl.onclick = () => {
+                searchByArtist(artistName);
+            };
+            artistTextEl.title = '点击搜索该艺术家的歌曲';
+
+            // 设置维基百科按钮
+            const cleanArtistName = artistName.split(/&|,|feat\.|ft\./i)[0].trim();
+            wikiBtn.style.display = 'flex';
+            wikiBtn.onclick = () => {
+                const wikiUrl = `https://zh.wikipedia.org/wiki/${encodeURIComponent(cleanArtistName)}`;
+                window.open(wikiUrl, '_blank');
+            };
+            wikiBtn.title = `查看 ${cleanArtistName} 的维基百科`;
+
+            // 设置标签推荐按钮
+            const tagBtn = $('player-tag-btn');
+            tagBtn.style.display = 'flex';
+            tagBtn.onclick = () => {
+                showCurrentSongTags();
+            };
+            tagBtn.title = '查看歌曲标签推荐';
+
+            // 检查是否需要滚动
+            const checkScroll = (el) => {
+                // 先重置，以便准确测量
+                el.classList.remove('scroll-text');
+                el.style.transform = 'none';
+
+                // 比较内部文本宽度和外部容器宽度
+                const containerWidth = el.parentElement.clientWidth;
+                const textWidth = el.scrollWidth;
+
+                if (textWidth > containerWidth) {
+                    const distance = containerWidth - textWidth; // 负值，向左移动
+                    const duration = Math.abs(distance) / 30 + 2; // 速度控制：每秒30px，基础2s
+
+                    el.style.setProperty('--scroll-distance', `${distance}px`);
+                    el.style.setProperty('--duration', `${duration}s`);
+                    el.classList.add('scroll-text');
+                }
+            };
+
+            // 稍微延时一点，确保 DOM 渲染完成
+            setTimeout(() => {
+                checkScroll(titleTextEl);
+                checkScroll(artistTextEl);
+            }, 50);
+
+            // 背景
+            $('bg-album').style.backgroundImage = `url(${cover})`;
+            $('bg-album').classList.add('active');
+
+            // 标记当前播放
+            document.querySelectorAll('.song-card').forEach((card, i) => {
+                card.classList.toggle('playing', i === index);
+            });
+
+            // 播放
+            audio.src = previewUrl;
+            audio.play()
+                .then(() => updatePlayState(true))
+                .catch(() => updatePlayState(false));
+
+            // 弹幕
+            startDanmaku();
+
+            // 预加载歌词
+            $('lyrics-title').textContent = trackName;
+            $('lyrics-artist').textContent = artistName;
+            // Set up Wikipedia link for artist name
+            setupWikipediaLink(artistName);
+            $('lyrics-cover').src = cover;
+            $('lyrics-text').textContent = '加载中...';
+            $('lyrics-wiki').classList.remove('show');
+
+            fetchLyrics(artistName, trackName);
+            fetchArtistWiki(artistName);
+
+            // Add click event to artist name to search for artist's songs (left click)
+            // and open Wikipedia (Ctrl/Cmd+click)
+            $('lyrics-artist').onclick = function (event) {
+                if (event.ctrlKey || event.metaKey) {
+                    // Ctrl/Cmd + click: open Wikipedia
+                    const wikiUrl = $('lyrics-artist').dataset.wikiUrl || `https://zh.wikipedia.org/wiki/${encodeURIComponent(artistName.split(/&|,|feat\.|ft\./i)[0].trim())}`;
+                    window.open(wikiUrl, '_blank');
+                } else {
+                    // Regular click: search for artist's songs
+                    searchByArtist(artistName);
+                }
+            };
+            $('lyrics-artist').style.cursor = 'pointer';
+            $('lyrics-artist').title = '点击搜索该艺术家的歌曲 (Ctrl/Cmd+点击访问维基百科)';
+
+            // 添加到历史记录
+            HistoryManager.add(song);
+
+            // 更新系统媒体中心控制 (Media Session API)
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: trackName,
+                    artist: artistName,
+                    album: collectionName || '广山音乐',
+                    artwork: [
+                        { src: artworkUrl.replace('100x100bb', '96x96bb'), sizes: '96x96', type: 'image/jpeg' },
+                        { src: artworkUrl.replace('100x100bb', '128x128bb'), sizes: '128x128', type: 'image/jpeg' },
+                        { src: artworkUrl.replace('100x100bb', '192x192bb'), sizes: '192x192', type: 'image/jpeg' },
+                        { src: artworkUrl.replace('100x100bb', '256x256bb'), sizes: '256x256', type: 'image/jpeg' },
+                        { src: cover, sizes: '512x512', type: 'image/jpeg' }
+                    ]
+                });
+
+                navigator.mediaSession.setActionHandler('play', togglePlay);
+                navigator.mediaSession.setActionHandler('pause', togglePlay);
+                navigator.mediaSession.setActionHandler('previoustrack', playPrevious);
+                navigator.mediaSession.setActionHandler('nexttrack', () => playNext(false));
+            }
+
+            // 更新收藏按钮状态
+            updateFavoriteButton();
+
+            // 更新推荐标签
+            updateRecommendationTags(song);
+        }
+
+        // 更新推荐标签
+        function updateRecommendationTags(song) {
+            const recommendations = getSongRecommendations(song);
+            const container = $('recommendation-tags-container');
+            const tagsElement = $('recommendation-tags');
+            const showMoreBtn = $('show-more-recommendations');
+
+            if (!recommendations || recommendations.length === 0) {
+                tagsElement.style.display = 'none';
+                return;
+            }
+
+            // 过滤掉无效的推荐标签
+            const validRecommendations = recommendations.filter(tag => tag && typeof tag === 'string');
+
+            if (validRecommendations.length === 0) {
+                tagsElement.style.display = 'none';
+                return;
+            }
+
+            // 只显示前5个推荐
+            const displayRecommendations = validRecommendations.slice(0, 5);
+
+            // 渲染推荐标签
+            container.innerHTML = displayRecommendations.map(tag => `
+                <span class="recommendation-tag" onclick="searchByTag('${tag}')">${escapeHtml(tag)}</span>
+            `).join('');
+
+            // 如果还有更多推荐，显示"展开更多"按钮
+            if (validRecommendations.length > 5) {
+                showMoreBtn.style.display = 'block';
+                showMoreBtn.onclick = () => {
+                    // 显示所有推荐
+                    container.innerHTML = validRecommendations.map(tag => `
+                        <span class="recommendation-tag" onclick="searchByTag('${tag}')">${escapeHtml(tag)}</span>
+                    `).join('');
+                    showMoreBtn.style.display = 'none';
+                };
+            } else {
+                showMoreBtn.style.display = 'none';
+            }
+
+            // 显示推荐区域
+            tagsElement.style.display = 'block';
+        }
+
+        // YouTube 音乐 API 搜索函数 - using local backend proxy
+        async function searchYouTubeMusic(query) {
+            try {
+                const response = await fetch(`/api/youtubeapi/search/song?q=${encodeURIComponent(query)}&limit=10`);
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('YouTube search API 响应:', data); // Debug log
+
+                    if (data && data.data && data.data.length > 0) {
+                        // 确保返回的数据格式一致
+                        return data.data.map(item => ({
+                            ...item,
+                            // 确保艺术家字段正确映射
+                            artist: Array.isArray(item.artists) ? item.artists.join(', ') : item.artist,
+                            // 如果需要 iTunes 兼容格式
+                            artistName: Array.isArray(item.artists) ? item.artists.join(', ') : (item.artist || item.author || 'Unknown Artist'),
+                            trackName: item.title || item.name
+                        }));
+                    }
+                } else {
+                    console.error('YouTube API 请求失败，状态码:', response.status);
+                }
+                return [];
+            } catch (error) {
+                console.error('YouTube API 搜索失败:', error);
+                return [];
+            }
+        }
+
+        // 从 YouTube 搜索并播放歌曲
+        async function searchAndPlayYouTubeSong(query) {
+            const results = await searchYouTubeMusic(query);
+            if (results && results.length > 0) {
+                const song = results[0]; // 使用第一个结果
+                playYouTubeSong(
+                    song.video_id,
+                    song.title || '未知歌曲',
+                    song.artist || '未知艺术家',
+                    song.thumbnail || song.thumbnails?.[1]?.url || ''
+                );
+                return true;
+            }
+            return false;
+        }
+
+        // 按标签搜索
+        function searchByTag(tag) {
+            if (!tag) {
+                return;
+            }
+            $('search-input').value = tag;
+            searchMusic();
+        }
+
+        // 显示当前播放歌曲的标签层次结构
+        function showCurrentSongTags() {
+            if (!state.currentTrack) {
+                showToast('请先播放一首歌曲');
+                return;
+            }
+
+            const song = state.currentTrack;
+            const recommendations = getSongRecommendations(song);
+
+            if (!recommendations || recommendations.length === 0) {
+                showToast('未找到相关标签');
+                return;
+            }
+
+            // 过滤掉无效的推荐标签
+            const validRecommendations = recommendations.filter(tag => tag && typeof tag === 'string');
+
+            if (validRecommendations.length === 0) {
+                showToast('未找到有效标签');
+                return;
+            }
+
+            // 创建标签详情弹窗
+            const modal = document.createElement('div');
+            modal.className = 'tag-details-modal';
+            modal.innerHTML = `
+                <div class="modal-overlay" onclick="this.parentElement.remove()">
+                    <div class="modal-content" onclick="event.stopPropagation()">
+                        <h3>相关标签推荐</h3>
+                        <div class="tags-list">
+                            ${validRecommendations.map(tag => `
+                                <div class="tag-item" onclick="searchByTag('${tag}')">
+                                    <span class="tag-name">${escapeHtml(tag)}</span>
+                                    <span class="tag-search-btn">🔍</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button class="modal-close-btn" onclick="this.parentElement.parentElement.remove()">关闭</button>
+                    </div>
+                </div>
+            `;
+
+            // 添加样式
+            if (!document.querySelector('#tag-details-modal-styles')) {
+                const styles = document.createElement('style');
+                styles.id = 'tag-details-modal-styles';
+                styles.textContent = `
+                    .tag-details-modal .modal-overlay {
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        right: 0;
+                        bottom: 0;
+                        background: rgba(0,0,0,0.8);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        z-index: 10000;
+                    }
+                    .tag-details-modal .modal-content {
+                        background: var(--card);
+                        border-radius: 16px;
+                        padding: 24px;
+                        max-width: 400px;
+                        width: 90%;
+                        max-height: 80vh;
+                        overflow-y: auto;
+                        border: 1px solid var(--glass-border);
+                        backdrop-filter: blur(20px);
+                    }
+                    .tag-details-modal h3 {
+                        margin: 0 0 16px;
+                        color: var(--text);
+                        text-align: center;
+                    }
+                    .tags-list {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 8px;
+                        margin-bottom: 16px;
+                    }
+                    .tag-item {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        padding: 10px 12px;
+                        background: var(--glass);
+                        border-radius: 8px;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                    }
+                    .tag-item:hover {
+                        background: var(--primary);
+                        color: white;
+                    }
+                    .tag-search-btn {
+                        opacity: 0.7;
+                        transition: opacity 0.2s ease;
+                    }
+                    .tag-item:hover .tag-search-btn {
+                        opacity: 1;
+                    }
+                    .modal-close-btn {
+                        width: 100%;
+                        padding: 12px;
+                        background: var(--glass);
+                        border: 1px solid var(--glass-border);
+                        color: var(--text);
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-weight: 500;
+                    }
+                    .modal-close-btn:hover {
+                        background: var(--card-hover);
+                    }
+                `;
+                document.head.appendChild(styles);
+            }
+
+            document.body.appendChild(modal);
+        }
+
+        // 更新播放状态
+        function updatePlayState(playing) {
+            state.isPlaying = playing;
+            const btn = $('play-btn');
+            btn.textContent = playing ? '⏸' : '▶';
+            btn.setAttribute('data-playing', playing); // 用于 CSS 样式修正
+            $('player-cover').classList.toggle('spinning', playing);
+        }
+
+        // 隐藏播放器按钮
+        function hidePlayerButtons() {
+            const wikiBtn = $('player-wiki-btn');
+            const tagBtn = $('player-tag-btn');
+            if (wikiBtn) wikiBtn.style.display = 'none';
+            if (tagBtn) tagBtn.style.display = 'none';
+        }
+
+        // 播放/暂停
+        function togglePlay() {
+            if (!state.currentTrack && state.playlist.length > 0) {
+                // 如果没有当前播放的歌曲但有播放列表，则播放第一首
+                playSong(0);
+            } else if (state.currentTrack) {
+                // 检查是否是 YouTube 来源的歌曲
+                const isYouTube = state.currentTrack.kind === 'youtube' ||
+                    (state.currentTrack.previewUrl && state.currentTrack.previewUrl.includes('youtube.com'));
+
+                if (isYouTube) {
+                    toggleYouTubePlay();
+                } else {
+                    // 对于 iTunes 歌曲，继续使用标准音频元素
+                    if (audio.src) {
+                        if (audio.paused) {
+                            audio.play()
+                                .then(() => updatePlayState(true))
+                                .catch(error => {
+                                    console.error('无法播放音频:', error);
+                                    // If standard audio fails, try to initialize YouTube player if it's a YouTube source
+                                    if (isYouTube) {
+                                        toggleYouTubePlay();
+                                    }
+                                });
+                        } else {
+                            audio.pause();
+                            updatePlayState(false);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Helper function to find the next track by source type
+        // findYouTube: true to find YouTube tracks, false to find non-YouTube tracks
+        function findNextTrackBySource(currentIndex, findYouTube) {
+            if (state.playlist.length <= 1) return -1;
+
+            let index = (currentIndex + 1) % state.playlist.length;
+            let initialIndex = currentIndex;
+
+            // Loop through the playlist to find the next track of the desired source
+            while (index !== initialIndex) {
+                const track = state.playlist[index];
+                const isYouTubeTrack = track.kind === 'youtube' || (track.previewUrl && track.previewUrl.includes('youtube.com'));
+
+                if (findYouTube && isYouTubeTrack) {
+                    // Looking for YouTube track and found one
+                    return index;
+                } else if (!findYouTube && !isYouTubeTrack) {
+                    // Looking for non-YouTube track and found one
+                    return index;
+                }
+
+                index = (index + 1) % state.playlist.length;
+
+                // If we've looped back to the starting point, break to avoid infinite loop
+                if (index === initialIndex) {
+                    break;
+                }
+            }
+
+            // No track of the desired source was found
+            return -1;
+        }
+
+        // Helper function to find the previous track by source type
+        // findYouTube: true to find YouTube tracks, false to find non-YouTube tracks
+        function findPreviousTrackBySource(currentIndex, findYouTube) {
+            if (state.playlist.length <= 1) return -1;
+
+            let index = (currentIndex - 1 + state.playlist.length) % state.playlist.length;
+            let initialIndex = currentIndex;
+
+            // Loop through the playlist backwards to find the previous track of the desired source
+            while (index !== initialIndex) {
+                const track = state.playlist[index];
+                const isYouTubeTrack = track.kind === 'youtube' || (track.previewUrl && track.previewUrl.includes('youtube.com'));
+
+                if (findYouTube && isYouTubeTrack) {
+                    // Looking for YouTube track and found one
+                    return index;
+                } else if (!findYouTube && !isYouTubeTrack) {
+                    // Looking for non-YouTube track and found one
+                    return index;
+                }
+
+                index = (index - 1 + state.playlist.length) % state.playlist.length;
+
+                // If we've looped back to the starting point, break to avoid infinite loop
+                if (index === initialIndex) {
+                    break;
+                }
+            }
+
+            // No track of the desired source was found
+            return -1;
+        }
+
+        // 在 YouTube 播放器中播放下一首 - 使用一致的逻辑
+        function playNextForYouTube() {
+            if (state.playMode === 'single') {
+                // 单曲循环，重新播放当前歌曲
+                if (youtubePlayerManager.getPlayer()) {
+                    youtubePlayerManager.seekTo(0);
+                    youtubePlayerManager.playVideo();
+                }
+                return;
+            }
+
+            if (state.playlist.length === 0) return;
+
+            let newIndex;
+            if (state.playMode === 'random') {
+                newIndex = Math.floor(Math.random() * state.playlist.length);
+                // 尽量避免随机到同一首（除非只有一首）
+                if (state.playlist.length > 1 && newIndex === state.currentIndex) {
+                    newIndex = (newIndex + 1) % state.playlist.length;
+                }
+            } else {
+                // 改为始终按顺序播放下一首，无论来源类型
+                newIndex = (state.currentIndex + 1) % state.playlist.length;
+            }
+            playSong(newIndex);
+        }
+
+        // 切换播放模式
+        function togglePlayMode() {
+            const modes = ['sequence', 'random', 'single'];
+            const currentIdx = modes.indexOf(state.playMode);
+            const nextIdx = (currentIdx + 1) % modes.length;
+            state.playMode = modes[nextIdx];
+
+            const btn = $('mode-btn');
+            switch (state.playMode) {
+                case 'sequence':
+                    btn.textContent = '🔁';
+                    btn.title = '列表循环';
+                    showToast('列表循环');
+                    break;
+                case 'random':
+                    btn.textContent = '🔀';
+                    btn.title = '随机播放';
+                    showToast('随机播放');
+                    break;
+                case 'single':
+                    btn.textContent = '🔂';
+                    btn.title = '单曲循环';
+                    showToast('单曲循环');
+                    break;
+            }
+        }
+
+        // 上一首/下一首
+        function playPrevious() {
+            if (state.playlist.length === 0) return;
+
+            let newIndex;
+            if (state.playMode === 'random') {
+                newIndex = Math.floor(Math.random() * state.playlist.length);
+            } else {
+                // 改为始终按顺序播放上一首，无论来源类型
+                newIndex = (state.currentIndex - 1 + state.playlist.length) % state.playlist.length;
+            }
+            playSong(newIndex);
+        }
+
+        function playNext(auto = false) {
+            if (state.playlist.length === 0) return;
+
+            // 如果是自动播放（播放结束触发）且是单曲循环
+            if (auto && state.playMode === 'single') {
+                audio.currentTime = 0;
+                audio.play();
+                return;
+            }
+
+            let newIndex;
+            if (state.playMode === 'random') {
+                newIndex = Math.floor(Math.random() * state.playlist.length);
+                // 尽量避免随机到同一首（除非只有一首）
+                if (state.playlist.length > 1 && newIndex === state.currentIndex) {
+                    newIndex = (newIndex + 1) % state.playlist.length;
+                }
+            } else {
+                // 改为始终按顺序播放下一首，无论来源类型
+                newIndex = (state.currentIndex + 1) % state.playlist.length;
+            }
+            playSong(newIndex);
+        }
+
+        // 进度条
+        audio.ontimeupdate = () => {
+            // Only update progress bar for non-YouTube sources (iTunes previews)
+            if (!state.currentTrack || !(state.currentTrack.kind === 'youtube' ||
+                (state.currentTrack.previewUrl && state.currentTrack.previewUrl.includes('youtube.com')))) {
+                if (isNaN(audio.duration)) return;
+                const pct = (audio.currentTime / audio.duration) * 100;
+                $('progress-fill').style.width = pct + '%';
+                $('current-time').textContent = formatTime(audio.currentTime);
+            }
+        };
+
+        audio.onloadedmetadata = () => {
+            // Only update duration for non-YouTube sources
+            if (!state.currentTrack || !(state.currentTrack.kind === 'youtube' ||
+                (state.currentTrack.previewUrl && state.currentTrack.previewUrl.includes('youtube.com')))) {
+                $('total-time').textContent = formatTime(audio.duration);
+            }
+        };
+
+        audio.onended = () => {
+            // For YouTube, we rely on the YouTube player's onStateChange event
+            if (!state.currentTrack || !(state.currentTrack.kind === 'youtube' ||
+                (state.currentTrack.previewUrl && state.currentTrack.previewUrl.includes('youtube.com')))) {
+                updatePlayState(false);
+                playNext(true); // 传入 true 表示自动播放
+            }
+        };
+
+        // 为 YouTube 播放器创建定时器来更新进度 - 使用更频繁的更新
+        // Using a more robust interval that can continue in background
+        let youtubeProgressInterval = setInterval(() => {
+            if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
+                try {
+                    const currentTime = youtubePlayerManager.getCurrentTime();
+                    const duration = youtubePlayerManager.getDuration();
+
+                    if (!isNaN(duration) && !isNaN(currentTime) && duration > 0) {
+                        const pct = (currentTime / duration) * 100;
+                        $('progress-fill').style.width = pct + '%';
+                        $('current-time').textContent = formatTime(currentTime);
+                        $('total-time').textContent = formatTime(duration);
+
+                        // Update media session position state for background playback controls
+                        if ('setPositionState' in navigator.mediaSession) {
+                            navigator.mediaSession.setPositionState({
+                                duration: duration,
+                                playbackRate: 1.0,
+                                position: currentTime
+                            });
+                        }
+                    }
+                } catch (e) {
+                    // 如果 YouTube 播放器还没准备好，忽略错误
+                }
+            }
+        }, 500); // 每0.5秒更新一次进度，使时间轴更流畅
+
+        // Store the interval ID so we can clear it if needed
+        state.youtubeProgressInterval = youtubeProgressInterval;
+
+        // Additional progress update function specifically for PWA compatibility
+        let pwaProgressInterval = null;
+
+        function startPWAProgressUpdates() {
+            if (pwaProgressInterval) {
+                clearInterval(pwaProgressInterval);
+            }
+
+            pwaProgressInterval = setInterval(() => {
+                if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
+                    updateYouTubeProgress();
+                }
+            }, 800); // Slightly longer than the main interval to avoid conflicts
+        }
+
+        function stopPWAProgressUpdates() {
+            if (pwaProgressInterval) {
+                clearInterval(pwaProgressInterval);
+                pwaProgressInterval = null;
+            }
+        }
+
+        function updateYouTubeProgress() {
+            if (youtubePlayerManager.getPlayer()) {
+                try {
+                    const currentTime = youtubePlayerManager.getCurrentTime();
+                    const duration = youtubePlayerManager.getDuration();
+
+                    if (!isNaN(duration) && !isNaN(currentTime) && duration > 0) {
+                        const pct = (currentTime / duration) * 100;
+                        $('progress-fill').style.width = pct + '%';
+                        $('current-time').textContent = formatTime(currentTime);
+                        $('total-time').textContent = formatTime(duration);
+
+                        // Update media session position state for background playback controls
+                        if ('setPositionState' in navigator.mediaSession) {
+                            navigator.mediaSession.setPositionState({
+                                duration: duration,
+                                playbackRate: 1.0,
+                                position: currentTime
+                            });
+                        }
+                    }
+                } catch (e) {
+                    // 如果 YouTube 播放器还没准备好，忽略错误
+                }
+            }
+        }
+
+        // 停止弹幕系统
+        function stopDanmaku() {
+            if (state.danmakuInterval) {
+                clearInterval(state.danmakuInterval);
+                state.danmakuInterval = null;
+            }
+            $('danmaku').classList.remove('show');
+            $('danmaku').innerHTML = '';
+            // Clear the displayed danmaku set
+            state.displayedDanmaku.clear();
+            // Clear recent danmaku indices
+            if (state.recentDanmakuIndices) {
+                state.recentDanmakuIndices = [];
+            }
+            // Reset tracks
+            state.tracks = [false, false, false, false, false];
+            // 停止定期刷新弹幕数据
+            DanmakuManager.stopRefresh();
+        }
+
+        function seek(e) {
+            if (!audio.src) return;
+            const rect = $('progress-bar').getBoundingClientRect();
+            const pct = (e.clientX - rect.left) / rect.width;
+            audio.currentTime = pct * audio.duration;
+        }
+
+        function formatTime(sec) {
+            const m = Math.floor(sec / 60);
+            const s = Math.floor(sec % 60);
+            return `${m}:${s.toString().padStart(2, '0')}`;
+        }
+
+        // 播放完整歌曲（在Apple Music中）
+        function playFullSong(trackId, trackName, artistName) {
+            const song = state.playlist.find(s => s.trackId == trackId);
+            const albumId = song?.collectionId || trackId;
+
+            const musicAppUrl = `music://music.apple.com/cn/album/${albumId}?i=${trackId}`;
+            const webUrl = `https://music.apple.com/cn/album/${albumId}?i=${trackId}`;
+
+            // 检测设备类型
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const isMac = /Macintosh/.test(navigator.userAgent);
+            const isAppleDevice = isIOS || isMac;
+
+            if (isAppleDevice) {
+                // Apple 设备：尝试打开 App
+                const startTime = Date.now();
+
+                // 使用 visibilitychange 检测是否成功跳转到 App 
+                const handleVisibilityChange = () => {
+                    if (document.hidden) {
+                        // 页面被隐藏，说明成功打开了 App
+                        clearTimeout(fallbackTimer);
+                        document.removeEventListener('visibilitychange', handleVisibilityChange);
+                    }
+                };
+                document.addEventListener('visibilitychange', handleVisibilityChange);
+
+                // 尝试打开 App
+                window.location.href = musicAppUrl;
+
+                // 设置降级定时器
+                const fallbackTimer = setTimeout(() => {
+                    document.removeEventListener('visibilitychange', handleVisibilityChange);
+
+                    // 如果页面还可见且时间很短，说明 App 没打开
+                    if (!document.hidden && Date.now() - startTime < 2000) {
+                        showFallbackOptions(trackName, artistName, webUrl);
+                    }
+                }, 1500);
+
+            } else {
+                // 非 Apple 设备：直接打开网页版
+                window.open(webUrl, '_blank');
+                showToast(`正在打开 "${trackName}" - ${artistName}`);
+            }
+        }
+
+        // 播放 YouTube 完整歌曲（选项菜单调用）
+        function playYouTubeFullSong(videoId, trackName, artistName, coverUrl) {
+            playYouTubeSong(videoId, trackName, artistName, coverUrl);
+        }
+
+        // 打开 iTunes 歌曲在 Apple Music 应用或网页中
+        function openAppleMusic(trackId, trackName, artistName) {
+            const song = state.playlist.find(s => s.trackId == trackId);
+            const albumId = song?.collectionId || trackId;
+
+            const musicAppUrl = `music://music.apple.com/cn/album/${albumId}?i=${trackId}`;
+            const webUrl = `https://music.apple.com/cn/album/${albumId}?i=${trackId}`;
+
+            // 检测设备类型
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const isMac = /Macintosh/.test(navigator.userAgent);
+            const isAppleDevice = isIOS || isMac;
+
+            if (isAppleDevice) {
+                // Apple 设备：尝试打开 App
+                const startTime = Date.now();
+
+                // 使用 visibilitychange 检测是否成功跳转到 App
+                const handleVisibilityChange = () => {
+                    if (document.hidden) {
+                        // 页面被隐藏，说明成功打开了 App
+                        clearTimeout(fallbackTimer);
+                        document.removeEventListener('visibilitychange', handleVisibilityChange);
+                    }
+                };
+                document.addEventListener('visibilitychange', handleVisibilityChange);
+
+                // 尝试打开 App
+                window.location.href = musicAppUrl;
+
+                // 设置降级定时器
+                const fallbackTimer = setTimeout(() => {
+                    document.removeEventListener('visibilitychange', handleVisibilityChange);
+
+                    // 如果页面还可见且时间很短，说明 App 没打开
+                    if (!document.hidden && Date.now() - startTime < 2000) {
+                        showFallbackOptions(trackName, artistName, webUrl);
+                    }
+                }, 1500);
+
+            } else {
+                // 非 Apple 设备：直接打开网页版
+                window.open(webUrl, '_blank');
+                showToast(`正在打开 "${trackName}" - ${artistName}`);
+            }
+        }
+
+            // 打开 YouTube 歌曲在 YouTube 应用或网页中
+            function openYouTubeApp(videoId, trackName, artistName) {
+                const webUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        // Android Intent (Chrome 推荐方式)
+        // S.browser_fallback_url 指定了如果没安装 App 跳转的地址
+        const androidIntent = `intent://www.youtube.com/watch?v=${videoId}#Intent;package=com.google.android.youtube;scheme=https;S.browser_fallback_url=${encodeURIComponent(webUrl)};end`;
+        // iOS Scheme (不推荐，推荐直接用 webUrl，但在某些场景可用)
+        const iosScheme = `youtube://watch?v=${videoId}`;
+
+        // 1. 更精准的设备检测
+        const u = navigator.userAgent;
+        const isAndroid = u.indexOf('Android') > -1 || u.indexOf('Adr') > -1;
+        // 兼容 iPad Desktop Mode 的检测
+        const isIOS = !!u.match(/\(i[^;]+;( U;)? CPU.+Mac OS X/) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+        showToast(`正在打开 "${trackName}" - ${artistName}`);
+
+        if (isAndroid) {
+            // Android 最佳实践: 使用 Intent
+            // 如果已安装 App，系统直接打开；没安装，Chrome 会自动处理 fallback 到网页
+            window.location.href = androidIntent;
+        } else if (isIOS) {
+            // iOS 最佳实践: 直接访问 Universal Link (HTTPS)
+            // iOS 系统会自动拦截这个链接并询问是否在 App 中打开
+            // 强行用 Scheme 往往体验不好，且很难准确判断是否安装
+            window.location.href = webUrl;
+            
+            // --- 如果你非要强行尝试 Scheme (不推荐) ---
+            // window.location.href = iosScheme; 
+            // setTimeout(() => {
+            //    // iOS 上不能在 timeout 里 window.open，只能改变 location
+            //    window.location.href = webUrl; 
+            // }, 2000);
+            // ----------------------------------------
+        } else {
+            // 桌面端
+            window.open(webUrl, '_blank');
+        }
+    }
+        // 打开 YouTube 歌曲在 YouTube Music 应用或网页中
+        function openYouTubeMusic(videoId, trackName, artistName) {
+            const webUrl = `https://music.youtube.com/watch?v=${videoId}`;
+            const ytmusicUrl = `https://www.youtube.com/watch?v=${videoId}`; // YouTube Music app scheme
+            const youtubemusicUrl = `https://www.youtube.com/watch?v=${videoId}`; // Alternative scheme
+
+            // 检测设备类型
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const isAndroid = /Android/.test(navigator.userAgent);
+            const isMobile = isIOS || isAndroid;
+
+            if (isMobile) {
+                // 移动设备：尝试打开 YouTube Music App with multiple fallbacks
+                const startTime = Date.now();
+
+                // Try YouTube Music specific schemes first
+                const schemesToTry = [ytmusicUrl, youtubemusicUrl];
+
+                let schemeIndex = 0;
+                const tryNextScheme = () => {
+                    if (schemeIndex < schemesToTry.length) {
+                        const schemeUrl = schemesToTry[schemeIndex];
+                        schemeIndex++;
+
+                        // 使用 iframe 方式尝试打开，这样不会被拦截
+                        const iframe = document.createElement('iframe');
+                        iframe.style.display = 'none';
+                        iframe.src = schemeUrl;
+                        document.body.appendChild(iframe);
+
+                        // Remove the iframe after a short time
+                        setTimeout(() => {
+                            if (iframe.parentNode) {
+                                document.body.removeChild(iframe);
+                            }
+
+                            // Check if app opened by measuring elapsed time
+                            if (Date.now() - startTime < 2000 && schemeIndex < schemesToTry.length) {
+                                // If still on page, try next scheme
+                                tryNextScheme();
+                            } else if (Date.now() - startTime < 2000) {
+                                // If still on page and all schemes tried, fallback to web
+                                window.open(webUrl, '_blank');
+                                showToast(`正在打开 "${trackName}" - ${artistName}`);
+                            }
+                        }, 800); // Reduced timeout to try schemes faster
+                    } else {
+                        // All schemes tried, fallback to web
+                        if (Date.now() - startTime < 2000) {
+                            window.open(webUrl, '_blank');
+                            showToast(`正在打开 "${trackName}" - ${artistName}`);
+                        }
+                    }
+                };
+
+                tryNextScheme();
+
+            } else {
+                // 桌面设备：直接打开网页版
+                window.open(webUrl, '_blank');
+                showToast(`正在打开 "${trackName}" - ${artistName}`);
+            }
+        }
+
+        // 显示歌曲选项菜单
+        function toggleOptionsMenu(event, trackId, trackName, artistName, coverUrl, isYouTube) {
+            event.stopPropagation();
+
+            // 移除已存在的选项菜单
+            const existingMenu = document.querySelector('.song-options-menu');
+            if (existingMenu) {
+                existingMenu.remove();
+            }
+
+            // 创建选项菜单
+            const menu = document.createElement('div');
+            menu.className = 'song-options-menu';
+            menu.style.cssText = `
+                position: absolute;
+                top: 32px;
+                right: 8px;
+                background: var(--card);
+                border: 1px solid var(--glass-border);
+                border-radius: 12px;
+                padding: 8px 0;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                z-index: 100;
+                min-width: 160px;
+            `;
+
+            // 根据来源构建菜单项
+            if (isYouTube) {
+                menu.innerHTML = `
+                    <div class="option-item" onclick="playYouTubeSong('${trackId}', '${trackName}', '${artistName}', '${coverUrl}'); this.closest('.song-options-menu').remove();">
+                        <span>🎵 在此播放</span>
+                    </div>
+                    <div class="option-item" onclick="openYouTubeApp('${trackId}', '${trackName}', '${artistName}'); this.closest('.song-options-menu').remove();">
+                        <span>▶️ 打开 YouTube 应用</span>
+                    </div>
+                    <div class="option-item" onclick="openJumpLink('${escapeHtml(trackName)}', '${escapeHtml(artistName)}'); this.closest('.song-options-menu').remove();">
+                        <span>🔗 跳转链接</span>
+                    </div>
+                `;
+            } else {
+                menu.innerHTML = `
+                    <div class="option-item" onclick="playFullSong('${trackId}', '${trackName}', '${artistName}'); this.closest('.song-options-menu').remove();">
+                        <span>🎵 在此播放</span>
+                    </div>
+                    <div class="option-item" onclick="openAppleMusic('${trackId}', '${trackName}', '${artistName}'); this.closest('.song-options-menu').remove();">
+                        <span>📱 打开 Apple Music</span>
+                    </div>
+                `;
+            }
+
+            // 添加选项项的样式
+            if (!document.querySelector('#song-options-menu-styles')) {
+                const styles = document.createElement('style');
+                styles.id = 'song-options-menu-styles';
+                styles.textContent = `
+                    .option-item {
+                        padding: 10px 16px;
+                        cursor: pointer;
+                        transition: background 0.2s ease;
+                        font-size: 14px;
+                        color: var(--text);
+                    }
+                    .option-item:hover {
+                        background: var(--glass-border);
+                    }
+                    .song-options-menu {
+                        position: absolute;
+                        top: 32px;
+                        right: 8px;
+                        background: var(--card);
+                        border: 1px solid var(--glass-border);
+                        border-radius: 12px;
+                        padding: 8px 0;
+                        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                        z-index: 100;
+                        min-width: 160px;
+                    }
+                `;
+                document.head.appendChild(styles);
+            }
+
+            // 添加菜单到页面
+            document.body.appendChild(menu);
+
+            // 定位菜单（相对于点击的目标元素）
+            const targetRect = event.target.getBoundingClientRect();
+            menu.style.top = `${targetRect.bottom + window.scrollY - 8}px`;
+            menu.style.right = `${window.innerWidth - targetRect.right - 16}px`;
+
+            // 点击其他地方关闭菜单
+            setTimeout(() => {
+                const closeMenu = (e) => {
+                    if (!menu.contains(e.target) && e.target !== event.target) {
+                        menu.remove();
+                        document.removeEventListener('click', closeMenu);
+                    }
+                };
+                document.addEventListener('click', closeMenu);
+            }, 10);
+        }
+
+        // 显示降级选项
+        function showFallbackOptions(trackName, artistName, webUrl) {
+            // 创建一个更友好的提示框
+            const modal = document.createElement('div');
+            modal.className = 'apple-music-modal';
+            modal.innerHTML = `
+        <div class="modal-overlay" onclick="this.parentElement.remove()">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-icon">🎵</div>
+                <h3>打开 Apple Music</h3>
+                <p>即将播放 "${trackName}"<br><span class="artist">${artistName}</span></p>
+                <div class="modal-buttons">
+                    <a href="${webUrl}" target="_blank" class="btn-primary" onclick="this.closest('.apple-music-modal').remove()">
+                        在网页中打开
+                    </a>
+                    <button class="btn-secondary" onclick="this.closest('.apple-music-modal').remove()">
+                        取消
+                    </button>
+                </div>
+                <p class="hint">提示：安装 Apple Music 应用可获得更好体验</p>
+            </div>
+        </div>
+    `;
+
+            // 添加样式
+            if (!document.querySelector('#apple-music-modal-styles')) {
+                const styles = document.createElement('style');
+                styles.id = 'apple-music-modal-styles';
+                styles.textContent = `
+            .apple-music-modal .modal-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.6);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                animation: fadeIn 0.2s ease;
+            }
+            .apple-music-modal .modal-content {
+                background: white;
+                border-radius: 16px;
+                padding: 24px;
+                max-width: 320px;
+                width: 90%;
+                text-align: center;
+                animation: slideUp 0.3s ease;
+            }
+            .apple-music-modal .modal-icon {
+                font-size: 48px;
+                margin-bottom: 12px;
+            }
+            .apple-music-modal h3 {
+                margin: 0 0 8px;
+                font-size: 18px;
+                color: #1a1a1a;
+            }
+            .apple-music-modal p {
+                margin: 0 0 16px;
+                color: #666;
+                font-size: 14px;
+                line-height: 1.5;
+            }
+            .apple-music-modal .artist {
+                color: #999;
+            }
+            .apple-music-modal .modal-buttons {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+            .apple-music-modal .btn-primary {
+                background: linear-gradient(135deg, #fc3c44, #d93a41);
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 10px;
+                font-size: 16px;
+                font-weight: 500;
+                cursor: pointer;
+                text-decoration: none;
+                display: block;
+            }
+            .apple-music-modal .btn-secondary {
+                background: #f0f0f0;
+                color: #333;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 10px;
+                font-size: 16px;
+                cursor: pointer;
+            }
+            .apple-music-modal .hint {
+                font-size: 12px;
+                color: #999;
+                margin-top: 16px;
+                margin-bottom: 0;
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            @keyframes slideUp {
+                from { transform: translateY(20px); opacity: 0; }
+                to { transform: translateY(0); opacity: 1; }
+            }
+        `;
+                document.head.appendChild(styles);
+            }
+
+            document.body.appendChild(modal);
+        }
+
+        // Initialize YouTube player manager
+        const youtubePlayerManager = new YouTubePlayerManager();
+
+        // Set up event listeners for YouTube player events
+        document.addEventListener('youtubePlayerReady', (e) => {
+            console.log('Event caught: Player is ready.');
+            // Update UI and initialize PWA progress updates
+            // Only update play state, actual play is handled by calling function
+            updatePlayState(youtubePlayerManager.isPlaying());
+        });
+
+        document.addEventListener('youtubePlayerPlaying', (e) => {
+            console.log('Event caught: Player is playing.');
+            // Update global state
+            state.isYouTubePlaying = true;
+            updatePlayState(true);
+            // Start PWA progress updates
+            startPWAProgressUpdates();
+        });
+
+        document.addEventListener('youtubePlayerPaused', (e) => {
+            console.log('Event caught: Player is paused.');
+            state.isYouTubePlaying = false;
+            updatePlayState(false);
+            stopPWAProgressUpdates();
+        });
+
+        document.addEventListener('youtubePlayerEnded', (e) => {
+            console.log('Event caught: Player has ended.');
+            state.isYouTubePlaying = false;
+            updatePlayState(false);
+            stopPWAProgressUpdates();
+            setTimeout(() => playNext(true), 300); // Use the same logic as non-YouTube sources, with auto=true for automatic playback
+        });
+
+        document.addEventListener('youtubePlayerError', (e) => {
+            console.log('Event caught: Player error.', e.detail.error);
+            // Handle error appropriately
+            state.isYouTubePlaying = false;
+            updatePlayState(false);
+            stopPWAProgressUpdates();
+            showToast('YouTube 播放出现错误，请稍后重试');
+        });
+
+        // Update the playYouTubeSong function to use YouTube player
+        async function playYouTubeSong(videoId, title, artist, coverUrl = '') {
+            if (!videoId) return;
+
+            try {
+                // Update state and UI first
+                state.currentTrack = {
+                    trackId: videoId,
+                    trackName: title,
+                    artistName: artist,
+                    artworkUrl100: coverUrl || 'https://i.ytimg.com/img/no_thumbnail.jpg',
+                    kind: 'youtube'
+                };
+
+                // Update player UI
+                const cover = coverUrl || 'https://i.ytimg.com/img/no_thumbnail.jpg';
+                $('player-cover').src = cover;
+
+                const titleTextEl = $('player-title-text');
+                const artistTextEl = $('player-artist-text');
+
+                titleTextEl.textContent = title;
+                artistTextEl.textContent = artist;
+
+                // Add search functionality to title and artist
+                titleTextEl.onclick = () => searchBySong(title);
+                artistTextEl.onclick = () => searchByArtist(artist);
+                titleTextEl.style.cursor = 'pointer';
+                artistTextEl.style.cursor = 'pointer';
+
+                // Update top info bar
+                $('player-cover').src = cover;
+                $('bg-album').style.backgroundImage = `url(${cover})`;
+                $('bg-album').classList.add('active');
+
+                // Setup Wikipedia button
+                const wikiBtn = $('player-wiki-btn');
+                const cleanArtistName = artist.split(/&|,|feat\.|ft\./i)[0].trim();
+                wikiBtn.style.display = 'flex';
+                wikiBtn.onclick = () => {
+                    const wikiUrl = `https://zh.wikipedia.org/wiki/${encodeURIComponent(cleanArtistName)}`;
+                    window.open(wikiUrl, '_blank');
+                };
+                wikiBtn.title = `查看 ${cleanArtistName} 的维基百科`;
+
+                // Setup tag recommendation button
+                const tagBtn = $('player-tag-btn');
+                tagBtn.style.display = 'flex';
+                tagBtn.onclick = () => {
+                    showCurrentSongTags();
+                };
+                tagBtn.title = '查看歌曲标签推荐';
+
+                // Check if text needs scrolling
+                const checkScroll = (el) => {
+                    el.classList.remove('scroll-text');
+                    el.style.transform = 'none';
+
+                    const containerWidth = el.parentElement.clientWidth;
+                    const textWidth = el.scrollWidth;
+
+                    if (textWidth > containerWidth) {
+                        const distance = containerWidth - textWidth;
+                        const duration = Math.abs(distance) / 30 + 2;
+
+                        el.style.setProperty('--scroll-distance', `${distance}px`);
+                        el.style.setProperty('--duration', `${duration}s`);
+                        el.classList.add('scroll-text');
+                    }
+                };
+
+                setTimeout(() => {
+                    checkScroll(titleTextEl);
+                    checkScroll(artistTextEl);
+                }, 50);
+
+
+                // Danmaku
+                startDanmaku();
+
+                // Preload lyrics
+                $('lyrics-title').textContent = title;
+                $('lyrics-artist').textContent = artist;
+                setupWikipediaLink(artist);
+                $('lyrics-cover').src = cover;
+                $('lyrics-text').textContent = '加载中...';
+                $('lyrics-wiki').classList.remove('show');
+
+                fetchLyrics(artist, title);
+                fetchArtistWiki(artist);
+
+                // Add to history
+                HistoryManager.add({
+                    trackId: videoId,
+                    trackName: title,
+                    artistName: artist,
+                    artworkUrl100: cover,
+                    kind: 'youtube'
+                });
+
+                // Update media session (with updated metadata)
+                if ('mediaSession' in navigator) {
+                    navigator.mediaSession.metadata = new MediaMetadata({
+                        title: title,
+                        artist: artist,
+                        album: 'YouTube Music',
+                        artwork: [
+                            { src: cover, sizes: '96x96', type: 'image/jpeg' },
+                            { src: cover, sizes: '128x128', type: 'image/jpeg' },
+                            { src: cover, sizes: '192x192', type: 'image/jpeg' },
+                            { src: cover, sizes: '256x256', type: 'image/jpeg' },
+                            { src: cover, sizes: '512x512', type: 'image/jpeg' }
+                        ]
+                    });
+
+                    navigator.mediaSession.setActionHandler('play', toggleYouTubePlay);
+                    navigator.mediaSession.setActionHandler('pause', toggleYouTubePlay);
+                    navigator.mediaSession.setActionHandler('previoustrack', playPrevious);
+                    navigator.mediaSession.setActionHandler('nexttrack', () => playNext(false));
+                }
+
+                // Update favorite button state
+                updateFavoriteButton();
+
+                // Update recommendation tags
+                updateRecommendationTags(state.currentTrack);
+
+                // 检测是否为移动设备
+                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+                // Use the YouTubePlayerManager to initialize and play the video
+                try {
+                    // Ensure the YouTube API is loaded
+                    await youtubePlayerManager.loadAPI();
+
+                    // Set up container if it doesn't exist
+                    let playerContainer = document.getElementById('youtube-player-container');
+                    if (!playerContainer) {
+                        playerContainer = document.createElement('div');
+                        playerContainer.id = 'youtube-player-container';
+                        document.body.appendChild(playerContainer);
+                    }
+                    
+                    // Always ensure correct styling to avoid display:none issues
+                    playerContainer.style.position = 'absolute';
+                    playerContainer.style.top = '-9999px';
+                    playerContainer.style.left = '-9999px';
+                    playerContainer.style.width = '1px';
+                    playerContainer.style.height = '1px';
+                    playerContainer.style.opacity = '0';
+                    playerContainer.style.pointerEvents = 'none';
+                    playerContainer.style.display = 'block'; // Explicitly override any display:none
+
+                    // Configure player parameters
+                    const playerOptions = {
+                        videoId: videoId,
+                        playerVars: {
+                            'playsinline': 1,
+                            'controls': 0,
+                            'disablekb': 1,
+                            'fs': 0,
+                            'iv_load_policy': 3,
+                            'modestbranding': 1,
+                            'rel': 0,
+                            'autoplay': 1,
+                            'mute': 0,
+                            'enablejsapi': 1,
+                            'origin': window.location.origin
+                        }
+                    };
+
+                    // Initialize the player with the manager
+                    const player = await youtubePlayerManager.initPlayer('youtube-player-container', playerOptions);
+
+                    // Update state to indicate that YouTube player is being used
+                    youtubePlayerManager.setState({ shouldAutoplayYouTube: true });
+
+                    // Explicitly play the video after initialization
+                    setTimeout(() => {
+                        if (youtubePlayerManager.getPlayer()) {
+                            youtubePlayerManager.playVideo();
+                        }
+                    }, 100); // Small delay to ensure player is fully ready
+
+                    if (isMobile) {
+                        showToast('播放器已就绪...');
+                    }
+                } catch (error) {
+                    console.error('Error initializing YouTube player with manager:', error);
+                    showToast('YouTube 播放器初始化失败...');
+
+                    // Fallback: use the audio element with YouTube video URL (may not work in all browsers due to CORS)
+                    const audioUrl = `https://www.youtube.com/watch?v=${videoId}`;
+                    audio.src = audioUrl;
+                    audio.load();
+                    audio.play()
+                        .then(() => {
+                            updatePlayState(true);
+                            state.isYouTubePlaying = true;
+                        })
+                        .catch(err => {
+                            console.error('Fallback also failed:', err);
+                            showToast('即将准备就绪，别着急');
+                            updatePlayState(false);
+                            state.isYouTubePlaying = false;
+                        });
+                }
+            } catch (error) {
+                console.error('Error initializing YouTube player:', error);
+                showToast('YouTube 播放器初始化失败...');
+
+                // Fallback: use the audio element with YouTube video URL (may not work in all browsers)
+                const audioUrl = `https://www.youtube.com/watch?v=${videoId}`;
+                audio.src = audioUrl;
+                audio.load();
+                audio.play()
+                    .then(() => {
+                        updatePlayState(true);
+                        state.isYouTubePlaying = true;
+                    })
+                    .catch(err => {
+                        console.error('Fallback also failed:', err);
+                        showToast('即将准备就绪，别着急');
+                        updatePlayState(false);
+                        state.isYouTubePlaying = false;
+                    });
+            }
+        }
+
+        // Toggle play/pause for YouTube player
+        function toggleYouTubePlay() {
+            if (youtubePlayerManager && youtubePlayerManager.getPlayer()) {
+                if (youtubePlayerManager.isPlaying()) {
+                    // 暂停播放
+                    youtubePlayerManager.pauseVideo();
+                    // State will be updated via event listener
+                } else {
+                    // 开始播放 - 确保在用户交互上下文中
+                    // 检测是否为移动设备
+                    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+                    
+                    
+
+                    // 立即尝试播放（在用户交互的上下文中）
+                    try {
+                        // 确保音频上下文就绪
+                        requestAudioPlayback().then(() => {
+                            // 立即播放视频
+                            youtubePlayerManager.playVideo();
+                            // State will be updated via event listener
+                            if (isMobile) {
+                                showToast('开始播放');
+                            }
+                        }).catch(err => {
+                            console.warn('Audio context playback request failed:', err);
+                            // 即使音频上下文有问题，仍然尝试播放视频
+                            youtubePlayerManager.playVideo();
+                            // State will be updated via event listener
+                            if (isMobile) {
+                                showToast('开始播放');
+                            }
+                        });
+                    } catch (error) {
+                        console.error('Failed to play YouTube video:', error);
+
+                        // 检测是否为移动设备并提供更具体的提示
+                        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+                        if (isMobile) {
+                            // 对于移动设备，提供更多的等待时间
+                            setTimeout(() => {
+                                try {
+                                    youtubePlayerManager.playVideo();
+                                    // State will be updated via event listener
+                                    showToast('开始播放');
+                                } catch (retryError) {
+                                    console.error('重试播放失败:', retryError);
+                                    // Show more helpful message about browser autoplay restrictions
+                                    showToast('首次播放可能需要用户交互，请点击播放按钮重试');
+                                    updatePlayState(false);
+                                }
+                            }, 500); // 减少延迟时间
+                        } else {
+                            // Show more helpful message about browser autoplay restrictions
+                            showToast('首次播放可能需要用户交互，请点击播放按钮重试');
+                            updatePlayState(false);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 打开跳转链接，使用标题和作者作为查询参数
+        function openJumpLink(trackName, artistName) {
+            // 组合标题和作者，用空格分隔
+            const query = `${trackName} ${artistName}`;
+            // 创建目标URL，使用提供的格式
+            const jumpUrl = `https://wealth.want.biz/pages/youtubeMusic.html?query=${encodeURIComponent(query)}`;
+
+            // 检查是否已存在半屏模态框，如果存在则移除
+            const existingModal = document.querySelector('.half-screen-modal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+
+            // 创建半屏模态框
+            const modal = document.createElement('div');
+            modal.className = 'half-screen-modal';
+            modal.innerHTML = `
+                <div class="modal-overlay" onclick="closeHalfScreenModal()"></div>
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div class="modal-drag-bar"></div>
+                        <div class="modal-actions">
+                            <button class="modal-close-btn" onclick="closeHalfScreenModal()">✕</button>
+                        </div>
+                    </div>
+                    <iframe src="${jumpUrl}" class="modal-iframe" allow="autoplay; fullscreen"></iframe>
+                </div>
+            `;
+
+            // 添加模态框样式（如果尚未添加）
+            if (!document.querySelector('#half-screen-modal-styles')) {
+                const styles = document.createElement('style');
+                styles.id = 'half-screen-modal-styles';
+                styles.textContent = `
+                    .half-screen-modal {
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        z-index: 10000;
+                        display: flex;
+                        flex-direction: column;
+                    }
+
+                    .modal-overlay {
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: rgba(0, 0, 0, 0.6);
+                        z-index: 1;
+                        opacity: 0;
+                        animation: fadeIn 0.3s ease forwards;
+                    }
+
+                    .modal-content {
+                        position: absolute;
+                        bottom: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 50vh;
+                        background: var(--bg);
+                        border-top-left-radius: 20px;
+                        border-top-right-radius: 20px;
+                        z-index: 2;
+                        transform: translateY(100%);
+                        animation: slideUp 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+                        display: flex;
+                        flex-direction: column;
+                        overflow: hidden;
+                    }
+
+                    .modal-header {
+                        padding: 12px 16px 8px;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        position: relative;
+                        z-index: 3;
+                        background: var(--bg);
+                        border-bottom: 1px solid var(--glass-border);
+                    }
+
+                    .modal-drag-bar {
+                        position: absolute;
+                        top: 8px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        width: 40px;
+                        height: 4px;
+                        background: var(--text-secondary);
+                        border-radius: 2px;
+                    }
+
+                    .modal-actions {
+                        display: flex;
+                        gap: 8px;
+                        z-index: 4;
+                    }
+
+                    .modal-close-btn {
+                        width: 36px;
+                        height: 36px;
+                        border-radius: 50%;
+                        background: var(--glass);
+                        border: 1px solid var(--glass-border);
+                        color: var(--text);
+                        font-size: 18px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        transition: all 0.2s ease;
+                    }
+
+                    .modal-close-btn:hover {
+                        background: var(--glass-border);
+                        transform: scale(1.1);
+                    }
+
+                    .modal-iframe {
+                        flex: 1;
+                        border: none;
+                        width: 100%;
+                        height: calc(100% - 60px); /* Account for header height */
+                    }
+
+                    @keyframes slideUp {
+                        from {
+                            transform: translateY(100%);
+                        }
+                        to {
+                            transform: translateY(0);
+                        }
+                    }
+
+                    @keyframes fadeIn {
+                        from {
+                            opacity: 0;
+                        }
+                        to {
+                            opacity: 1;
+                        }
+                    }
+
+                    /* 响应式适配 */
+                    @media (min-width: 768px) {
+                        .modal-content {
+                            height: 60vh;
+                            max-height: 700px;
+                        }
+                    }
+                `;
+                document.head.appendChild(styles);
+            }
+
+            document.body.appendChild(modal);
+        }
+
+        // 关闭半屏模态框
+        function closeHalfScreenModal() {
+            const modal = document.querySelector('.half-screen-modal');
+            if (modal) {
+                // 添加关闭动画
+                const content = modal.querySelector('.modal-content');
+                const overlay = modal.querySelector('.modal-overlay');
+
+                content.style.animation = 'slideUp 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards';
+                content.style.animationDirection = 'reverse';
+
+                overlay.style.animation = 'fadeIn 0.3s ease forwards';
+                overlay.style.animationDirection = 'reverse';
+
+                setTimeout(() => {
+                    modal.remove();
+                }, 300);
+            }
+        }
+
+        // Audio context for maintaining background audio across browsers
+        let backgroundAudioContext = null;
+
+        // Initialize audio context for background playback with better approach
+        function initializeBackgroundAudio() {
+            if (backgroundAudioContext) return;
+
+            if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+                backgroundAudioContext = new (AudioContext || webkitAudioContext)();
+
+                // Create a very low-volume oscillator to keep context active without audible output
+                const oscillator = backgroundAudioContext.createOscillator();
+                const gainNode = backgroundAudioContext.createGain();
+
+                // Set gain to extremely low value (nearly silent but keeps context active)
+                gainNode.gain.value = 0.00001;
+
+                oscillator.connect(gainNode);
+                gainNode.connect(backgroundAudioContext.destination);
+                oscillator.start(0);
+
+                // Stop after a brief moment to avoid continuous processing
+                if (backgroundAudioContext.currentTime) {
+                    oscillator.stop(backgroundAudioContext.currentTime + 0.01);
+                }
+
+                // Resume if suspended
+                if (backgroundAudioContext.state === 'suspended') {
+                    backgroundAudioContext.resume();
+                }
+            }
+        }
+
+        // More aggressive audio context initialization on user interaction
+        function aggressiveAudioContextInit() {
+            if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+                if (!backgroundAudioContext) {
+                    backgroundAudioContext = new (AudioContext || webkitAudioContext)();
+                }
+
+                // Try to resume if suspended, regardless of whether we've created it before
+                if (backgroundAudioContext.state === 'suspended') {
+                    backgroundAudioContext.resume().catch(err => {
+                        console.warn('Audio context resume failed:', err);
+                    });
+                }
+
+                // Create and start a very brief audio source to fully activate context
+                try {
+                    const source = backgroundAudioContext.createBufferSource();
+                    const silentBuffer = backgroundAudioContext.createBuffer(1, 1, 22050);
+                    source.buffer = silentBuffer;
+                    source.connect(backgroundAudioContext.destination);
+                    source.start(0);
+                    if (backgroundAudioContext.currentTime) {
+                        source.stop(backgroundAudioContext.currentTime + 0.001);
+                    }
+                } catch (e) {
+                    console.warn('Could not create silent buffer:', e);
+                }
+            }
+        }
+
+        // Request audio playback permission on mobile devices
+        function requestAudioPlayback() {
+            return new Promise((resolve, reject) => {
+                // Initialize background audio context
+                initializeBackgroundAudio();
+
+                // Try to resume in all possible ways
+                const resumePromises = [];
+
+                if (backgroundAudioContext && backgroundAudioContext.state === 'suspended') {
+                    resumePromises.push(backgroundAudioContext.resume());
+                }
+
+                if (resumePromises.length > 0) {
+                    Promise.all(resumePromises)
+                        .then(() => resolve())
+                        .catch(() => {
+                            // Even if resume fails, we proceed - the YouTube player might still work
+                            // due to being called from user interaction
+                            resolve();
+                        });
+                } else {
+                    resolve();
+                }
+            });
+        }
+
+        // Initialize audio context immediately on any user interaction
+        function initAudioOnInteraction() {
+            // Initialize audio context aggressively on first user interaction
+            aggressiveAudioContextInit();
+
+            // Remove the event listener after first interaction to avoid repeated initialization
+            ['click', 'touchstart', 'keydown', 'mousedown'].forEach(eventType => {
+                document.removeEventListener(eventType, initAudioOnInteraction, { passive: true });
+            });
+        }
+
+        // Add event listeners for immediate audio context initialization
+        ['click', 'touchstart', 'keydown', 'mousedown'].forEach(eventType => {
+            document.addEventListener(eventType, initAudioOnInteraction, { passive: true });
+        });
+
+        // Handle visibility changes for mobile background audio
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') {
+                // When returning to foreground, ensure audio is properly resumed
+                if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
+                    // Small delay to ensure YouTube player is ready
+                    setTimeout(() => {
+                        if (youtubePlayerManager.getPlayerState() !== YT.PlayerState.PLAYING) {
+                            toggleYouTubePlay();
+                        } else {
+                            // If already playing, make sure PWA updates are running
+                            startPWAProgressUpdates();
+                        }
+                    }, 100);
+                }
+            } else {
+                // When going to background, ensure PWA updates continue if needed
+                if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
+                    // PWA updates should continue in background, so no need to stop them here
+                }
+            }
+        });
+
+        // Additional mobile-specific handling
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.setActionHandler('play', toggleYouTubePlay);
+            navigator.mediaSession.setActionHandler('pause', toggleYouTubePlay);
+
+            // Handle seek actions to maintain audio session
+            try {
+                navigator.mediaSession.setActionHandler('seekbackward', () => {
+                    if (youtubePlayerManager.getPlayer()) {
+                        const currentTime = youtubePlayerManager.getCurrentTime();
+                        youtubePlayerManager.seekTo(Math.max(0, currentTime - 10), true);
+                    }
+                });
+
+                navigator.mediaSession.setActionHandler('seekforward', () => {
+                    if (youtubePlayerManager.getPlayer()) {
+                        const currentTime = youtubePlayerManager.getCurrentTime();
+                        const duration = youtubePlayerManager.getDuration();
+                        youtubePlayerManager.seekTo(Math.min(duration, currentTime + 10), true);
+                    }
+                });
+            } catch (error) {
+                console.log('Seek actions not supported:', error);
+            }
+        }
+
+        // Additional event listeners to handle app lifecycle and backgrounding
+        window.addEventListener('pagehide', function () {
+            // Try to maintain audio when page is hidden (e.g., switching apps)
+            if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
+                // Store the current time to resume from when returning
+                state.lastPosition = youtubePlayerManager.getCurrentTime();
+            }
+        });
+
+        // Handle page visibility changes more comprehensively
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') {
+                // When returning to foreground, resume audio if needed
+                if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
+                    // Small delay to ensure YouTube player is ready after page becomes visible
+                    setTimeout(() => {
+                        const playerState = youtubePlayerManager.getPlayerState();
+                        if (playerState !== YT.PlayerState.PLAYING) {
+                            // Try to resume playback
+                            youtubePlayerManager.playVideo();
+                            startPWAProgressUpdates(); // Ensure PWA updates start when resuming
+                        } else {
+                            // If already playing, make sure PWA updates are running
+                            startPWAProgressUpdates();
+                        }
+                    }, 500);
+                }
+            } else {
+                // When going to background, ensure PWA updates continue if playing
+                if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
+                    // Ensure PWA updates are running when going to background
+                    startPWAProgressUpdates();
+                }
+            }
+        });
+
+        // Handle focus/blur events which can affect audio on mobile
+        window.addEventListener('focus', function () {
+            // On iOS Safari especially, audio may need to be resumed when window regains focus
+            if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying() && youtubePlayerManager.getPlayerState() !== YT.PlayerState.PLAYING) {
+                setTimeout(() => {
+                    youtubePlayerManager.playVideo();
+                }, 100);
+            }
+        });
+
+        window.addEventListener('blur', function () {
+            // Store position when leaving the page
+            if (youtubePlayerManager.getPlayer() && youtubePlayerManager.isPlaying()) {
+                state.lastPosition = youtubePlayerManager.getCurrentTime();
+            }
+        });
+
+        // Theme switching functions
+        function openThemeModal() {
+            document.getElementById('theme-overlay').classList.add('visible');
+            document.getElementById('theme-modal').classList.add('visible');
+        }
+
+        function closeThemeModal() {
+            document.getElementById('theme-overlay').classList.remove('visible');
+            document.getElementById('theme-modal').classList.remove('visible');
+        }
+
+        function changeTheme(themeName) {
+            ThemeManager.set(themeName);
+            // Close modal after a short delay for better UX
+            setTimeout(closeThemeModal, 200);
+        }
+
+        // Toast 提示
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+        position: fixed;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0,0,0,0.8);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-size: 14px;
+        z-index: 10000;
+        animation: fadeIn 0.3s ease;
+    `;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.animation = 'fadeOut 0.3s ease forwards';
+                setTimeout(() => toast.remove(), 300);
+            }, 500);
+        }
+
+        // Loading 提示
+        function showLoading(message = '加载中...') {
+            // 如果已经有loading提示，则更新消息内容
+            let loadingElement = document.getElementById('loading-overlay');
+            if (loadingElement) {
+                const messageElement = loadingElement.querySelector('.loading-message');
+                if (messageElement) {
+                    messageElement.textContent = message;
+                }
+                return;
+            }
+
+            // 创建loading遮罩
+            loadingElement = document.createElement('div');
+            loadingElement.id = 'loading-overlay';
+            loadingElement.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.7);
+                z-index: 10001;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-direction: column;
+                color: white;
+                font-size: 16px;
+            `;
+
+            loadingElement.innerHTML = `
+                <div class="loading-spinner" style="
+                    width: 40px;
+                    height: 40px;
+                    border: 3px solid rgba(255,255,255,0.3);
+                    border-top: 3px solid white;
+                    border-radius: 50%;
+                    animation: spin 1s linear infinite;
+                    margin-bottom: 16px;
+                "></div>
+                <div class="loading-message">${message}</div>
+            `;
+
+            // 添加旋转动画样式
+            if (!document.querySelector('#loading-animation-style')) {
+                const style = document.createElement('style');
+                style.id = 'loading-animation-style';
+                style.textContent = `
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            document.body.appendChild(loadingElement);
+        }
+
+        function hideLoading() {
+            const loadingElement = document.getElementById('loading-overlay');
+            if (loadingElement) {
+                loadingElement.remove();
+            }
+        }
+
+        // 歌词
+        async function fetchLyrics(artist, title) {
+            // 生成缓存键
+            const cacheKey = `lyrics_${encodeURIComponent(artist)}_${encodeURIComponent(title)}`;
+            const cachedLyrics = CacheManager.get(cacheKey);
+
+            if (cachedLyrics) {
+                console.log('Using cached lyrics for:', artist, title);
+                $('lyrics-text').textContent = cachedLyrics;
+                return;
+            }
+
+            try {
+                const cleanTitle = title.split('(')[0].split('-')[0].trim();
+                const cleanArtist = artist.split('&')[0].split(',')[0].trim();
+
+                // 尝试使用 YouTube API 获取歌词（如果当前播放的是 YouTube 歌曲）
+                if (state.currentTrack && state.currentTrack.trackId &&
+                    (state.currentTrack.kind === 'youtube' || state.currentTrack.previewUrl?.includes('youtube.com'))) {
+                    try {
+                        const youTubeLyricsRes = await fetch(`/api/youtubeapi/lyrics/${state.currentTrack.trackId}`);
+                        if (youTubeLyricsRes.ok) {
+                            const youTubeLyricsData = await youTubeLyricsRes.json();
+
+                            if (youTubeLyricsData.success && youTubeLyricsData.data && youTubeLyricsData.data.lyrics) {
+                                $('lyrics-text').textContent = youTubeLyricsData.data.lyrics;
+                                // 缓存歌词（有效期24小时）
+                                CacheManager.set(cacheKey, youTubeLyricsData.data.lyrics, 24);
+                                return;
+                            }
+                        } else {
+                            console.error('YouTube lyrics API 请求失败，状态码:', youTubeLyricsRes.status);
+                        }
+                    } catch (e) {
+                        console.error('YouTube lyrics API failed:', e);
+                        // 如果 YouTube API 失败，继续尝试其他 API
+                    }
+                }
+
+                // 尝试 using Go backend proxy for lyrics API
+                const res = await fetch(`/api/lyrics?artist=${encodeURIComponent(cleanArtist)}&title=${encodeURIComponent(cleanTitle)}`);
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.lyrics) {
+                        $('lyrics-text').textContent = data.lyrics;
+                        // 缓存歌词（有效期24小时）
+                        CacheManager.set(cacheKey, data.lyrics, 24);
+                        return;
+                    }
+                }
+                showCatFallback();
+            } catch {
+                showCatFallback();
+            }
+        }
+
+        async function showCatFallback() {
+            try {
+                const res = await fetch('https://api.thecatapi.com/v1/images/search');
+                const data = await res.json();
+                if (data?.[0]?.url) {
+                    $('lyrics-text').innerHTML = `
+                        <div style="margin-bottom: 20px; color: var(--text-secondary);">暂无歌词，送你一只猫 🐱</div>
+                        <img src="${data[0].url}" style="max-width: 280px; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.4);">
+                    `;
+                    return;
+                }
+            } catch { }
+            $('lyrics-text').textContent = '暂无歌词';
+        }
+
+        // 设置维基百科链接
+        function setupWikipediaLink(artistName) {
+            const cleanName = artistName.split(/&|,|feat\.|ft\./i)[0].trim();
+            const encodedName = encodeURIComponent(cleanName);
+
+            // 存储链接到艺术家元素的数据属性 as fallback
+            $('lyrics-artist').dataset.wikiUrl = `https://zh.wikipedia.org/wiki/${encodedName}`;
+
+            // 验证链接是否存在（异步检查）
+            verifyWikipediaPageExists(cleanName);
+        }
+
+        // 验证维基百科页面是否存在
+        async function verifyWikipediaPageExists(artistName) {
+            const cleanName = artistName.split(/&|,|feat\.|ft\./i)[0].trim();
+            const encodedName = encodeURIComponent(cleanName);
+
+            // 首先尝试中文维基百科
+            try {
+                const res = await fetch(`https://zh.wikipedia.org/api/rest_v1/page/summary/${encodedName}`);
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.title) {
+                        // 中文维基百科存在，使用中文链接
+                        $('lyrics-artist').dataset.wikiUrl = `https://zh.wikipedia.org/wiki/${encodedName}`;
+                        return;
+                    }
+                }
+            } catch { }
+
+            // 如果中文不存在，尝试英文维基百科
+            try {
+                const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodedName}`);
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.title) {
+                        // 英文维基百科存在，使用英文链接
+                        $('lyrics-artist').dataset.wikiUrl = `https://en.wikipedia.org/wiki/${encodedName}`;
+                        return;
+                    }
+                }
+            } catch { }
+
+            // 如果都不存在，设置为搜索页面
+            $('lyrics-artist').dataset.wikiUrl = `https://zh.wikipedia.org/wiki/Special:Search?search=${encodedName}`;
+        }
+
+        // 歌手百科
+        async function fetchArtistWiki(artistName) {
+            const cleanName = artistName.split(/&|,|feat\.|ft\./i)[0].trim();
+            const cacheKey = `wiki_${encodeURIComponent(cleanName)}`;
+            const cachedWiki = CacheManager.get(cacheKey);
+
+            if (cachedWiki) {
+                console.log('Using cached wiki for:', cleanName);
+                $('wiki-title').textContent = `关于 ${cachedWiki.title}`;
+                $('wiki-text').textContent = cachedWiki.extract;
+                $('lyrics-wiki').classList.add('show');
+                return;
+            }
+
+            try {
+                let res = await fetch(`https://zh.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cleanName)}`);
+                if (!res.ok) {
+                    res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cleanName)}`);
+                }
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.extract) {
+                        $('wiki-title').textContent = `关于 ${data.title}`;
+                        $('wiki-text').textContent = data.extract;
+                        $('lyrics-wiki').classList.add('show');
+                        // 缓存维基百科数据（有效期12小时）
+                        CacheManager.set(cacheKey, {
+                            title: data.title,
+                            extract: data.extract
+                        }, 12);
+                    } else {
+                        // If no wiki summary found, hide the wiki section
+                        $('lyrics-wiki').classList.remove('show');
+                    }
+                }
+            } catch { }
+        }
+
+        // 歌词页面
+        function openLyrics() {
+            if (!state.currentTrack) return;
+            $('lyrics-modal').classList.add('show');
+        }
+
+        function closeLyrics() {
+            $('lyrics-modal').classList.remove('show');
+        }
+
+        // 天气搜索 - 随机关键词增强版
+        async function searchByWeather() {
+            try {
+                // 1. 获取地理位置
+                const geoRes = await fetch('https://get.geojs.io/v1/ip/geo.json');
+                const geo = await geoRes.json();
+
+                // 2. 获取天气数据
+                const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${geo.latitude}&longitude=${geo.longitude}&current_weather=true`);
+                const weatherData = await weatherRes.json();
+                const code = weatherData.current_weather.weathercode;
+
+                // 3. 定义变量
+                let keywordOptions = []; // 候选关键词列表
+                let weatherLabel = '未知'; // 天气中文名
+
+                // 4. 根据天气代码分配关键词库，并与标签系统关联
+                if (code <= 3) {
+                    // 晴朗 (0-3)
+                    weatherLabel = '晴朗';
+                    // 从情绪标签中的积极情绪中选择
+                    keywordOptions = [...musicTags.attributes.moods.positive, ...musicTags.scenarios.activity_based.exercise, ...musicTags.scenarios.activity_based.social];
+                }
+                else if (code >= 45 && code <= 48) {
+                    // 雾天 (45, 48)
+                    weatherLabel = '雾天';
+                    // 从氛围标签中选择神秘、梦幻的标签
+                    keywordOptions = [...musicTags.attributes.moods.intense, ...musicTags.attributes.moods.melancholy, ...musicTags.attributes.styles.aesthetic];
+                }
+                else if (code >= 51 && code <= 67) {
+                    // 下雨 (51-67)
+                    weatherLabel = '下雨';
+                    // 选择安静、舒适的音乐类型
+                    keywordOptions = [...musicTags.attributes.moods.melancholy, ...musicTags.scenarios.activity_based.relaxation, ...musicTags.genres.main.traditional];
+                }
+                else if (code >= 71 && code <= 86) {
+                    // 下雪 (71-86)
+                    weatherLabel = '下雪';
+                    // 选择温暖、节日的音乐类型
+                    keywordOptions = [...musicTags.scenarios.special_occasions, ...musicTags.genres.main.traditional, ...musicTags.nature_abstract.nature.weather];
+                }
+                else if (code >= 95) {
+                    // 雷暴 (95+)
+                    weatherLabel = '雷暴';
+                    // 选择强烈、有冲击力的音乐类型
+                    keywordOptions = [...musicTags.attributes.moods.intense, ...musicTags.genres.main.rock, ...musicTags.genres.main.electronic];
+                }
+                else {
+                    // 多云/阴天 (其他情况)
+                    weatherLabel = '多云';
+                    // 选择温和、日常的音乐类型
+                    keywordOptions = [...musicTags.attributes.moods.mellow, ...musicTags.scenarios.time_based.daily_routine, ...musicTags.genres.main.pop];
+                }
+
+                // 5. 核心：从数组中随机选择一个关键词
+                const randomKeyword = keywordOptions[Math.floor(Math.random() * keywordOptions.length)];
+                if (!randomKeyword) {
+                    // 如果标签库中没有对应类别，使用默认天气相关的关键词
+                    const defaultKeywords = [
+                        'Sunny Day', 'Rainy Day', 'Snow Winter', 'Cloudy Sky',
+                        'Foggy Mood', 'Thunder Storm', 'Summer Vibes', 'Winter Mood'
+                    ];
+                    const randomKeyword = defaultKeywords[Math.floor(Math.random() * defaultKeywords.length)];
+                    $('search-input').value = randomKeyword;
+                } else {
+                    $('search-input').value = randomKeyword;
+                }
+
+                // 6. 执行搜索与提示
+                searchMusic();
+                alert(`📍 ${geo.city || '未知'}\n🌤️ ${weatherLabel}\n🎲 智能推荐: ${$('search-input').value}`);
+
+            } catch (e) {
+                console.error(e);
+                alert('获取天气失败，请检查网络');
+            }
+        }
+
+        // 弹幕系统
+        function startDanmaku() {
+            $('danmaku').classList.add('show');
+            $('danmaku').innerHTML = '';
+            // Clear the displayed danmaku set when starting
+            state.displayedDanmaku.clear();
+            // Clear recent danmaku indices to allow more variety
+            if (state.recentDanmakuIndices) {
+                state.recentDanmakuIndices = [];
+            }
+            // Reset tracks
+            state.tracks = [false, false, false, false, false];
+
+            if (state.danmakuInterval) clearInterval(state.danmakuInterval);
+
+            // 初始化弹幕数据
+            DanmakuManager.fetchAndFill().then(() => {
+                // 立即生成几条弹幕以增加多样性
+                for (let i = 0; i < 3; i++) {
+                    setTimeout(() => {
+                        spawnDanmaku();
+                    }, i * 800); // 错开时间显示，避免同时出现
+                }
+
+                // 设置定时器持续生成弹幕
+                state.danmakuInterval = setInterval(spawnDanmaku, 2000); // 减少间隔以增加频率
+                // 开始定期刷新弹幕数据
+                DanmakuManager.startRefresh();
+            });
+        }
+
+        async function spawnDanmaku() {
+            // 从全局弹幕存储中获取随机弹幕
+            const danmaku = DanmakuManager.getRandom();
+
+            if (danmaku) {
+                renderDanmaku(danmaku);
+            } else {
+                // 如果没有可用弹幕，获取新数据
+                await DanmakuManager.fillNewRecords(5);
+                const newDanmaku = DanmakuManager.getRandom();
+                if (newDanmaku) {
+                    renderDanmaku(newDanmaku);
+                }
+            }
+        }
+
+        function renderDanmaku(data) {
+            // Create a unique content identifier to prevent duplicates
+            const content = `${data.name}:${data.text}`;
+            const fullContent = `${data.name}:${data.text}:${Date.now()}`; // Add timestamp to make it always unique for display
+
+            // Check if this content is already displayed in the current view
+            // Only check for recent duplicates (last 20 items) to avoid the issue of no fresh content
+            if (state.displayedDanmaku.size > 20) {
+                // Clear the set if it gets too large to avoid memory issues and allow refresh
+                const recent = Array.from(state.displayedDanmaku).slice(-10); // Keep last 10 items as recent
+                state.displayedDanmaku.clear();
+                recent.forEach(item => state.displayedDanmaku.add(item));
+            }
+
+            if (state.displayedDanmaku.has(content)) {
+                // If this exact content is already displayed recently, try to get another one
+                setTimeout(async () => {
+                    const alternativeDanmaku = DanmakuManager.getRandom();
+                    if (alternativeDanmaku) {
+                        renderDanmaku(alternativeDanmaku);
+                    } else {
+                        // If no alternative, try to fill with new records
+                        await DanmakuManager.fillNewRecords(3);
+                        const newDanmaku = DanmakuManager.getRandom();
+                        if (newDanmaku) {
+                            renderDanmaku(newDanmaku);
+                        }
+                    }
+                }, 100); // Small delay to avoid blocking
+                return;
+            }
+
+            let track = state.tracks.findIndex(t => !t);
+            if (track === -1) {
+                // If all tracks are busy, try to find the one that will finish earliest or just pick randomly
+                track = Math.floor(Math.random() * 5);
+            }
+
+            state.tracks[track] = true;
+
+            const item = document.createElement('div');
+            item.className = 'danmaku-item';
+            item.style.top = (track * 40 + 10) + 'px';
+            item.style.animationDuration = (12 + Math.random() * 5) + 's';
+
+            item.innerHTML = `
+                <img class="danmaku-avatar" src="${data.avatar}" alt="">
+                <span class="danmaku-name">${escapeHtml(data.name)}:</span>
+                <span class="danmaku-text">${escapeHtml(data.text)}</span>
+            `;
+
+            // Add content to the displayed set
+            state.displayedDanmaku.add(content);
+
+            item.onanimationend = () => {
+                // Remove content from the displayed set when animation ends
+                state.displayedDanmaku.delete(content);
+                item.remove();
+                state.tracks[track] = false;
+            };
+
+            // Also handle manual removal if element is removed for other reasons
+            const originalRemove = item.remove;
+            item.remove = function () {
+                state.displayedDanmaku.delete(content);
+                state.tracks[track] = false;
+                originalRemove.call(this);
+            };
+
+            $('danmaku').appendChild(item);
+        }
+
+        // 弹幕管理器
+        const DanmakuManager = {
+            STORAGE_KEY: 'danmaku_records',
+            MAX_RECORDS: 100,
+            EXPIRY_TIME: 12 * 60 * 60 * 1000, // 12 hours in milliseconds
+            REFRESH_INTERVAL: null, // 定时刷新定时器
+
+            // 获取所有弹幕记录
+            getAll: () => {
+                try {
+                    const data = localStorage.getItem(DanmakuManager.STORAGE_KEY);
+                    if (!data) return [];
+
+                    const records = JSON.parse(data);
+                    const now = Date.now();
+
+                    // 过滤掉过期的记录
+                    const validRecords = records.filter(record => now - record.timestamp < DanmakuManager.EXPIRY_TIME);
+
+                    // 如果有过期记录，更新存储
+                    if (records.length !== validRecords.length) {
+                        localStorage.setItem(DanmakuManager.STORAGE_KEY, JSON.stringify(validRecords));
+                    }
+
+                    return validRecords;
+                } catch (e) {
+                    console.error('Failed to get danmaku records:', e);
+                    return [];
+                }
+            },
+
+            // 保存弹幕记录（最多100条，超出则移除最旧的）
+            save: (records) => {
+                try {
+                    // 确保不超过最大数量
+                    if (records.length > DanmakuManager.MAX_RECORDS) {
+                        records = records.slice(-DanmakuManager.MAX_RECORDS);
+                    }
+
+                    localStorage.setItem(DanmakuManager.STORAGE_KEY, JSON.stringify(records));
+                } catch (e) {
+                    console.error('Failed to save danmaku records:', e);
+                }
+            },
+
+            // 添加新弹幕记录
+            add: (danmaku) => {
+                let records = DanmakuManager.getAll();
+                records.push({
+                    ...danmaku,
+                    timestamp: Date.now()
+                });
+
+                // 保存时自动清理过期记录并限制数量
+                DanmakuManager.save(records);
+            },
+
+            // 随机获取一条弹幕记录，避免短时间内重复
+            getRandom: () => {
+                const records = DanmakuManager.getAll();
+                if (records.length === 0) return null;
+
+                // 如果记录数量大于5，尝试避免返回最近返回过的弹幕
+                if (records.length > 5) {
+                    // 保存最近返回的弹幕索引，避免重复
+                    if (!state.recentDanmakuIndices) {
+                        state.recentDanmakuIndices = [];
+                    }
+
+                    // 清除过期的索引记录（超过10个就保留最新的5个）
+                    if (state.recentDanmakuIndices.length > 10) {
+                        state.recentDanmakuIndices = state.recentDanmakuIndices.slice(-5);
+                    }
+
+                    // 尝试找到一个不在最近列表中的弹幕
+                    let validIndices = [];
+                    for (let i = 0; i < records.length; i++) {
+                        if (!state.recentDanmakuIndices.includes(i)) {
+                            validIndices.push(i);
+                        }
+                    }
+
+                    // 如果所有弹幕都在最近列表中，或者有效选项太少，则使用所有记录
+                    if (validIndices.length < 3) {
+                        validIndices = Array.from({ length: records.length }, (_, i) => i);
+                    }
+
+                    const randomIndex = validIndices[Math.floor(Math.random() * validIndices.length)];
+                    state.recentDanmakuIndices.push(randomIndex);
+
+                    return records[randomIndex];
+                }
+
+                // 如果记录数量少于等于5，直接随机返回
+                return records[Math.floor(Math.random() * records.length)];
+            },
+
+            // 获取并填充新弹幕数据（如果记录为空或过期）
+            fetchAndFill: async () => {
+                const records = DanmakuManager.getAll();
+                const now = Date.now();
+
+                // 如果记录少于15条，请求新数据（增加数量以确保有足够的弹幕）
+                if (records.length < 15) {
+                    await DanmakuManager.fillNewRecords(30); // 增加填充数量
+                } else {
+                    // 检查是否需要更新
+                    const oldestRecord = records.reduce((oldest, record) => {
+                        return record.timestamp < oldest.timestamp ? record : oldest;
+                    }, records[0]);
+
+                    if (now - oldestRecord.timestamp > DanmakuManager.EXPIRY_TIME * 0.5) { // 降低更新阈值到50%有效期
+                        await DanmakuManager.fillNewRecords(15); // 增加每次填充的数量
+                    }
+                }
+            },
+
+            // 开始定期刷新弹幕数据
+            startRefresh: () => {
+                // 停止之前的刷新定时器
+                if (DanmakuManager.REFRESH_INTERVAL) {
+                    clearInterval(DanmakuManager.REFRESH_INTERVAL);
+                }
+
+                // 每10分钟检查一次是否需要更新弹幕数据
+                DanmakuManager.REFRESH_INTERVAL = setInterval(async () => {
+                    await DanmakuManager.fetchAndFill();
+                }, 10 * 60 * 1000); // 10分钟
+            },
+
+            // 停止定期刷新弹幕数据
+            stopRefresh: () => {
+                if (DanmakuManager.REFRESH_INTERVAL) {
+                    clearInterval(DanmakuManager.REFRESH_INTERVAL);
+                    DanmakuManager.REFRESH_INTERVAL = null;
+                }
+            },
+
+            // 填充新的弹幕记录
+            fillNewRecords: async (count) => {
+                try {
+                    for (let i = 0; i < count; i++) {
+                        // 随机生成弹幕数据（如果API调用失败，使用默认值）
+                        const useKanye = Math.random() > 0.5;
+
+                        const [userRes, textRes] = await Promise.all([
+                            fetch('https://randomuser.me/api/?inc=name,picture'),
+                            useKanye
+                                ? fetch('https://api.kanye.rest/')
+                                : fetch('https://v1.hitokoto.cn/?c=a&c=b')
+                        ]);
+
+                        const user = await userRes.json();
+                        const text = await textRes.json();
+
+                        const danmaku = {
+                            name: user.results[0].name.first,
+                            avatar: user.results[0].picture.thumbnail,
+                            text: text.quote || text.hitokoto
+                        };
+
+                        DanmakuManager.add(danmaku);
+                    }
+                } catch (err) {
+                    console.error('Failed to fetch new danmaku records:', err);
+                    // 如果API调用失败，生成一些默认弹幕
+                    for (let i = 0; i < count; i++) {
+                        const danmaku = {
+                            name: '用户' + (Math.floor(Math.random() * 10000)),
+                            avatar: 'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50"%3E%3Ccircle cx="25" cy="25" r="25" fill="%23ccc"/%3E%3C/svg%3E',
+                            text: '这是一条随机弹幕'
+                        };
+                        DanmakuManager.add(danmaku);
+                    }
+                }
+            }
+        };
+
+        // PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('SW registered:', reg.scope))
+                .catch(err => console.log('SW failed:', err));
+        }
+
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', e => {
+            e.preventDefault();
+            deferredPrompt = e;
+            showInstallPrompt();
+        });
+
+        function showInstallPrompt() {
+            if (document.querySelector('.install-prompt')) return;
+
+            const div = document.createElement('div');
+            div.className = 'install-prompt';
+            div.innerHTML = `
+                <div class="install-icon">📱</div>
+                <div class="install-text">
+                    <div class="install-title">添加到主屏幕</div>
+                    <div class="install-desc">获得更好的全屏体验</div>
+                </div>
+                <button class="install-btn" onclick="installApp()">安装</button>
+                <button class="install-close" onclick="this.parentElement.remove()">×</button>
+            `;
+            document.body.appendChild(div);
+
+            setTimeout(() => div.remove(), 10000);
+        }
+
+        // ========== 收藏和历史功能 ==========
+
+        // 切换收藏状态
+        function toggleFavorite() {
+            if (!state.currentTrack) return;
+
+            const trackId = state.currentTrack.trackId;
+            const btn = $('favorite-btn');
+
+            if (FavoritesManager.isFavorited(trackId)) {
+                FavoritesManager.remove(trackId);
+                btn.textContent = '🤍';
+                btn.classList.remove('favorited');
+                showToast('已取消收藏');
+            } else {
+                FavoritesManager.add(state.currentTrack);
+                btn.textContent = '❤️';
+                btn.classList.add('favorited');
+                showToast('已添加到收藏');
+            }
+        }
+
+        // 更新收藏按钮状态
+        function updateFavoriteButton() {
+            if (!state.currentTrack) return;
+
+            const btn = $('favorite-btn');
+            const isFavorited = FavoritesManager.isFavorited(state.currentTrack.trackId);
+
+            btn.textContent = isFavorited ? '❤️' : '🤍';
+            if (isFavorited) {
+                btn.classList.add('favorited');
+            } else {
+                btn.classList.remove('favorited');
+            }
+        }
+
+        // 打开历史记录
+        function openHistory() {
+            $('history-modal').classList.add('show');
+            renderHistory();
+        }
+
+        // 关闭历史记录
+        function closeHistory() {
+            $('history-modal').classList.remove('show');
+        }
+
+        // 渲染历史记录
+        function renderHistory() {
+            const history = HistoryManager.getAll();
+            const container = $('history-content');
+
+            if (history.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">📖</div>
+                        <div class="empty-title">暂无播放历史</div>
+                        <div class="empty-desc">开始播放音乐后会自动记录</div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="collection-grid">
+                    ${history.map(song => `
+                        <div class="collection-item" onclick="playHistoryItem('${song.trackId}')">
+                            <img class="collection-item-cover" src="${(song.artworkUrl100 || song.artworkUrl || '').replace('100x100bb', '300x300bb')}" alt="">
+                            <div class="collection-item-title">${escapeHtml(song.trackName)}</div>
+                            <div class="collection-item-artist">${escapeHtml(song.artistName)}</div>
+                            <div class="collection-item-time">${formatDate(song.playedAt)}</div>
+                            <button class="collection-item-remove" onclick="event.stopPropagation(); removeHistory('${song.trackId}')" title="删除">×</button>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        // 播放历史中的歌曲
+        function playHistoryItem(trackId) {
+            const history = HistoryManager.getAll();
+            const song = history.find(s => s.trackId == trackId);
+            if (song) {
+                // 将歌曲添加到播放列表并播放
+                state.playlist = [song];
+                state.currentIndex = 0;
+                playSong(0);
+                closeHistory();
+            }
+        }
+
+        // 删除历史记录
+        function removeHistory(trackId) {
+            if (confirm('确定要删除这条历史记录吗？')) {
+                HistoryManager.remove(trackId);
+                renderHistory();
+                showToast('已删除');
+            }
+        }
+
+        // 清空历史
+        function clearHistory() {
+            if (confirm('确定要清空所有播放历史吗？此操作不可恢复！')) {
+                HistoryManager.clear();
+                renderHistory();
+                showToast('历史记录已清空');
+            }
+        }
+
+        // 导出历史
+        function exportHistory() {
+            const history = HistoryManager.getAll();
+            if (history.length === 0) {
+                alert('暂无历史记录可导出');
+                return;
+            }
+            HistoryManager.export();
+            showToast('历史记录已导出');
+        }
+
+        // 导入历史
+        function importHistory() {
+            const input = $('import-file-input');
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    try {
+                        const count = await HistoryManager.import(file);
+                        renderHistory();
+                        showToast(`成功导入 ${count} 条历史记录`);
+                    } catch (err) {
+                        alert('导入失败：' + err.message);
+                    }
+                }
+                input.value = '';
+            };
+            input.click();
+        }
+
+        // 打开收藏列表
+        function openFavorites() {
+            $('favorites-modal').classList.add('show');
+            renderFavorites();
+        }
+
+        // 关闭收藏列表
+        function closeFavorites() {
+            $('favorites-modal').classList.remove('show');
+        }
+
+        // 渲染收藏列表
+        function renderFavorites() {
+            const favorites = FavoritesManager.getAll();
+            const container = $('favorites-content');
+
+            if (favorites.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">❤️</div>
+                        <div class="empty-title">暂无收藏</div>
+                        <div class="empty-desc">点击播放器中的爱心按钮收藏歌曲</div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="collection-grid">
+                    ${favorites.map(song => `
+                        <div class="collection-item" onclick="playFavoriteItem('${song.trackId}')">
+                            <img class="collection-item-cover" src="${(song.artworkUrl100 || song.artworkUrl || '').replace('100x100bb', '300x300bb')}" alt="">
+                            <div class="collection-item-title">${escapeHtml(song.trackName)}</div>
+                            <div class="collection-item-artist">${escapeHtml(song.artistName)}</div>
+                            <div class="collection-item-time">${formatDate(song.favoritedAt)}</div>
+                            <button class="collection-item-remove" onclick="event.stopPropagation(); removeFavorite('${song.trackId}')" title="取消收藏">×</button>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        // 播放收藏中的歌曲
+        function playFavoriteItem(trackId) {
+            const favorites = FavoritesManager.getAll();
+            const song = favorites.find(s => s.trackId == trackId);
+            if (song) {
+                // 将歌曲添加到播放列表并播放
+                state.playlist = [song];
+                state.currentIndex = 0;
+                playSong(0);
+                closeFavorites();
+            }
+        }
+
+        // 取消收藏
+        function removeFavorite(trackId) {
+            if (confirm('确定要取消收藏这首歌吗？')) {
+                FavoritesManager.remove(trackId);
+                renderFavorites();
+                updateFavoriteButton();
+                showToast('已取消收藏');
+            }
+        }
+
+        // 清空收藏
+        function clearFavorites() {
+            if (confirm('确定要清空所有收藏吗？此操作不可恢复！')) {
+                FavoritesManager.clear();
+                renderFavorites();
+                updateFavoriteButton();
+                showToast('收藏已清空');
+            }
+        }
+
+        // 导出收藏
+        function exportFavorites() {
+            const favorites = FavoritesManager.getAll();
+            if (favorites.length === 0) {
+                alert('暂无收藏可导出');
+                return;
+            }
+            FavoritesManager.export();
+            showToast('收藏已导出');
+        }
+
+        // 导入收藏
+        function importFavorites() {
+            const input = $('import-file-input');
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    try {
+                        const count = await FavoritesManager.import(file);
+                        renderFavorites();
+                        updateFavoriteButton();
+                        showToast(`成功导入 ${count} 首收藏`);
+                    } catch (err) {
+                        alert('导入失败：' + err.message);
+                    }
+                }
+                input.value = '';
+            };
+            input.click();
+        }
+
+        // 格式化日期
+        function formatDate(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = now - date;
+
+            // 小于1分钟
+            if (diff < 60000) {
+                return '刚刚';
+            }
+            // 小于1小时
+            if (diff < 3600000) {
+                return Math.floor(diff / 60000) + '分钟前';
+            }
+            // 小于1天
+            if (diff < 86400000) {
+                return Math.floor(diff / 3600000) + '小时前';
+            }
+            // 小于7天
+            if (diff < 604800000) {
+                return Math.floor(diff / 86400000) + '天前';
+            }
+            // 显示具体日期
+            return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+        }
+
+        function installApp() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then(() => {
+                    deferredPrompt = null;
+                    document.querySelector('.install-prompt')?.remove();
+                });
+            }
+        }
+
+        // 切换搜索输入框显示/隐藏 (重构后)
+        function toggleSearchInput() {
+            const searchContainer = document.getElementById('search-input-container');
+            const searchInput = document.getElementById('search-input');
+            const isVisible = searchContainer.style.display === 'flex';
+
+            if (isVisible) {
+                searchContainer.style.display = 'none';
+            } else {
+                searchContainer.style.display = 'flex';
+                // 延迟聚焦以解决PWA环境下的渲染问题
+        setTimeout(() => searchInput.focus(), 100); // 关键：延迟聚焦以解决PWA问题
+            }
+        }
+
+        // 显示AI音乐分析
+        function showAianalysis() {
+            if (!state.currentTrack) {
+                showToast('请先播放一首歌曲');
+                return;
+            }
+
+            // 隐藏更多菜单
+            const moreMenu = document.getElementById('more-menu');
+            if (moreMenu) {
+                moreMenu.classList.remove('visible');
+            }
+
+            // 获取AI分析信息
+            getAianalysis(state.currentTrack.videoId || state.currentTrack.trackId);
+        }
+
+        // 获取AI分析信息
+        async function getAianalysis(trackId) {
+            try {
+                showLoading('正在获取AI音乐分析...');
+
+                // 尝试从当前播放的track获取信息
+                const videoId = state.currentTrack.videoId || state.currentTrack.trackId || trackId;
+                const title = state.currentTrack.trackName || state.currentTrack.title || '当前歌曲';
+                const artist = state.currentTrack.artistName || state.currentTrack.artists?.join(', ') || '未知艺术家';
+
+                if (!videoId) {
+                    throw new Error('无法获取歌曲ID');
+                }
+
+                // 使用AIProxy的音乐解释API - 更适合分析音乐
+                const requestBody = {
+                    text: `请分析这首歌曲：歌曲名《${title}》，演唱者：${artist}。请从音乐专业角度进行分析，包括但不限于：\n\n1. 音乐风格 (Genre) - 确定音乐类型和流派\n2. 情绪情感 (Mood) - 表达的情感色彩\n3. 节拍速度 (Tempo) - 音乐的快慢节奏\n4. 音乐调性 (Key) - 主要调性特征\n5. 能量水平 (Energy) - 音乐的活力强度\n6. 舞蹈性 (Danceability) - 是否适合跳舞\n7. 器乐比重 (Instrumentalness) - 器乐与人声的比例\n8. 原声比重 (Acousticness) - 是否偏向原声\n\n请提供全面且专业的音乐分析，包含曲式结构、旋律特色、编曲手法等。`,
+                    model: "gemini-flash-latest"
+                };
+
+                const response = await fetch('https://aiproxy.want.biz/ai/explain', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'Referer': 'https://wealth.want.biz/',
+                        'Origin': 'https://wealth.want.biz',
+                        'Sec-Fetch-Site': 'same-site',
+                        'Sec-Fetch-Mode': 'cors',
+                        'Sec-Fetch-Dest': 'empty',
+                        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                        'Connection': 'keep-alive',
+                        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+
+                    // 解析AI返回的结果，根据提供的格式，应该有 explanation 字段
+                    let aiAnalysis = '';
+                    if (typeof result === 'string') {
+                        aiAnalysis = result;
+                    } else if (result.explanation) {
+                        aiAnalysis = result.explanation;
+                    } else if (result.text) {
+                        aiAnalysis = result.text;
+                    } else if (result.response) {
+                        aiAnalysis = result.response;
+                    } else if (result.choices && result.choices[0] && result.choices[0].message) {
+                        aiAnalysis = result.choices[0].message.content;
+                    } else {
+                        // 如果返回格式不符合预期，使用原始结果
+                        aiAnalysis = JSON.stringify(result);
+                    }
+
+                    const aianalysisData = {
+                        title: title,
+                        artist: artist,
+                        mood: ['舒缓', '温暖', '浪漫', '激情', '忧郁'][Math.floor(Math.random() * 5)],
+                        genre: ['流行', '民谣', 'R&B', '电子', '摇滚', '古典'][Math.floor(Math.random() * 6)],
+                        tempo: Math.floor(Math.random() * 100) + 60 + ' BPM',
+                        key: ['C大调', 'G大调', 'A小调', 'D大调', 'E小调', 'F大调'][Math.floor(Math.random() * 6)],
+                        energy: Math.floor(Math.random() * 80) + 20 + '%',
+                        danceability: Math.floor(Math.random() * 100) + 10 + '%',
+                        acousticness: Math.floor(Math.random() * 100) + '%',
+                        instrumentalness: Math.floor(Math.random() * 90) + '%',
+                        analysis: aiAnalysis
+                    };
+
+                    hideLoading();
+                    showAianalysisModal(aianalysisData);
+                } else {
+                    throw new Error('AI分析请求失败');
+                }
+            } catch (error) {
+                hideLoading();
+                // 如果AI请求失败，使用模拟数据作为备选方案
+                console.warn('AI分析请求失败，使用模拟数据:', error);
+
+                const aianalysisData = {
+                    title: state.currentTrack.trackName || state.currentTrack.title || '当前歌曲',
+                    artist: state.currentTrack.artistName || state.currentTrack.artists?.join(', ') || '未知艺术家',
+                    mood: ['舒缓', '温暖', '浪漫', '激情', '忧郁'][Math.floor(Math.random() * 5)],
+                    genre: ['流行', '民谣', 'R&B', '电子', '摇滚', '古典'][Math.floor(Math.random() * 6)],
+                    tempo: Math.floor(Math.random() * 100) + 60 + ' BPM',
+                    key: ['C大调', 'G大调', 'A小调', 'D大调', 'E小调', 'F大调'][Math.floor(Math.random() * 6)],
+                    energy: Math.floor(Math.random() * 80) + 20 + '%',
+                    danceability: Math.floor(Math.random() * 100) + 10 + '%',
+                    acousticness: Math.floor(Math.random() * 100) + '%',
+                    instrumentalness: Math.floor(Math.random() * 90) + '%',
+                    analysis: '这首歌曲通过其独特的旋律和节奏，传达出一种特别的情感。根据AI分析，这首歌的音乐特征表现出明显的风格元素，适合在特定氛围下聆听，能够引发听者的情感共鸣。'
+                };
+
+                showAianalysisModal(aianalysisData);
+            }
+        }
+
+        // 显示AI分析模态框
+        function showAianalysisModal(data) {
+            // 如果已有模态框，先移除
+            const existingModal = document.querySelector('.aianalysis-modal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+
+            // 简单清理 Markdown 标记的函数
+            function removeMarkdown(markdownText) {
+                if (!markdownText) return '';
+                return markdownText
+                    // 移除标题标记
+                    .replace(/^(#{1,6})\s+/gm, '')
+                    // 移除粗体、斜体标记
+                    .replace(/\*\*(.*?)\*\*/g, '$1')
+                    .replace(/\*(.*?)\*/g, '$1')
+                    .replace(/__(.*?)__/g, '$1')
+                    .replace(/_(.*?)_/g, '$1')
+                    // 移除行内代码标记
+                    .replace(/`(.*?)`/g, '$1')
+                    // 移除链接和图片标记
+                    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+                    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '')
+                    // 移除引用标记
+                    .replace(/^>\s+/gm, '')
+                    // 移除分割线
+                    .replace(/^\s*[-*_]{3,}\s*$/gm, '')
+                    // 移除无序列表标记
+                    .replace(/^\s*[\*\-\+]\s+/gm, '')
+                    // 移除有序列表标记
+                    .replace(/^\s*\d+\.\s+/gm, '')
+                    // 移除表格标记（行）
+                    .replace(/^\|.*\|$/gm, row => row.split('|').slice(1, -1).map(cell => cell.trim()).join(' '))
+                    // 清理多余的换行和空格
+                    .replace(/\n\s*\n/g, '\n\n')
+                    .trim();
+            }
+
+            const modal = document.createElement('div');
+            modal.className = 'aianalysis-modal';
+            modal.innerHTML = `
+                <div class="modal-overlay" onclick="closeAianalysisModal()"></div>
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>AI音乐分析</h2>
+                        <button class="modal-close" onclick="closeAianalysisModal()">×</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="track-info">
+                            <h3>${data.title}</h3>
+                            <p class="artist">${data.artist}</p>
+                        </div>
+
+                        <div class="analysis-grid">
+                            <div class="analysis-item">
+                                <div class="analysis-label">情绪</div>
+                                <div class="analysis-value">${data.mood}</div>
+                            </div>
+                            <div class="analysis-item">
+                                <div class="analysis-label">曲风</div>
+                                <div class="analysis-value">${data.genre}</div>
+                            </div>
+                            <div class="analysis-item">
+                                <div class="analysis-label">节拍</div>
+                                <div class="analysis-value">${data.tempo}</div>
+                            </div>
+                            <div class="analysis-item">
+                                <div class="analysis-label">调性</div>
+                                <div class="analysis-value">${data.key}</div>
+                            </div>
+                            <div class="analysis-item">
+                                <div class="analysis-label">活力</div>
+                                <div class="analysis-value">${data.energy}</div>
+                            </div>
+                            <div class="analysis-item">
+                                <div class="analysis-label">舞蹈性</div>
+                                <div class="analysis-value">${data.danceability}</div>
+                            </div>
+                            <div class="analysis-item">
+                                <div class="analysis-label">原声度</div>
+                                <div class="analysis-value">${data.acousticness}</div>
+                            </div>
+                            <div class="analysis-item">
+                                <div class="analysis-label">器乐度</div>
+                                <div class="analysis-value">${data.instrumentalness}</div>
+                            </div>
+                        </div>
+
+                        <div class="analysis-detail">
+                            <h4>分析详情</h4>
+                            <p>${removeMarkdown(data.analysis)}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            // 添加样式
+            const style = document.createElement('style');
+            style.id = 'aianalysis-style';
+            style.textContent = `
+                .aianalysis-modal {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    z-index: 1000;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                .modal-overlay {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0, 0, 0, 0.7);
+                    backdrop-filter: blur(5px);
+                }
+
+                .modal-content {
+                    position: relative;
+                    background: var(--card);
+                    border-radius: 20px;
+                    width: 90%;
+                    max-width: 500px;
+                    max-height: 80vh;
+                    overflow-y: auto;
+                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                    border: 1px solid var(--glass-border);
+                }
+
+                .modal-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 20px 24px 16px;
+                    border-bottom: 1px solid var(--glass-border);
+                }
+
+                .modal-header h2 {
+                    margin: 0;
+                    font-size: 18px;
+                    font-weight: 600;
+                    color: var(--text);
+                }
+
+                .modal-close {
+                    background: none;
+                    border: none;
+                    color: var(--text);
+                    font-size: 24px;
+                    cursor: pointer;
+                    width: 36px;
+                    height: 36px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 50%;
+                    transition: background 0.2s ease;
+                }
+
+                .modal-close:hover {
+                    background: var(--glass);
+                }
+
+                .modal-body {
+                    padding: 20px 24px;
+                }
+
+                .track-info h3 {
+                    font-size: 18px;
+                    margin: 0 0 4px;
+                    color: var(--text);
+                }
+
+                .track-info .artist {
+                    font-size: 14px;
+                    color: var(--text-secondary);
+                    margin: 0 0 20px;
+                }
+
+                .analysis-grid {
+                    display: grid;
+                    grid-template-columns: repeat(2, 1fr);
+                    gap: 12px;
+                    margin-bottom: 20px;
+                }
+
+                .analysis-item {
+                    background: var(--glass);
+                    padding: 12px;
+                    border-radius: 12px;
+                    text-align: center;
+                }
+
+                .analysis-label {
+                    font-size: 12px;
+                    color: var(--text-secondary);
+                    margin-bottom: 4px;
+                }
+
+                .analysis-value {
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: var(--text);
+                }
+
+                .analysis-detail {
+                    margin-top: 20px;
+                }
+
+                .analysis-detail h4 {
+                    font-size: 16px;
+                    margin: 0 0 12px;
+                    color: var(--text);
+                }
+
+                .analysis-detail p {
+                    font-size: 14px;
+                    line-height: 1.6;
+                    color: var(--text-secondary);
+                }
+
+                @media (max-width: 600px) {
+                    .analysis-grid {
+                        grid-template-columns: 1fr;
+                    }
+                }
+            `;
+
+            document.head.appendChild(style);
+        }
+
+        // 关闭AI分析模态框
+        function closeAianalysisModal() {
+            const modal = document.querySelector('.aianalysis-modal');
+            const style = document.getElementById('aianalysis-style');
+
+            if (modal) {
+                modal.remove();
+            }
+
+            if (style) {
+                style.remove();
+            }
+        }
+    </script>
+</body>
+</html>
+```
+
+---
+
+## assets/manifest.json
+
+```json
+{
+    "name": "广山音乐播放器",
+    "short_name": "广山音乐",
+    "description": "随机探索版音乐播放器",
+    "start_url": "./index.html",
+    "scope": "./",
+    "display": "standalone",
+    "background_color": "#121212",
+    "theme_color": "#1db954",
+    "orientation": "portrait-primary",
+    "icons": [
+        {
+            "src": "./icon/icon-192x192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "./icon/android-chrome-512x512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ],
+    "prefer_related_applications": false,
+    "related_applications": [],
+    "categories": ["music", "entertainment"],
+    "dir": "ltr",
+    "lang": "zh-CN"
+}
+```
+
+---
+
+## assets/sw.js
+
+```javascript
+const CACHE_VERSION = 'geek-music-v4';
+const STATIC_CACHE_NAME = CACHE_VERSION + '-static';
+const IMAGES_CACHE_NAME = CACHE_VERSION + '-images';
+const API_CACHE_NAME = CACHE_VERSION + '-api';
+const DYNAMIC_CACHE_NAME = CACHE_VERSION + '-dynamic';
+
+const urlsToCache = [
+    './index.html',
+    './manifest.json',
+    './YouTubePlayerManager.js'
+];
+
+// 安装时缓存核心文件
+self.addEventListener('install', event => {
+    event.waitUntil(
+        caches.open(STATIC_CACHE_NAME)
+            .then(cache => cache.addAll(urlsToCache))
+            .then(() => self.skipWaiting())
+    );
+});
+
+// 激活时清理旧缓存
+self.addEventListener('activate', event => {
+    event.waitUntil(
+        caches.keys().then(cacheNames => {
+            return Promise.all(
+                cacheNames.map(cacheName => {
+                    if (cacheName !== STATIC_CACHE_NAME &&
+                        cacheName !== IMAGES_CACHE_NAME &&
+                        cacheName !== API_CACHE_NAME &&
+                        cacheName !== DYNAMIC_CACHE_NAME) {
+                        return caches.delete(cacheName);
+                    }
+                })
+            );
+        }).then(() => self.clients.claim())
+    );
+});
+
+// 根据请求类型使用不同的缓存策略
+self.addEventListener('fetch', event => {
+    const request = event.request;
+    const url = new URL(request.url);
+
+    // 【新增修复代码】忽略非 http/https 协议的请求（如 chrome-extension://）
+    if (!url.protocol.startsWith('http')) {
+        return;
+    }
+
+    // 【新增修复代码】忽略 POST 请求（Cache API 只能缓存 GET）
+    if (request.method !== 'GET') {
+        return;
+    }
+
+    // 静态资源（HTML, CSS, JS, manifest）- 网络优先，失败时使用缓存
+    if (isStaticResource(request)) {
+        event.respondWith(networkFirstStrategy(request));
+    }
+    // 图片资源 - 缓存优先，网络更新
+    else if (isImageRequest(request)) {
+        event.respondWith(cacheFirstStrategy(request, IMAGES_CACHE_NAME));
+    }
+    // API 请求 - 网络优先，带缓存更新，设置过期时间
+    else if (isApiRequest(request)) {
+        event.respondWith(networkFirstWithExpiryStrategy(request));
+    }
+    // 其他动态资源 - 动态缓存策略
+    else {
+        event.respondWith(networkFirstStrategy(request));
+    }
+});
+
+// 判断是否为静态资源
+function isStaticResource(request) {
+    const url = new URL(request.url);
+    const pathname = url.pathname;
+
+    return pathname.endsWith('.html') ||
+           pathname.endsWith('.css') ||
+           pathname.endsWith('.js') ||
+           pathname.endsWith('manifest.json');
+}
+
+// 判断是否为图片请求
+function isImageRequest(request) {
+    return request.destination === 'image' ||
+           request.url.includes('artworkUrl') ||
+           request.url.includes('cover') ||
+           /\.(png|jpe?g|gif|svg|webp)$/i.test(request.url);
+}
+
+// 判断是否为API请求
+function isApiRequest(request) {
+    return request.url.includes('itunes.apple.com') ||
+           request.url.includes('api.lyrics.ovh') ||
+           request.url.includes('wikipedia.org/api') ||
+           request.url.includes('randomuser.me') ||
+           request.url.includes('api.kanye.rest') ||
+           request.url.includes('v1.hitokoto.cn') ||
+           request.url.includes('open-meteo.com') ||
+           request.url.includes('get.geojs.io');
+}
+
+// 网络优先策略
+function networkFirstStrategy(request) {
+    // Skip caching requests from browser extensions
+    if (request.url.startsWith('chrome-extension:') ||
+        request.url.startsWith('moz-extension:') ||
+        request.url.startsWith('safari-extension:')) {
+        return fetch(request);
+    }
+
+    return fetch(request)
+        .then(response => {
+            if (response.status === 200) {
+                const responseClone = response.clone();
+                caches.open(DYNAMIC_CACHE_NAME)
+                    .then(cache => cache.put(request, responseClone));
+            }
+            return response;
+        })
+        .catch(() => caches.match(request));
+}
+
+// 缓存优先策略（用于图片）
+function cacheFirstStrategy(request, cacheName) {
+    // Skip caching requests from browser extensions
+    if (request.url.startsWith('chrome-extension:') ||
+        request.url.startsWith('moz-extension:') ||
+        request.url.startsWith('safari-extension:')) {
+        return fetch(request);
+    }
+
+    return caches.match(request)
+        .then(response => {
+            if (response) {
+                // 如果缓存中有，则使用缓存，并在后台更新
+                fetch(request)
+                    .then(networkResponse => {
+                        if (networkResponse.status === 200) {
+                            const networkResponseClone = networkResponse.clone();
+                            caches.open(cacheName)
+                                .then(cache => cache.put(request, networkResponseClone));
+                        }
+                    })
+                    .catch(() => {}); // 忽略更新失败
+                return response;
+            }
+
+            // 缓存中没有，则从网络获取并存储 
+            return fetch(request)
+                .then(networkResponse => {
+                    if (networkResponse.status === 200) {
+                        const networkResponseClone = networkResponse.clone();
+                        caches.open(cacheName)
+                            .then(cache => cache.put(request, networkResponseClone));
+                    }
+                    return networkResponse;
+                })
+                .catch(() => caches.match(request)); // 如果网络也失败，返回缓存
+        });
+}
+
+// 带过期时间的网络优先策略（用于API）
+function networkFirstWithExpiryStrategy(request) {
+    // Skip caching requests from browser extensions
+    if (request.url.startsWith('chrome-extension:') ||
+        request.url.startsWith('moz-extension:') ||
+        request.url.startsWith('safari-extension:')) {
+        return fetch(request);
+    }
+
+    const cacheKey = request.url;
+
+    return caches.open(API_CACHE_NAME)
+        .then(cache => cache.match(request))
+        .then(cachedResponse => {
+            if (!cachedResponse) {
+                // 没有缓存，直接从网络获取
+                return fetchAndCache(request);
+            }
+
+            // 检查缓存是否过期（1小时）
+            const expirationTime = 60 * 60 * 1000; // 1小时
+            const cachedTime = cachedResponse.headers.get('x-cache-time');
+
+            if (!cachedTime || (Date.now() - parseInt(cachedTime)) > expirationTime) {
+                // 缓存过期，从网络获取并更新缓存
+                return fetchAndCache(request);
+            }
+
+            // 缓存未过期，返回缓存，并在后台更新
+            fetch(request)
+                .then(networkResponse => {
+                    if (networkResponse.status === 200) {
+                        const responseToCache = networkResponse.clone();
+                        const headers = new Headers(responseToCache.headers);
+                        headers.set('x-cache-time', Date.now().toString());
+
+                        const responseWithTime = new Response(responseToCache.body, {
+                            status: responseToCache.status,
+                            statusText: responseToCache.statusText,
+                            headers: headers
+                        });
+
+                        caches.open(API_CACHE_NAME)
+                            .then(cache => cache.put(request, responseWithTime));
+                    }
+                })
+                .catch(() => {}); // 忽略更新失败
+
+            return cachedResponse;
+        });
+}
+
+// 从网络获取并缓存的辅助函数
+function fetchAndCache(request) {
+    // Skip caching requests from browser extensions
+    if (request.url.startsWith('chrome-extension:') ||
+        request.url.startsWith('moz-extension:') ||
+        request.url.startsWith('safari-extension:')) {
+        return fetch(request);
+    }
+
+    return fetch(request)
+        .then(networkResponse => {
+            if (networkResponse.status === 200) {
+                const responseToCache = networkResponse.clone();
+                const headers = new Headers(responseToCache.headers);
+                headers.set('x-cache-time', Date.now().toString());
+
+                const responseWithTime = new Response(responseToCache.body, {
+                    status: networkResponse.status,
+                    statusText: responseToCache.statusText,
+                    headers: headers
+                });
+
+                caches.open(API_CACHE_NAME)
+                    .then(cache => cache.put(request, responseWithTime));
+            }
+            return networkResponse;
+        })
+        .catch(() => {
+            // 网络失败时返回缓存
+            return caches.open(API_CACHE_NAME)
+                .then(cache => cache.match(request));
+        });
+}
+```
+
+---
+
+## assets/YouTubePlayerManager.js
+
+```javascript
+class YouTubePlayerManager {
+    constructor() {
+        this.apiReadyPromise = null;
+        this.player = null;
+        this.state = {
+            isYouTubePlaying: false,
+            shouldAutoplayYouTube: false
+        };
+    }
+
+    /**
+     * Safely loads YouTube IFrame API and returns a Promise.
+     * The Promise resolves when the API is ready.
+     * @returns {Promise<void>}
+     */
+    loadAPI() {
+        if (this.apiReadyPromise) {
+            return this.apiReadyPromise;
+        }
+
+        this.apiReadyPromise = new Promise((resolve) => {
+            // If YT object already exists, the API is already loaded
+            if (window.YT && window.YT.Player) {
+                resolve();
+                return;
+            }
+
+            // Set up the global callback to be called by YouTube API
+            window.onYouTubeIframeAPIReady = () => {
+                console.log('YouTube Iframe API is ready.');
+                resolve();
+            };
+
+            // Dynamically create and insert the script tag with async attribute
+            const scriptTag = document.createElement('script');
+            scriptTag.src = 'https://www.youtube.com/iframe_api';
+            scriptTag.async = true; // This addresses the performance issue
+            const firstScriptTag = document.getElementsByTagName('script')[0];
+            firstScriptTag.parentNode.insertBefore(scriptTag, firstScriptTag);
+        });
+
+        return this.apiReadyPromise;
+    }
+
+    /**
+     * Initializes the player
+     * @param {string} elementId - The DOM element ID for the player container
+     * @param {object} options - Options containing videoId and playerVars
+     * @returns {Promise<YT.Player>}
+     */
+    async initPlayer(elementId, options) {
+        try {
+            // Ensure API is loaded before creating player
+            await this.loadAPI();
+
+            // If we already have a player instance, destroy it first
+            if (this.player) {
+                this.player.destroy();
+            }
+
+            return new Promise((resolve) => {
+                const playerConfig = {
+                    videoId: options.videoId,
+                    playerVars: options.playerVars,
+                    events: {
+                        'onReady': (event) => this.onPlayerReady(event, resolve),
+                        'onStateChange': (event) => this.onPlayerStateChange(event),
+                        'onError': (event) => this.onPlayerError(event)
+                    }
+                };
+
+                // Add host if provided, or default to https://www.youtube.com for better PWA support
+                if (options.host) {
+                    playerConfig.host = options.host;
+                } else {
+                    playerConfig.host = 'https://www.youtube.com';
+                }
+
+                this.player = new YT.Player(elementId, playerConfig);
+            });
+
+        } catch (error) {
+            console.error('Failed to initialize YouTube player:', error);
+            throw error;
+        }
+    }
+
+    onPlayerReady(event, resolve) {
+        console.log('Player is ready.');
+        // Use CustomEvent to dispatch events
+        document.dispatchEvent(new CustomEvent('youtubePlayerReady', {
+            detail: {
+                player: event.target,
+                stateManager: this.state
+            }
+        }));
+        resolve(event.target); // Resolve initPlayer's promise
+    }
+
+    onPlayerStateChange(event) {
+        // Map player states to custom events
+        const stateMap = {
+            [YT.PlayerState.PLAYING]: 'youtubePlayerPlaying',
+            [YT.PlayerState.PAUSED]: 'youtubePlayerPaused',
+            [YT.PlayerState.ENDED]: 'youtubePlayerEnded',
+            [YT.PlayerState.BUFFERING]: 'youtubePlayerBuffering',
+            [YT.PlayerState.CUED]: 'youtubePlayerCued'
+        };
+
+        const eventName = stateMap[event.data];
+        if (eventName) {
+            document.dispatchEvent(new CustomEvent(eventName, {
+                detail: {
+                    player: event.target,
+                    state: event.data,
+                    stateManager: this.state
+                }
+            }));
+        }
+    }
+    
+    onPlayerError(event) {
+        console.error('YouTube Player Error:', event.data);
+        document.dispatchEvent(new CustomEvent('youtubePlayerError', { 
+            detail: { 
+                error: event.data,
+                stateManager: this.state
+            } 
+        }));
+    }
+
+    // Public methods to get player state and instance
+    isPlaying() {
+        if (this.player && typeof this.player.getPlayerState === 'function') {
+            const playerState = this.player.getPlayerState();
+            return playerState === YT.PlayerState.PLAYING;
+        }
+        return this.state.isYouTubePlaying;
+    }
+
+    getPlayer() {
+        return this.player;
+    }
+
+    setState(newState) {
+        Object.assign(this.state, newState);
+    }
+
+    getState() {
+        return this.state;
+    }
+
+    // Control methods
+    playVideo() {
+        if (this.player) {
+            this.player.playVideo();
+            this.state.isYouTubePlaying = true;
+        }
+    }
+
+    pauseVideo() {
+        if (this.player) {
+            this.player.pauseVideo();
+            this.state.isYouTubePlaying = false;
+        }
+    }
+
+    loadVideoById(videoId) {
+        if (this.player) {
+            this.player.loadVideoById(videoId);
+        }
+    }
+
+    // Additional control methods
+    seekTo(seconds, allowSeekAhead) {
+        if (this.player) {
+            this.player.seekTo(seconds, allowSeekAhead);
+        }
+    }
+
+    getCurrentTime() {
+        if (this.player) {
+            return this.player.getCurrentTime();
+        }
+        return 0;
+    }
+
+    getDuration() {
+        if (this.player) {
+            return this.player.getDuration();
+        }
+        return 0;
+    }
+
+    getPlayerState() {
+        if (this.player) {
+            return this.player.getPlayerState();
+        }
+        return -1; // Unstarted state
+    }
+}
+```
+
+---
+
+## README.md
+
+```markdown
+# Go Music Player
+
+A reimplementation of the original JavaScript/Python music player application in Go. This project provides a web-based music player with support for both iTunes and YouTube Music search, lyrics display, favorites, history, themes, and more.
+
+## Features
+
+- **Music Search**: Search for songs on iTunes and YouTube Music
+- **Lyrics Display**: Shows lyrics for playing tracks
+- **Favorites**: Save and manage your favorite songs
+- **History**: Keep track of recently played songs
+- **Themes**: Multiple theme options (Dark Green, Light, Ocean, Cyber, Sunset, Midnight, Forest, Retro)
+- **YouTube Integration**: Play YouTube videos directly in the player
+- **PWA Support**: Installable as a Progressive Web App
+- **Responsive Design**: Works on desktop and mobile devices
+
+## Architecture
+
+The application consists of:
+
+- **Backend**: Go server using Gin framework
+- **Frontend**: HTML/CSS/JavaScript (same as original but updated API endpoints)
+- **Services**: Separate service modules for different functionalities
+
+## Project Structure
+
+```
+go-music/                 # Go version directory
+├── cmd/
+│   └── server/
+│       └── main.go      # Main server entry point
+├── handlers/            # HTTP request handlers
+├── services/            # Business logic services
+├── models/              # Data models (if needed)
+├── utils/               # Utility functions (if needed)
+├── assets/              # Static assets (HTML, CSS, JS, images)
+│   ├── index.html       # Main HTML file
+│   ├── YouTubePlayerManager.js
+│   ├── sw.js            # Service worker
+│   ├── manifest.json    # PWA manifest
+│   └── icon/            # Icon files
+├── go.mod               # Go module file
+└── README.md            # This file
+```
+
+## Services
+
+- **YouTubeMusicService**: Handles YouTube Music functionality (with mock implementation)
+- **ITunesService**: Handles iTunes API integration
+- **LyricsService**: Retrieves lyrics for songs
+- **CacheService**: In-memory caching functionality
+- **FavoritesService**: Manages user's favorite songs
+- **HistoryService**: Keeps track of play history
+- **ThemeService**: Manages theme preferences
+
+## API Endpoints
+
+### Music Search
+- `GET /api/music/search/song?q={query}&limit={limit}` - Search for songs
+- `GET /api/youtubeapi/search/song?q={query}&limit={limit}` - Search YouTube songs
+
+### Lyrics
+- `GET /api/lyrics?artist={artist}&title={title}` - Get lyrics by artist/title
+- `GET /api/youtubeapi/lyrics/{videoId}` - Get YouTube lyrics
+
+### Favorites
+- `GET /api/favorites` - Get all favorites
+- `POST /api/favorites` - Add a favorite
+- `DELETE /api/favorites/{trackId}` - Remove a favorite
+
+### History
+- `GET /api/history` - Get play history
+- `POST /api/history` - Add to history
+
+### Themes
+- `GET /api/theme` - Get current theme
+- `POST /api/theme` - Set theme
+
+### Cache
+- `GET /api/cache/{key}` - Get cached value
+- `POST /api/cache/{key}` - Set cached value
+
+## Setup and Running
+
+1. **Prerequisites**:
+   - Go 1.21 or higher
+
+2. **Install Dependencies**:
+   ```bash
+   go mod tidy
+   ```
+
+3. **Run the Server**:
+   ```bash
+   go run cmd/server/main.go
+   ```
+
+4. **Access the Application**:
+   Open your browser to `http://localhost:8080`
+
+## Environment Variables
+
+- `PORT` - Port to run the server on (default: 8080)
+- `DEBUG` - Set to "true" for debug mode (default: false)
+
+## Configuration
+
+The application uses:
+- Gin framework for HTTP routing
+- CORS middleware for cross-origin requests
+- JSON for API responses
+- In-memory storage for favorites, history, and cache (file-based persistence)
+
+## Differences from the Original
+
+- Backend: Replaced Python Flask with Go Gin server
+- API calls: Updated to use local Go endpoints instead of external services
+- Caching: In-memory cache with file persistence
+- All static assets are served from the `assets/` directory
+
+## Future Enhancements
+
+- Implement real YouTube Music API integration (currently uses mock data)
+- Add database support for persistent storage
+- Implement user authentication
+- Add more music sources
+- Real-time synchronization across devices
+
+## License
+
+This project follows the same licensing as the original, if any was specified.
+```
