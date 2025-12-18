@@ -518,6 +518,52 @@
             box-shadow: 0 0 0 3px var(--primary-light);
         }
 
+        .stream-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: 16px;
+        }
+
+        .stream-toggle label {
+            color: var(--text-light);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .stream-toggle input[type="checkbox"] {
+            width: 40px;
+            height: 20px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: var(--input-bg);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            position: relative;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .stream-toggle input[type="checkbox"]:checked {
+            background: var(--primary-color);
+        }
+
+        .stream-toggle input[type="checkbox"]::before {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--text-light);
+            top: 1px;
+            left: 1px;
+            transition: 0.3s;
+        }
+
+        .stream-toggle input[type="checkbox"]:checked::before {
+            transform: translateX(20px);
+        }
+
         .quote-display {
             display: flex;
             align-items: center;
@@ -1520,6 +1566,10 @@
                     <option value="script-bot-creator">script-bot-creator</option>
                     <option value="app-creator">app-creator</option>
                 </select>
+                <div class="stream-toggle">
+                    <label for="streamToggle">Stream</label>
+                    <input type="checkbox" id="streamToggle" checked>
+                </div>
                 <div class="quote-display">
                     <span id="quoteText">我思故我在</span>
                     <span id="quoteAuthor">— 笛卡尔</span>
@@ -2544,19 +2594,34 @@
             try {
                 const messages = getRecentMessages(5);
 
-                // Create temporary assistant message for streaming
-                createTemporaryAssistantMessage();
+                // Get user preference for streaming
+                const streamToggle = document.getElementById('streamToggle');
+                const shouldStream = streamToggle ? streamToggle.checked : true;
 
-                // Remove typing indicator since we'll show streaming content
-                removeTypingIndicator();
+                if (shouldStream) {
+                    // Create temporary assistant message for streaming
+                    createTemporaryAssistantMessage();
 
-                // Call the streaming API with a callback to update content
-                const response = await callPoeAPI(messages, modelSelector.value, (content) => {
-                    updateTemporaryAssistantContent(content);
-                });
+                    // Remove typing indicator since we'll show streaming content
+                    removeTypingIndicator();
 
-                // Finalize the message with the complete content
-                finalizeAssistantMessage(response, Date.now());
+                    // Call the streaming API with a callback to update content
+                    const response = await callPoeAPI(messages, modelSelector.value, (content) => {
+                        updateTemporaryAssistantContent(content);
+                    });
+
+                    // Finalize the message with the complete content
+                    finalizeAssistantMessage(response, Date.now());
+                } else {
+                    // For non-streaming, remove typing indicator and call API without streaming
+                    removeTypingIndicator();
+
+                    // Call the API without streaming (no callback)
+                    const response = await callPoeAPI(messages, modelSelector.value, null);
+
+                    // Add the complete response directly to the DOM
+                    addMessageToDOM('assistant', response, null, Date.now());
+                }
 
                 if (!currentSession) {
                     currentSession = 'session_' + Date.now();
@@ -2716,6 +2781,10 @@
 
         async function callPoeAPI(messages, model, onContentUpdate) {
             const apiBaseUrl = '';
+            // Determine if we should stream based on user preference from the toggle and whether an update callback is provided
+            const streamToggle = document.getElementById('streamToggle');
+            const userPrefersStream = streamToggle ? streamToggle.checked : true;
+            const shouldStream = userPrefersStream && typeof onContentUpdate === 'function';
 
             const response = await fetch(`${apiBaseUrl}/v1/chat/completions`, {
                 method: 'POST',
@@ -2726,7 +2795,7 @@
                     model: model,
                     messages: messages,
                     temperature: 0.7,
-                    stream: false
+                    stream: shouldStream
                 })
             });
 
@@ -2735,43 +2804,55 @@
                 throw new Error(`API Error: ${response.status} - ${errorData}`);
             }
 
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let accumulatedContent = '';
+            if (shouldStream) {
+                // Handle streaming response
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let accumulatedContent = '';
 
-            try {
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
+                try {
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
 
-                    const chunk = decoder.decode(value);
-                    const lines = chunk.split('\n');
+                        const chunk = decoder.decode(value);
+                        const lines = chunk.split('\n');
 
-                    for (const line of lines) {
-                        if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-                            try {
-                                const data = JSON.parse(line.slice(6));
-                                if (data.choices && data.choices[0]?.delta?.content) {
-                                    const content = data.choices[0].delta.content;
-                                    accumulatedContent += content;
+                        for (const line of lines) {
+                            if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+                                try {
+                                    const data = JSON.parse(line.slice(6));
+                                    if (data.choices && data.choices[0]?.delta?.content) {
+                                        const content = data.choices[0].delta.content;
+                                        accumulatedContent += content;
 
-                                    // Call the update callback if provided
-                                    if (onContentUpdate) {
-                                        onContentUpdate(accumulatedContent);
+                                        // Call the update callback if provided
+                                        if (onContentUpdate) {
+                                            onContentUpdate(accumulatedContent);
+                                        }
                                     }
+                                } catch (e) {
+                                    // Ignore parsing errors for non-JSON lines
+                                    continue;
                                 }
-                            } catch (e) {
-                                // Ignore parsing errors for non-JSON lines
-                                continue;
                             }
                         }
                     }
+                } finally {
+                    reader.releaseLock();
                 }
-            } finally {
-                reader.releaseLock();
-            }
 
-            return accumulatedContent;
+                return accumulatedContent;
+            } else {
+                // Handle non-streaming response
+                const data = await response.json();
+                if (data.choices && data.choices[0]?.message?.content) {
+                    const content = data.choices[0].message.content;
+                    return content;
+                } else {
+                    throw new Error('Invalid response format from API');
+                }
+            }
         }
 
         async function loadModels() {
