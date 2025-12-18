@@ -674,7 +674,8 @@
             width: 100%;
         }
 
-        .assistant:hover .message-actions {
+        .assistant:hover .message-actions,
+        .user:hover .message-actions {
             opacity: 1;
         }
 
@@ -698,6 +699,18 @@
             border-color: var(--primary-color);
             color: var(--primary-color);
             transform: translateY(-1px);
+        }
+
+        .delete-btn {
+            background: rgba(255, 107, 107, 0.1);
+            border-color: rgba(255, 107, 107, 0.3);
+            color: #ff6b6b;
+        }
+
+        .delete-btn:hover {
+            background: rgba(255, 107, 107, 0.2);
+            border-color: #ff6b6b;
+            color: #ff6b6b;
         }
 
         /* Input Container */
@@ -2581,7 +2594,33 @@
 
             const contentWrapper = document.createElement('div');
             contentWrapper.className = 'message-content';
+
+            const footerDiv = document.createElement('div');
+            footerDiv.className = 'message-footer';
+
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = 'Thinking...';
+
+            // Create actions div for temporary message
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'message-actions';
+
+            // Add copy and delete buttons for temporary message
+            actionsDiv.innerHTML = `
+                <button class="action-btn copy-btn" title="Copy">
+                    <i class="fas fa-copy"></i> Copy
+                </button>
+                <button class="action-btn delete-btn" title="Delete">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            `;
+
+            // Add both time and actions to footer
+            footerDiv.appendChild(timeDiv);
+            footerDiv.appendChild(actionsDiv);
             contentWrapper.appendChild(contentDiv);
+            contentWrapper.appendChild(footerDiv);
 
             messageDiv.appendChild(avatarDiv);
             messageDiv.appendChild(contentWrapper);
@@ -2600,6 +2639,26 @@
             }, 10);
 
             chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            // Add event listeners for the action buttons (for temporary message)
+            const copyBtn = messageDiv.querySelector('.copy-btn');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const tempContent = messageDiv.querySelector('.content');
+                    if (tempContent) {
+                        copyMessage(tempContent.getAttribute('data-raw') || '');
+                    }
+                });
+            }
+
+            const deleteBtn = messageDiv.querySelector('.delete-btn');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteMessage(messageDiv, 'assistant', '');
+                });
+            }
 
             return messageDiv;
         }
@@ -2632,17 +2691,8 @@
         function finalizeAssistantMessage(content, timestamp) {
             const tempMessage = document.getElementById('temp-assistant-message');
             if (tempMessage) {
-                // Remove streaming effects before finalizing
-                tempMessage.classList.remove('fancy-typing', 'stream-highlight');
-                const tempContent = tempMessage.querySelector('.content');
-                if (tempContent) {
-                    tempContent.classList.remove('fancy-typing', 'stream-highlight');
-                }
-                // Restore the regular robot icon
-                const avatarDiv = tempMessage.querySelector('.avatar');
-                if (avatarDiv) {
-                    avatarDiv.innerHTML = '<i class="fas fa-robot"></i>';
-                }
+                // Remove the temporary message completely
+                tempMessage.remove();
             }
 
             // Add the final message with normal styling (no streaming effects)
@@ -2793,29 +2843,25 @@
             timeDiv.className = 'message-time';
             timeDiv.textContent = timeString;
 
-            // Create actions div for assistant messages
+            // Create actions div for all messages (both user and assistant)
             const actionsDiv = document.createElement('div');
             actionsDiv.className = 'message-actions';
 
-            if (role === 'assistant') {
-                actionsDiv.innerHTML = `
-                    <button class="action-btn copy-btn" title="Copy">
-                        <i class="fas fa-copy"></i> Copy
-                    </button>
-                `;
-            }
+            // Add copy and delete buttons for both user and assistant messages
+            actionsDiv.innerHTML = `
+                <button class="action-btn copy-btn" title="Copy">
+                    <i class="fas fa-copy"></i> Copy
+                </button>
+                <button class="action-btn delete-btn" title="Delete">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            `;
 
-            // For assistant messages, add both time and actions to footer
-            if (role === 'assistant') {
-                footerDiv.appendChild(timeDiv);
-                footerDiv.appendChild(actionsDiv);
-                contentWrapper.appendChild(contentDiv);
-                contentWrapper.appendChild(footerDiv);
-            } else {
-                // For user messages, keep the original structure
-                contentWrapper.appendChild(contentDiv);
-                contentWrapper.appendChild(timeDiv);
-            }
+            // Add both time and actions to footer for all message types
+            footerDiv.appendChild(timeDiv);
+            footerDiv.appendChild(actionsDiv);
+            contentWrapper.appendChild(contentDiv);
+            contentWrapper.appendChild(footerDiv);
 
             messageDiv.appendChild(avatarDiv);
             messageDiv.appendChild(contentWrapper);
@@ -2835,11 +2881,21 @@
 
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
-            if (role === 'assistant') {
-                const copyBtn = messageDiv.querySelector('.copy-btn');
-                if (copyBtn) {
-                    copyBtn.addEventListener('click', () => copyMessage(rawContent));
-                }
+            // Add event listeners for the action buttons
+            const copyBtn = messageDiv.querySelector('.copy-btn');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    copyMessage(rawContent);
+                });
+            }
+
+            const deleteBtn = messageDiv.querySelector('.delete-btn');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteMessage(messageDiv, role, rawContent);
+                });
             }
         }
 
@@ -2926,6 +2982,18 @@
                 .catch(err => {
                     console.error('Failed to copy: ', err);
                 });
+        }
+
+        function deleteMessage(messageElement, role, content) {
+            if (confirm('Are you sure you want to delete this message?')) {
+                // Remove the message element from the DOM
+                messageElement.remove();
+
+                // For temporary messages during streaming, also remove the typing indicator if it was the last message
+                if (messageElement.id === 'temp-assistant-message') {
+                    removeTypingIndicator();
+                }
+            }
         }
 
         // Handle mobile viewport height issues
