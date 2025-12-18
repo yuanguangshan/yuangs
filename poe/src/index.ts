@@ -91,6 +91,14 @@ export default {
                     await env.DB.prepare("DELETE FROM conversations WHERE id = ?").bind(id).run();
                     return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
                 }
+                if (request.method === 'PATCH') {
+                    const data = await request.json() as any;
+                    if (!data.title) {
+                        return new Response(JSON.stringify({ error: "Missing title" }), { status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+                    }
+                    await env.DB.prepare("UPDATE conversations SET title = ? WHERE id = ?").bind(data.title, id).run();
+                    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+                }
             }
 
             // --- Proxy to Upstream (/v1/...) ---
