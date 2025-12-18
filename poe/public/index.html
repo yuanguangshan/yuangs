@@ -870,7 +870,7 @@
 
         // Call Poe API
         async function callPoeAPI(messages, model) {
-            // Use the local worker proxy
+            // Use the local worker proxy to handle CORS
             const apiBaseUrl = '/api';
 
             // Call the API via proxy
@@ -887,18 +887,28 @@
             });
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: { message: `API error: ${response.status} ${response.statusText}` } }));
-                throw new Error(errorData.error?.message || `API error: ${response.status} ${response.statusText}`);
+                const errorData = await response.text();
+                throw new Error(`API Error: ${response.status} - ${errorData}`);
             }
 
             const data = await response.json();
-            return data.choices[0].message.content;
+
+            // Handle OpenAI format (standard)
+            if (data.choices && data.choices.length > 0 && data.choices[0].message) {
+                return data.choices[0].message.content;
+            }
+
+            // Fallback for other potential formats
+            if (data.content) return data.content;
+
+            console.warn("Unexpected API response format:", data);
+            return "Error: Could not parse API response.";
         }
 
         // Retrieve model list from the API
         async function loadModels() {
             try {
-                // Use relative path which will go through the worker proxy
+                // Use proxy to handle CORS
                 const response = await fetch('/api/v1/models', {
                     method: 'GET',
                     headers: {
