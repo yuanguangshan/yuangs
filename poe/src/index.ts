@@ -1,7 +1,8 @@
-import { ExecutionContext } from '@cloudflare/workers-types';
+import { ExecutionContext, D1Database } from '@cloudflare/workers-types';
 
 export interface Env {
     ASSETS: { fetch: (request: Request) => Promise<Response> };
+    DB: D1Database;
 }
 
 export default {
@@ -10,6 +11,54 @@ export default {
 
         // API Proxy Logic
         if (url.pathname.startsWith('/api/')) {
+
+            // --- History API ---
+            if (url.pathname === '/api/history') {
+                if (request.method === 'GET') {
+                    const { results } = await env.DB.prepare(
+                        "SELECT * FROM conversations ORDER BY timestamp DESC"
+                    ).all();
+                    return new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } });
+                }
+                if (request.method === 'POST') {
+                    const data = await request.json() as any;
+                    // Create or update conversation
+                    await env.DB.prepare(
+                        "INSERT INTO conversations (id, title, model, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET title=excluded.title, model=excluded.model"
+                    ).bind(data.id, data.title, data.model, data.timestamp).run();
+
+                    // If messages provided, sync them (simple implementation: delete all and re-insert or just append new ones)
+                    // For simplicity/robustness in this migration:
+                    if (data.messages && Array.isArray(data.messages)) {
+                        await env.DB.prepare("DELETE FROM messages WHERE conversation_id = ?").bind(data.id).run();
+                        const stmt = env.DB.prepare("INSERT INTO messages (conversation_id, role, content, raw_content, timestamp) VALUES (?, ?, ?, ?, ?)");
+                        const batch = data.messages.map((msg: any) => stmt.bind(data.id, msg.role, msg.content, msg.rawContent, msg.timestamp || Date.now()));
+                        await env.DB.batch(batch);
+                    }
+
+                    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+                }
+            }
+
+            if (url.pathname.startsWith('/api/history/')) {
+                const id = url.pathname.split('/').pop();
+                if (request.method === 'GET') {
+                    const { results } = await env.DB.prepare(
+                        "SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC"
+                    ).bind(id).all();
+                    // Fetch conv details too
+                    const conv = await env.DB.prepare("SELECT * FROM conversations WHERE id = ?").bind(id).first();
+
+                    return new Response(JSON.stringify({ ...conv, messages: results }), { headers: { 'Content-Type': 'application/json' } });
+                }
+                if (request.method === 'DELETE') {
+                    await env.DB.prepare("DELETE FROM messages WHERE conversation_id = ?").bind(id).run();
+                    await env.DB.prepare("DELETE FROM conversations WHERE id = ?").bind(id).run();
+                    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+                }
+            }
+
+            // --- Proxy to Upstream ---
             const targetUrl = new URL(url.pathname.replace('/api/', '/'), 'https://api.yuangs.cc');
 
             // Copy query parameters
@@ -17,7 +66,6 @@ export default {
                 targetUrl.searchParams.append(key, value);
             });
 
-            // Create new request to target
             const proxyRequest = new Request(targetUrl.toString(), {
                 method: request.method,
                 headers: request.headers,
@@ -25,19 +73,10 @@ export default {
                 redirect: 'follow'
             });
 
-            // Ideally, we might want to strip/replace the Host header or others, 
-            // but often fetch handles this. We might need to override origin/referer 
-            // if the upstream checks strictly.
-            // For now, let's try a simple pass-through.
-
             try {
                 const response = await fetch(proxyRequest);
-
-                // Re-create response to allow modifying headers if needed (CORS is handled by worker usually if same origin)
-                // But since we are serving this from the SAME origin as the assets, we don't strictly need CORS headers 
-                // on the response for our own frontend, but it's good practice to pass them through or set them.
                 const newHeaders = new Headers(response.headers);
-                newHeaders.set('Access-Control-Allow-Origin', '*'); // Or specific origin
+                newHeaders.set('Access-Control-Allow-Origin', '*');
 
                 return new Response(response.body, {
                     status: response.status,

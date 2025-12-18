@@ -12,17 +12,35 @@
             --primary-hover: #0d8a6a;
             --background-dark: #343541;
             --input-bg: #40414f;
-            --text-light: #ffffff;
+            --text-light: #ececf1;
             --text-gray: #c5c5d2;
-            --border-radius: 8px;
+            --text-muted: #8e8ea0;
+            --border-radius: 12px;
             --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --font-family: 'Söhne',
+                'ui-sans-serif',
+                'system-ui',
+                -apple-system,
+                'Segoe UI',
+                Roboto,
+                Ubuntu,
+                Cantarell,
+                'Noto Sans',
+                sans-serif,
+                'Helvetica Neue',
+                Arial,
+                'Apple Color Emoji',
+                'Segoe UI Emoji',
+                'Segoe UI Symbol',
+                'Noto Color Emoji';
         }
 
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: var(--font-family);
+            -webkit-font-smoothing: antialiased;
         }
 
         body {
@@ -81,6 +99,9 @@
             overflow: hidden;
             text-overflow: ellipsis;
             transition: background-color 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
 
         .history-item:hover {
@@ -176,6 +197,36 @@
             justify-content: center;
             flex-shrink: 0;
             font-size: 14px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .message-header {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .message-time {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .history-time {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-left: 24px;
+        }
+
+        .history-content {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .message.assistant .message-content {
+            line-height: 1.7;
+        }
         }
 
         .user .avatar {
@@ -515,10 +566,10 @@
         let conversations = JSON.parse(localStorage.getItem('conversations')) || {};
 
         // Initialize the app
-        function initApp() {
+        async function initApp() {
             setupEventListeners();
             loadModels();  // Load available models from the API
-            loadHistory();
+            await loadHistory();
             updateTokenCounter();
 
             // Check if we have a current session in URL hash
@@ -577,7 +628,7 @@
             window.location.hash = currentSession;
 
             // Add to history
-            addToHistory(currentSession, 'New Chat');
+            addToHistory(currentSession, 'New Chat', Date.now());
 
             // Clear active class from all history items
             document.querySelectorAll('.history-item').forEach(item => {
@@ -585,8 +636,8 @@
             });
         }
 
-        // Save current session to localStorage
-        function saveCurrentSession() {
+        // Save current session to API
+        async function saveCurrentSession() {
             if (!currentSession) return;
 
             const messages = [];
@@ -594,19 +645,31 @@
                 messages.push({
                     role: msg.classList.contains('user') ? 'user' : 'assistant',
                     content: msg.querySelector('.content').innerHTML,
-                    rawContent: msg.querySelector('.content').dataset.raw || ''
+                    rawContent: msg.querySelector('.content').dataset.raw || '',
+                    timestamp: msg.dataset.timestamp || Date.now()
                 });
             });
 
-            conversations[currentSession] = {
+            const conversationData = {
+                id: currentSession,
                 title: getConversationTitle(),
                 messages: messages,
-                timestamp: Date.now(),
+                timestamp: conversations[currentSession]?.timestamp || Date.now(),
                 model: modelSelector.value
             };
 
-            localStorage.setItem('conversations', JSON.stringify(conversations));
-            updateHistoryDisplay();
+            // Update local cache
+            conversations[currentSession] = conversationData;
+
+            try {
+                await fetch('/api/history', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(conversationData)
+                });
+            } catch (e) {
+                console.error("Failed to save history:", e);
+            }
         }
 
         // Get conversation title from first user message
@@ -622,13 +685,20 @@
         }
 
         // Add message to history sidebar
-        function addToHistory(sessionId, title) {
+        function addToHistory(sessionId, title, timestamp = Date.now()) {
             const historyItem = document.createElement('div');
             historyItem.className = 'history-item';
             historyItem.dataset.sessionId = sessionId;
+            const date = new Date(parseInt(timestamp));
+            const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const dateString = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+
             historyItem.innerHTML = `
-                <i class="fas fa-comment"></i>
-                <span>${title}</span>
+                <div class="history-content">
+                    <i class="fas fa-comment"></i>
+                    <span>${title}</span>
+                </div>
+                <div class="history-time">${dateString} ${timeString}</div>
             `;
 
             historyItem.addEventListener('click', () => {
@@ -647,60 +717,90 @@
             historyList.prepend(historyItem);
         }
 
-        // Load conversation from localStorage
-        function loadConversation(sessionId) {
-            const conv = conversations[sessionId];
-            if (!conv) return;
+        // Load conversation from API
+        async function loadConversation(sessionId) {
+            try {
+                const res = await fetch(`/api/history/${sessionId}`);
+                if (!res.ok) throw new Error('Failed to load');
+                const conv = await res.json();
 
-            // Clear current chat
-            chatContainer.innerHTML = '';
+                // Update local cache
+                conversations[sessionId] = conv;
 
-            // Restore messages
-            conv.messages.forEach(msg => {
-                addMessageToDOM(msg.role, msg.rawContent, msg.content);
-            });
+                // Clear current chat
+                chatContainer.innerHTML = '';
 
-            // Set selected model
-            modelSelector.value = conv.model || 'GPT-4o-mini';
+                // Restore messages
+                if (conv.messages) {
+                    conv.messages.forEach(msg => {
+                        // Backend returns snake_case from DB
+                        addMessageToDOM(msg.role, msg.raw_content || msg.rawContent, msg.content, msg.timestamp);
+                    });
+                }
 
-            // Highlight active history item
-            document.querySelectorAll('.history-item').forEach(item => {
-                item.classList.toggle('active', item.dataset.sessionId === sessionId);
-            });
+                // Set selected model
+                modelSelector.value = conv.model || 'GPT-4o-mini';
+
+                // Highlight active history item
+                document.querySelectorAll('.history-item').forEach(item => {
+                    item.classList.toggle('active', item.dataset.sessionId === sessionId);
+                });
+            } catch (e) {
+                console.error("Error loading conversation:", e);
+            }
         }
 
-        // Load history from localStorage
-        function loadHistory() {
+        // Load history from API
+        async function loadHistory() {
             historyList.innerHTML = '';
 
-            // Sort conversations by timestamp (most recent first)
-            const sortedSessions = Object.entries(conversations)
-                .sort((a, b) => b[1].timestamp - a[1].timestamp);
+            try {
+                const res = await fetch('/api/history');
+                if (res.ok) {
+                    const results = await res.json();
+                    // Sort conversations by timestamp (most recent first)
+                    const sortedSessions = results.sort((a, b) => b.timestamp - a.timestamp);
 
-            sortedSessions.forEach(([sessionId, conv]) => {
-                const historyItem = document.createElement('div');
-                historyItem.className = 'history-item';
-                historyItem.dataset.sessionId = sessionId;
-                historyItem.innerHTML = `
-                    <i class="fas fa-comment"></i>
-                    <span>${conv.title}</span>
-                `;
+                    // Update local cache object roughly
+                    conversations = {};
+                    sortedSessions.forEach(c => conversations[c.id] = c);
 
-                historyItem.addEventListener('click', () => {
-                    if (currentSession) saveCurrentSession();
-                    loadConversation(sessionId);
-                    currentSession = sessionId;
-                    window.location.hash = sessionId;
+                    sortedSessions.forEach(conv => {
+                        const historyItem = document.createElement('div');
+                        historyItem.className = 'history-item';
+                        historyItem.dataset.sessionId = conv.id;
 
-                    // Update active state
-                    document.querySelectorAll('.history-item').forEach(item => {
-                        item.classList.remove('active');
+                        const date = new Date(conv.timestamp);
+                        const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        const dateString = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+                        historyItem.innerHTML = `
+                            <div class="history-content">
+                                <i class="fas fa-comment"></i>
+                                <span>${conv.title}</span>
+                            </div>
+                            <div class="history-time">${dateString} ${timeString}</div>
+                        `;
+
+                        historyItem.addEventListener('click', () => {
+                            if (currentSession) saveCurrentSession();
+                            loadConversation(conv.id);
+                            currentSession = conv.id;
+                            window.location.hash = conv.id;
+
+                            // Update active state
+                            document.querySelectorAll('.history-item').forEach(item => {
+                                item.classList.remove('active');
+                            });
+                            historyItem.classList.add('active');
+                        });
+
+                        historyList.appendChild(historyItem);
                     });
-                    historyItem.classList.add('active');
-                });
-
-                historyList.appendChild(historyItem);
-            });
+                }
+            } catch (e) {
+                console.error("Failed to load history list:", e);
+            }
         }
 
         // Update history display
@@ -714,7 +814,8 @@
             if (!message) return;
 
             // Add user message to UI
-            addMessageToDOM('user', message);
+            const timestamp = Date.now();
+            addMessageToDOM('user', message, null, timestamp);
             const userMessageElement = document.querySelectorAll('.message.user')[document.querySelectorAll('.message.user').length - 1];
 
             // Clear input
@@ -735,7 +836,7 @@
                 removeTypingIndicator();
 
                 // Add assistant response to UI
-                addMessageToDOM('assistant', response);
+                addMessageToDOM('assistant', response, null, Date.now());
 
                 // Save the conversation
                 if (currentSession) {
@@ -844,7 +945,7 @@
         }
 
         // Add message to DOM
-        function addMessageToDOM(role, rawContent, htmlContent = null) {
+        function addMessageToDOM(role, rawContent, htmlContent = null, timestamp = Date.now()) {
             // Remove welcome message if it exists
             const welcomeMessage = chatContainer.querySelector('.welcome-message');
             if (welcomeMessage) {
@@ -853,6 +954,10 @@
 
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${role}`;
+            messageDiv.dataset.timestamp = timestamp; // Store timestamp in data attribute
+
+            const timeDate = new Date(parseInt(timestamp));
+            const timeString = timeDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             const avatarDiv = document.createElement('div');
             avatarDiv.className = 'avatar';
@@ -885,7 +990,25 @@
 
             const contentWrapper = document.createElement('div');
             contentWrapper.className = 'message-content';
+            const messageHeader = document.createElement('div');
+            messageHeader.className = 'message-header';
+
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'message-time';
+            timeSpan.textContent = timeString;
+
+            // No longer putting avatar in header to keep the side-by-side look, 
+            // but we can put the time above or below. 
+            // Let's attach time to content wrapper for now or put it in message-actions.
+            // Actually, let's append it to the content wrapper for better layout
+
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.style.marginTop = '4px';
+            timeDiv.textContent = timeString;
+
             contentWrapper.appendChild(contentDiv);
+            contentWrapper.appendChild(timeDiv); // Add time below content
             contentWrapper.appendChild(actionsDiv);
 
             messageDiv.appendChild(avatarDiv);
