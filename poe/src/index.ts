@@ -25,39 +25,53 @@ export default {
             }
 
             // --- History API ---
-            if (url.pathname === '/api/history') {
-                if (request.method === 'GET') {
-                    const { results } = await env.DB.prepare(
-                        "SELECT * FROM conversations ORDER BY timestamp DESC"
-                    ).all();
-                    return new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
-                }
-                if (request.method === 'POST') {
-                    const data = await request.json() as any;
-                    // Create or update conversation
-                    await env.DB.prepare(
-                        "INSERT INTO conversations (id, title, model, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET title=excluded.title, model=excluded.model"
-                    ).bind(data.id, data.title, data.model, data.timestamp).run();
-
-                    // If messages provided, sync them (simple implementation: delete all and re-insert or just append new ones)
-                    // For simplicity/robustness in this migration:
-                    // If messages provided, sync them using a transaction
-                    if (data.messages && Array.isArray(data.messages)) {
-                        const batch = [];
-                        // 1. Delete existing messages
-                        batch.push(env.DB.prepare("DELETE FROM messages WHERE conversation_id = ?").bind(data.id));
-
-                        // 2. Insert new messages
-                        const stmt = env.DB.prepare("INSERT INTO messages (conversation_id, role, content, raw_content, timestamp) VALUES (?, ?, ?, ?, ?)");
-                        data.messages.forEach((msg: any) => {
-                            batch.push(stmt.bind(data.id, msg.role, msg.content, msg.rawContent, msg.timestamp || Date.now()));
-                        });
-
-                        // Execute atomically
-                        await env.DB.batch(batch);
+            // Allow optional trailing slash
+            if (url.pathname.replace(/\/$/, '') === '/api/history') {
+                try {
+                    if (request.method === 'GET') {
+                        const { results } = await env.DB.prepare(
+                            "SELECT * FROM conversations ORDER BY created_at DESC"
+                        ).all();
+                        // Map created_at back to timestamp for frontend if needed, or frontend adapts
+                        // The frontend expects 'timestamp' for sorting. Let's alias it or map it.
+                        // Easier to just alias in SQL if supported, or map in JS.
+                        // SQLite alias: SELECT *, created_at as timestamp ...
+                        const fixedResults = results.map((c: any) => ({ ...c, timestamp: c.created_at }));
+                        return new Response(JSON.stringify(fixedResults), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
                     }
+                    if (request.method === 'POST') {
+                        const data = await request.json() as any;
 
-                    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+                        // Validate data
+                        if (!data.id) {
+                            return new Response(JSON.stringify({ error: "Missing ID" }), { status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+                        }
+
+                        // Create or update conversation
+                        await env.DB.prepare(
+                            "INSERT INTO conversations (id, title, model, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET title=excluded.title, model=excluded.model"
+                        ).bind(data.id, data.title || 'New Chat', data.model || 'GPT-4o-mini', data.timestamp || Date.now()).run();
+
+                        // If messages provided, sync them using a transaction
+                        if (data.messages && Array.isArray(data.messages)) {
+                            const batch = [];
+                            // 1. Delete existing messages
+                            batch.push(env.DB.prepare("DELETE FROM messages WHERE conversation_id = ?").bind(data.id));
+
+                            // 2. Insert new messages
+                            const stmt = env.DB.prepare("INSERT INTO messages (conversation_id, role, content, raw_content, timestamp) VALUES (?, ?, ?, ?, ?)");
+                            data.messages.forEach((msg: any) => {
+                                batch.push(stmt.bind(data.id, msg.role, msg.content, msg.rawContent || '', msg.timestamp || Date.now()));
+                            });
+
+                            // Execute atomically
+                            await env.DB.batch(batch);
+                        }
+
+                        return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+                    }
+                } catch (e) {
+                    return new Response(JSON.stringify({ error: `DB Error: ${e}` }), { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
                 }
             }
 
@@ -86,11 +100,10 @@ export default {
                 targetPath = targetPath.replace('/api/', '/');
             }
 
-            // If it's the history API, we shouldn't be here (handled above), 
+            // If it's the history API, we shouldn't be here (handled above),
             // but for safety, ensure we only proxy /v1/ calls to upstream.
             if (!targetPath.startsWith('/v1/')) {
-                // Should have been handled by history block or is invalid for proxy
-                // But wait, history block returns. So if we are here, it's not history.
+                return new Response(JSON.stringify({ error: `Worker 404: Route not found or invalid proxy target: ${url.pathname}` }), { status: 404, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
             }
 
             const targetUrl = new URL(targetPath, 'https://api.yuangs.cc');

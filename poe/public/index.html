@@ -658,17 +658,27 @@
                 model: modelSelector.value
             };
 
-            // Update local cache
-            conversations[currentSession] = conversationData;
-
             try {
-                await fetch('/api/history', {
+                const response = await fetch('/api/history', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify(conversationData)
                 });
-            } catch (e) {
-                console.error("Failed to save history:", e);
+
+                if (!response.ok) {
+                    const err = await response.text();
+                    console.error("Save failed:", err);
+                    addErrorMessage(`DEBUG: Save failed (${response.status}): ${err}`);
+                } else {
+                    console.log("Session saved:", currentSession);
+                    // Update cache
+                    conversations[currentSession] = conversationData;
+                }
+            } catch (error) {
+                console.error('Error saving session:', error);
+                addErrorMessage(`DEBUG: Network Error saving: ${error.message}`);
             }
         }
 
