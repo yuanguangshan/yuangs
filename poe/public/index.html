@@ -2807,7 +2807,7 @@
             if (shouldStream) {
                 // Handle streaming response
                 const reader = response.body.getReader();
-                const decoder = new TextDecoder();
+                const decoder = new TextDecoder('utf-8');
                 let accumulatedContent = '';
 
                 try {
@@ -2815,7 +2815,8 @@
                         const { done, value } = await reader.read();
                         if (done) break;
 
-                        const chunk = decoder.decode(value);
+                        // 使用 { stream: true } 选项以正确处理 UTF-8 截断
+                        const chunk = decoder.decode(value, { stream: true });
                         const lines = chunk.split('\n');
 
                         for (const line of lines) {
@@ -2845,6 +2846,12 @@
                                 }
                             }
                         }
+                    }
+
+                    // 在流结束时，使用 { stream: false } 刷新任何剩余的字节
+                    const finalChunk = decoder.decode(new Uint8Array(), { stream: false });
+                    if (finalChunk) {
+                        console.warn('Unexpected final chunk after stream ended:', finalChunk);
                     }
                 } finally {
                     reader.releaseLock();
