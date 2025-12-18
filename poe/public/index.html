@@ -23,6 +23,12 @@
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* Prevent unwanted zooming on mobile devices */
+        @media (max-width: 768px) {
+            textarea {
+                font-size: 16px !important; /* Prevents automatic zoom on mobile devices */
+            }
+        }
         :root {
             --primary-color: #10a37f;
             --primary-hover: #0d8a6a;
@@ -296,6 +302,15 @@
             font-weight: 500;
         }
 
+        .header {
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+        }
+
+        .header.hidden {
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+
         .chat-container {
             flex: 1;
             overflow-y: auto;
@@ -505,10 +520,10 @@
             border: none;
             color: var(--text-light);
             resize: none;
-            padding: 16px 48px 16px 16px;
-            font-size: 16px;
-            height: 60px;
-            max-height: 200px;
+            padding: 12px 48px 12px 12px;
+            font-size: 14px;
+            height: 50px;
+            max-height: 180px;
             outline: none;
         }
 
@@ -570,10 +585,10 @@
             border: none;
             color: var(--text-light);
             resize: none;
-            padding: 16px 48px 16px 16px;
-            font-size: 16px;
-            height: 60px;
-            max-height: 200px;
+            padding: 12px 48px 12px 12px;
+            font-size: 14px;
+            height: 50px;
+            max-height: 180px;
             outline: none;
         }
 
@@ -1604,7 +1619,7 @@
                     conversations = {};
                     sortedSessions.forEach(c => conversations[c.id] = c);
 
-                    sortedSessions.forEach(conv => {
+                    sortedSessions.forEach((conv, index) => {
                         // Desktop history item
                         const historyItem = document.createElement('div');
                         historyItem.className = 'history-item';
@@ -1647,18 +1662,14 @@
 
                         historyList.appendChild(historyItem);
 
-                        // Mobile history item (only first two characters)
+                        // Mobile history item for the dialog (full titles)
                         if (mobileHistoryList) {
                             const mobileHistoryItem = document.createElement('div');
                             mobileHistoryItem.className = 'mobile-history-item';
                             mobileHistoryItem.dataset.sessionId = conv.id;
 
-                            // Only show first two characters followed by ... if longer
-                            const shortTitle = conv.title.length > 2 ?
-                                conv.title.substring(0, 2) + '...' :
-                                conv.title;
-
-                            mobileHistoryItem.textContent = shortTitle;
+                            // Show full title for dialog items
+                            mobileHistoryItem.textContent = conv.title;
 
                             mobileHistoryItem.addEventListener('click', () => {
                                 if (currentSession) saveCurrentSession();
@@ -1678,11 +1689,39 @@
                                 // Also add active class to corresponding desktop item
                                 const desktopItem = document.querySelector(`.history-item[data-session-id="${conv.id}"]`);
                                 if (desktopItem) desktopItem.classList.add('active');
+
+                                // Hide dialog after selection
+                                hideMobileHistoryDialog();
+
+                                // Update the recent chat display
+                                const recentChatDiv = document.getElementById('mobileRecentChat');
+                                if (recentChatDiv) {
+                                    recentChatDiv.querySelector('.recent-chat-title').textContent = conv.title;
+                                    recentChatDiv.querySelector('.recent-chat-time').textContent = `${dateString} ${timeString}`;
+                                }
                             });
 
                             mobileHistoryList.appendChild(mobileHistoryItem);
+
+                            // Update the recent chat display with the most recent item (first one)
+                            if (index === 0) { // Most recent
+                                const recentChatDiv = document.getElementById('mobileRecentChat');
+                                if (recentChatDiv) {
+                                    recentChatDiv.querySelector('.recent-chat-title').textContent = conv.title;
+                                    recentChatDiv.querySelector('.recent-chat-time').textContent = `${dateString} ${timeString}`;
+                                }
+                            }
                         }
                     });
+
+                    // If no conversations exist, show "No chats yet"
+                    if (sortedSessions.length === 0) {
+                        const recentChatDiv = document.getElementById('mobileRecentChat');
+                        if (recentChatDiv) {
+                            recentChatDiv.querySelector('.recent-chat-title').textContent = 'No chats yet';
+                            recentChatDiv.querySelector('.recent-chat-time').textContent = '';
+                        }
+                    }
                 }
             } catch (e) {
                 console.error("Failed to load history list:", e);
