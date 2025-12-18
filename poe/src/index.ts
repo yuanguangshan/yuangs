@@ -5,144 +5,136 @@ export interface Env {
     DB: D1Database;
 }
 
+// 提取公共 CORS 头部
+const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, HEAD, POST, OPTIONS, DELETE, PATCH',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '86400',
+};
+
+// 辅助函数：返回 JSON 响应
+const jsonResponse = (data: any, status = 200) => {
+    return new Response(JSON.stringify(data), {
+        status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+};
+
 export default {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
         const url = new URL(request.url);
+        const { pathname } = url;
 
-        // API Proxy Logic
-        if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/v1/')) {
+        // 1. 处理 API 路由
+        if (pathname.startsWith('/api/') || pathname.startsWith('/v1/')) {
 
-            // Handle CORS Preflight for all API routes
+            // 处理跨域预检
             if (request.method === 'OPTIONS') {
-                return new Response(null, {
-                    headers: {
-                        'Access-Control-Allow-Origin': '*',
-                        'Access-Control-Allow-Methods': 'GET, HEAD, POST, OPTIONS, DELETE',
-                        'Access-Control-Allow-Headers': 'Content-Type',
-                        'Access-Control-Max-Age': '86400',
-                    }
-                });
+                return new Response(null, { headers: corsHeaders });
             }
 
-            // --- History API ---
-            // Allow optional trailing slash
-            if (url.pathname.replace(/\/$/, '') === '/api/history') {
+            // --- 历史记录 API (/api/history) ---
+            if (pathname.replace(/\/$/, '') === '/api/history') {
                 try {
+                    // 【优化】获取列表：增加 LIMIT 50，避免读取行数随对话增加而爆炸
                     if (request.method === 'GET') {
                         const { results } = await env.DB.prepare(
-                            "SELECT * FROM conversations ORDER BY created_at DESC"
+                            "SELECT id, title, model, created_at FROM conversations ORDER BY created_at DESC LIMIT 50"
                         ).all();
-                        // Map created_at back to timestamp for frontend if needed, or frontend adapts
-                        // The frontend expects 'timestamp' for sorting. Let's alias it or map it.
-                        // Easier to just alias in SQL if supported, or map in JS.
-                        // SQLite alias: SELECT *, created_at as timestamp ...
-                        const fixedResults = results.map((c: any) => ({ ...c, timestamp: c.created_at }));
-                        return new Response(JSON.stringify(fixedResults), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+                        return jsonResponse(results.map((c: any) => ({ ...c, timestamp: c.created_at })));
                     }
+
+                    // 【优化】保存对话：使用 batch 提升写入性能
                     if (request.method === 'POST') {
                         const data = await request.json() as any;
+                        if (!data.id) return jsonResponse({ error: "Missing ID" }, 400);
 
-                        // Validate data
-                        if (!data.id) {
-                            return new Response(JSON.stringify({ error: "Missing ID" }), { status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
-                        }
+                        const batch = [];
+                        const timestamp = data.timestamp || Date.now();
 
-                        // Create or update conversation
-                        await env.DB.prepare(
-                            "INSERT INTO conversations (id, title, model, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET title=excluded.title, model=excluded.model"
-                        ).bind(data.id, data.title || 'New Chat', data.model || 'GPT-4o-mini', data.timestamp || Date.now()).run();
+                        // 插入或更新对话主表
+                        batch.push(
+                            env.DB.prepare(
+                                "INSERT INTO conversations (id, title, model, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET title=excluded.title, model=excluded.model"
+                            ).bind(data.id, data.title || 'New Chat', data.model || 'GPT-4o-mini', timestamp)
+                        );
 
-                        // If messages provided, sync them using a transaction
+                        // 如果传了消息列表，则同步
                         if (data.messages && Array.isArray(data.messages)) {
-                            const batch = [];
-                            // 1. Delete existing messages
+                            // 删除旧消息（依靠之前建立的索引，这里会非常快）
                             batch.push(env.DB.prepare("DELETE FROM messages WHERE conversation_id = ?").bind(data.id));
 
-                            // 2. Insert new messages
                             const stmt = env.DB.prepare("INSERT INTO messages (conversation_id, role, content, raw_content, timestamp) VALUES (?, ?, ?, ?, ?)");
                             data.messages.forEach((msg: any) => {
-                                batch.push(stmt.bind(data.id, msg.role, msg.content, msg.rawContent || '', msg.timestamp || Date.now()));
+                                batch.push(stmt.bind(data.id, msg.role, msg.content, msg.rawContent || '', msg.timestamp || timestamp));
                             });
-
-                            // Execute atomically
-                            await env.DB.batch(batch);
                         }
 
-                        return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+                        await env.DB.batch(batch);
+                        return jsonResponse({ success: true });
                     }
                 } catch (e) {
-                    return new Response(JSON.stringify({ error: `DB Error: ${e}` }), { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+                    return jsonResponse({ error: `DB Error: ${e}` }, 500);
                 }
             }
 
-            if (url.pathname.startsWith('/api/history/')) {
-                const id = url.pathname.split('/').pop();
-                if (request.method === 'GET') {
-                    const { results } = await env.DB.prepare(
-                        "SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC"
-                    ).bind(id).all();
-                    // Fetch conv details too
-                    const conv = await env.DB.prepare("SELECT * FROM conversations WHERE id = ?").bind(id).first();
+            // --- 历史记录详情 API (/api/history/:id) ---
+            if (pathname.startsWith('/api/history/')) {
+                const id = pathname.split('/').pop();
 
-                    return new Response(JSON.stringify({ ...conv, messages: results }), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+                // 【优化】获取详情：使用 Promise.all 并行查询，减少 Worker 等待时间
+                if (request.method === 'GET') {
+                    const [msgResult, conv] = await Promise.all([
+                        env.DB.prepare("SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC").bind(id).all(),
+                        env.DB.prepare("SELECT * FROM conversations WHERE id = ?").bind(id).first()
+                    ]);
+                    return jsonResponse({ ...conv, messages: msgResult.results });
                 }
+
                 if (request.method === 'DELETE') {
-                    await env.DB.prepare("DELETE FROM messages WHERE conversation_id = ?").bind(id).run();
-                    await env.DB.prepare("DELETE FROM conversations WHERE id = ?").bind(id).run();
-                    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+                    await env.DB.batch([
+                        env.DB.prepare("DELETE FROM messages WHERE conversation_id = ?").bind(id),
+                        env.DB.prepare("DELETE FROM conversations WHERE id = ?").bind(id)
+                    ]);
+                    return jsonResponse({ success: true });
                 }
+
                 if (request.method === 'PATCH') {
                     const data = await request.json() as any;
-                    if (!data.title) {
-                        return new Response(JSON.stringify({ error: "Missing title" }), { status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
-                    }
+                    if (!data.title) return jsonResponse({ error: "Missing title" }, 400);
                     await env.DB.prepare("UPDATE conversations SET title = ? WHERE id = ?").bind(data.title, id).run();
-                    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+                    return jsonResponse({ success: true });
                 }
             }
 
-            // --- Proxy to Upstream (/v1/...) ---
-            // If it starts with /api/, we strip it (legacy/history). If /v1/, we leave it.
-            let targetPath = url.pathname;
+            // --- API 代理逻辑 (/v1/...) ---
+            let targetPath = pathname;
             if (targetPath.startsWith('/api/v1/')) {
                 targetPath = targetPath.replace('/api/', '/');
             }
 
-            // If it's the history API, we shouldn't be here (handled above),
-            // but for safety, ensure we only proxy /v1/ calls to upstream.
             if (!targetPath.startsWith('/v1/')) {
-                return new Response(JSON.stringify({ error: `Worker 404: Route not found or invalid proxy target: ${url.pathname}` }), { status: 404, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+                return jsonResponse({ error: `Route not found: ${pathname}` }, 404);
             }
 
             const targetUrl = new URL(targetPath, 'https://api.yuangs.cc');
+            url.searchParams.forEach((value, key) => targetUrl.searchParams.append(key, value));
 
-            // Copy query parameters
-            url.searchParams.forEach((value, key) => {
-                targetUrl.searchParams.append(key, value);
-            });
-
-            // Prepare headers for upstream
             const proxyHeaders = new Headers(request.headers);
-            proxyHeaders.delete('Host'); // VALID: Allow fetch to set correct Host
-            proxyHeaders.delete('Referer'); // Optional: Privacy
-            proxyHeaders.delete('Origin'); // Optional: Let upstream see fetch origin
-
-            const proxyRequest = new Request(targetUrl.toString(), {
-                method: request.method,
-                headers: proxyHeaders,
-                body: request.body,
-                redirect: 'follow'
-            });
+            ['Host', 'Referer', 'Origin', 'cf-connecting-ip'].forEach(h => proxyHeaders.delete(h));
 
             try {
-                const response = await fetch(proxyRequest);
-                const newHeaders = new Headers(response.headers);
+                const response = await fetch(targetUrl.toString(), {
+                    method: request.method,
+                    headers: proxyHeaders,
+                    body: request.body,
+                    redirect: 'follow'
+                });
 
-                // Re-write CORS headers for the client
-                newHeaders.delete('Access-Control-Allow-Origin');
-                newHeaders.set('Access-Control-Allow-Origin', '*');
-                newHeaders.set('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS, DELETE');
-                newHeaders.set('Access-Control-Allow-Headers', 'Content-Type');
+                const newHeaders = new Headers(response.headers);
+                // 覆盖目标服务器可能存在的 CORS 限制
+                Object.entries(corsHeaders).forEach(([k, v]) => newHeaders.set(k, v));
 
                 return new Response(response.body, {
                     status: response.status,
@@ -150,11 +142,11 @@ export default {
                     headers: newHeaders
                 });
             } catch (e) {
-                return new Response(JSON.stringify({ error: { message: `Proxy error: ${e}` } }), { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+                return jsonResponse({ error: { message: `Proxy error: ${e}` } }, 500);
             }
         }
 
-        // Serve static assets from the 'public' directory
+        // 2. 静态资源处理
         if (env.ASSETS) {
             return env.ASSETS.fetch(request);
         }
