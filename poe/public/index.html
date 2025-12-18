@@ -2779,7 +2779,7 @@
             addMessageToDOM('assistant', content, null, timestamp);
         }
 
-        async function callPoeAPI(messages, model, onContentUpdate) {
+ async function callPoeAPI(messages, model, onContentUpdate) {
             const apiBaseUrl = '';
             // Determine if we should stream based on user preference from the toggle and whether an update callback is provided
             const streamToggle = document.getElementById('streamToggle');
@@ -2809,15 +2809,26 @@
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder('utf-8');
                 let accumulatedContent = '';
+                
+                // --- 修复开始：引入 buffer 变量 ---
+                let buffer = ''; 
+                // --- 修复结束 ---
 
                 try {
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done) break;
 
-                        // 使用 { stream: true } 选项以正确处理 UTF-8 截断
+                        // 1. 解码当前块并追加到缓冲区
                         const chunk = decoder.decode(value, { stream: true });
-                        const lines = chunk.split('\n');
+                        buffer += chunk;
+                        
+                        // 2. 按换行符切割
+                        const lines = buffer.split('\n');
+                        
+                        // 3. 关键步骤：数组的最后一个元素可能是不完整的（因为末尾可能没有 \n）
+                        // 将其弹出并保存回 buffer，等待下一个 chunk 补全
+                        buffer = lines.pop();
 
                         for (const line of lines) {
                             if (line.trim().length === 0) continue; // Skip empty lines
@@ -2828,31 +2839,33 @@
                                         const content = data.choices[0].delta.content;
 
                                         // Add the new content to the accumulated content
-                                        // This should maintain order as chunks arrive in sequence
                                         accumulatedContent += content;
 
                                         // Call the update callback if provided
                                         if (onContentUpdate) {
-                                            // Pass the accumulated content to maintain order
                                             onContentUpdate(accumulatedContent);
                                         }
                                     }
                                 } catch (e) {
-                                    // Ignore parsing errors for non-JSON lines
-                                    if (line.slice(6).trim() !== '[DONE]') {
-                                        console.warn('Stream parsing error:', e, 'Line:', line);
-                                    }
+                                    // 只有在真正的格式错误时才会报错，断行问题已被 buffer 解决
+                                    console.warn('Stream parsing error:', e, 'Line:', line);
                                     continue;
                                 }
                             }
                         }
                     }
-
-                    // 在流结束时，使用 { stream: false } 刷新任何剩余的字节
-                    const finalChunk = decoder.decode(new Uint8Array(), { stream: false });
-                    if (finalChunk) {
-                        console.warn('Unexpected final chunk after stream ended:', finalChunk);
+                    
+                    // 循环结束后，如果 buffer 里还有残留数据（极少见，除非服务器没发换行符），可以在这里尝试处理
+                    if (buffer.length > 0 && buffer.startsWith('data: ') && buffer !== 'data: [DONE]') {
+                         try {
+                            const data = JSON.parse(buffer.slice(6));
+                            if (data.choices && data.choices[0]?.delta?.content) {
+                                accumulatedContent += data.choices[0].delta.content;
+                                if (onContentUpdate) onContentUpdate(accumulatedContent);
+                            }
+                         } catch(e) {}
                     }
+
                 } finally {
                     reader.releaseLock();
                 }
