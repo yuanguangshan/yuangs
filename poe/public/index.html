@@ -673,18 +673,18 @@
             opacity: 1;
         }
 
-        .message-footer {
-            display: flex;
-            justify-content: flex-start;
-            align-items: center;
-            margin-top: 8px;
-            width: 100%;
-        }
-
-        .assistant .message-content {
+        .message-content {
             display: flex;
             flex-direction: column;
             width: 100%;
+        }
+
+        .message:hover .message-actions {
+            opacity: 1;
+        }
+
+        .message-content:hover .message-actions {
+            opacity: 1;
         }
 
         .assistant:hover .message-actions,
@@ -795,6 +795,17 @@
 
         .send-btn:active {
             transform: translateY(0);
+        }
+
+        .send-btn.disabled {
+            background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .send-btn.disabled:hover {
+            transform: none;
+            box-shadow: var(--shadow-sm);
         }
 
         .token-counter {
@@ -1421,6 +1432,28 @@
 
         }
 
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+        }
+
         @media (min-width: 769px) {
             .sidebar {
                 display: flex !important;
@@ -1620,6 +1653,7 @@
             await loadHistory();
             loadUserProfile();
             updateTokenCounter();
+            updateSendButtonState(); // Initialize send button state
             handleResponsiveButton();
 
             const sessionId = window.location.hash.substring(1);
@@ -1652,6 +1686,7 @@
             });
 
             userInput.addEventListener('input', updateTokenCounter);
+            userInput.addEventListener('input', updateSendButtonState);
 
             // Update new chat button to toggle dropdown instead of starting new chat directly
             newChatBtn.addEventListener('click', function(event) {
@@ -1783,6 +1818,17 @@
             const count = userInput.value.length;
             tokenCounter.textContent = `${count}`;
             tokenCounter.style.color = count > 1800 ? '#ff6b6b' : 'var(--text-muted)';
+        }
+
+        function updateSendButtonState() {
+            const isEmpty = !userInput.value.trim();
+            if (isEmpty) {
+                sendButton.classList.add('disabled');
+                sendButton.disabled = true;
+            } else {
+                sendButton.classList.remove('disabled');
+                sendButton.disabled = false;
+            }
         }
 
         function startNewConversation() {
@@ -2531,7 +2577,7 @@
 
         async function sendMessage() {
             const message = userInput.value.trim();
-            if (!message) return;
+            if (!message || sendButton.disabled) return;
 
             const timestamp = Date.now();
             addMessageToDOM('user', message, null, timestamp);
@@ -2539,6 +2585,7 @@
 
             userInput.value = '';
             updateTokenCounter();
+            updateSendButtonState(); // Update button state after clearing input
 
             showTypingIndicator();
 
@@ -2676,6 +2723,39 @@
                     deleteMessage(messageDiv, 'assistant', '');
                 });
             }
+
+            // Add right-click context menu for copying temporary message content
+            messageDiv.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                const tempContent = messageDiv.querySelector('.content');
+                const contentToCopy = tempContent ? tempContent.getAttribute('data-raw') || '' : '';
+                copyMessage(contentToCopy);
+                // Show visual feedback that content was copied
+                const tempFeedback = document.createElement('div');
+                tempFeedback.textContent = '✓ Copied!';
+                tempFeedback.style.cssText = `
+                    position: fixed;
+                    bottom: 32px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: linear-gradient(135deg, var(--primary-color) 0%, #0d8a6a 100%);
+                    color: white;
+                    padding: 12px 20px;
+                    border-radius: 8px;
+                    z-index: 1000;
+                    font-weight: 600;
+                    box-shadow: var(--shadow-lg);
+                    animation: slideIn 0.3s ease-out;
+                `;
+                document.body.appendChild(tempFeedback);
+
+                setTimeout(() => {
+                    tempFeedback.style.animation = 'slideOut 0.3s ease-out';
+                    setTimeout(() => {
+                        document.body.removeChild(tempFeedback);
+                    }, 300);
+                }, 2000);
+            });
 
             return messageDiv;
         }
@@ -2989,6 +3069,37 @@
                     deleteMessage(messageDiv, role, rawContent);
                 });
             }
+
+            // Add right-click context menu for copying message content
+            messageDiv.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                copyMessage(rawContent);
+                // Show visual feedback that content was copied
+                const tempFeedback = document.createElement('div');
+                tempFeedback.textContent = '✓ Copied!';
+                tempFeedback.style.cssText = `
+                    position: fixed;
+                    bottom: 32px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: linear-gradient(135deg, var(--primary-color) 0%, #0d8a6a 100%);
+                    color: white;
+                    padding: 12px 20px;
+                    border-radius: 8px;
+                    z-index: 1000;
+                    font-weight: 600;
+                    box-shadow: var(--shadow-lg);
+                    animation: slideIn 0.3s ease-out;
+                `;
+                document.body.appendChild(tempFeedback);
+
+                setTimeout(() => {
+                    tempFeedback.style.animation = 'slideOut 0.3s ease-out';
+                    setTimeout(() => {
+                        document.body.removeChild(tempFeedback);
+                    }, 300);
+                }, 2000);
+            });
         }
 
         function showTypingIndicator() {
@@ -3051,7 +3162,8 @@
                     tempFeedback.style.cssText = `
                         position: fixed;
                         bottom: 32px;
-                        right: 32px;
+                        left: 50%;
+                        transform: translateX(-50%);
                         background: linear-gradient(135deg, var(--primary-color) 0%, #0d8a6a 100%);
                         color: white;
                         padding: 12px 20px;
