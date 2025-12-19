@@ -2744,61 +2744,94 @@
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder('utf-8');
                 let accumulatedContent = '';
-                
-                // --- 修复开始：引入 buffer 变量 ---
-                let buffer = ''; 
-                // --- 修复结束 ---
+
+                // Buffer to accumulate data chunks
+                let buffer = '';
 
                 try {
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done) break;
 
-                        // 1. 解码当前块并追加到缓冲区
+                        // Decode current chunk and append to buffer
                         const chunk = decoder.decode(value, { stream: true });
                         buffer += chunk;
-                        
-                        // 2. 按换行符切割
+
+                        // Split by newline
                         const lines = buffer.split('\n');
-                        
-                        // 3. 关键步骤：数组的最后一个元素可能是不完整的（因为末尾可能没有 \n）
-                        // 将其弹出并保存回 buffer，等待下一个 chunk 补全
-                        buffer = lines.pop();
+
+                        // The last element might be incomplete (no trailing \n)
+                        // Save it back to buffer to wait for next chunk to complete it
+                        buffer = lines.pop() || '';
 
                         for (const line of lines) {
                             if (line.trim().length === 0) continue; // Skip empty lines
                             if (line.startsWith('data: ') && line !== 'data: [DONE]') {
                                 try {
-                                    const data = JSON.parse(line.slice(6));
-                                    if (data.choices && data.choices[0]?.delta?.content) {
-                                        const content = data.choices[0].delta.content;
+                                    // Safely parse JSON with validation
+                                    const jsonDataStr = line.slice(6);
 
-                                        // Add the new content to the accumulated content
-                                        accumulatedContent += content;
+                                    // Additional validation - check if it looks like JSON before parsing
+                                    if (jsonDataStr.trim().startsWith('{') && jsonDataStr.trim().endsWith('}')) {
+                                        const data = JSON.parse(jsonDataStr);
+                                        if (data.choices && data.choices[0]?.delta?.content) {
+                                            const content = data.choices[0].delta.content;
 
-                                        // Call the update callback if provided
-                                        if (onContentUpdate) {
-                                            onContentUpdate(accumulatedContent);
+                                            // Add the new content to the accumulated content
+                                            accumulatedContent += content;
+
+                                            // Call the update callback if provided
+                                            if (onContentUpdate) {
+                                                onContentUpdate(accumulatedContent);
+                                            }
+                                        }
+                                    } else {
+                                        // If it doesn't look like a complete JSON object, try to parse anyway but catch errors more carefully
+                                        const data = JSON.parse(jsonDataStr);
+                                        if (data.choices && data.choices[0]?.delta?.content) {
+                                            const content = data.choices[0].delta.content;
+
+                                            // Add the new content to the accumulated content
+                                            accumulatedContent += content;
+
+                                            // Call the update callback if provided
+                                            if (onContentUpdate) {
+                                                onContentUpdate(accumulatedContent);
+                                            }
                                         }
                                     }
                                 } catch (e) {
-                                    // 只有在真正的格式错误时才会报错，断行问题已被 buffer 解决
-                                    console.warn('Stream parsing error:', e, 'Line:', line);
+                                    // More specific error handling for JSON parsing issues
+                                    console.warn('Stream parsing error:', e.message, 'Raw line:', line);
+                                    // Continue processing other lines, skip this malformed one
                                     continue;
                                 }
                             }
                         }
                     }
-                    
-                    // 循环结束后，如果 buffer 里还有残留数据（极少见，除非服务器没发换行符），可以在这里尝试处理
+
+                    // After loop ends, process any remaining data in buffer
                     if (buffer.length > 0 && buffer.startsWith('data: ') && buffer !== 'data: [DONE]') {
-                         try {
-                            const data = JSON.parse(buffer.slice(6));
-                            if (data.choices && data.choices[0]?.delta?.content) {
-                                accumulatedContent += data.choices[0].delta.content;
-                                if (onContentUpdate) onContentUpdate(accumulatedContent);
+                        try {
+                            // Try to parse remaining buffer content
+                            const jsonDataStr = buffer.slice(6);
+                            if (jsonDataStr.trim().startsWith('{') && jsonDataStr.trim().endsWith('}')) {
+                                const data = JSON.parse(jsonDataStr);
+                                if (data.choices && data.choices[0]?.delta?.content) {
+                                    accumulatedContent += data.choices[0].delta.content;
+                                    if (onContentUpdate) onContentUpdate(accumulatedContent);
+                                }
+                            } else {
+                                // Attempt to parse anyway
+                                const data = JSON.parse(jsonDataStr);
+                                if (data.choices && data.choices[0]?.delta?.content) {
+                                    accumulatedContent += data.choices[0].delta.content;
+                                    if (onContentUpdate) onContentUpdate(accumulatedContent);
+                                }
                             }
-                         } catch(e) {}
+                        } catch (e) {
+                            console.warn('Final stream parsing error:', e.message, 'Remaining buffer:', buffer);
+                        }
                     }
 
                 } finally {
