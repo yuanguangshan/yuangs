@@ -762,7 +762,11 @@
 
         .message {
             display: flex;
-            gap: 16px;
+            flex-direction: column;
+            /* Unified Vertical stack */
+            align-items: flex-start;
+            gap: 4px;
+            /* Tight vertical spacing */
             padding: 20px 0;
             animation: fadeIn 0.3s ease-in;
         }
@@ -799,16 +803,24 @@
             width: 100%;
         }
 
+        .message-name {
+            font-weight: 600;
+            font-size: 0.95em;
+            color: var(--text-color);
+            opacity: 0.9;
+        }
+
         .message-info {
             display: flex;
             align-items: center;
             gap: 12px;
+            margin-left: auto;
+            /* Push to the far right */
             flex-wrap: wrap;
-            /* Handle narrow screens */
         }
 
-        /* Show assistant actions permanently in the header row */
-        .message.assistant .message-actions {
+        /* Show actions permanently in the header row for all roles */
+        .message .message-actions {
             opacity: 1;
         }
 
@@ -4054,6 +4066,10 @@
             const messageInfoDiv = document.createElement('div');
             messageInfoDiv.className = 'message-info';
 
+            const nameDiv = document.createElement('div');
+            nameDiv.className = 'message-name';
+            nameDiv.textContent = modelSelector.value || 'Assistant';
+
             const timeDiv = document.createElement('div');
             timeDiv.className = 'message-time breathing-text';
             // Randomly select a cute thinking message
@@ -4072,13 +4088,13 @@
             // Make actions visible immediately for the new layout
             actionsDiv.style.opacity = '1';
 
-            // Add copy and delete buttons
+            // Order changed: Time -> Delete -> Copy
             actionsDiv.innerHTML = `
-                <button class="action-btn copy-btn" title="复制">
-                    <i class="fas fa-copy"></i>
-                </button>
                 <button class="action-btn delete-btn" title="删除">
                     <i class="fas fa-trash"></i>
+                </button>
+                <button class="action-btn copy-btn" title="复制">
+                    <i class="fas fa-copy"></i>
                 </button>
             `;
 
@@ -4086,6 +4102,7 @@
             messageInfoDiv.appendChild(actionsDiv);
 
             headerDiv.appendChild(avatarDiv);
+            headerDiv.appendChild(nameDiv); // Name next to avatar
             headerDiv.appendChild(messageInfoDiv);
 
             const contentDiv = document.createElement('div');
@@ -4504,11 +4521,11 @@
             const actionsDiv = document.createElement('div');
             actionsDiv.className = 'message-actions';
             actionsDiv.innerHTML = `
-                <button class="action-btn copy-btn" title="复制">
-                    <i class="fas fa-copy"></i>
-                </button>
                 <button class="action-btn delete-btn" title="删除">
                     <i class="fas fa-trash"></i>
+                </button>
+                <button class="action-btn copy-btn" title="复制">
+                    <i class="fas fa-copy"></i>
                 </button>
             `;
 
@@ -4516,45 +4533,52 @@
             timeDiv.className = 'message-time';
             timeDiv.textContent = timeString;
 
-            // DIFFERENT LAYOUT FOR ASSISTANT vs USER
+            // UNIFIED VERTICAL LAYOUT FOR ALL ROLES (User & Assistant)
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'message-header';
+
+            const nameDiv = document.createElement('div');
+            nameDiv.className = 'message-name';
+            nameDiv.textContent = role === 'user' ? '苑广山' : (modelSelector.value || 'Assistant');
+
+            const messageInfoDiv = document.createElement('div');
+            messageInfoDiv.className = 'message-info';
+
+            // Show top actions permanently
+            actionsDiv.style.opacity = '1';
+
+            messageInfoDiv.appendChild(timeDiv);
+            messageInfoDiv.appendChild(actionsDiv);
+
+            headerDiv.appendChild(avatarDiv);
+            headerDiv.appendChild(nameDiv); // Name next to avatar
+            headerDiv.appendChild(messageInfoDiv); // Metadata info (pushed right by CSS)
+
+            messageDiv.appendChild(headerDiv);
+
+            // Add Footer to contentWrapper only for Assistant (User questions are short, dual controls are redundant)
             if (role === 'assistant') {
-                // Vertical Layout for Assistant
-                const headerDiv = document.createElement('div');
-                headerDiv.className = 'message-header';
-
-                const messageInfoDiv = document.createElement('div');
-                messageInfoDiv.className = 'message-info';
-
-                // Show actions permanently or on hover? CSS handles hover, but struct needs to be here.
-                // For assistant, actions are in header next to time.
-                actionsDiv.style.opacity = '1'; // Make visible in header
-
-                messageInfoDiv.appendChild(timeDiv);
-                messageInfoDiv.appendChild(actionsDiv);
-
-                headerDiv.appendChild(avatarDiv);
-                headerDiv.appendChild(messageInfoDiv);
-
-                messageDiv.appendChild(headerDiv);
-                messageDiv.appendChild(contentWrapper);
-
-            } else {
-                // Standard Horizontal Layout for User
                 const footerDiv = document.createElement('div');
                 footerDiv.className = 'message-footer';
 
+                const footerTimeDiv = document.createElement('div');
+                footerTimeDiv.className = 'message-time';
+                footerTimeDiv.textContent = timeString;
+
+                const footerActionsDiv = document.createElement('div');
+                footerActionsDiv.className = 'message-actions';
+                footerActionsDiv.innerHTML = actionsDiv.innerHTML;
+
                 const timeActionsWrapper = document.createElement('div');
                 timeActionsWrapper.className = 'time-actions-wrapper';
-
-                timeActionsWrapper.appendChild(timeDiv);
-                timeActionsWrapper.appendChild(actionsDiv);
+                timeActionsWrapper.appendChild(footerTimeDiv);
+                timeActionsWrapper.appendChild(footerActionsDiv);
 
                 footerDiv.appendChild(timeActionsWrapper);
                 contentWrapper.appendChild(footerDiv);
-
-                messageDiv.appendChild(avatarDiv);
-                messageDiv.appendChild(contentWrapper);
             }
+
+            messageDiv.appendChild(contentWrapper);
 
             chatContainer.appendChild(messageDiv);
 
