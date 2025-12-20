@@ -547,27 +547,33 @@
 
         /* Logo Dropdown Menu */
         .logo-dropdown {
-            position: absolute;
-            top: calc(100% + 10px);
-            left: 0;
-            width: 260px;
+            position: fixed;
+            top: 70px;
+            left: 20px;
+            width: 280px;
             background: var(--sidebar-bg);
             border-radius: 12px;
             padding: 8px 0;
             box-shadow: var(--shadow-lg);
-            z-index: 100;
+            z-index: 1000;
             display: none;
             border: 1px solid var(--border-color);
             max-height: 400px;
             overflow-y: auto;
+            animation: fadeIn 0.2s ease;
+        }
+
+        @media (max-width: 768px) {
+            .logo-dropdown {
+                left: 10px;
+                top: 60px;
+                width: calc(100% - 20px);
+                max-width: 350px;
+            }
         }
 
         .logo-dropdown.show {
             display: block;
-        }
-
-        .logo-section {
-            position: relative;
         }
 
         /* Main Content Styles */
@@ -1963,13 +1969,9 @@
     <!-- Sidebar (hidden on mobile) -->
     <div class="sidebar">
         <div class="logo-section">
-            <div class="logo" id="logoContainer">
+            <div class="logo" id="logoContainer" style="cursor: pointer;">
                 <i class="fas fa-robot"></i>
                 <span>Poe API</span>
-            </div>
-            <div class="logo-dropdown" id="logoDropdown">
-                <div class="dropdown-header">Recent Chats</div>
-                <div id="logoDropdownHistoryList"></div>
             </div>
         </div>
 
@@ -2026,11 +2028,17 @@
         </div>
     </div>
 
+    <!-- Global Dropdowns -->
+    <div class="logo-dropdown" id="logoDropdown">
+        <div class="dropdown-header">Recent Chats</div>
+        <div id="logoDropdownHistoryList"></div>
+    </div>
+
     <!-- Main Content -->
     <div class="main-content">
         <div class="header">
             <div class="header-left">
-                <div class="logo-full">
+                <div class="logo-full" id="logoContainerHeader" style="cursor: pointer;">
                     <i class="fas fa-robot"></i>
                     <span class="logo-text">POE</span>
                 </div>
@@ -2253,21 +2261,43 @@
 
             // Add click listener for logo to toggle logo dropdown
             const logoContainer = document.getElementById('logoContainer');
+            const logoContainerHeader = document.getElementById('logoContainerHeader');
             const logoDropdown = document.getElementById('logoDropdown');
-            if (logoContainer && logoDropdown) {
-                logoContainer.addEventListener('click', function (event) {
-                    event.stopPropagation();
-                    // Close the new chat dropdown if open
-                    newChatDropdown.classList.remove('show');
-                    // Toggle the logo dropdown
-                    logoDropdown.classList.toggle('show');
-                });
+
+            function toggleLogoDropdown(event) {
+                event.stopPropagation();
+                // Close the new chat dropdown if open
+                if (newChatDropdown) newChatDropdown.classList.remove('show');
+                // Toggle the logo dropdown
+                if (logoDropdown) logoDropdown.classList.toggle('show');
+
+                // Position the dropdown if on desktop sidebar
+                if (window.innerWidth > 768 && logoDropdown.classList.contains('show')) {
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    logoDropdown.style.top = (rect.bottom + 10) + 'px';
+                    logoDropdown.style.left = rect.left + 'px';
+                } else if (logoDropdown.classList.contains('show')) {
+                    // Mobile position is handled by CSS mostly, but let's ensure top
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    logoDropdown.style.top = (rect.bottom + 10) + 'px';
+                }
+            }
+
+            if (logoContainer) {
+                logoContainer.addEventListener('click', toggleLogoDropdown);
+            }
+            if (logoContainerHeader) {
+                logoContainerHeader.addEventListener('click', toggleLogoDropdown);
             }
 
             // Handle clicks outside the logo dropdown to close it
             document.addEventListener('click', function (event) {
-                if (logoContainer && !logoContainer.contains(event.target) && logoDropdown && logoDropdown.classList.contains('show')) {
-                    logoDropdown.classList.remove('show');
+                if (logoDropdown && logoDropdown.classList.contains('show')) {
+                    const isLogoClick = (logoContainer && logoContainer.contains(event.target)) ||
+                        (logoContainerHeader && logoContainerHeader.contains(event.target));
+                    if (!isLogoClick && !logoDropdown.contains(event.target)) {
+                        logoDropdown.classList.remove('show');
+                    }
                 }
             });
 
