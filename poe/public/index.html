@@ -3160,7 +3160,8 @@
                     role: msg.classList.contains('user') ? 'user' : 'assistant',
                     content: msg.querySelector('.content').innerHTML,
                     rawContent: msg.querySelector('.content').dataset.raw || '',
-                    timestamp: msg.dataset.timestamp || Date.now()
+                    timestamp: msg.dataset.timestamp || Date.now(),
+                    model: msg.dataset.model || null // Harvest the specific model for this message
                 });
             });
 
@@ -3623,7 +3624,8 @@
 
                 if (conv.messages) {
                     conv.messages.forEach(msg => {
-                        addMessageToDOM(msg.role, msg.raw_content || msg.rawContent, msg.content, msg.timestamp);
+                        // Pass msg.model from database to addMessageToDOM
+                        addMessageToDOM(msg.role, msg.raw_content || msg.rawContent, msg.content, msg.timestamp, msg.model);
                     });
                 }
 
@@ -4068,7 +4070,11 @@
 
             const nameDiv = document.createElement('div');
             nameDiv.className = 'message-name';
-            nameDiv.textContent = modelSelector.value || 'Assistant';
+            const modelName = modelSelector.value || 'Assistant';
+            nameDiv.textContent = modelName;
+
+            // Store the model name in the dataset so finalize can use it
+            messageDiv.dataset.model = modelName;
 
             const timeDiv = document.createElement('div');
             timeDiv.className = 'message-time breathing-text';
@@ -4287,7 +4293,10 @@
         // Remove temporary assistant message and add final message
         function finalizeAssistantMessage(content, timestamp) {
             const tempMessage = document.getElementById('temp-assistant-message');
+            let modelName = null;
             if (tempMessage) {
+                // Retrieve the model name from the temporary message's dataset
+                modelName = tempMessage.dataset.model;
                 // Remove the temporary message completely
                 tempMessage.remove();
             }
@@ -4295,8 +4304,8 @@
             // Ensure content is not empty if stopped or failed
             const finalContent = content || '...';
 
-            // Add the final message with normal styling (no streaming effects)
-            addMessageToDOM('assistant', finalContent, null, timestamp);
+            // Add the final message with the model name used during generation
+            addMessageToDOM('assistant', finalContent, null, timestamp, modelName);
         }
 
         async function callPoeAPI(messages, model, onContentUpdate, signal = null) {
@@ -4484,7 +4493,7 @@
             });
         }
 
-        function addMessageToDOM(role, rawContent, htmlContent = null, timestamp = Date.now()) {
+        function addMessageToDOM(role, rawContent, htmlContent = null, timestamp = Date.now(), messageModel = null) {
             const welcomeMessage = chatContainer.querySelector('.welcome-message');
             if (welcomeMessage) {
                 welcomeMessage.remove();
@@ -4539,7 +4548,14 @@
 
             const nameDiv = document.createElement('div');
             nameDiv.className = 'message-name';
-            nameDiv.textContent = role === 'user' ? '苑广山' : (modelSelector.value || 'Assistant');
+            // Use provided messageModel if available (e.g. from history), otherwise fall back to current selector
+            const modelName = role === 'user' ? '苑广山' : (messageModel || modelSelector.value || 'Assistant');
+            nameDiv.textContent = modelName;
+
+            // Store the model name for future saving
+            if (role === 'assistant') {
+                messageDiv.dataset.model = modelName;
+            }
 
             const messageInfoDiv = document.createElement('div');
             messageInfoDiv.className = 'message-info';

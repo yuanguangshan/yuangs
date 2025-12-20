@@ -65,9 +65,9 @@ export default {
                             // 删除旧消息（依靠之前建立的索引，这里会非常快）
                             batch.push(env.DB.prepare("DELETE FROM messages WHERE conversation_id = ?").bind(data.id));
 
-                            const stmt = env.DB.prepare("INSERT INTO messages (conversation_id, role, content, raw_content, timestamp) VALUES (?, ?, ?, ?, ?)");
+                            const stmt = env.DB.prepare("INSERT INTO messages (conversation_id, role, content, raw_content, timestamp, model) VALUES (?, ?, ?, ?, ?, ?)");
                             data.messages.forEach((msg: any) => {
-                                batch.push(stmt.bind(data.id, msg.role, msg.content, msg.rawContent || '', msg.timestamp || timestamp));
+                                batch.push(stmt.bind(data.id, msg.role, msg.content, msg.rawContent || '', msg.timestamp || timestamp, msg.model || null));
                             });
                         }
 
