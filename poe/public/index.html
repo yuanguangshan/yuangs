@@ -1409,6 +1409,42 @@
             animation: moon-rotate 3s linear infinite;
         }
 
+        /* Code Copy Button Styles */
+        .markdown-body pre {
+            position: relative;
+        }
+
+        .code-copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: rgba(255, 255, 255, 0.6);
+            padding: 4px 8px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            z-index: 10;
+            backdrop-filter: blur(4px);
+        }
+
+        .code-copy-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .code-copy-btn.success {
+            background: rgba(16, 163, 127, 0.3);
+            border-color: rgba(16, 163, 127, 0.5);
+            color: #4ade80;
+        }
+
         @keyframes moon-rotate {
             0% {
                 transform: rotate(0deg);
@@ -3406,6 +3442,11 @@
 
             chatContainer.appendChild(messageDiv);
 
+            // Add copy buttons to any code blocks in the new message
+            if (typeof addCopyButtonsToCodeBlocks === 'function') {
+                addCopyButtonsToCodeBlocks(contentDiv);
+            }
+
             // Add entrance animation
             messageDiv.style.opacity = '0';
             messageDiv.style.transform = 'translateY(20px)';
@@ -3495,11 +3536,55 @@
                 // Apply fancy glow effect to the content for streaming
                 tempContent.classList.add('stream-highlight');
 
+                // Add copy buttons to code blocks
+                addCopyButtonsToCodeBlocks(tempContent);
+
                 // Use requestAnimationFrame for more reliable scrolling on mobile
                 requestAnimationFrame(() => {
                     chatContainer.scrollTop = chatContainer.scrollHeight;
                 });
             }
+        }
+
+        // Add copy buttons to all pre tags in a container
+        function addCopyButtonsToCodeBlocks(container) {
+            const preBlocks = container.querySelectorAll('pre');
+            preBlocks.forEach(pre => {
+                // If button already exists, skip
+                if (pre.querySelector('.code-copy-btn')) return;
+
+                const button = document.createElement('button');
+                button.className = 'code-copy-btn';
+                button.innerHTML = '<i class="far fa-copy"></i> Copy';
+                button.title = 'Copy code';
+
+                const code = pre.querySelector('code');
+                const textToCopy = code ? code.innerText : pre.innerText;
+
+                button.onclick = (e) => {
+                    e.stopPropagation();
+                    copyCode(textToCopy, button);
+                };
+
+                pre.appendChild(button);
+            });
+        }
+
+        // Global copy code function with feedback
+        function copyCode(text, button) {
+            navigator.clipboard.writeText(text).then(() => {
+                const originalContent = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                button.classList.add('success');
+
+                setTimeout(() => {
+                    button.innerHTML = originalContent;
+                    button.classList.remove('success');
+                }, 2000);
+            }).catch(err => {
+                console.error('Could not copy text: ', err);
+                alert('Copy failed');
+            });
         }
 
         // Remove temporary assistant message and add final message
@@ -3767,6 +3852,11 @@
             messageDiv.appendChild(contentWrapper);
 
             chatContainer.appendChild(messageDiv);
+
+            // Add copy buttons to any code blocks in the new message
+            if (typeof addCopyButtonsToCodeBlocks === 'function') {
+                addCopyButtonsToCodeBlocks(contentDiv);
+            }
 
             // Add entrance animation
             messageDiv.style.opacity = '0';
