@@ -55,6 +55,14 @@
             box-sizing: border-box;
             font-family: var(--font-family);
             -webkit-font-smoothing: antialiased;
+            max-width: 100%; /* Prevent any element from exceeding container width */
+        }
+
+        .constrained-content {
+            max-width: 100%;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            word-break: break-word;
         }
 
         body {
@@ -65,6 +73,7 @@
             min-height: 100vh;
             height: 100vh;
             overflow: hidden;
+            overflow-x: hidden; /* Prevent any horizontal scrolling on the page */
         }
 
         @media (max-width: 768px) {
@@ -323,6 +332,64 @@
             text-align: center;
         }
 
+        .account-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: auto;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 20px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: var(--primary-color);
+        }
+
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+
+        .account-label {
+            font-size: 12px;
+            font-weight: 600;
+            min-width: 30px;
+        }
+
         .dropdown-divider {
             height: 1px;
             background: rgba(255, 255, 255, 0.1);
@@ -427,6 +494,7 @@
             height: 100%;
             position: relative;
             background: var(--background-dark);
+            overflow-x: hidden; /* Prevent horizontal scrolling */
         }
 
         @media (max-width: 768px) {
@@ -545,6 +613,9 @@
             display: flex;
             flex-direction: column;
             gap: 24px;
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden; /* Prevent horizontal scrolling */
         }
 
         .chat-container::-webkit-scrollbar {
@@ -641,6 +712,8 @@
             overflow-wrap: break-word;
             word-wrap: break-word;
             word-break: break-word;
+            max-width: 100%;
+            overflow-x: hidden; /* Prevent horizontal overflow */
         }
 
         .message-time {
@@ -869,6 +942,11 @@
             line-height: 1.8;
             font-size: 15px;
             color: rgb(220, 220, 230);
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            word-break: break-word;
+            max-width: 100%;
+            overflow-x: hidden;
         }
 
         .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4, .markdown-body h5, .markdown-body h6 {
@@ -973,9 +1051,12 @@
             background: rgba(30, 30, 40, 0.5);
             border-radius: 8px;
             padding: 18px;
-            overflow: auto;
+            overflow-x: auto; /* Allow horizontal scroll for code blocks only */
+            overflow-y: hidden;
             margin: 18px 0;
             border: thin solid rgba(102, 126, 234, 0.3);
+            max-width: 100%;
+            word-wrap: normal; /* Don't break words in code blocks */
         }
 
         .markdown-body code {
@@ -986,6 +1067,9 @@
             border-radius: 4px;
             border: 1px solid rgb(60, 60, 80);
             color: rgb(255, 180, 100);
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            max-width: 100%;
         }
 
         .markdown-body pre code {
@@ -995,6 +1079,7 @@
             color: inherit;
             overflow-x: auto;
             line-height: 1.5;
+            word-wrap: normal; /* Preserve code formatting */
         }
 
         .markdown-body blockquote {
@@ -1020,6 +1105,9 @@
             width: 100%;
             border-collapse: collapse;
             margin: 18px 0;
+            table-layout: fixed; /* Prevent table from overflowing */
+            max-width: 100%;
+            overflow-wrap: break-word;
         }
 
         .markdown-body th {
@@ -1514,6 +1602,17 @@
                     <i class="fas fa-plus"></i>
                     <span>New Chat</span>
                 </div>
+                <div class="dropdown-option">
+                    <i class="fas fa-user"></i>
+                    <span>Account Type</span>
+                    <div class="account-toggle">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="accountTypeToggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="account-label" id="accountLabel">Free</span>
+                    </div>
+                </div>
                 <div class="dropdown-divider"></div>
                 <div class="dropdown-header">Recent Chats</div>
                 <div id="dropdownHistoryList"></div>
@@ -1705,6 +1804,22 @@
                 newChatOption.addEventListener('click', function() {
                     startNewConversation();
                     newChatDropdown.classList.remove('show');
+                });
+            }
+
+            // Add event listener for account type toggle
+            const accountTypeToggle = document.getElementById('accountTypeToggle');
+            const accountLabel = document.getElementById('accountLabel');
+            if (accountTypeToggle && accountLabel) {
+                // Load saved account type preference or default to free
+                const savedAccountType = localStorage.getItem('accountType') || 'free';
+                accountTypeToggle.checked = (savedAccountType === 'paid');
+                accountLabel.textContent = savedAccountType.charAt(0).toUpperCase() + savedAccountType.slice(1);
+
+                accountTypeToggle.addEventListener('change', function() {
+                    const accountType = this.checked ? 'paid' : 'free';
+                    accountLabel.textContent = accountType.charAt(0).toUpperCase() + accountType.slice(1);
+                    localStorage.setItem('accountType', accountType);
                 });
             }
 
@@ -2812,6 +2927,9 @@
             // Always use streaming when callback is provided (for smooth UI updates)
             const shouldStream = typeof onContentUpdate === 'function';
 
+            // Get the current account type from localStorage, default to 'free'
+            const accountType = localStorage.getItem('accountType') || 'free';
+
             const response = await fetch(`${apiBaseUrl}/v1/chat/completions`, {
                 method: 'POST',
                 headers: {
@@ -2821,7 +2939,8 @@
                     model: model,
                     messages: messages,
                     temperature: 0.7,
-                    stream: shouldStream
+                    stream: shouldStream,
+                    account: accountType  // Add account type to the request
                 })
             });
 
