@@ -2020,6 +2020,10 @@
                         <option value="solarized">Solarized</option>
                     </select>
                 </div>
+                <div class="dropdown-option" id="exportAllBtn">
+                    <i class="fas fa-download"></i>
+                    <span>Export All Chats</span>
+                </div>
                 <div class="dropdown-divider"></div>
                 <div class="dropdown-header">Recent Chats</div>
                 <div id="dropdownHistoryList"></div>
@@ -2098,6 +2102,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script>
         // DOM Elements
         const chatContainer = document.getElementById('chatContainer');
@@ -2267,6 +2272,16 @@
                     const selectedScheme = this.value;
                     applyColorScheme(selectedScheme);
                     localStorage.setItem('colorScheme', selectedScheme);
+                });
+            }
+
+            // Add event listener for export all chats button
+            const exportAllBtn = document.getElementById('exportAllBtn');
+            if (exportAllBtn) {
+                exportAllBtn.addEventListener('click', function () {
+                    exportAllConversations();
+                    // Close the dropdown after clicking
+                    if (newChatDropdown) newChatDropdown.classList.remove('show');
                 });
             }
 
@@ -2515,12 +2530,34 @@
                 <div class="history-title-row">
                     <div class="history-title" title="${title}">${title}</div>
                     <div class="history-actions">
-                        <button class="action-btn rename-btn" title="Rename" onclick="event.stopPropagation(); renameConversation('${sessionId}', '${title.replace(/'/g, "\\'")}')">✎</button>
-                        <button class="action-btn delete-btn" title="Delete" onclick="event.stopPropagation(); deleteConversation('${sessionId}')">🗑️</button>
+                        <button class="action-btn rename-btn" title="Rename">✎</button>
+                        <button class="action-btn export-btn" title="Export">⬇️</button>
+                        <button class="action-btn delete-btn" title="Delete">🗑️</button>
                     </div>
                 </div>
                 <div class="history-time">${dateString} ${timeString}</div>
             `;
+
+            // Add rename button functionality
+            const renameBtn = historyItem.querySelector('.rename-btn');
+            renameBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                renameConversation(sessionId, title);
+            });
+
+            // Add export button functionality
+            const exportBtn = historyItem.querySelector('.export-btn');
+            exportBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                exportConversation(sessionId);
+            });
+
+            // Add delete button functionality
+            const deleteBtn = historyItem.querySelector('.delete-btn');
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteConversation(sessionId);
+            });
 
             historyItem.addEventListener('click', () => {
                 if (currentSession === sessionId) return;
@@ -2563,7 +2600,7 @@
                 dropdownHistoryItem.className = 'dropdown-option';
                 dropdownHistoryItem.dataset.sessionId = sessionId;
 
-                // Create the inner structure with edit/delete buttons
+                // Create the inner structure with edit/export/delete buttons
                 dropdownHistoryItem.innerHTML = `
                     <div style="display: flex; align-items: center; flex: 1; gap: 8px;">
                         <i class="fas fa-comment"></i>
@@ -2572,6 +2609,9 @@
                     <div class="dropdown-actions">
                         <button class="dropdown-action-btn edit-btn" title="Rename">
                             <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="dropdown-action-btn export-btn" title="Export">
+                            <i class="fas fa-download"></i>
                         </button>
                         <button class="dropdown-action-btn delete-btn" title="Delete">
                             <i class="fas fa-trash"></i>
@@ -2624,6 +2664,13 @@
                     deleteHistoryItem(sessionId);
                 });
 
+                // Add export button functionality
+                const exportBtn = dropdownHistoryItem.querySelector('.export-btn');
+                exportBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    exportConversation(sessionId);
+                });
+
                 dropdownHistoryList.prepend(dropdownHistoryItem);
             }
 
@@ -2634,7 +2681,7 @@
                 logoDropdownHistoryItem.className = 'dropdown-option';
                 logoDropdownHistoryItem.dataset.sessionId = sessionId;
 
-                // Create the inner structure with edit/delete buttons
+                // Create the inner structure with edit/export/delete buttons
                 logoDropdownHistoryItem.innerHTML = `
                     <div style="display: flex; align-items: center; flex: 1; gap: 8px;">
                         <i class="fas fa-comment"></i>
@@ -2643,6 +2690,9 @@
                     <div class="dropdown-actions">
                         <button class="dropdown-action-btn edit-btn" title="Rename">
                             <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="dropdown-action-btn export-btn" title="Export">
+                            <i class="fas fa-download"></i>
                         </button>
                         <button class="dropdown-action-btn delete-btn" title="Delete">
                             <i class="fas fa-trash"></i>
@@ -2695,6 +2745,13 @@
                 deleteBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     deleteHistoryItem(sessionId);
+                });
+
+                // Add export button functionality
+                const exportBtn = logoDropdownHistoryItem.querySelector('.export-btn');
+                exportBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    exportConversation(sessionId);
                 });
 
                 logoDropdownHistoryList.prepend(logoDropdownHistoryItem);
@@ -2926,12 +2983,34 @@
                             <div class="history-title-row">
                                 <div class="history-title" title="${conv.title}">${conv.title}</div>
                                 <div class="history-actions">
-                                    <button class="action-btn rename-btn" title="Rename" onclick="event.stopPropagation(); renameConversation('${conv.id}', '${conv.title.replace(/'/g, "\\'")}')">✎</button>
-                                    <button class="action-btn delete-btn" title="Delete" onclick="event.stopPropagation(); deleteConversation('${conv.id}')">🗑️</button>
+                                    <button class="action-btn rename-btn" title="Rename">✎</button>
+                                    <button class="action-btn export-btn" title="Export">⬇️</button>
+                                    <button class="action-btn delete-btn" title="Delete">🗑️</button>
                                 </div>
                             </div>
                             <div class="history-time">${dateString} ${timeString}</div>
                         `;
+
+                        // Add rename button functionality
+                        const renameBtn = historyItem.querySelector('.rename-btn');
+                        renameBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            renameConversation(conv.id, conv.title);
+                        });
+
+                        // Add export button functionality
+                        const exportBtn = historyItem.querySelector('.export-btn');
+                        exportBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            exportConversation(conv.id);
+                        });
+
+                        // Add delete button functionality
+                        const deleteBtn = historyItem.querySelector('.delete-btn');
+                        deleteBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            deleteConversation(conv.id);
+                        });
 
                         historyItem.addEventListener('click', () => {
                             if (currentSession) saveCurrentSession();
@@ -2966,7 +3045,7 @@
                             dropdownHistoryItem.className = 'dropdown-option';
                             dropdownHistoryItem.dataset.sessionId = conv.id;
 
-                            // Create the inner structure with edit/delete buttons
+                            // Create the inner structure with edit/export/delete buttons
                             dropdownHistoryItem.innerHTML = `
                                 <div style="display: flex; align-items: center; flex: 1; gap: 8px;">
                                     <i class="fas fa-comment"></i>
@@ -2975,6 +3054,9 @@
                                 <div class="dropdown-actions">
                                     <button class="dropdown-action-btn edit-btn" title="Rename">
                                         <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="dropdown-action-btn export-btn" title="Export">
+                                        <i class="fas fa-download"></i>
                                     </button>
                                     <button class="dropdown-action-btn delete-btn" title="Delete">
                                         <i class="fas fa-trash"></i>
@@ -3026,6 +3108,13 @@
                                 deleteHistoryItem(conv.id);
                             });
 
+                            // Add export button functionality
+                            const exportBtn = dropdownHistoryItem.querySelector('.export-btn');
+                            exportBtn.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                exportConversation(conv.id);
+                            });
+
                             dropdownHistoryList.appendChild(dropdownHistoryItem);
                         }
 
@@ -3035,7 +3124,7 @@
                             logoDropdownHistoryItem.className = 'dropdown-option';
                             logoDropdownHistoryItem.dataset.sessionId = conv.id;
 
-                            // Create the inner structure with edit/delete buttons
+                            // Create the inner structure with edit/export/delete buttons
                             logoDropdownHistoryItem.innerHTML = `
                                 <div style="display: flex; align-items: center; flex: 1; gap: 8px;">
                                     <i class="fas fa-comment"></i>
@@ -3044,6 +3133,9 @@
                                 <div class="dropdown-actions">
                                     <button class="dropdown-action-btn edit-btn" title="Rename">
                                         <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="dropdown-action-btn export-btn" title="Export">
+                                        <i class="fas fa-download"></i>
                                     </button>
                                     <button class="dropdown-action-btn delete-btn" title="Delete">
                                         <i class="fas fa-trash"></i>
@@ -3095,6 +3187,13 @@
                             deleteBtn.addEventListener('click', (e) => {
                                 e.stopPropagation();
                                 deleteHistoryItem(conv.id);
+                            });
+
+                            // Add export button functionality
+                            const exportBtn = logoDropdownHistoryItem.querySelector('.export-btn');
+                            exportBtn.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                exportConversation(conv.id);
                             });
 
                             logoDropdownHistoryList.appendChild(logoDropdownHistoryItem);
@@ -3887,6 +3986,199 @@
                 if (messageElement.id === 'temp-assistant-message') {
                     removeTypingIndicator();
                 }
+            }
+        }
+
+        async function exportConversation(sessionId) {
+            try {
+                const res = await fetch(`/api/history/${sessionId}`);
+                if (!res.ok) throw new Error('Failed to load conversation');
+                const conv = await res.json();
+
+                // Create markdown content
+                let markdownContent = `# ${conv.title}\n\n`;
+                markdownContent += `> Model: ${conv.model || 'Unknown'}\n`;
+                // Convert timestamp to date - handle various possible formats
+                let dateValue;
+                if (conv.timestamp instanceof Date) {
+                    dateValue = conv.timestamp;
+                } else if (typeof conv.timestamp === 'string' || typeof conv.timestamp === 'number') {
+                    dateValue = new Date(conv.timestamp);
+                } else if (conv.created_at) {
+                    // Fallback to created_at if timestamp is not available in expected format
+                    dateValue = new Date(conv.created_at);
+                } else {
+                    // If no valid date found, use current date
+                    dateValue = new Date();
+                }
+
+                // Check if the date is valid
+                const dateString = isNaN(dateValue.getTime()) ? new Date().toLocaleString() : dateValue.toLocaleString();
+                markdownContent += `> Date: ${dateString}\n\n`;
+
+                if (conv.messages) {
+                    conv.messages.forEach(msg => {
+                        const role = msg.role === 'user' ? 'User' : 'Assistant';
+                        const content = msg.raw_content || msg.rawContent || msg.content || '';
+
+                        markdownContent += `## ${role}\n\n`;
+                        markdownContent += `${content}\n\n`;
+                    });
+                }
+
+                // Create a downloadable file
+                const blob = new Blob([markdownContent], { type: 'text/markdown' });
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement('a');
+                a.href = url;
+                // Sanitize filename: replace special characters but keep letters, numbers, and common punctuation
+                let sanitizedTitle = conv.title.replace(/[^a-z0-9\u4e00-\u9fa5\u3400-\u4dbf\u3040-\u309f\u30a0-\u30ff\u31f0-\u31ff\uac00-\ud7af\s\-_]/gi, '_').substring(0, 50);
+                // Remove trailing underscores and spaces
+                sanitizedTitle = sanitizedTitle.replace(/[\s_]+$/, '');
+                a.download = `${sanitizedTitle || 'conversation'}.md`;
+                document.body.appendChild(a);
+                a.click();
+
+                // Clean up
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
+            } catch (e) {
+                console.error("Export failed:", e);
+                alert("Failed to export conversation: " + e.message);
+            }
+        }
+
+        async function exportAllConversations() {
+            try {
+                const res = await fetch('/api/history');
+                if (!res.ok) throw new Error('Failed to load conversations');
+                const conversations = await res.json();
+
+                if (conversations.length === 0) {
+                    alert('No conversations to export.');
+                    return;
+                }
+
+                // Create a zip file containing all conversations as separate markdown files
+                // First, let's try to use the JSZip library if available, otherwise export as a single file
+                if (typeof JSZip !== 'undefined') {
+                    // Use JSZip to create a zip file
+                    const zip = new JSZip();
+
+                    for (const conv of conversations) {
+                        try {
+                            const convRes = await fetch(`/api/history/${conv.id}`);
+                            if (!convRes.ok) continue;
+                            const fullConv = await convRes.json();
+
+                            let markdownContent = `# ${fullConv.title}\n\n`;
+                            markdownContent += `> Model: ${fullConv.model || 'Unknown'}\n`;
+                            markdownContent += `> Date: ${new Date(fullConv.timestamp).toLocaleString()}\n\n`;
+
+                            if (fullConv.messages) {
+                                fullConv.messages.forEach(msg => {
+                                    const role = msg.role === 'user' ? 'User' : 'Assistant';
+                                    const content = msg.raw_content || msg.rawContent || msg.content || '';
+
+                                    markdownContent += `## ${role}\n\n`;
+                                    markdownContent += `${content}\n\n`;
+                                });
+                            }
+
+                            // Sanitize filename: replace special characters but keep letters, numbers, and common punctuation
+                            let sanitizedTitle = fullConv.title.replace(/[^a-z0-9\u4e00-\u9fa5\u3400-\u4dbf\u3040-\u309f\u30a0-\u30ff\u31f0-\u31ff\uac00-\ud7af\s\-_]/gi, '_').substring(0, 50);
+                            // Remove trailing underscores and spaces
+                            sanitizedTitle = sanitizedTitle.replace(/[\s_]+$/, '');
+                            const fileName = `${sanitizedTitle || 'conversation'}.md`;
+                            zip.file(fileName, markdownContent);
+                        } catch (e) {
+                            console.error(`Failed to export conversation ${conv.id}:`, e);
+                        }
+                    }
+
+                    const zipBlob = await zip.generateAsync({type: "blob"});
+                    const url = URL.createObjectURL(zipBlob);
+
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `all_conversations_${new Date().toISOString().slice(0, 10)}.zip`;
+                    document.body.appendChild(a);
+                    a.click();
+
+                    // Clean up
+                    setTimeout(() => {
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    }, 100);
+                } else {
+                    // Export as a single combined markdown file if JSZip is not available
+                    let combinedMarkdown = `# All Conversations Export\n\n`;
+                    combinedMarkdown += `> Exported on: ${new Date().toLocaleString()}\n\n`;
+
+                    for (const conv of conversations) {
+                        try {
+                            const convRes = await fetch(`/api/history/${conv.id}`);
+                            if (!convRes.ok) continue;
+                            const fullConv = await convRes.json();
+
+                            combinedMarkdown += `# ${fullConv.title}\n\n`;
+                            combinedMarkdown += `> Model: ${fullConv.model || 'Unknown'}\n`;
+                            // Convert timestamp to date - handle various possible formats
+                            let dateValue;
+                            if (fullConv.timestamp instanceof Date) {
+                                dateValue = fullConv.timestamp;
+                            } else if (typeof fullConv.timestamp === 'string' || typeof fullConv.timestamp === 'number') {
+                                dateValue = new Date(fullConv.timestamp);
+                            } else if (fullConv.created_at) {
+                                // Fallback to created_at if timestamp is not available in expected format
+                                dateValue = new Date(fullConv.created_at);
+                            } else {
+                                // If no valid date found, use current date
+                                dateValue = new Date();
+                            }
+
+                            // Check if the date is valid
+                            const dateString = isNaN(dateValue.getTime()) ? new Date().toLocaleString() : dateValue.toLocaleString();
+                            combinedMarkdown += `> Date: ${dateString}\n\n`;
+
+                            if (fullConv.messages) {
+                                fullConv.messages.forEach(msg => {
+                                    const role = msg.role === 'user' ? 'User' : 'Assistant';
+                                    const content = msg.raw_content || msg.rawContent || msg.content || '';
+
+                                    combinedMarkdown += `## ${role}\n\n`;
+                                    combinedMarkdown += `${content}\n\n`;
+                                });
+                            }
+
+                            combinedMarkdown += `---\n\n`; // Separator between conversations
+                        } catch (e) {
+                            console.error(`Failed to export conversation ${conv.id}:`, e);
+                        }
+                    }
+
+                    // Create a downloadable file
+                    const blob = new Blob([combinedMarkdown], { type: 'text/markdown' });
+                    const url = URL.createObjectURL(blob);
+
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `all_conversations_${new Date().toISOString().slice(0, 10)}.md`;
+                    document.body.appendChild(a);
+                    a.click();
+
+                    // Clean up
+                    setTimeout(() => {
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    }, 100);
+                }
+            } catch (e) {
+                console.error("Export all failed:", e);
+                alert("Failed to export all conversations: " + e.message);
             }
         }
 
