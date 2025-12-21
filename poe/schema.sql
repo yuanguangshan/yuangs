@@ -1,5 +1,4 @@
-DROP TABLE IF EXISTS messages;
-DROP TABLE IF EXISTS conversations;
+-- Database Schema
 
 CREATE TABLE conversations (
     id TEXT PRIMARY KEY,
