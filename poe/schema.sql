@@ -16,5 +16,6 @@ CREATE TABLE messages (
     raw_content TEXT,
     timestamp INTEGER,
     model TEXT,
-    FOREIGN KEY(conversation_id) REFERENCES conversations(id)
+    FOREIGN KEY(conversation_id) REFERENCES conversations(id),
+    UNIQUE(conversation_id, role, timestamp)
 );

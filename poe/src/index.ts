@@ -14,10 +14,10 @@ const corsHeaders = {
 };
 
 // 辅助函数：返回 JSON 响应
-const jsonResponse = (data: any, status = 200) => {
+const jsonResponse = (data: any, status = 200, extraHeaders = {}) => {
     return new Response(JSON.stringify(data), {
         status,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', ...extraHeaders }
     });
 };
 
@@ -42,10 +42,16 @@ export default {
                         const { results } = await env.DB.prepare(
                             "SELECT id, title, model, created_at FROM conversations ORDER BY created_at DESC LIMIT 50"
                         ).all();
-                        return jsonResponse(results.map((c: any) => ({ ...c, timestamp: c.created_at })));
+                        // 增加 60 秒浏览器缓存，减少重复刷新时的 READ 消耗
+                        return jsonResponse(
+                            results.map((c: any) => ({ ...c, timestamp: c.created_at })),
+                            200,
+                            { 'Cache-Control': 'public, max-age=60' }
+                        );
                     }
 
                     // 【优化】保存对话：使用 batch 提升写入性能
+                    // 【优化】保存对话：使用增量写入，极大减少单次请求的写入行数
                     if (request.method === 'POST') {
                         const data = await request.json() as any;
                         if (!data.id) return jsonResponse({ error: "Missing ID" }, 400);
@@ -62,10 +68,9 @@ export default {
 
                         // 如果传了消息列表，则同步
                         if (data.messages && Array.isArray(data.messages)) {
-                            // 删除旧消息（依靠之前建立的索引，这里会非常快）
-                            batch.push(env.DB.prepare("DELETE FROM messages WHERE conversation_id = ?").bind(data.id));
-
-                            const stmt = env.DB.prepare("INSERT INTO messages (conversation_id, role, content, raw_content, timestamp, model) VALUES (?, ?, ?, ?, ?, ?)");
+                            // 【核心优化】不再删除旧消息，而是使用 INSERT OR IGNORE 增量插入
+                            // 配合 schema 中的 UNIQUE 约束，数据库会自动跳过已存在的历史消息
+                            const stmt = env.DB.prepare("INSERT OR IGNORE INTO messages (conversation_id, role, content, raw_content, timestamp, model) VALUES (?, ?, ?, ?, ?, ?)");
                             data.messages.forEach((msg: any) => {
                                 batch.push(stmt.bind(data.id, msg.role, msg.content, msg.rawContent || '', msg.timestamp || timestamp, msg.model || null));
                             });
