@@ -3365,7 +3365,7 @@
             const renameBtn = historyItem.querySelector('.rename-btn');
             renameBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                renameConversation(sessionId, title);
+                enterRenameMode(sessionId, title, historyItem);
             });
 
             // Add export button functionality
@@ -3629,22 +3629,66 @@
             }
         }
 
-        async function renameConversation(id, currentTitle) {
-            const newTitle = prompt("Enter new title:", currentTitle);
-            if (newTitle && newTitle.trim() !== "" && newTitle !== currentTitle) {
-                try {
-                    await fetch(`/api/history/${id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ title: newTitle.trim() })
-                    });
-                    loadHistory();
-                    if (conversations[id]) conversations[id].title = newTitle.trim();
-                } catch (e) {
-                    console.error("Rename failed", e);
-                    alert("Failed to rename");
+        function enterRenameMode(id, currentTitle, itemElement) {
+            const isDropdown = itemElement.classList.contains('dropdown-option');
+            const titleSelector = isDropdown ? '.dropdown-title' : '.history-title';
+            const actionsSelector = isDropdown ? '.dropdown-actions' : '.history-actions';
+
+            const titleDiv = itemElement.querySelector(titleSelector);
+            const actionsDiv = itemElement.querySelector(actionsSelector);
+            if (!titleDiv) return;
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'rename-input';
+            input.value = currentTitle;
+            
+            // Replace title with input
+            titleDiv.style.display = 'none';
+            if (actionsDiv) actionsDiv.style.display = 'none';
+            
+            // Insert input before the title div
+            titleDiv.parentElement.insertBefore(input, titleDiv);
+            input.focus();
+            input.select();
+
+            const cleanup = () => {
+                input.remove();
+                titleDiv.style.display = '';
+                if (actionsDiv) actionsDiv.style.display = '';
+            };
+
+            const saveRename = async () => {
+                const newTitle = input.value.trim();
+                cleanup();
+
+                if (newTitle && newTitle !== currentTitle) {
+                    try {
+                        const response = await fetch(`/api/history/${id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ title: newTitle })
+                        });
+                        if (!response.ok) throw new Error('Failed to save title');
+                        
+                        // Reload history to ensure all UI parts are consistent
+                        loadHistory(); 
+
+                    } catch (e) {
+                        console.error("Rename failed", e);
+                        alert("Failed to rename");
+                    }
                 }
-            }
+            };
+
+            input.addEventListener('blur', saveRename);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    saveRename();
+                } else if (e.key === 'Escape') {
+                    cleanup();
+                }
+            });
         }
 
         async function deleteConversation(id) {
@@ -3670,40 +3714,6 @@
                 } catch (e) {
                     console.error("Delete failed", e);
                     alert("Failed to delete");
-                }
-            }
-        }
-
-        function renameHistoryItem(id, currentTitle, dropdownItem) {
-            const newTitle = prompt("Enter new title:", currentTitle);
-            if (newTitle && newTitle.trim() !== "" && newTitle !== currentTitle) {
-                try {
-                    fetch(`/api/history/${id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ title: newTitle.trim() })
-                    })
-                        .then(response => {
-                            if (!response.ok) {
-                                throw new Error(`HTTP error! status: ${response.status}`);
-                            }
-                            return response.json();
-                        })
-                        .then(() => {
-                            // Update the title in the dropdown
-                            const titleSpan = dropdownItem.querySelector('.dropdown-title');
-                            if (titleSpan) titleSpan.textContent = newTitle.trim();
-
-                            // Also update all other locations
-                            loadHistory(); // Refresh all history displays
-                        })
-                        .catch(error => {
-                            console.error("Rename failed", error);
-                            alert("Failed to rename");
-                        });
-                } catch (e) {
-                    console.error("Rename failed", e);
-                    alert("Failed to rename");
                 }
             }
         }
@@ -3819,7 +3829,7 @@
                         const renameBtn = historyItem.querySelector('.rename-btn');
                         renameBtn.addEventListener('click', (e) => {
                             e.stopPropagation();
-                            renameConversation(conv.id, conv.title);
+                            enterRenameMode(conv.id, conv.title, historyItem);
                         });
 
                         // Add export button functionality
@@ -3922,7 +3932,7 @@
                             const editBtn = dropdownHistoryItem.querySelector('.edit-btn');
                             editBtn.addEventListener('click', (e) => {
                                 e.stopPropagation();
-                                renameHistoryItem(conv.id, conv.title, dropdownHistoryItem);
+                                enterRenameMode(conv.id, conv.title, dropdownHistoryItem);
                             });
 
                             // Add delete button functionality
@@ -4003,7 +4013,7 @@
                             const editBtn = logoDropdownHistoryItem.querySelector('.edit-btn');
                             editBtn.addEventListener('click', (e) => {
                                 e.stopPropagation();
-                                renameHistoryItem(conv.id, conv.title, logoDropdownHistoryItem);
+                                enterRenameMode(conv.id, conv.title, logoDropdownHistoryItem);
                             });
 
                             // Add delete button functionality
