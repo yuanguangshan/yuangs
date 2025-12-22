@@ -179,10 +179,6 @@
             <h3>今日消耗 Tokens</h3>
             <p id="total-tokens">-</p>
         </div>
-        <div class="card">
-            <h3>活跃应用数</h3>
-            <p id="active-apps">-</p>
-        </div>
     </div>
 
     <div class="chart-container">
@@ -191,6 +187,7 @@
 
     <div style="overflow: hidden; margin-bottom: 10px;">
         <h2 style="float: left; margin: 0; font-size: 1.2rem;">应用明细</h2>
+        <p style="float: right; margin: 0; font-size: 1.2rem; color: var(--accent-color);">活跃应用数: <span id="active-apps">-</span></p>
         <button class="refresh-btn" onclick="fetchStats()">刷新数据</button>
     </div>
 
@@ -200,11 +197,12 @@
                 <th>应用 ID</th>
                 <th>调用次数</th>
                 <th>Token 消耗</th>
+                <th>平均请求 Token 数</th>
                 <th>最后活跃</th>
             </tr>
         </thead>
         <tbody>
-            <tr><td colspan="4" style="text-align:center; opacity:0.5;">正在加载数据...</td></tr>
+            <tr><td colspan="5" style="text-align:center; opacity:0.5;">正在加载数据...</td></tr>
         </tbody>
     </table>
 </div>
@@ -248,7 +246,7 @@
         tbody.innerHTML = '';
 
         if (data.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; opacity:0.5; padding: 30px;">
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; opacity:0.5; padding: 30px;">
                 暂无数据<br><span style="font-size:0.8rem">请先调用 API 产生日志</span>
             </td></tr>`;
         } else {
@@ -256,14 +254,16 @@
                 const appName = item.app_name || 'Unknown';
                 const count = item.count;
                 const tokens = (item.total_tokens || 0).toLocaleString();
-                // 简单处理时间格式
-                const timeStr = item.last_active ? item.last_active.split('.')[0].replace('T', ' ') : '-';
+                const avgTokens = count > 0 ? Math.round((item.total_tokens || 0) / count) : 0;
+                // 计算相对时间和绝对时间
+                const timeStr = item.last_active ? `${formatRelativeTime(item.last_active)} (${formatAbsoluteTime(item.last_active)})` : '-';
 
                 const row = `
                     <tr>
                         <td data-label="应用 ID"><span class="app-tag">${appName}</span></td>
                         <td data-label="调用次数">${count} 次</td>
                         <td data-label="Token 消耗">${tokens}</td>
+                        <td data-label="平均请求 Token 数">${avgTokens}</td>
                         <td data-label="最后活跃">${timeStr}</td>
                     </tr>
                 `;
@@ -316,6 +316,30 @@
                 }
             }
         });
+    }
+
+    function formatRelativeTime(dateString) {
+        const now = new Date();
+        const date = new Date(dateString);
+        const diffInSeconds = Math.floor((now - date) / 1000);
+
+        if (diffInSeconds < 60) {
+            return `${diffInSeconds} 秒前`;
+        } else if (diffInSeconds < 3600) {
+            const minutes = Math.floor(diffInSeconds / 60);
+            return `${minutes} 分钟前`;
+        } else if (diffInSeconds < 86400) {
+            const hours = Math.floor(diffInSeconds / 3600);
+            return `${hours} 小时前`;
+        } else {
+            const days = Math.floor(diffInSeconds / 86400);
+            return `${days} 天前`;
+        }
+    }
+
+    function formatAbsoluteTime(dateString) {
+        const date = new Date(dateString);
+        return date.toISOString().slice(0, 19).replace('T', ' ');
     }
 
     // 初始化加载
