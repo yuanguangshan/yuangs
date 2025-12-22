@@ -1512,7 +1512,7 @@ function saveInterpretationToCache(title, author, content) {
 }
 
 async function explainText(text, model) {
-    return await requestJSON('POST', '/ai/explain', { text, model });
+    return await requestJSON('POST', '/v1/chat/completions', { text, model });
 }
 
 async function getRealPoemInterpretation(title, author, verse, desc, forceRefresh = false) {
