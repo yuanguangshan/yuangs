@@ -1429,7 +1429,7 @@ async function requestJSON(method, path, payload) {
     try {
         const response = await fetch(url, {
             method: method,
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json'},
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-App-ID': 'shici'},
             body: payload ? JSON.stringify(payload) : null,
             signal: controller.signal
         });
