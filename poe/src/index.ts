@@ -155,7 +155,7 @@ export default {
                 return jsonResponse({ error: `Route not found: ${pathname}` }, 404);
             }
 
-            const targetUrl = new URL(targetPath, 'https://api.yuangs.cc');
+            const targetUrl = new URL(targetPath, 'https://aiproxy.want.biz');
             url.searchParams.forEach((value, key) => targetUrl.searchParams.append(key, value));
 
             const proxyHeaders = new Headers(request.headers);
