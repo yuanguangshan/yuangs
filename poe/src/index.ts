@@ -113,6 +113,38 @@ export default {
                 }
             }
 
+            // --- API 监控端点 ---
+            if (pathname.startsWith('/api/stats/')) {
+                if (request.method === 'GET') {
+                    const statType = pathname.split('/').pop();
+
+                    if (statType === 'client-usage') {
+                        // Get client usage statistics
+                        const { results } = await env.DB.prepare(
+                            "SELECT client_id, COUNT(*) as count FROM api_logs GROUP BY client_id ORDER BY count DESC"
+                        ).all();
+
+                        return jsonResponse({
+                            clientUsage: results.map(r => ({
+                                clientId: r.client_id,
+                                count: r.count
+                            }))
+                        });
+                    } else if (statType === 'recent-logs') {
+                        // Get recent API logs
+                        const { results } = await env.DB.prepare(
+                            "SELECT client_id, path, method, timestamp FROM api_logs ORDER BY timestamp DESC LIMIT 20"
+                        ).all();
+
+                        return jsonResponse({
+                            recentLogs: results
+                        });
+                    }
+                }
+
+                return jsonResponse({ error: `Stats endpoint not found: ${pathname}` }, 404);
+            }
+
             // --- API 代理逻辑 (/v1/...) ---
             let targetPath = pathname;
             if (targetPath.startsWith('/api/v1/')) {
@@ -127,7 +159,18 @@ export default {
             url.searchParams.forEach((value, key) => targetUrl.searchParams.append(key, value));
 
             const proxyHeaders = new Headers(request.headers);
+            // Capture client ID before removing headers
+            const clientId = proxyHeaders.get('X-Client-ID') || 'unknown';
             ['Host', 'Referer', 'Origin', 'cf-connecting-ip'].forEach(h => proxyHeaders.delete(h));
+
+            // Log the API call with client ID
+            try {
+                await env.DB.prepare(
+                    "INSERT INTO api_logs (client_id, path, method, timestamp) VALUES (?, ?, ?, ?)"
+                ).bind(clientId, targetPath, request.method, Date.now()).run();
+            } catch (logErr) {
+                console.warn('Failed to log API call:', logErr);
+            }
 
             try {
                 const response = await fetch(targetUrl.toString(), {

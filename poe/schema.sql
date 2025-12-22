@@ -18,3 +18,11 @@ CREATE TABLE messages (
     FOREIGN KEY(conversation_id) REFERENCES conversations(id),
     UNIQUE(conversation_id, role, timestamp)
 );
+
+CREATE TABLE api_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id TEXT,
+    path TEXT,
+    method TEXT,
+    timestamp INTEGER
+);
