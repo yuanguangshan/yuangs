@@ -1537,16 +1537,14 @@ function saveInterpretationToCache(title, author, content) {
 // AI 接口兼容函数 - 支持新旧两种接口格式
 async function explainText(text, model, useLegacy = false) {
     if (useLegacy) {
-        // 使用旧接口 ai/explain
+        // 使用旧接口 ai/explain - 需要 'text' 字段
         return await requestJSON('POST', '/ai/explain', { text, model });
     } else {
-        // 使用新接口 v1/chat/completions (OpenAI 兼容格式)
+        // 使用新接口 v1/chat/completions - 服务器期望 'text' 字段
         const payload = {
-            model: model,
-            messages: [
-                { role: "user", content: text }
-            ],
-            stream: false
+            text: text,  // 必需的字段
+            model: model
+            // 注意：不包含 messages 字段，因为服务器可能期望 'text' 字段
         };
         return await requestJSON('POST', '/v1/chat/completions', payload);
     }
