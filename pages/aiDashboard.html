@@ -37,13 +37,14 @@
             letter-spacing: 2px;
             margin-bottom: 30px;
             color: var(--text-color);
+            font-size: 1.5rem;
         }
 
         /* 顶部数据卡片 */
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(3, 1fr); /* 默认三列 */
+            gap: 15px;
             margin-bottom: 30px;
         }
 
@@ -57,18 +58,19 @@
             transition: transform 0.3s;
         }
 
-        .card:hover { transform: translateY(-5px); }
+        .card:hover { transform: translateY(-3px); }
 
-        .card h3 { font-size: 0.9rem; opacity: 0.7; margin: 0; }
-        .card p { font-size: 1.8rem; margin: 10px 0 0 0; font-weight: bold; color: var(--accent-color); }
+        .card h3 { font-size: 0.85rem; opacity: 0.7; margin: 0; }
+        .card p { font-size: 1.5rem; margin: 10px 0 0 0; font-weight: bold; color: var(--accent-color); }
 
         /* 图表区域 */
         .chart-container {
             background: var(--card-bg);
             border-radius: 20px;
-            padding: 25px;
+            padding: 20px;
             margin-bottom: 30px;
             border: 1px solid rgba(255, 255, 255, 0.1);
+            height: 300px; /* 固定高度防止抖动 */
         }
 
         /* 列表区域 */
@@ -78,34 +80,89 @@
             background: var(--card-bg);
             border-radius: 15px;
             overflow: hidden;
+            table-layout: fixed; /* 固定布局 */
         }
 
         th, td {
             padding: 15px;
             text-align: left;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            word-wrap: break-word;
         }
 
         th { background: rgba(255, 255, 255, 0.1); font-size: 0.85rem; }
+        
         .app-tag {
             background: var(--accent-purple);
-            padding: 3px 10px;
+            padding: 3px 8px;
             border-radius: 5px;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
+            display: inline-block;
         }
 
         .refresh-btn {
             background: none;
             border: 1px solid var(--accent-color);
             color: var(--accent-color);
-            padding: 8px 16px;
+            padding: 6px 14px;
             border-radius: 20px;
             cursor: pointer;
             float: right;
             transition: 0.3s;
+            font-size: 0.85rem;
+            margin-top: -10px;
         }
 
         .refresh-btn:hover { background: var(--accent-color); color: #000; }
+
+        /* === 移动端适配 (核心修改) === */
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            
+            /* 顶部卡片变单列或双列 */
+            .grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+            .card:last-child { grid-column: span 2; } /* 第三个卡片占满一行 */
+            
+            .card { padding: 15px; }
+            .card p { font-size: 1.2rem; }
+
+            /* 图表高度减小 */
+            .chart-container { height: 220px; padding: 10px; }
+
+            /* 表格变卡片模式 (CSS魔法) */
+            thead { display: none; } /* 隐藏表头 */
+            
+            table, tbody, tr, td { display: block; width: 100%; box-sizing: border-box; }
+            
+            tr {
+                margin-bottom: 15px;
+                background: rgba(255,255,255,0.02);
+                border-radius: 10px;
+                border: 1px solid rgba(255,255,255,0.05);
+            }
+            
+            td {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                text-align: right;
+                padding: 10px 15px;
+                border-bottom: 1px solid rgba(255,255,255,0.05);
+                font-size: 0.9rem;
+            }
+            
+            td:last-child { border-bottom: none; }
+
+            /* 利用 data-label 属性显示标题 */
+            td::before {
+                content: attr(data-label);
+                font-weight: bold;
+                opacity: 0.6;
+                font-size: 0.8rem;
+                margin-right: 10px;
+                text-align: left;
+            }
+        }
     </style>
 </head>
 <body>
@@ -132,19 +189,23 @@
         <canvas id="usageChart"></canvas>
     </div>
 
-    <button class="refresh-btn" onclick="fetchStats()">手动刷新</button>
-    <h2>应用明细</h2>
+    <div style="overflow: hidden; margin-bottom: 10px;">
+        <h2 style="float: left; margin: 0; font-size: 1.2rem;">应用明细</h2>
+        <button class="refresh-btn" onclick="fetchStats()">刷新数据</button>
+    </div>
+
     <table id="stats-table">
         <thead>
             <tr>
                 <th>应用 ID</th>
                 <th>调用次数</th>
-                <th>总 Token 消耗</th>
+                <th>Token 消耗</th>
                 <th>最后活跃</th>
             </tr>
         </thead>
         <tbody>
-            </tbody>
+            <tr><td colspan="4" style="text-align:center; opacity:0.5;">正在加载数据...</td></tr>
+        </tbody>
     </table>
 </div>
 
@@ -153,18 +214,28 @@
 
     async function fetchStats() {
         try {
-            // 注意：这里改为你实际部署的 API 地址
             const response = await fetch('/api/stats');
-            const data = await response.json();
+            
+            // 错误处理：如果 API 报错
+            if (!response.ok) {
+                console.error("API Error", response.status);
+                return;
+            }
+
+            const rawData = await response.json();
+            // 安全处理：确保 data 是数组，防止报错
+            const data = Array.isArray(rawData) ? rawData : [];
 
             updateUI(data);
         } catch (error) {
             console.error("获取统计数据失败:", error);
+            document.querySelector('#stats-table tbody').innerHTML = 
+                `<tr><td colspan="4" style="text-align:center; color:#ff4444;">数据加载失败，请检查网络</td></tr>`;
         }
     }
 
     function updateUI(data) {
-        // 1. 更新卡片数据
+        // 1. 更新顶部卡片
         const totalReq = data.reduce((sum, item) => sum + item.count, 0);
         const totalTokens = data.reduce((sum, item) => sum + (item.total_tokens || 0), 0);
         
@@ -172,20 +243,33 @@
         document.getElementById('total-tokens').innerText = totalTokens.toLocaleString();
         document.getElementById('active-apps').innerText = data.length;
 
-        // 2. 更新表格
+        // 2. 更新表格 (增加 data-label 以适配手机端)
         const tbody = document.querySelector('#stats-table tbody');
         tbody.innerHTML = '';
-        data.forEach(item => {
-            const row = `
-                <tr>
-                    <td><span class="app-tag">${item.app_name}</span></td>
-                    <td>${item.count} 次</td>
-                    <td>${(item.total_tokens || 0).toLocaleString()}</td>
-                    <td>${item.last_active || '刚刚'}</td>
-                </tr>
-            `;
-            tbody.innerHTML += row;
-        });
+
+        if (data.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; opacity:0.5; padding: 30px;">
+                暂无数据<br><span style="font-size:0.8rem">请先调用 API 产生日志</span>
+            </td></tr>`;
+        } else {
+            data.forEach(item => {
+                const appName = item.app_name || 'Unknown';
+                const count = item.count;
+                const tokens = (item.total_tokens || 0).toLocaleString();
+                // 简单处理时间格式
+                const timeStr = item.last_active ? item.last_active.split('.')[0].replace('T', ' ') : '-';
+
+                const row = `
+                    <tr>
+                        <td data-label="应用 ID"><span class="app-tag">${appName}</span></td>
+                        <td data-label="调用次数">${count} 次</td>
+                        <td data-label="Token 消耗">${tokens}</td>
+                        <td data-label="最后活跃">${timeStr}</td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
 
         // 3. 更新图表
         renderChart(data);
@@ -194,8 +278,9 @@
     function renderChart(data) {
         const ctx = document.getElementById('usageChart').getContext('2d');
         
-        const labels = data.map(item => item.app_name);
-        const values = data.map(item => item.total_tokens || 0);
+        // 如果没数据，给一个默认空数据，防止图表报错
+        const labels = data.length ? data.map(item => item.app_name) : ['暂无数据'];
+        const values = data.length ? data.map(item => item.total_tokens || 0) : [0];
 
         if (myChart) myChart.destroy();
 
@@ -204,21 +289,30 @@
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'Token 消耗分布',
+                    label: 'Token 消耗',
                     data: values,
-                    backgroundColor: 'rgba(0, 209, 178, 0.4)',
+                    backgroundColor: 'rgba(0, 209, 178, 0.5)',
                     borderColor: 'rgba(0, 209, 178, 1)',
-                    borderWidth: 1
+                    borderWidth: 1,
+                    borderRadius: 4
                 }]
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false, // 允许自适应高度
                 plugins: {
                     legend: { display: false }
                 },
                 scales: {
-                    y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
-                    x: { grid: { display: false } }
+                    y: { 
+                        beginAtZero: true, 
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#888', font: {size: 10} }
+                    },
+                    x: { 
+                        grid: { display: false },
+                        ticks: { color: '#ccc', font: {size: 10} }
+                    }
                 }
             }
         });
@@ -226,7 +320,7 @@
 
     // 初始化加载
     fetchStats();
-    // 每 1 分钟自动刷新
+    // 每 60 秒自动刷新
     setInterval(fetchStats, 60000);
 </script>
 
