@@ -313,11 +313,20 @@
 <script>
     let myChart = null;
 
+    // 1. 获取数据
     async function fetchStats() {
         try {
-            // 注意：这里改为你实际部署的 API 地址
+            // 请求 API
             const response = await fetch('/api/stats');
+            
+            // 错误处理
+            if (!response.ok) {
+                console.error("API Error:", response.status);
+                return;
+            }
+
             const data = await response.json();
+            console.log("API 返回数据:", data); // 在浏览器控制台查看数据
 
             updateUI(data);
         } catch (error) {
@@ -325,42 +334,63 @@
         }
     }
 
+    // 2. 更新界面
     function updateUI(data) {
-        // 1. 更新卡片数据
-        const totalReq = data.reduce((sum, item) => sum + item.count, 0);
-        const totalTokens = data.reduce((sum, item) => sum + (item.total_tokens || 0), 0);
+        // --- 更新顶部卡片 ---
+        // 确保 data 是数组，防止报错
+        const safeData = Array.isArray(data) ? data : [];
+
+        const totalReq = safeData.reduce((sum, item) => sum + item.count, 0);
+        const totalTokens = safeData.reduce((sum, item) => sum + (item.total_tokens || 0), 0);
 
         document.getElementById('total-req').innerText = totalReq;
         document.getElementById('total-tokens').innerText = totalTokens.toLocaleString();
-        document.getElementById('active-apps').innerText = data.length;
+        document.getElementById('active-apps').innerText = safeData.length;
 
-        // 2. 更新表格
+        // --- 更新表格 ---
         const tbody = document.querySelector('#stats-table tbody');
         tbody.innerHTML = '';
-        data.forEach(item => {
-            const row = `
-                <tr>
-                    <td><span class="app-tag">${item.app_name}</span></td>
-                    <td>${item.count} 次</td>
-                    <td>${(item.total_tokens || 0).toLocaleString()}</td>
-                    <td>${item.last_active || '刚刚'}</td>
-                </tr>
-            `;
-            tbody.innerHTML += row;
-        });
 
-        // 3. 更新图表
-        renderChart(data);
+        if (safeData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: #888;">暂无应用调用数据（请先发起请求）</td></tr>';
+        } else {
+            safeData.forEach(item => {
+                // 处理可能的 null 值
+                const appName = item.app_name || '未知应用';
+                const count = item.count || 0;
+                const tokens = (item.total_tokens || 0).toLocaleString();
+                const lastActive = item.last_active ? item.last_active.replace('T', ' ').split('.')[0] : '刚刚';
 
-        // 4. 处理移动端表格布局
-        handleTableLayout();
+                const row = `
+                    <tr>
+                        <td><span class="app-tag">${appName}</span></td>
+                        <td>${count} 次</td>
+                        <td>${tokens}</td>
+                        <td>${lastActive}</td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
+
+        // --- 更新图表 ---
+        renderChart(safeData);
+
+        // --- 强制刷新移动端布局 ---
+        // 先移除旧的移动端视图，重新生成，避免更新逻辑各种 Bug
+        const oldMobile = document.querySelector('.mobile-stats-container');
+        if (oldMobile) oldMobile.remove();
+        
+        handleTableLayout(); 
     }
 
+    // 3. 渲染图表
     function renderChart(data) {
         const ctx = document.getElementById('usageChart').getContext('2d');
-
-        const labels = data.map(item => item.app_name);
-        const values = data.map(item => item.total_tokens || 0);
+        
+        // 如果没数据，显示空图表
+        const labels = data.length > 0 ? data.map(item => item.app_name) : ['暂无数据'];
+        const values = data.length > 0 ? data.map(item => item.total_tokens || 0) : [0];
 
         if (myChart) myChart.destroy();
 
@@ -369,7 +399,7 @@
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'Token 消耗分布',
+                    label: 'Token 消耗',
                     data: values,
                     backgroundColor: 'rgba(0, 209, 178, 0.4)',
                     borderColor: 'rgba(0, 209, 178, 1)',
@@ -378,98 +408,75 @@
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: false, // 允许图表适应容器大小
-                plugins: {
-                    legend: { display: false }
-                },
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
                 scales: {
                     y: {
                         beginAtZero: true,
                         grid: { color: 'rgba(255,255,255,0.05)' },
-                        ticks: { maxTicksLimit: 6, font: { size: 10 } }
+                        ticks: { color: '#888', font: { size: 10 } }
                     },
                     x: {
                         grid: { display: false },
-                        ticks: { maxRotation: 45, minRotation: 45, font: { size: 10 } }
+                        ticks: { color: '#ccc', font: { size: 10 } }
                     }
                 }
             }
         });
     }
 
-    // 初始化加载
-    fetchStats();
-    // 每 1 分钟自动刷新
-    setInterval(fetchStats, 60000);
-
-    // 添加响应式表格处理 - 当屏幕变小时将表格转换为卡片布局
+    // 4. 响应式布局处理（重写版：更稳定）
     function handleTableLayout() {
         const table = document.getElementById('stats-table');
-        const tableBody = document.querySelector('#stats-table tbody');
-        const headings = Array.from(document.querySelectorAll('#stats-table th')).map(th => th.textContent);
+        const isMobile = window.innerWidth <= 480;
 
-        if(window.innerWidth <= 480) {
-            // 转换为卡片布局
+        if (isMobile) {
             table.style.display = 'none';
 
-            // 创建卡片式布局（如果尚未创建）
-            if(!document.querySelector('.mobile-stats-container')) {
-                const mobileContainer = document.createElement('div');
+            // 重新构建移动端视图
+            let mobileContainer = document.querySelector('.mobile-stats-container');
+            if (!mobileContainer) {
+                mobileContainer = document.createElement('div');
                 mobileContainer.className = 'mobile-stats-container';
-                mobileContainer.style.width = '100%';
-                mobileContainer.style.display = 'block';
-
-                // 遍历每一行数据并创建对应的卡片
-                const rows = tableBody.querySelectorAll('tr');
-                rows.forEach(row => {
-                    const mobileRow = document.createElement('div');
-                    mobileRow.className = 'mobile-row';
-
-                    const cells = row.querySelectorAll('td');
-                    cells.forEach((cell, index) => {
-                        const mobileCell = document.createElement('div');
-                        mobileCell.className = 'mobile-cell';
-                        mobileCell.innerHTML = `<span>${headings[index]}</span><span>${cell.innerHTML}</span>`;
-                        mobileRow.appendChild(mobileCell);
-                    });
-
-                    mobileContainer.appendChild(mobileRow);
-                });
-
-                // 将卡片容器插入到原表格之后
                 document.querySelector('.stats-container').appendChild(mobileContainer);
-            } else {
-                // 更新现有卡片的内容
-                const mobileRows = document.querySelectorAll('.mobile-stats-container .mobile-row');
-                const rows = tableBody.querySelectorAll('tr');
-
-                mobileRows.forEach((mobileRow, rowIndex) => {
-                    if(rowIndex < rows.length) {
-                        const cells = rows[rowIndex].querySelectorAll('td');
-                        const mobileCells = mobileRow.querySelectorAll('.mobile-cell span:last-child');
-
-                        cells.forEach((cell, cellIndex) => {
-                            mobileCells[cellIndex].innerHTML = cell.innerHTML;
-                        });
-                    }
-                });
             }
+            
+            // 清空容器，完全根据当前表格内容重建
+            mobileContainer.innerHTML = ''; 
+
+            const rows = table.querySelectorAll('tbody tr');
+            const headings = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent);
+
+            rows.forEach(row => {
+                // 如果是“暂无数据”行，特殊处理
+                if (row.cells.length === 1) {
+                    mobileContainer.innerHTML = `<div style="padding:15px; text-align:center; color:#888;">暂无数据</div>`;
+                    return;
+                }
+
+                const mobileRow = document.createElement('div');
+                mobileRow.className = 'mobile-row';
+                
+                Array.from(row.cells).forEach((cell, index) => {
+                    const mobileCell = document.createElement('div');
+                    mobileCell.className = 'mobile-cell';
+                    mobileCell.innerHTML = `<span>${headings[index]}</span><span>${cell.innerHTML}</span>`;
+                    mobileRow.appendChild(mobileCell);
+                });
+                mobileContainer.appendChild(mobileRow);
+            });
+
         } else {
-            // 显示表格，隐藏卡片布局
             table.style.display = 'table';
             const mobileContainer = document.querySelector('.mobile-stats-container');
-            if(mobileContainer) {
-                mobileContainer.style.display = 'none';
-            }
+            if (mobileContainer) mobileContainer.remove(); // 宽屏时直接移除移动端DOM
         }
     }
 
-
-    // 添加窗口大小改变时的处理
+    // 初始化
+    fetchStats();
+    setInterval(fetchStats, 60000);
     window.addEventListener('resize', handleTableLayout);
-
-    // 初始化时也处理一次
-    setTimeout(handleTableLayout, 100);
 </script>
 
 </body>
