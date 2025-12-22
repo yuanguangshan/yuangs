@@ -6,7 +6,7 @@ View as Markdown Markdown 查看
 The Poe API provides access to hundreds of AI models and bots through a single OpenAI-compatible endpoint. Switch between frontier models from all major labs, open-source models, and millions of community-created bots using the same familiar interface.
 Poe API 通过一个 OpenAI 兼容的端点，提供对数百个 AI 模型和机器人的访问。使用相同的熟悉界面，在所有主要实验室的前沿模型、开源模型以及数百万个社区创建的机器人之间切换。
 
-Key benefits: 主要优势：
+Key benefits: 主要优势
 
 Use your existing Poe subscription points with no additional setup
 无需额外设置即可使用现有的 Poe 订阅积分
