@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>AI Proxy 指挥中心</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #0d0d0d;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --text-color: #e0e0e0;
+            --accent-color: #00d1b2;
+            --accent-purple: #9b51e0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Noto Serif SC', serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+        }
+
+        h1 {
+            text-align: center;
+            font-weight: 700;
+            letter-spacing: 2px;
+            margin-bottom: 30px;
+            color: var(--text-color);
+        }
+
+        /* 顶部数据卡片 */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+            transition: transform 0.3s;
+        }
+
+        .card:hover { transform: translateY(-5px); }
+
+        .card h3 { font-size: 0.9rem; opacity: 0.7; margin: 0; }
+        .card p { font-size: 1.8rem; margin: 10px 0 0 0; font-weight: bold; color: var(--accent-color); }
+
+        /* 图表区域 */
+        .chart-container {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* 列表区域 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--card-bg);
+            border-radius: 15px;
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        th { background: rgba(255, 255, 255, 0.1); font-size: 0.85rem; }
+        .app-tag {
+            background: var(--accent-purple);
+            padding: 3px 10px;
+            border-radius: 5px;
+            font-size: 0.8rem;
+        }
+
+        .refresh-btn {
+            background: none;
+            border: 1px solid var(--accent-color);
+            color: var(--accent-color);
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            float: right;
+            transition: 0.3s;
+        }
+
+        .refresh-btn:hover { background: var(--accent-color); color: #000; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>指挥中心 · 运行看板</h1>
+
+    <div class="grid">
+        <div class="card">
+            <h3>今日请求总数</h3>
+            <p id="total-req">-</p>
+        </div>
+        <div class="card">
+            <h3>今日消耗 Tokens</h3>
+            <p id="total-tokens">-</p>
+        </div>
+        <div class="card">
+            <h3>活跃应用数</h3>
+            <p id="active-apps">-</p>
+        </div>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="usageChart"></canvas>
+    </div>
+
+    <button class="refresh-btn" onclick="fetchStats()">手动刷新</button>
+    <h2>应用明细</h2>
+    <table id="stats-table">
+        <thead>
+            <tr>
+                <th>应用 ID</th>
+                <th>调用次数</th>
+                <th>总 Token 消耗</th>
+                <th>最后活跃</th>
+            </tr>
+        </thead>
+        <tbody>
+            </tbody>
+    </table>
+</div>
+
+<script>
+    let myChart = null;
+
+    async function fetchStats() {
+        try {
+            // 注意：这里改为你实际部署的 API 地址
+            const response = await fetch('/api/stats');
+            const data = await response.json();
+
+            updateUI(data);
+        } catch (error) {
+            console.error("获取统计数据失败:", error);
+        }
+    }
+
+    function updateUI(data) {
+        // 1. 更新卡片数据
+        const totalReq = data.reduce((sum, item) => sum + item.count, 0);
+        const totalTokens = data.reduce((sum, item) => sum + (item.total_tokens || 0), 0);
+        
+        document.getElementById('total-req').innerText = totalReq;
+        document.getElementById('total-tokens').innerText = totalTokens.toLocaleString();
+        document.getElementById('active-apps').innerText = data.length;
+
+        // 2. 更新表格
+        const tbody = document.querySelector('#stats-table tbody');
+        tbody.innerHTML = '';
+        data.forEach(item => {
+            const row = `
+                <tr>
+                    <td><span class="app-tag">${item.app_name}</span></td>
+                    <td>${item.count} 次</td>
+                    <td>${(item.total_tokens || 0).toLocaleString()}</td>
+                    <td>${item.last_active || '刚刚'}</td>
+                </tr>
+            `;
+            tbody.innerHTML += row;
+        });
+
+        // 3. 更新图表
+        renderChart(data);
+    }
+
+    function renderChart(data) {
+        const ctx = document.getElementById('usageChart').getContext('2d');
+        
+        const labels = data.map(item => item.app_name);
+        const values = data.map(item => item.total_tokens || 0);
+
+        if (myChart) myChart.destroy();
+
+        myChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Token 消耗分布',
+                    data: values,
+                    backgroundColor: 'rgba(0, 209, 178, 0.4)',
+                    borderColor: 'rgba(0, 209, 178, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    // 初始化加载
+    fetchStats();
+    // 每 1 分钟自动刷新
+    setInterval(fetchStats, 60000);
+</script>
+
+</body>
+</html>
