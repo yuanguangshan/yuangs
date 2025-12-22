@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>AI Proxy 指挥中心</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
         :root {
             --bg-color: #0d0d0d;
@@ -208,6 +208,11 @@
         <canvas id="usageChart"></canvas>
     </div>
 
+    <!-- 热力图容器 -->
+    <div class="chart-container" style="height: 400px;">
+        <div id="heatmapChart" style="width: 100%; height: 100%;"></div>
+    </div>
+
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
         <h2 style="margin: 0; font-size: 1.2rem;">明细</h2>
         <div style="display: flex; align-items: center; gap: 15px;">
@@ -273,7 +278,7 @@
         // 1. 更新顶部卡片
         const totalReq = data.reduce((sum, item) => sum + item.count, 0);
         const totalTokens = data.reduce((sum, item) => sum + (item.total_tokens || 0), 0);
-        
+
         document.getElementById('total-req').innerText = totalReq;
         document.getElementById('total-tokens').innerText = totalTokens.toLocaleString();
         document.getElementById('total-tokens-inline').innerText = totalTokens.toLocaleString();
@@ -291,11 +296,11 @@
             data.forEach(item => {
                 // 【修改】使用 getAppName 函数转换名称
                 const displayAppName = getAppName(item.app_name);
-                
+
                 const count = item.count;
                 const tokens = (item.total_tokens || 0).toLocaleString();
                 const avgTokens = count > 0 ? Math.round((item.total_tokens || 0) / count) : 0;
-                
+
                 // 处理时间
                 const timeStr = item.last_active ? `${formatRelativeTime(item.last_active)}` : '-';
 
@@ -314,6 +319,9 @@
 
         // 3. 更新图表
         renderChart(data);
+
+        // 4. 更新热力图
+        renderHeatmap(data);
     }
 
     function renderChart(data) {
@@ -368,6 +376,253 @@
         if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} 分钟前`;
         if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} 小时前`;
         return `${Math.floor(diffInSeconds / 86400)} 天前`;
+    }
+
+    // 【新增】生成过去30天的日期数组
+    function getLast30Days() {
+        const dates = [];
+        const today = new Date();
+        for (let i = 29; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(today.getDate() - i);
+            dates.push(date.toISOString().split('T')[0]); // YYYY-MM-DD 格式
+        }
+        return dates;
+    }
+
+    // 【新增】处理热力图数据
+    function processHeatmapData(rawData) {
+        // 获取过去30天的日期
+        const dates = getLast30Days();
+
+        // 获取所有唯一应用名称
+        const apps = [...new Set(rawData.map(item => item.app_name))];
+
+        // 创建应用名称映射
+        const appNames = apps.map(app => getAppName(app));
+
+        // 准备热力图数据
+        const heatmapData = [];
+
+        // 检查是否已有按日期划分的数据
+        if (rawData.length > 0 && rawData[0].hasOwnProperty('date')) {
+            // 如果数据包含date字段，说明是历史数据
+            rawData.forEach(item => {
+                const date = item.date;
+                const dateIndex = dates.indexOf(date);
+
+                if (dateIndex !== -1) { // 只处理过去30天内的数据
+                    const appIndex = apps.indexOf(item.app_name);
+                    const tokens = item.total_tokens || 0;
+
+                    heatmapData.push([dateIndex, appIndex, tokens]);
+                }
+            });
+        } else {
+            // 如果没有date字段，说明是当前汇总数据，使用今天的数据
+            const todayIndex = dates.length - 1; // 最后一个位置是今天
+
+            rawData.forEach(item => {
+                const appIndex = apps.indexOf(item.app_name);
+                const tokens = item.total_tokens || 0;
+
+                heatmapData.push([todayIndex, appIndex, tokens]);
+            });
+        }
+
+        return {
+            dates: dates,
+            apps: appNames,
+            heatmapData: heatmapData
+        };
+    }
+
+    // 【新增】渲染热力图
+    function renderHeatmap(data) {
+        const chartDom = document.getElementById('heatmapChart');
+        const myChart = echarts.init(chartDom);
+
+        const processedData = processHeatmapData(data);
+
+        // 如果没有数据或只有今天的数据，生成模拟数据用于展示
+        let option;
+        if (processedData.heatmapData.length === 0 ||
+            (processedData.heatmapData.length > 0 &&
+             processedData.heatmapData.every(d => d[0] === processedData.dates.length - 1))) {
+
+            // 生成模拟数据用于展示热力图功能
+            option = getDemoHeatmapOption(processedData.dates, processedData.apps);
+        } else {
+            // 使用真实数据
+            option = {
+                title: {
+                    text: '过去30天应用活跃热力图',
+                    textStyle: {
+                        color: '#e0e0e0',
+                        fontSize: 16
+                    },
+                    left: 'center',
+                    top: 10
+                },
+                tooltip: {
+                    position: 'top',
+                    formatter: function(params) {
+                        const date = processedData.dates[params.data[0]];
+                        const app = processedData.apps[params.data[1]];
+                        const tokens = params.data[2];
+                        return `${date}<br/>${app}<br/>Token消耗: ${tokens}`;
+                    }
+                },
+                grid: {
+                    height: '70%',
+                    top: '15%'
+                },
+                xAxis: {
+                    type: 'category',
+                    data: processedData.dates,
+                    splitArea: {
+                        show: true
+                    },
+                    axisLabel: {
+                        color: '#ccc',
+                        fontSize: 10,
+                        rotate: 45
+                    },
+                    axisTick: {
+                        alignWithLabel: true
+                    }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: processedData.apps,
+                    splitArea: {
+                        show: true
+                    },
+                    axisLabel: {
+                        color: '#ccc',
+                        fontSize: 10
+                    }
+                },
+                visualMap: {
+                    min: 0,
+                    max: Math.max(...processedData.heatmapData.map(d => d[2]), 100),
+                    calculable: true,
+                    orient: 'horizontal',
+                    left: 'center',
+                    bottom: '5%',
+                    inRange: {
+                        color: ['rgba(10, 25, 47, 0.2)', 'rgba(0, 209, 178, 0.4)', 'rgba(0, 209, 178, 1)']
+                    }
+                },
+                series: [{
+                    name: 'Token 消耗',
+                    type: 'heatmap',
+                    data: processedData.heatmapData,
+                    emphasis: {
+                        itemStyle: {
+                            shadowBlur: 10,
+                            shadowColor: 'rgba(0, 0, 0, 0.5)'
+                        }
+                    }
+                }]
+            };
+        }
+
+        myChart.setOption(option);
+
+        // 保存图表实例以便后续更新
+        window.heatmapChart = myChart;
+    }
+
+    // 【新增】生成演示热力图选项
+    function getDemoHeatmapOption(dates, apps) {
+        // 如果没有历史数据，生成模拟数据展示热力图功能
+        const demoData = [];
+
+        // 为每个应用在不同日期生成随机数据
+        for (let appId = 0; appId < apps.length; appId++) {
+            for (let dateId = 0; dateId < dates.length; dateId++) {
+                // 随机生成token数量，增加一些变化
+                const randomValue = Math.floor(Math.random() * 1000);
+                // 模拟某些日期/应用组合更活跃
+                if (Math.random() > 0.7) {
+                    demoData.push([dateId, appId, randomValue]);
+                }
+            }
+        }
+
+        return {
+            title: {
+                text: '过去30天应用活跃热力图 (演示数据)',
+                textStyle: {
+                    color: '#e0e0e0',
+                    fontSize: 16
+                },
+                left: 'center',
+                top: 10
+            },
+            tooltip: {
+                position: 'top',
+                formatter: function(params) {
+                    const date = dates[params.data[0]];
+                    const app = apps[params.data[1]];
+                    const tokens = params.data[2];
+                    return `${date}<br/>${app}<br/>Token消耗: ${tokens}`;
+                }
+            },
+            grid: {
+                height: '70%',
+                top: '15%'
+            },
+            xAxis: {
+                type: 'category',
+                data: dates,
+                splitArea: {
+                    show: true
+                },
+                axisLabel: {
+                    color: '#ccc',
+                    fontSize: 10,
+                    rotate: 45
+                },
+                axisTick: {
+                    alignWithLabel: true
+                }
+            },
+            yAxis: {
+                type: 'category',
+                data: apps,
+                splitArea: {
+                    show: true
+                },
+                axisLabel: {
+                    color: '#ccc',
+                    fontSize: 10
+                }
+            },
+            visualMap: {
+                min: 0,
+                max: 1000,
+                calculable: true,
+                orient: 'horizontal',
+                left: 'center',
+                bottom: '5%',
+                inRange: {
+                    color: ['rgba(10, 25, 47, 0.2)', 'rgba(0, 209, 178, 0.4)', 'rgba(0, 209, 178, 1)']
+                }
+            },
+            series: [{
+                name: 'Token 消耗',
+                type: 'heatmap',
+                data: demoData,
+                emphasis: {
+                    itemStyle: {
+                        shadowBlur: 10,
+                        shadowColor: 'rgba(0, 0, 0, 0.5)'
+                    }
+                }
+            }]
+        };
     }
 
     // 初始化加载
