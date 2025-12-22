@@ -1429,20 +1429,43 @@ async function requestJSON(method, path, payload) {
     try {
         const response = await fetch(url, {
             method: method,
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-App-ID': 'shici'},
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-App-ID': 'shici'
+            },
             body: payload ? JSON.stringify(payload) : null,
             signal: controller.signal
         });
         clearTimeout(timeoutId);
+
         if (!response.ok) {
             let errorData = {};
-            try { errorData = await response.json(); } catch { errorData = { message: await response.text() }; }
+            try {
+                errorData = await response.json();
+            } catch {
+                // 如果响应不是JSON格式，尝试获取文本
+                try {
+                    const errorText = await response.text();
+                    errorData = { message: errorText };
+                } catch {
+                    errorData = { message: `HTTP Error ${response.status}` };
+                }
+            }
             throw new Error(`API请求失败: ${errorData.error?.message || toDisplayString(errorData)}`);
         }
         return await response.json();
     } catch (e) {
         clearTimeout(timeoutId);
-        if (e.name === 'AbortError') throw new Error('网络请求超时');
+        if (e.name === 'AbortError') {
+            console.error('[Poetry AI] 请求超时:', e);
+            throw new Error('网络请求超时，请检查网络连接');
+        }
+        if (e instanceof TypeError && e.message.includes('fetch')) {
+            console.error('[Poetry AI] 网络错误:', e);
+            throw new Error('网络连接失败，请检查网络设置');
+        }
+        console.error('[Poetry AI] 请求错误:', e);
         throw new Error(`网络或API错误: ${e.message}`);
     }
 }
@@ -1540,11 +1563,15 @@ async function explainText(text, model, useLegacy = false) {
         // 使用旧接口 ai/explain - 需要 'text' 字段
         return await requestJSON('POST', '/ai/explain', { text, model });
     } else {
-        // 使用新接口 v1/chat/completions - 服务器期望 'text' 字段
+        // 使用新接口 v1/chat/completions - OpenAI兼容格式
         const payload = {
-            text: text,  // 必需的字段
-            model: model
-            // 注意：不包含 messages 字段，因为服务器可能期望 'text' 字段
+            model: model,
+            messages: [{
+                role: "user",
+                content: text
+            }],
+            temperature: 0.7,
+            max_tokens: 2000
         };
         return await requestJSON('POST', '/v1/chat/completions', payload);
     }
@@ -1572,19 +1599,31 @@ async function getRealPoemInterpretation(title, author, verse, desc, forceRefres
             markdownResult = resultData.explanation || resultData.data || resultData.text || resultData;
         } else {
             // 新接口格式 (OpenAI兼容): { choices: [{ message: { content: "..." } }] }
-            if (resultData.choices && resultData.choices[0]) {
-                markdownResult = resultData.choices[0].message?.content || resultData.choices[0].text || resultData;
-            } else {
+            if (resultData && resultData.choices && resultData.choices[0]) {
+                markdownResult = resultData.choices[0].message?.content || resultData.choices[0].text;
+            }
+            // 如果上面没有获取到结果，尝试其他可能的字段
+            if (!markdownResult && resultData && typeof resultData === 'string') {
                 markdownResult = resultData;
+            }
+            if (!markdownResult && resultData && resultData.content) {
+                markdownResult = resultData.content;
             }
         }
 
-        if (typeof markdownResult !== 'string' || !markdownResult.trim()) throw new Error('API返回结果格式不正确');
+        if (typeof markdownResult !== 'string' || !markdownResult.trim()) {
+            console.error("[Poetry AI] API返回结果格式不正确:", resultData);
+            throw new Error('API返回结果格式不正确，无法解析');
+        }
         const finalResult = markdownResult.trim();
         saveInterpretationToCache(title, author, finalResult);
         return finalResult;
     } catch (error) {
         console.error("[Poetry AI] Error:", error);
+        // 如果是网络或API错误，提供更友好的错误信息
+        if (error.message.includes('网络') || error.message.includes('API') || error.message.includes('请求失败')) {
+            throw new Error('AI服务暂时不可用，请稍后重试');
+        }
         throw error;
     }
 }
