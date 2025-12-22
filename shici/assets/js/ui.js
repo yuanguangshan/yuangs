@@ -1408,6 +1408,7 @@ const API_PREFIX = API_DOMAIN.replace(/\/+$/, '');
 const DEFAULT_TIMEOUT = 120;
 const DEFAULT_MODEL_ID = 'gemini-pro-latest';
 const AI_MODEL_PREFERENCE_KEY = 'preferred_ai_model';
+const AI_INTERFACE_PREFERENCE_KEY = 'preferred_ai_interface'; // 新增：AI接口偏好设置
 const AI_CACHE_KEY = 'poem_ai_interpretations_v1';
 const PROMPT_TEMPLATES = {
     '诗词': '请为以下古诗词提供深度解读和赏析，使用Markdown格式输出，包含以下部分：1. 诗词背景与作者心境 2. 逐句解析（如果诗句较短可合并解析） 3. 艺术手法与修辞特点 4. 主题思想与情感内涵 5. 文学价值与影响 6.作者生平与经历'
@@ -1500,6 +1501,28 @@ function setUserPreferredModel(modelId) {
     }
 }
 
+// 获取用户选择的AI接口类型 (false=新接口, true=旧接口)
+function getUserPreferredInterface() {
+    try {
+        const preferredInterface = localStorage.getItem(AI_INTERFACE_PREFERENCE_KEY);
+        // 默认使用新接口 (false)，除非用户明确选择旧接口
+        return preferredInterface === 'legacy';
+    } catch (e) {
+        console.warn('获取用户AI接口偏好失败:', e);
+        return false; // 默认使用新接口
+    }
+}
+
+// 设置用户选择的AI接口类型
+function setUserPreferredInterface(useLegacy) {
+    try {
+        localStorage.setItem(AI_INTERFACE_PREFERENCE_KEY, useLegacy ? 'legacy' : 'new');
+        console.log('已设置AI接口类型:', useLegacy ? '旧接口(ai/explain)' : '新接口(v1/chat/completions)');
+    } catch (e) {
+        console.error('保存AI接口偏好失败:', e);
+    }
+}
+
 function saveInterpretationToCache(title, author, content) {
     try {
         const cache = localStorage.getItem(AI_CACHE_KEY);
@@ -1511,11 +1534,25 @@ function saveInterpretationToCache(title, author, content) {
     } catch (e) {}
 }
 
-async function explainText(text, model) {
-    return await requestJSON('POST', '/v1/chat/completions', { text, model });
+// AI 接口兼容函数 - 支持新旧两种接口格式
+async function explainText(text, model, useLegacy = false) {
+    if (useLegacy) {
+        // 使用旧接口 ai/explain
+        return await requestJSON('POST', '/ai/explain', { text, model });
+    } else {
+        // 使用新接口 v1/chat/completions (OpenAI 兼容格式)
+        const payload = {
+            model: model,
+            messages: [
+                { role: "user", content: text }
+            ],
+            stream: false
+        };
+        return await requestJSON('POST', '/v1/chat/completions', payload);
+    }
 }
 
-async function getRealPoemInterpretation(title, author, verse, desc, forceRefresh = false) {
+async function getRealPoemInterpretation(title, author, verse, desc, forceRefresh = false, useLegacy = null) {
     if (!forceRefresh) {
         const cached = getInterpretationFromCache(title, author);
         if (cached) return cached;
@@ -1526,8 +1563,24 @@ async function getRealPoemInterpretation(title, author, verse, desc, forceRefres
 
     try {
         const userModel = getUserPreferredModel();
-        const resultData = await explainText(finalText, userModel);
-        const markdownResult = resultData.explanation || resultData.data || resultData.text || resultData;
+        // 如果没有明确指定接口类型，则使用用户偏好设置
+        const shouldUseLegacy = useLegacy !== null ? useLegacy : getUserPreferredInterface();
+        const resultData = await explainText(finalText, userModel, shouldUseLegacy);
+
+        // 处理新旧接口不同的返回格式
+        let markdownResult;
+        if (shouldUseLegacy) {
+            // 旧接口格式: { explanation: "...", data: "...", text: "..." }
+            markdownResult = resultData.explanation || resultData.data || resultData.text || resultData;
+        } else {
+            // 新接口格式 (OpenAI兼容): { choices: [{ message: { content: "..." } }] }
+            if (resultData.choices && resultData.choices[0]) {
+                markdownResult = resultData.choices[0].message?.content || resultData.choices[0].text || resultData;
+            } else {
+                markdownResult = resultData;
+            }
+        }
+
         if (typeof markdownResult !== 'string' || !markdownResult.trim()) throw new Error('API返回结果格式不正确');
         const finalResult = markdownResult.trim();
         saveInterpretationToCache(title, author, finalResult);
@@ -1627,7 +1680,7 @@ async function showAIInterpretation() {
     
     try {
         const verse = currentPoem.content.replace(/\\n/g, '\n');
-        const result = await getRealPoemInterpretation(currentPoem.title, currentPoem.auth, verse, originalDesc);
+        const result = await getRealPoemInterpretation(currentPoem.title, currentPoem.auth, verse, originalDesc); // 使用用户设置的接口类型
         const aiBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 深度赏析 <span onclick="window.regenerateAnalysis()" style="cursor:pointer; margin-left:10px; font-size:0.8em; opacity:0.8; border-bottom:1px solid white;" title="重新生成解读">🔄 重新生成</span></div>';
         desc.innerHTML = originalDesc + separator + aiBadge + markdownToHtml(result);
     } catch (error) {
@@ -1646,7 +1699,7 @@ window.regenerateAnalysis = async function() {
     
     try {
         const verse = currentPoem.content.replace(/\\n/g, '\n');
-        const result = await getRealPoemInterpretation(currentPoem.title, currentPoem.auth, verse, originalDesc, true);
+        const result = await getRealPoemInterpretation(currentPoem.title, currentPoem.auth, verse, originalDesc, true); // forceRefresh=true, 使用用户设置的接口类型
         const aiBadge = '<div style="display:inline-block; background:linear-gradient(90deg, #6366f1, #8b5cf6); color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-bottom:10px; font-weight:bold;">✨ AI 深度赏析 <span onclick="window.regenerateAnalysis()" style="cursor:pointer; margin-left:10px; font-size:0.8em; opacity:0.8; border-bottom:1px solid white;" title="重新生成解读">🔄 重新生成</span></div>';
         desc.innerHTML = originalDesc + separator + aiBadge + markdownToHtml(result);
     } catch (error) {
@@ -1729,6 +1782,24 @@ window.setAIModel = function(modelId) {
     console.log('已设置AI模型:', modelId);
 };
 
+// 设置AI接口类型的全局函数
+window.setAIInterface = function(useLegacy) {
+    setUserPreferredInterface(useLegacy);
+
+    // Update UI to show selected interface
+    const aiInterfaceOptions = document.querySelectorAll('.ai-interface-option');
+    aiInterfaceOptions.forEach(option => {
+        if ((useLegacy && option.dataset.interface === 'legacy') ||
+            (!useLegacy && option.dataset.interface === 'new')) {
+            option.classList.add('selected');
+        } else {
+            option.classList.remove('selected');
+        }
+    });
+
+    console.log('已设置AI接口类型:', useLegacy ? '旧接口(ai/explain)' : '新接口(v1/chat/completions)');
+};
+
 // 初始化AI模型选择界面
 function initAIMenu() {
     // Highlight the currently selected model
@@ -1736,6 +1807,18 @@ function initAIMenu() {
     const aiModelOptions = document.querySelectorAll('.ai-model-option');
     aiModelOptions.forEach(option => {
         if (option.textContent.includes(currentModel)) {
+            option.classList.add('selected');
+        } else {
+            option.classList.remove('selected');
+        }
+    });
+
+    // Highlight the currently selected interface
+    const currentInterface = getUserPreferredInterface();
+    const aiInterfaceOptions = document.querySelectorAll('.ai-interface-option');
+    aiInterfaceOptions.forEach(option => {
+        if ((currentInterface && option.dataset.interface === 'legacy') ||
+            (!currentInterface && option.dataset.interface === 'new')) {
             option.classList.add('selected');
         } else {
             option.classList.remove('selected');
@@ -1755,6 +1838,7 @@ Object.assign(window, {
     showAIInterpretation,
     regenerateAnalysis,
     setAIModel,
+    setAIInterface,
 
     // 布局与显示
     toggleScrollMode,

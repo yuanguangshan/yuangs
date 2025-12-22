@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 接口兼容性测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 3px;
+            white-space: pre-wrap;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+        }
+    </style>
+</head>
+<body>
+    <h1>AI 接口兼容性测试</h1>
+    
+    <div class="test-section">
+        <h3>接口切换测试</h3>
+        <p>当前使用接口: <span id="currentInterface">未知</span></p>
+        <button onclick="switchToNewInterface()">使用新接口 (v1/chat/completions)</button>
+        <button onclick="switchToLegacyInterface()">使用旧接口 (ai/explain)</button>
+    </div>
+    
+    <div class="test-section">
+        <h3>AI 解读测试</h3>
+        <p>点击按钮测试 AI 解读功能（使用当前接口设置）</p>
+        <button onclick="testAIInterpretation()">测试 AI 解读</button>
+        <div id="testResult" class="result" style="display: none;"></div>
+    </div>
+
+    <script>
+        // 模拟诗词数据
+        const mockPoem = {
+            title: "静夜思",
+            auth: "李白",
+            content: "床前明月光\\n疑是地上霜\\n举头望明月\\n低头思故乡",
+            desc: "这是一首思乡诗"
+        };
+        
+        // 更新当前接口显示
+        function updateCurrentInterfaceDisplay() {
+            const useLegacy = getUserPreferredInterface();
+            const display = document.getElementById('currentInterface');
+            if (display) {
+                display.textContent = useLegacy ? '旧接口 (ai/explain)' : '新接口 (v1/chat/completions)';
+            }
+        }
+        
+        // 获取用户偏好的接口类型
+        function getUserPreferredInterface() {
+            const preferredInterface = localStorage.getItem('preferred_ai_interface');
+            return preferredInterface === 'legacy';
+        }
+        
+        // 设置用户偏好的接口类型
+        function setUserPreferredInterface(useLegacy) {
+            localStorage.setItem('preferred_ai_interface', useLegacy ? 'legacy' : 'new');
+            updateCurrentInterfaceDisplay();
+            console.log('已设置AI接口类型:', useLegacy ? '旧接口(ai/explain)' : '新接口(v1/chat/completions)');
+        }
+        
+        // 切换到新接口
+        function switchToNewInterface() {
+            setUserPreferredInterface(false);
+        }
+        
+        // 切换到旧接口
+        function switchToLegacyInterface() {
+            setUserPreferredInterface(true);
+        }
+        
+        // 测试AI解读功能
+        async function testAIInterpretation() {
+            const resultDiv = document.getElementById('testResult');
+            if (resultDiv) {
+                resultDiv.style.display = 'block';
+                resultDiv.textContent = '正在测试...';
+                resultDiv.className = 'result';
+            }
+            
+            try {
+                // 模拟API调用
+                const useLegacy = getUserPreferredInterface();
+                const textToInterpret = `诗词题目：${mockPoem.title}\n作者：${mockPoem.auth}\n诗词内容：\n${mockPoem.content}\n\n原注释：${mockPoem.desc}`;
+                
+                let result;
+                if (useLegacy) {
+                    // 模拟旧接口调用
+                    result = {
+                        explanation: `这是模拟的旧接口返回结果\n\n使用接口: ai/explain\n处理诗词: ${mockPoem.title}\n作者: ${mockPoem.auth}\n\n模拟的诗词解读内容...`
+                    };
+                } else {
+                    // 模拟新接口调用
+                    result = {
+                        choices: [{
+                            message: {
+                                content: `这是模拟的新接口返回结果\n\n使用接口: v1/chat/completions\n处理诗词: ${mockPoem.title}\n作者: ${mockPoem.auth}\n\n模拟的诗词解读内容...`
+                            }
+                        }]
+                    };
+                }
+                
+                // 模拟处理结果
+                let markdownResult;
+                if (useLegacy) {
+                    markdownResult = result.explanation || result.data || result.text || result;
+                } else {
+                    if (result.choices && result.choices[0]) {
+                        markdownResult = result.choices[0].message?.content || result.choices[0].text || result;
+                    } else {
+                        markdownResult = result;
+                    }
+                }
+                
+                if (typeof markdownResult !== 'string' || !markdownResult.trim()) {
+                    throw new Error('API返回结果格式不正确');
+                }
+                
+                if (resultDiv) {
+                    resultDiv.textContent = `✅ 测试成功!\n\n当前接口: ${useLegacy ? '旧接口 (ai/explain)' : '新接口 (v1/chat/completions)'}\n\n结果:\n${markdownResult}`;
+                }
+            } catch (error) {
+                if (resultDiv) {
+                    resultDiv.textContent = `❌ 测试失败: ${error.message}`;
+                    resultDiv.className = 'result error';
+                }
+            }
+        }
+        
+        // 页面加载时更新显示
+        window.onload = function() {
+            updateCurrentInterfaceDisplay();
+        };
+    </script>
+</body>
+</html>
