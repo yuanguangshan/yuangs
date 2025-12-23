@@ -26,7 +26,7 @@
             display: flex;
             flex-direction: column;
             gap: 20px;
-            max-width: 1200px;
+            max-width: 1400px; /*稍微加宽以容纳并排图表*/
             margin: 0 auto;
         }
 
@@ -40,10 +40,10 @@
             text-shadow: 0 0 10px rgba(102, 252, 241, 0.5);
         }
 
-        /* 布局容器 */
+        /* 布局容器 - 桌面端改为双列 */
         .dashboard-grid {
             display: grid;
-            grid-template-columns: 1fr;
+            grid-template-columns: 2fr 1fr; /* 左侧宽，右侧窄 */
             gap: 20px;
         }
 
@@ -56,9 +56,10 @@
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
             position: relative;
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
 
-        /* 装饰性角标 */
         .panel::before {
             content: '';
             position: absolute;
@@ -68,8 +69,9 @@
             opacity: 0.5;
         }
 
-        /* 顶部三个数据卡片 */
+        /* 顶部三个数据卡片 - 跨越两列 */
         .metrics-row {
+            grid-column: span 2;
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 20px;
@@ -85,25 +87,19 @@
             margin: 0;
         }
         .metric-card p {
-            font-size: 1.5rem;
+            font-size: 2rem; /* 增大字体 */
             color: var(--accent-cyan);
             margin: 5px 0 0 0;
             font-family: 'JetBrains Mono', monospace;
             font-weight: bold;
         }
 
-        /* 热力图区域 */
-        .heatmap-container {
-            height: 350px;
-            grid-column: span 1;
-        }
-
-        /* 实时日志区域 */
-        .logs-container {
-            height: 350px;
-            display: flex;
-            flex-direction: column;
-        }
+        /* 各个区域的布局分配 */
+        .area-logs { grid-column: span 1; height: 400px; }
+        .area-pie { grid-column: span 1; height: 400px; } /* 饼图 */
+        .area-bar { grid-column: span 2; height: 350px; } /* 柱状图跨满 */
+        .area-table { grid-column: span 1; height: 400px; overflow: hidden; }
+        .area-heatmap { grid-column: span 1; height: 400px; }
 
         .panel-title {
             font-size: 1rem;
@@ -116,9 +112,10 @@
             align-items: center;
         }
 
+        /* 日志列表样式 */
         .log-list {
             flex: 1;
-            overflow-y: hidden; /* 禁止手动滚动，保持视觉整洁 */
+            overflow-y: hidden;
             font-family: 'JetBrains Mono', monospace;
             font-size: 0.85rem;
         }
@@ -145,22 +142,9 @@
             opacity: 0.8;
         }
 
-        .app-badge {
-            color: var(--accent-cyan);
-            font-weight: bold;
-        }
-
-        .log-content {
-            color: #fff;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .token-count {
-            color: #ffcc00;
-            font-size: 0.75rem;
-        }
+        .app-badge { color: var(--accent-cyan); font-weight: bold; }
+        .log-content { color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .token-count { color: #ffcc00; font-size: 0.75rem; }
 
         @keyframes fadeIn {
             from { opacity: 0; transform: translateX(10px); }
@@ -178,22 +162,17 @@
         }
         .refresh-btn:hover { background: var(--accent-dark); color: #fff; }
 
+        /* 表格样式 */
+        .stats-table { width: 100%; border-collapse: collapse; color: var(--text-color); font-size: 0.9rem; }
+        .stats-table th { text-align: left; padding: 8px; border-bottom: 1px solid var(--accent-dark); color: var(--accent-cyan); }
+        .stats-table td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+
         /* 移动端适配 */
         @media (max-width: 768px) {
             .dashboard-grid { grid-template-columns: 1fr; }
-            .metrics-row {
-                grid-template-columns: repeat(3, 1fr);
-                gap: 10px;
-            }
-            /* 在小屏幕上，可能需要调整卡片尺寸 */
-            .metric-card h3 {
-                font-size: 0.7rem;
-            }
-            .metric-card p {
-                font-size: 1.5rem;
-            }
-            .heatmap-container, .logs-container { height: 300px; }
-            .panel { padding: 15px; }
+            .metrics-row { grid-column: span 1; }
+            .area-bar, .area-logs, .area-pie, .area-table, .area-heatmap { grid-column: span 1; height: 320px; }
+            h1 { font-size: 1.5rem; }
         }
     </style>
 </head>
@@ -202,7 +181,7 @@
     <h1>苑广山AI调度中心</h1>
 
     <div class="dashboard-grid">
-        <!-- 核心指标 -->
+        <!-- 1. 核心指标 (Row 1) -->
         <div class="metrics-row">
             <div class="panel metric-card">
                 <h3>今日请求</h3>
@@ -218,8 +197,8 @@
             </div>
         </div>
 
-        <!-- 实时日志 -->
-        <div class="panel logs-container">
+        <!-- 2. 实时日志 (Row 2 Left) -->
+        <div class="panel area-logs">
             <div class="panel-title">
                 实时调用流
                 <button class="refresh-btn" onclick="fetchData()">REFRESH</button>
@@ -229,73 +208,83 @@
             </div>
         </div>
 
-        <!-- 今日应用使用量柱状图 -->
-        <div class="panel">
-            <div class="panel-title">今日各应用使用量对比</div>
-            <div id="barChart" style="width: 100%; height: 350px;"></div>
+        <!-- 3. [新增] 模型消耗占比饼图 (Row 2 Right) -->
+        <div class="panel area-pie">
+            <div class="panel-title">模型Token消耗占比</div>
+            <div id="pieChart" style="width: 100%; height: 100%;"></div>
         </div>
 
-        <!-- 各应用总量统计数据 -->
-        <div class="panel">
-            <div class="panel-title">各应用总量统计</div>
-            <div id="appStatsTable" style="overflow-x: auto;">
-                <table style="width: 100%; border-collapse: collapse; color: var(--text-color);">
+        <!-- 4. 今日应用使用量柱状图 (Row 3 Full) -->
+        <div class="panel area-bar">
+            <div class="panel-title">今日各应用使用量对比</div>
+            <div id="barChart" style="width: 100%; height: 100%;"></div>
+        </div>
+
+        <!-- 5. 各应用总量统计数据 (Row 4 Left) -->
+        <div class="panel area-table">
+            <div class="panel-title">各应用详细统计</div>
+            <div style="overflow-x: auto; flex: 1;">
+                <table class="stats-table">
                     <thead>
-                        <tr style="background-color: var(--accent-dark); color: white;">
-                            <th style="padding: 10px; text-align: left;">名称</th>
-                            <th style="padding: 10px; text-align: right;">请求</th>
-                            <th style="padding: 10px; text-align: right;">Token</th>
-                            <th style="padding: 10px; text-align: right;">平均</th>
+                        <tr>
+                            <th>名称</th>
+                            <th style="text-align: right;">请求</th>
+                            <th style="text-align: right;">Token</th>
                         </tr>
                     </thead>
                     <tbody id="appStatsBody">
-                        <tr>
-                            <td colspan="4" style="text-align: center; padding: 20px; opacity: 0.5;">等待数据加载...</td>
-                        </tr>
+                        <tr><td colspan="3" style="text-align: center; padding: 20px; opacity: 0.5;">等待数据...</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <!-- 热力图 -->
-        <div class="panel heatmap-container">
-            <div class="panel-title">历史活跃热力图</div>
-            <div id="heatmapChart" style="width: 100%; height: 350px;"></div>
+        <!-- 6. 热力图 (Row 4 Right) -->
+        <div class="panel area-heatmap">
+            <div class="panel-title">30天活跃热力图</div>
+            <div id="heatmapChart" style="width: 100%; height: 100%;"></div>
         </div>
     </div>
 
 <script>
     let heatmapChart = null;
     let barChart = null;
+    let pieChart = null; // 新增饼图实例
 
     // 应用名称映射表
     const appNameMap = {
         'shici': '诗词雅苑',
         'music': '广山音乐',
         'ai': 'AI助手',
+        'chatbox': 'ChatBox',
         'proxy': '代理服务',
         'poe-app': '自建POE',
         'unknown-app': '其他'
-        // 可以继续添加更多映射
     };
 
-    // 获取显示名称的函数
     function getDisplayName(appName) {
         return appNameMap[appName] || appName;
     }
 
     // 初始化 ECharts 实例
     function initChart() {
+        // 初始化热力图
         const heatmapChartDom = document.getElementById('heatmapChart');
-        heatmapChart = echarts.init(heatmapChartDom, 'dark', { renderer: 'canvas' });
+        if(heatmapChartDom) heatmapChart = echarts.init(heatmapChartDom, 'dark', { renderer: 'canvas', backgroundColor: 'transparent' });
 
+        // 初始化柱状图
         const barChartDom = document.getElementById('barChart');
-        barChart = echarts.init(barChartDom, 'dark', { renderer: 'canvas' });
+        if(barChartDom) barChart = echarts.init(barChartDom, 'dark', { renderer: 'canvas', backgroundColor: 'transparent' });
 
-        // 窗口大小改变时重绘
+        // [新增] 初始化饼图
+        const pieChartDom = document.getElementById('pieChart');
+        if(pieChartDom) pieChart = echarts.init(pieChartDom, 'dark', { renderer: 'canvas', backgroundColor: 'transparent' });
+
+        // 窗口大小改变时重绘所有图表
         window.addEventListener('resize', () => {
-            heatmapChart.resize();
-            barChart.resize();
+            if(heatmapChart) heatmapChart.resize();
+            if(barChart) barChart.resize();
+            if(pieChart) pieChart.resize();
         });
     }
 
@@ -306,30 +295,95 @@
 
             const data = await response.json();
 
-            // 数据解构：后端现在返回 { summary, latest, heatmap }
+            // 数据解构：增加了 models
             const summary = data.summary || [];
             const latest = data.latest || [];
             const heatmapData = data.heatmap || [];
+            const models = data.models || []; // 后端新增的字段
 
             updateMetrics(summary);
             renderLogs(latest);
             renderHeatmap(heatmapData, summary);
-            renderBarChart(summary);  // 新增：渲染柱状图
-            renderAppStatsTable(summary);  // 新增：渲染应用统计数据表
+            renderBarChart(summary);
+            renderAppStatsTable(summary);
+            renderPieChart(models); // [新增] 渲染饼图
 
         } catch (error) {
             console.error(error);
         }
     }
 
+    // [新增] 渲染模型消耗饼图
+    function renderPieChart(models) {
+        if (!pieChart) return;
+
+        // 如果没有数据，给一个占位
+        if (!models || models.length === 0) {
+            pieChart.clear();
+            return;
+        }
+
+        const chartData = models.map(item => ({
+            value: item.total_tokens,
+            name: item.model_name || 'unknown'
+        }));
+
+        const option = {
+            backgroundColor: 'transparent',
+            tooltip: {
+                trigger: 'item',
+                formatter: '{b}: {c} ({d}%)' // 显示 名称: 数值 (百分比)
+            },
+            legend: {
+                top: '0%',
+                left: 'center',
+                textStyle: { color: '#c5c6c7' }
+            },
+            series: [
+                {
+                    name: 'Token消耗',
+                    type: 'pie',
+                    radius: ['40%', '70%'], // 环形图 (Donut) 看起来更高级
+                    avoidLabelOverlap: false,
+                    itemStyle: {
+                        borderRadius: 10,
+                        borderColor: '#1f2833',
+                        borderWidth: 2
+                    },
+                    label: {
+                        show: false,
+                        position: 'center'
+                    },
+                    emphasis: {
+                        label: {
+                            show: true,
+                            fontSize: 16,
+                            fontWeight: 'bold',
+                            color: '#66fcf1'
+                        }
+                    },
+                    labelLine: {
+                        show: false
+                    },
+                    data: chartData
+                }
+            ],
+            // 自定义颜色盘，匹配你的主题
+            color: [
+                '#66fcf1', '#45a29e', '#1f2833', '#c5c6c7', '#546e7a', 
+                '#26a69a', '#80cbc4', '#009688'
+            ]
+        };
+
+        pieChart.setOption(option);
+    }
+
     // 1. 更新顶部指标
     function updateMetrics(summary) {
         const totalReq = summary.reduce((sum, item) => sum + item.count, 0);
         const totalTokens = summary.reduce((sum, item) => sum + (item.total_tokens || 0), 0);
-
-        // 简单的数字滚动动画效果
         animateValue("total-req", parseInt(document.getElementById("total-req").innerText) || 0, totalReq, 1000);
-        document.getElementById("total-tokens").innerText = totalTokens;
+        document.getElementById("total-tokens").innerText = totalTokens.toLocaleString();
         document.getElementById("active-apps").innerText = summary.length;
     }
 
@@ -340,7 +394,7 @@
         const step = (timestamp) => {
             if (!startTimestamp) startTimestamp = timestamp;
             const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-            obj.innerHTML = Math.floor(progress * (end - start) + start);
+            obj.innerHTML = Math.floor(progress * (end - start) + start).toLocaleString();
             if (progress < 1) window.requestAnimationFrame(step);
         };
         window.requestAnimationFrame(step);
@@ -349,16 +403,14 @@
     // 2. 渲染实时日志列表
     function renderLogs(logs) {
         const container = document.getElementById('logList');
-        container.innerHTML = ''; // 清空旧数据
-
+        container.innerHTML = '';
         if (logs.length === 0) {
             container.innerHTML = '<div style="text-align:center; margin-top:50px; opacity:0.5;">NO DATA SIGNAL</div>';
             return;
         }
-
         logs.forEach(log => {
-            const time = log.created_at ? log.created_at.split(' ')[1] : 'Unknown'; // 只取时间部分
-            const model = log.model_name || 'unknown-model';
+            const time = log.created_at ? log.created_at.split(' ')[1] : 'Unknown';
+            const model = log.model_name || 'unknown';
             const displayName = getDisplayName(log.app_name);
 
             const div = document.createElement('div');
@@ -377,243 +429,84 @@
 
     // 3. 渲染热力图
     function renderHeatmap(rawData, summary) {
-        if (!heatmapChart) initChart();
-
-        // 提取所有 App 名字作为 Y 轴，并转换为显示名称
+        if (!heatmapChart) return;
         const apps = summary.map(item => getDisplayName(item.app_name));
-
-        // 生成过去30天的日期数组作为 X 轴
         const dates = [];
         for (let i = 29; i >= 0; i--) {
             const d = new Date();
             d.setDate(d.getDate() - i);
             dates.push(d.toISOString().split('T')[0]);
         }
-
-        // 转换数据为 ECharts 热力图格式 [x, y, value]
-        // x: dateIndex, y: appIndex, value: tokens
         const seriesData = rawData.map(item => {
             const dateIndex = dates.indexOf(item.date);
-            // 使用原始名称查找索引，但显示时使用映射名称
             const appIndex = summary.map(s => s.app_name).indexOf(item.app_name);
-            if (dateIndex !== -1 && appIndex !== -1) {
-                return [dateIndex, appIndex, item.daily_tokens];
-            }
+            if (dateIndex !== -1 && appIndex !== -1) return [dateIndex, appIndex, item.daily_tokens];
             return null;
         }).filter(item => item !== null);
 
         const option = {
             backgroundColor: 'transparent',
-            tooltip: {
-                position: 'top',
-                formatter: function (params) {
-                    // 这里需要获取原始app_name对应的显示名称
-                    const originalAppName = summary[params.value[1]] ? summary[params.value[1]].app_name : '';
-                    const displayName = getDisplayName(originalAppName);
-                    return `${dates[params.value[0]]}<br/>${displayName}: ${params.value[2]} tokens`;
-                }
-            },
-            grid: {
-                top: '10px',
-                bottom: '30px',
-                left: '80px', // 留给 App 名字的空间
-                right: '20px'
-            },
-            xAxis: {
-                type: 'category',
-                data: dates,
-                axisLabel: { color: '#ccc', fontSize: 10 },
-                axisLine: { lineStyle: { color: '#333' } },
-                splitArea: { show: true }
-            },
-            yAxis: {
-                type: 'category',
-                data: apps,
-                axisLabel: { color: '#66fcf1', fontSize: 11 },
-                axisLine: { lineStyle: { color: '#333' } },
-                splitArea: { show: true }
-            },
-            visualMap: {
-                min: 0,
-                max: 5000, // 根据你的实际 token 量级调整这个最大值，深色代表高消耗
-                calculable: true,
-                orient: 'horizontal',
-                left: 'center',
-                bottom: '0%',
-                inRange: {
-                    color: ['#1f2833', '#45a29e', '#66fcf1'] // 从暗到亮的颜色渐变
-                },
-                textStyle: { color: '#fff' }
-            },
-            series: [{
-                name: 'Token Usage',
-                type: 'heatmap',
-                data: seriesData,
-                label: { show: false },
-                emphasis: {
-                    itemStyle: {
-                        shadowBlur: 10,
-                        shadowColor: 'rgba(0, 0, 0, 0.5)'
-                    }
-                }
-            }]
+            tooltip: { position: 'top', formatter: (p) => `${dates[p.value[0]]}<br/>${getDisplayName(summary[p.value[1]]?.app_name)}: ${p.value[2]} tokens` },
+            grid: { top: '10px', bottom: '30px', left: '80px', right: '20px' },
+            xAxis: { type: 'category', data: dates, axisLabel: { color: '#ccc', fontSize: 10 }, axisLine: { lineStyle: { color: '#333' } } },
+            yAxis: { type: 'category', data: apps, axisLabel: { color: '#66fcf1', fontSize: 11 }, axisLine: { lineStyle: { color: '#333' } }, splitLine: {show:true, lineStyle:{color:'#333'}} },
+            visualMap: { min: 0, max: 5000, calculable: true, orient: 'horizontal', left: 'center', bottom: '0%', inRange: { color: ['#1f2833', '#45a29e', '#66fcf1'] }, textStyle: { color: '#fff' } },
+            series: [{ type: 'heatmap', data: seriesData, itemStyle: { borderColor: '#0b0c10', borderWidth: 1 } }]
         };
-
         heatmapChart.setOption(option);
     }
 
     // 4. 渲染今日应用使用量柱状图
     function renderBarChart(summary) {
-        if (!barChart) initChart();
-
-        // 提取应用名称和对应的总token数，使用映射名称
+        if (!barChart) return;
         const appNames = summary.map(item => getDisplayName(item.app_name));
         const tokenCounts = summary.map(item => item.total_tokens || 0);
         const requestCounts = summary.map(item => item.count || 0);
 
         const option = {
             backgroundColor: 'transparent',
-            tooltip: {
-                trigger: 'axis',
-                axisPointer: {
-                    type: 'shadow'
-                },
-                formatter: function (params) {
-                    // 获取原始app_name，然后转换为显示名称
-                    const originalAppName = summary[params.dataIndex] ? summary[params.dataIndex].app_name : '';
-                    const displayName = getDisplayName(originalAppName);
-                    const tokens = params[0].value;
-                    const requests = params[1].value;
-                    return `${displayName}<br/>Token数: ${tokens}<br/>请求数: ${requests}`;
-                }
-            },
-            legend: {
-                data: ['Token数', '请求数'],
-                textStyle: {
-                    color: '#c5c6c7'
-                }
-            },
-            grid: {
-                left: '3%',
-                right: '4%',
-                bottom: '3%',
-                containLabel: true
-            },
-            xAxis: [
-                {
-                    type: 'category',
-                    data: appNames,
-                    axisTick: {
-                        alignWithLabel: true
-                    },
-                    axisLabel: {
-                        color: '#c5c6c7',
-                        rotate: 45
-                    },
-                    axisLine: {
-                        lineStyle: {
-                            color: '#45a29e'
-                        }
-                    }
-                }
-            ],
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            legend: { data: ['Token', '请求'], textStyle: { color: '#c5c6c7' } },
+            grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+            xAxis: [{ type: 'category', data: appNames, axisLabel: { color: '#c5c6c7', rotate: 0 }, axisLine: { lineStyle: { color: '#45a29e' } } }],
             yAxis: [
-                {
-                    type: 'value',
-                    name: 'Token数',
-                    position: 'left',
-                    axisLabel: {
-                        color: '#c5c6c7'
-                    },
-                    axisLine: {
-                        lineStyle: {
-                            color: '#45a29e'
-                        }
-                    }
-                },
-                {
-                    type: 'value',
-                    name: '请求数',
-                    position: 'right',
-                    axisLabel: {
-                        color: '#c5c6c7'
-                    },
-                    axisLine: {
-                        lineStyle: {
-                            color: '#c5c6c7'
-                        }
-                    }
-                }
+                { type: 'value', name: 'Token', position: 'left', axisLabel: { color: '#c5c6c7' }, splitLine: { lineStyle: { color: '#333' } } },
+                { type: 'value', name: '请求', position: 'right', axisLabel: { color: '#c5c6c7' }, splitLine: { show: false } }
             ],
             series: [
-                {
-                    name: 'Token数',
-                    type: 'bar',
-                    yAxisIndex: 0,
-                    data: tokenCounts,
-                    itemStyle: {
-                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                            { offset: 0, color: '#66fcf1' },
-                            { offset: 1, color: '#45a29e' }
-                        ])
-                    }
-                },
-                {
-                    name: '请求数',
-                    type: 'bar',
-                    yAxisIndex: 1,
-                    data: requestCounts,
-                    itemStyle: {
-                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                            { offset: 0, color: '#c5c6c7' },
-                            { offset: 1, color: '#1f2833' }
-                        ])
-                    }
-                }
+                { name: 'Token', type: 'bar', yAxisIndex: 0, data: tokenCounts, itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: '#66fcf1' }, { offset: 1, color: '#45a29e' }]) } },
+                { name: '请求', type: 'bar', yAxisIndex: 1, data: requestCounts, itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: '#c5c6c7' }, { offset: 1, color: '#1f2833' }]) } }
             ]
         };
-
         barChart.setOption(option);
     }
 
-    // 5. 渲染各应用总量统计数据表
+    // 5. 渲染表格
     function renderAppStatsTable(summary) {
         const tableBody = document.getElementById('appStatsBody');
-
         if (!summary || summary.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; opacity: 0.5;">暂无数据</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px; opacity: 0.5;">暂无数据</td></tr>';
             return;
         }
-
-        // 按总token数排序
         const sortedSummary = [...summary].sort((a, b) => (b.total_tokens || 0) - (a.total_tokens || 0));
-
         let tableHTML = '';
-
         sortedSummary.forEach(item => {
-            const originalAppName = item.app_name || '未知应用';
-            const displayName = getDisplayName(originalAppName);
-            const count = item.count || 0;
-            const totalTokens = item.total_tokens || 0;
-            const avgTokens = count > 0 ? Math.round(totalTokens / count) : 0;
-
+            const displayName = getDisplayName(item.app_name);
             tableHTML += `
-                <tr style="border-bottom: 1px solid var(--border-color);">
-                    <td style="padding: 10px; color: var(--accent-cyan);">${displayName}</td>
-                    <td style="padding: 10px; text-align: right; color: #fff;">${count}</td>
-                    <td style="padding: 10px; text-align: right; color: #66fcf1;">${totalTokens}</td>
-                    <td style="padding: 10px; text-align: right; color: #c5c6c7;">${avgTokens}</td>
+                <tr>
+                    <td style="color: var(--accent-cyan);">${displayName}</td>
+                    <td style="text-align: right; color: #fff;">${item.count}</td>
+                    <td style="text-align: right; color: #ffcc00;">${(item.total_tokens || 0).toLocaleString()}</td>
                 </tr>
             `;
         });
-
         tableBody.innerHTML = tableHTML;
     }
 
     // 启动
     initChart();
     fetchData();
-    setInterval(fetchData, 60000); // 每分钟刷新
+    setInterval(fetchData, 60000); 
 
 </script>
 </body>
