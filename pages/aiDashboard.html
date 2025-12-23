@@ -5,7 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>AI Proxy 指挥中心</title>
-    <!-- 引入 ECharts -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link
         href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Serif+SC:wght@400;700&display=swap"
@@ -17,656 +16,312 @@
             --text-color: #c5c6c7;
             --accent-cyan: #66fcf1;
             --accent-dark: #45a29e;
+            --accent-gold: #ffcc00;
             --border-color: rgba(102, 252, 241, 0.2);
         }
 
         body {
             background-color: var(--bg-color);
             color: var(--text-color);
-            font-family: 'Noto Serif SC', sans-serif;
+            font-family: 'JetBrains Mono', 'Noto Serif SC', sans-serif;
             margin: 0;
             padding: 20px;
             display: flex;
             flex-direction: column;
             gap: 20px;
-            max-width: 1400px;
-            /*稍微加宽以容纳并排图表*/
-            margin: 0 auto;
+            max-width: 1200px;
+            margin-left: auto;
+            margin-right: auto;
         }
 
         h1 {
             text-align: center;
-            color: var(--accent-cyan);
-            font-family: 'JetBrains Mono', monospace;
-            text-transform: uppercase;
+            font-weight: 700;
             letter-spacing: 4px;
-            margin-bottom: 10px;
+            color: var(--accent-cyan);
+            margin: 20px 0;
+            text-transform: uppercase;
             text-shadow: 0 0 10px rgba(102, 252, 241, 0.5);
         }
 
-        /* 布局容器 - 桌面端改为双列 */
-        .dashboard-grid {
+        /* 顶部卡片 */
+        .grid-header {
             display: grid;
-            grid-template-columns: 2fr 1fr;
-            /* 左侧宽，右侧窄 */
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
             gap: 20px;
         }
 
-        /* 卡片通用样式 */
-        .panel {
+        .stat-card {
             background: var(--card-bg);
             border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 12px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
             position: relative;
             overflow: hidden;
-            display: flex;
-            flex-direction: column;
         }
 
-        .panel::before {
-            content: '';
+        .stat-card::before {
+            content: "";
             position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
-            opacity: 0.5;
+            width: 4px;
+            height: 100%;
+            background: var(--accent-cyan);
         }
 
-        /* 顶部三个数据卡片 - 跨越两列 */
-        .metrics-row {
-            grid-column: span 2;
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
+        .stat-card.gold::before {
+            background: var(--accent-gold);
         }
 
-        .metric-card {
-            text-align: center;
-        }
-
-        .metric-card h3 {
-            font-size: 0.8rem;
-            color: var(--text-color);
-            opacity: 0.7;
+        .stat-card h3 {
             margin: 0;
+            font-size: 0.8rem;
+            opacity: 0.6;
+            text-transform: uppercase;
         }
 
-        .metric-card p {
-            font-size: 1.2rem;
-            /* 增大字体 */
+        .stat-card p {
+            margin: 10px 0 0;
+            font-size: 2rem;
+            font-weight: 700;
             color: var(--accent-cyan);
-            margin: 3px 0 0 0;
-            font-family: 'JetBrains Mono', monospace;
-            font-weight: bold;
         }
 
-        /* 各个区域的布局分配 */
-        .area-logs {
-            grid-column: span 1;
+        .stat-card.gold p {
+            color: var(--accent-gold);
+        }
+
+        /* 图表布局 */
+        .chart-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 20px;
+        }
+
+        .chart-container {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
             height: 400px;
-        }
-
-        .area-pie {
-            grid-column: span 1;
-            height: 400px;
-        }
-
-        /* 饼图 */
-        .area-bar {
-            grid-column: span 2;
-            height: 350px;
-        }
-
-        /* 柱状图跨满 */
-        .area-table {
-            grid-column: span 1;
-            height: 400px;
-            overflow: hidden;
-        }
-
-        .area-heatmap {
-            grid-column: span 1;
-            height: 400px;
-        }
-
-        .panel-title {
-            font-size: 0.9rem;
-            color: var(--accent-cyan);
-            margin-bottom: 10px;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 5px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        /* 日志列表样式 */
-        .log-list {
-            flex: 1;
-            overflow-y: auto;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem;
-        }
-
-        .log-item {
-            padding: 10px;
-            border-left: 2px solid var(--accent-dark);
-            background: rgba(0, 0, 0, 0.2);
-            margin-bottom: 8px;
-            transition: all 0.3s ease;
-            animation: fadeIn 0.5s ease;
-        }
-
-        .log-item:hover {
-            border-left-color: var(--accent-cyan);
-            background: rgba(102, 252, 241, 0.1);
-        }
-
-        .log-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 4px;
-            font-size: 0.75rem;
-            opacity: 0.8;
-        }
-
-        .app-badge {
-            color: var(--accent-cyan);
-            font-weight: bold;
-        }
-
-        .log-content {
-            color: #fff;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .token-count {
-            color: #ffcc00;
-            font-size: 0.75rem;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateX(10px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        .refresh-btn {
-            background: transparent;
-            border: 1px solid var(--accent-dark);
-            color: var(--accent-cyan);
-            padding: 4px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.7rem;
-        }
-
-        .refresh-btn:hover {
-            background: var(--accent-dark);
-            color: #fff;
         }
 
         /* 表格样式 */
-        .stats-table {
+        .table-container {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            overflow-x: auto;
+        }
+
+        table {
             width: 100%;
             border-collapse: collapse;
-            color: var(--text-color);
             font-size: 0.9rem;
         }
 
-        .stats-table th {
+        th,
+        td {
+            padding: 12px 15px;
             text-align: left;
-            padding: 8px;
-            border-bottom: 1px solid var(--accent-dark);
-            color: var(--accent-cyan);
-        }
-
-        .stats-table td {
-            padding: 8px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        /* 移动端适配 */
-        @media (max-width: 768px) {
-            .dashboard-grid {
-                grid-template-columns: 1fr;
-            }
+        th {
+            color: var(--accent-dark);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+        }
 
-            .metrics-row {
-                grid-column: span 1;
-            }
+        .tag {
+            background: rgba(102, 252, 241, 0.1);
+            color: var(--accent-cyan);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
 
-            .area-bar,
-            .area-logs,
-            .area-pie,
-            .area-table,
-            .area-heatmap {
-                grid-column: span 1;
-                height: 320px;
-            }
+        .refresh-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: var(--accent-cyan);
+            color: var(--bg-color);
+            border: none;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(102, 252, 241, 0.3);
+            z-index: 100;
+        }
 
-            h1 {
-                font-size: 1.5rem;
-            }
+        .refresh-btn:hover {
+            transform: scale(1.05);
         }
     </style>
 </head>
 
 <body>
+    <h1>AI Proxy 指挥中心</h1>
 
-    <h1>AI监控中心</h1>
-
-    <div class="dashboard-grid">
-        <!-- 1. 核心指标 (Row 1) -->
-        <div class="metrics-row">
-            <div class="panel metric-card">
-                <h3>今日请求</h3>
-                <p id="total-req">-</p>
-            </div>
-            <div class="panel metric-card">
-                <h3>Token消耗</h3>
-                <p id="total-tokens">-</p>
-            </div>
-            <div class="panel metric-card">
-                <h3>活跃应用</h3>
-                <p id="active-apps">-</p>
-            </div>
+    <div class="grid-header">
+        <div class="stat-card">
+            <h3>今日总请求</h3>
+            <p id="totalRequests">-</p>
         </div>
-
-        <!-- 2. 实时日志 (Row 2 Left) -->
-        <div class="panel area-logs">
-            <div class="panel-title">
-                实时调用流
-                <button class="refresh-btn" onclick="fetchData()">REFRESH</button>
-            </div>
-            <div class="log-list" id="logList">
-                <div style="text-align:center; padding: 20px; opacity: 0.5;">等待信号连接...</div>
-            </div>
+        <div class="stat-card">
+            <h3>今日总 Tokens</h3>
+            <p id="totalTokens">-</p>
         </div>
-
-        <!-- 3. [新增] 模型消耗占比饼图 (Row 2 Right) -->
-        <div class="panel area-pie">
-            <div class="panel-title">模型Token消耗占比</div>
-            <div id="pieChart" style="width: 100%; height: 100%;"></div>
-        </div>
-
-        <!-- 4. 今日应用使用量柱状图 (Row 3 Full) -->
-        <div class="panel area-bar">
-            <div class="panel-title">今日各应用使用量对比</div>
-            <div id="barChart" style="width: 100%; height: 100%;"></div>
-        </div>
-
-        <!-- 5. 各应用总量统计数据 (Row 4 Left) -->
-        <div class="panel area-table">
-            <div class="panel-title">各应用详细统计</div>
-            <div style="overflow-x: auto; flex: 1;">
-                <table class="stats-table">
-                    <thead>
-                        <tr>
-                            <th>名称</th>
-                            <th style="text-align: right;">请求</th>
-                            <th style="text-align: right;">Token</th>
-                        </tr>
-                    </thead>
-                    <tbody id="appStatsBody">
-                        <tr>
-                            <td colspan="3" style="text-align: center; padding: 20px; opacity: 0.5;">等待数据...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- 6. 热力图 (Row 4 Right) -->
-        <div class="panel area-heatmap">
-            <div class="panel-title">7天活跃热力图</div>
-            <div id="heatmapChart" style="width: 100%; height: 100%;"></div>
+        <div class="stat-card gold">
+            <h3>预计消耗成本</h3>
+            <p id="totalCost">$ 0.0000</p>
         </div>
     </div>
 
+    <div class="chart-row">
+        <div class="chart-container" id="heatmapChart"></div>
+        <div class="chart-container" id="perfChart"></div>
+    </div>
+
+    <div class="table-container">
+        <h2 style="color: var(--accent-dark); margin-top: 0; font-size: 1.2rem;">应用流水明细</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>应用</th>
+                    <th>模型</th>
+                    <th>Tokens</th>
+                    <th>耗时 (ms)</th>
+                    <th>时间</th>
+                </tr>
+            </thead>
+            <tbody id="latestLogsBody"></tbody>
+        </table>
+    </div>
+
+    <div class="table-container">
+        <h2 style="color: var(--accent-dark); margin-top: 0; font-size: 1.2rem;">应用统计概览</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>应用名称</th>
+                    <th>请求总数</th>
+                    <th>Token 累计</th>
+                    <th>预计成本</th>
+                </tr>
+            </thead>
+            <tbody id="summaryBody"></tbody>
+        </table>
+    </div>
+
+    <button class="refresh-btn" onclick="fetchStats()">刷新数据</button>
+
     <script>
-        let heatmapChart = null;
-        let barChart = null;
-        let pieChart = null; // 新增饼图实例
+        let heatmapChart, perfChart;
 
-        // 应用名称映射表
-        const appNameMap = {
-            'shici': '诗词雅苑',
-            'music': '广山音乐',
-            'ai': 'AI助手',
-            'chatbox': 'ChatBox',
-            'proxy': '代理服务',
-            'poe-app': 'My POE',
-            'unknown-app': '其他'
-        };
-
-        function getDisplayName(appName) {
-            return appNameMap[appName] || appName;
-        }
-
-        // 初始化 ECharts 实例
-        function initChart() {
-            // 初始化热力图
-            const heatmapChartDom = document.getElementById('heatmapChart');
-            if (heatmapChartDom) heatmapChart = echarts.init(heatmapChartDom, 'dark', { renderer: 'canvas', backgroundColor: 'transparent' });
-
-            // 初始化柱状图
-            const barChartDom = document.getElementById('barChart');
-            if (barChartDom) barChart = echarts.init(barChartDom, 'dark', { renderer: 'canvas', backgroundColor: 'transparent' });
-
-            // [新增] 初始化饼图
-            const pieChartDom = document.getElementById('pieChart');
-            if (pieChartDom) pieChart = echarts.init(pieChartDom, 'dark', { renderer: 'canvas', backgroundColor: 'transparent' });
-
-            // 窗口大小改变时重绘所有图表
+        // 初始化图表
+        function initCharts() {
+            heatmapChart = echarts.init(document.getElementById('heatmapChart'));
+            perfChart = echarts.init(document.getElementById('perfChart'));
             window.addEventListener('resize', () => {
-                if (heatmapChart) heatmapChart.resize();
-                if (barChart) barChart.resize();
-                if (pieChart) pieChart.resize();
+                heatmapChart.resize();
+                perfChart.resize();
             });
         }
 
-        async function fetchData() {
+        async function fetchStats() {
             try {
                 const response = await fetch('/api/stats');
-                if (!response.ok) throw new Error("API Error");
-
                 const data = await response.json();
-
-                // 数据解构：增加了 models
-                const summary = data.summary || [];
-                const latest = data.latest || [];
-                const heatmapData = data.heatmap || [];
-                const models = data.models || []; // 后端新增的字段
-
-                updateMetrics(summary);
-                renderLogs(latest);
-                renderHeatmap(heatmapData, summary);
-                renderBarChart(summary);
-                renderAppStatsTable(summary);
-                renderPieChart(models); // [新增] 渲染饼图
-
+                updateUI(data);
             } catch (error) {
-                console.error(error);
+                console.error('Fetch error:', error);
             }
         }
 
-        // [新增] 渲染模型消耗饼图
-        function renderPieChart(models) {
-            if (!pieChart) return;
+        function updateUI(data) {
+            // 1. 更新顶部卡片
+            const totalTokens = data.summary.reduce((s, i) => s + i.total_tokens, 0);
+            const totalRequests = data.summary.reduce((s, i) => s + i.count, 0);
+            const totalCost = data.summary.reduce((s, i) => s + parseFloat(i.estimated_cost || 0), 0);
 
-            // 如果没有数据，给一个占位
-            if (!models || models.length === 0) {
-                pieChart.clear();
-                return;
-            }
+            document.getElementById('totalRequests').innerText = totalRequests.toLocaleString();
+            document.getElementById('totalTokens').innerText = totalTokens.toLocaleString();
+            document.getElementById('totalCost').innerText = `$ ${totalCost.toFixed(4)}`;
 
-            const chartData = models.map(item => ({
-                value: item.total_tokens,
-                name: item.model_name || 'unknown'
-            }));
+            // 2. 渲染 App 统计表格
+            const summaryBody = document.getElementById('summaryBody');
+            summaryBody.innerHTML = data.summary.map(item => `
+                <tr>
+                    <td><span class="tag">${getDisplayName(item.app_name)}</span></td>
+                    <td>${item.count}</td>
+                    <td style="color: var(--accent-gold);">${item.total_tokens.toLocaleString()}</td>
+                    <td style="color: var(--accent-cyan);">$ ${parseFloat(item.estimated_cost).toFixed(4)}</td>
+                </tr>
+            `).join('');
 
+            // 3. 渲染最新流水
+            const latestBody = document.getElementById('latestLogsBody');
+            latestBody.innerHTML = data.latest.map(item => `
+                <tr>
+                    <td>${getDisplayName(item.app_name)}</td>
+                    <td style="font-size: 0.8rem; opacity: 0.7;">${item.model_name}</td>
+                    <td>${item.tokens}</td>
+                    <td style="color: ${item.duration > 5000 ? '#ff4444' : '#66fcf1'}">${item.duration}ms</td>
+                    <td style="font-size: 0.8rem; opacity: 0.5;">${item.created_at.split(' ')[1]}</td>
+                </tr>
+            `).join('');
+
+            // 4. 渲染图表
+            renderHeatmap(data.heatmap);
+            renderPerfChart(data.performance);
+        }
+
+        function renderHeatmap(history) {
             const option = {
-                backgroundColor: 'transparent',
-                tooltip: {
-                    trigger: 'item',
-                    formatter: '{b}: {c} ({d}%)'
-                },
-                grid: {
-                    top: 40,
-                    bottom: 20,
-                    left: 20,
-                    right: 20,
-                    containLabel: true
-                },
-                series: [
-                    {
-                        name: 'Token消耗',
-                        type: 'pie',
-                        radius: ['35%', '60%'], // 稍微缩小半径，给标签留出更多空间
-                        center: ['50%', '65%'], // 中心点进一步下移
-                        avoidLabelOverlap: true,
-                        itemStyle: {
-                            borderRadius: 8,
-                            borderColor: '#1f2833',
-                            borderWidth: 2
-                        },
-                        label: {
-                            show: true,
-                            position: 'outside',
-                            // 优化标签：截断过长的模型名并换行
-                            formatter: function (params) {
-                                let name = params.name;
-                                if (name.length > 20) {
-                                    name = name.substring(0, 18) + '...';
-                                }
-                                return name + '\n' + params.percent + '%';
-                            },
-                            color: '#c5c6c7',
-                            fontSize: 11,
-                            overflow: 'break',
-                            width: 100 // 限制标签宽度
-                        },
-                        emphasis: {
-                            scale: true,
-                            scaleSize: 10,
-                            label: {
-                                show: true,
-                                fontSize: 13,
-                                fontWeight: 'bold',
-                                color: '#66fcf1'
-                            }
-                        },
-                        labelLine: {
-                            show: true,
-                            length: 8,
-                            length2: 8,
-                            smooth: true
-                        },
-                        data: chartData
-                    }
-                ],
-                color: [
-                    '#66fcf1', '#45a29e', '#1f2833', '#c5c6c7', '#546e7a',
-                    '#26a69a', '#80cbc4', '#009688'
-                ]
-            };
-
-            // 提取展示逻辑
-            function showPieInfo(name, value, percent, autoHide = true) {
-                let floatDiv = document.getElementById('pie-click-info');
-                if (!floatDiv) {
-                    floatDiv = document.createElement('div');
-                    floatDiv.id = 'pie-click-info';
-                    floatDiv.style.position = 'absolute';
-                    floatDiv.style.top = '38px'; // 移至顶部标题下方
-                    floatDiv.style.left = '10px';
-                    floatDiv.style.right = '10px';
-                    floatDiv.style.backgroundColor = 'rgba(31, 40, 51, 0.95)';
-                    floatDiv.style.color = '#66fcf1';
-                    floatDiv.style.padding = '8px 12px';
-                    floatDiv.style.border = '1px solid rgba(102, 252, 241, 0.3)';
-                    floatDiv.style.borderRadius = '4px';
-                    floatDiv.style.zIndex = '1000';
-                    floatDiv.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.5)';
-                    floatDiv.style.fontFamily = "'JetBrains Mono', monospace";
-                    floatDiv.style.fontSize = '12px';
-                    floatDiv.style.textAlign = 'center';
-                    floatDiv.style.wordBreak = 'break-all';
-                    floatDiv.style.pointerEvents = 'none';
-                    document.getElementById('pieChart').parentNode.appendChild(floatDiv);
-                }
-
-                floatDiv.innerHTML = `<strong>${name}</strong><br/>${value.toLocaleString()} tokens (${percent}%)`;
-
-                if (window._pieTimer) clearTimeout(window._pieTimer);
-                if (autoHide) {
-                    window._pieTimer = setTimeout(() => {
-                        if (floatDiv && floatDiv.parentNode) {
-                            floatDiv.parentNode.removeChild(floatDiv);
-                        }
-                    }, 5000);
-                }
-            }
-
-            pieChart.off('click'); // 移除旧监听，防止重复
-            pieChart.on('click', function (params) {
-                showPieInfo(params.name, params.value, params.percent, true);
-            });
-
-            pieChart.setOption(option);
-
-            // 默认显示最大占比的模型
-            if (chartData.length > 0) {
-                const maxItem = [...chartData].sort((a, b) => b.value - a.value)[0];
-                const total = chartData.reduce((sum, i) => sum + i.value, 0);
-                const percent = ((maxItem.value / total) * 100).toFixed(2);
-                showPieInfo(maxItem.name, maxItem.value, percent, false); // 默认显示不自动隐藏
-            }
-        }
-
-        // 1. 更新顶部指标
-        function updateMetrics(summary) {
-            const totalReq = summary.reduce((sum, item) => sum + item.count, 0);
-            const totalTokens = summary.reduce((sum, item) => sum + (item.total_tokens || 0), 0);
-            animateValue("total-req", parseInt(document.getElementById("total-req").innerText) || 0, totalReq, 1000);
-            document.getElementById("total-tokens").innerText = totalTokens.toLocaleString();
-            document.getElementById("active-apps").innerText = summary.length;
-        }
-
-        function animateValue(id, start, end, duration) {
-            if (start === end) return;
-            const obj = document.getElementById(id);
-            let startTimestamp = null;
-            const step = (timestamp) => {
-                if (!startTimestamp) startTimestamp = timestamp;
-                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-                obj.innerHTML = Math.floor(progress * (end - start) + start).toLocaleString();
-                if (progress < 1) window.requestAnimationFrame(step);
-            };
-            window.requestAnimationFrame(step);
-        }
-
-        // 2. 渲染实时日志列表
-        function renderLogs(logs) {
-            const container = document.getElementById('logList');
-            container.innerHTML = '';
-            if (logs.length === 0) {
-                container.innerHTML = '<div style="text-align:center; margin-top:50px; opacity:0.5;">NO DATA SIGNAL</div>';
-                return;
-            }
-            logs.forEach(log => {
-                const time = log.created_at ? log.created_at.split(' ')[1] : 'Unknown';
-                const model = log.model_name || 'unknown';
-                const displayName = getDisplayName(log.app_name);
-
-                const div = document.createElement('div');
-                div.className = 'log-item';
-                div.innerHTML = `
-                <div class="log-header">
-                    <span class="app-badge">[${displayName}]</span>
-                    <span style="font-family:'JetBrains Mono'">${time}</span>
-                </div>
-                <div class="log-content">Model: ${model}</div>
-                <div class="token-count">Tokens: ${log.tokens}</div>
-            `;
-                container.appendChild(div);
-            });
-        }
-
-        // 3. 渲染热力图
-        function renderHeatmap(rawData, summary) {
-            if (!heatmapChart) return;
-            const apps = summary.map(item => getDisplayName(item.app_name));
-            const dates = [];
-            for (let i = 6; i >= 0; i--) {
-                const d = new Date();
-                d.setDate(d.getDate() - i);
-                dates.push(d.toISOString().split('T')[0]);
-            }
-            const seriesData = rawData.map(item => {
-                const dateIndex = dates.indexOf(item.date);
-                const appIndex = summary.map(s => s.app_name).indexOf(item.app_name);
-                if (dateIndex !== -1 && appIndex !== -1) return [dateIndex, appIndex, item.daily_tokens];
-                return null;
-            }).filter(item => item !== null);
-
-            const option = {
-                backgroundColor: 'transparent',
-                tooltip: { position: 'top', formatter: (p) => `${dates[p.value[0]]}<br/>${getDisplayName(summary[p.value[1]]?.app_name)}: ${p.value[2]} tokens` },
-                grid: { top: '10px', bottom: '65px', left: '80px', right: '20px' },
-                xAxis: { type: 'category', data: dates, axisLabel: { color: '#ccc', fontSize: 12 }, axisLine: { lineStyle: { color: '#333' } } },
-                yAxis: { type: 'category', data: apps, axisLabel: { color: '#66fcf1', fontSize: 11 }, axisLine: { lineStyle: { color: '#333' } }, splitLine: { show: true, lineStyle: { color: '#333' } } },
-                visualMap: { min: 0, max: 5000, calculable: true, orient: 'horizontal', left: 'center', bottom: '-5px', inRange: { color: ['#1f2833', '#45a29e', '#66fcf1'] }, textStyle: { color: '#fff' } },
-                series: [{ type: 'heatmap', data: seriesData, itemStyle: { borderColor: '#0b0c10', borderWidth: 1 } }]
+                title: { text: '7日消耗趋势', textStyle: { color: '#66fcf1', fontSize: 14 } },
+                tooltip: { trigger: 'axis' },
+                xAxis: { type: 'category', data: history.map(d => d.date.slice(5)), axisLine: { lineStyle: { color: '#45a29e' } } },
+                yAxis: { type: 'value', splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
+                series: [{
+                    data: history.map(d => d.daily_tokens),
+                    type: 'bar',
+                    itemStyle: { color: '#66fcf1' }
+                }]
             };
             heatmapChart.setOption(option);
         }
 
-        // 4. 渲染今日应用使用量柱状图
-        function renderBarChart(summary) {
-            if (!barChart) return;
-            const appNames = summary.map(item => getDisplayName(item.app_name));
-            const tokenCounts = summary.map(item => item.total_tokens || 0);
-            const requestCounts = summary.map(item => item.count || 0);
-
+        function renderPerfChart(perf) {
             const option = {
-                backgroundColor: 'transparent',
-                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-                legend: { data: ['Token', '请求'], textStyle: { color: '#c5c6c7' } },
-                grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-                xAxis: [{ type: 'category', data: appNames, axisLabel: { color: '#c5c6c7', rotate: 0 }, axisLine: { lineStyle: { color: '#45a29e' } } }],
-                yAxis: [
-                    { type: 'value', name: 'Token', position: 'left', axisLabel: { color: '#c5c6c7' }, splitLine: { lineStyle: { color: '#333' } } },
-                    { type: 'value', name: '请求', position: 'right', axisLabel: { color: '#c5c6c7' }, splitLine: { show: false } }
-                ],
-                series: [
-                    { name: 'Token', type: 'bar', yAxisIndex: 0, data: tokenCounts, itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: '#66fcf1' }, { offset: 1, color: '#45a29e' }]) } },
-                    { name: '请求', type: 'bar', yAxisIndex: 1, data: requestCounts, itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: '#c5c6c7' }, { offset: 1, color: '#1f2833' }]) } }
-                ]
+                title: { text: '响应耗时趋势 (24H)', textStyle: { color: '#66fcf1', fontSize: 14 } },
+                tooltip: { trigger: 'axis' },
+                xAxis: { type: 'category', data: perf.map(p => p.hour), axisLine: { lineStyle: { color: '#45a29e' } } },
+                yAxis: { type: 'value', name: 'ms', splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
+                series: [{
+                    data: perf.map(p => Math.round(p.avg_duration)),
+                    type: 'line',
+                    smooth: true,
+                    lineStyle: { color: '#ffcc00' },
+                    areaStyle: { color: 'rgba(255, 204, 0, 0.1)' }
+                }]
             };
-            barChart.setOption(option);
+            perfChart.setOption(option);
         }
 
-        // 5. 渲染表格
-        function renderAppStatsTable(summary) {
-            const tableBody = document.getElementById('appStatsBody');
-            if (!summary || summary.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px; opacity: 0.5;">暂无数据</td></tr>';
-                return;
-            }
-            const sortedSummary = [...summary].sort((a, b) => (b.total_tokens || 0) - (a.total_tokens || 0));
-            let tableHTML = '';
-            sortedSummary.forEach(item => {
-                const displayName = getDisplayName(item.app_name);
-                tableHTML += `
-                <tr>
-                    <td style="color: var(--accent-cyan);">${displayName}</td>
-                    <td style="text-align: right; color: #fff;">${item.count}</td>
-                    <td style="text-align: right; color: #ffcc00;">${(item.total_tokens || 0).toLocaleString()}</td>
-                </tr>
-            `;
-            });
-            tableBody.innerHTML = tableHTML;
+        function getDisplayName(name) {
+            const map = { 'shici': '古诗词赏析', 'poe-app': 'Poe 助手', 'music': '音乐分析', 'chatbox': '桌面聊天' };
+            return map[name] || name;
         }
 
-        // 启动
-        initChart();
-        fetchData();
-        setInterval(fetchData, 60000);
-
+        initCharts();
+        fetchStats();
+        setInterval(fetchStats, 60000); // 每一分钟自动刷新
     </script>
 </body>
 
