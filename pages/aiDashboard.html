@@ -225,27 +225,62 @@
                 <div style="text-align:center; padding: 20px; opacity: 0.5;">等待信号连接...</div>
             </div>
         </div>
+
+        <!-- 今日应用使用量柱状图 -->
+        <div class="panel" style="height: 350px; grid-column: span 2;">
+            <div class="panel-title">今日各应用使用量对比</div>
+            <div id="barChart" style="width: 100%; height: 90%;"></div>
+        </div>
+
+        <!-- 各应用总量统计数据 -->
+        <div class="panel" style="grid-column: span 2;">
+            <div class="panel-title">各应用总量统计</div>
+            <div id="appStatsTable" style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; color: var(--text-color);">
+                    <thead>
+                        <tr style="background-color: var(--accent-dark); color: white;">
+                            <th style="padding: 10px; text-align: left;">应用名称</th>
+                            <th style="padding: 10px; text-align: right;">总请求数</th>
+                            <th style="padding: 10px; text-align: right;">总Token数</th>
+                            <th style="padding: 10px; text-align: right;">平均Token数</th>
+                        </tr>
+                    </thead>
+                    <tbody id="appStatsBody">
+                        <tr>
+                            <td colspan="4" style="text-align: center; padding: 20px; opacity: 0.5;">等待数据加载...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
 <script>
     let heatmapChart = null;
+    let barChart = null;
 
     // 初始化 ECharts 实例
     function initChart() {
-        const chartDom = document.getElementById('heatmapChart');
-        heatmapChart = echarts.init(chartDom, 'dark', { renderer: 'canvas' });
-        
+        const heatmapChartDom = document.getElementById('heatmapChart');
+        heatmapChart = echarts.init(heatmapChartDom, 'dark', { renderer: 'canvas' });
+
+        const barChartDom = document.getElementById('barChart');
+        barChart = echarts.init(barChartDom, 'dark', { renderer: 'canvas' });
+
         // 窗口大小改变时重绘
-        window.addEventListener('resize', () => heatmapChart.resize());
+        window.addEventListener('resize', () => {
+            heatmapChart.resize();
+            barChart.resize();
+        });
     }
 
     async function fetchData() {
         try {
             const response = await fetch('/api/stats');
             if (!response.ok) throw new Error("API Error");
-            
+
             const data = await response.json();
-            
+
             // 数据解构：后端现在返回 { summary, latest, heatmap }
             const summary = data.summary || [];
             const latest = data.latest || [];
@@ -254,6 +289,8 @@
             updateMetrics(summary);
             renderLogs(latest);
             renderHeatmap(heatmapData, summary);
+            renderBarChart(summary);  // 新增：渲染柱状图
+            renderAppStatsTable(summary);  // 新增：渲染应用统计数据表
 
         } catch (error) {
             console.error(error);
@@ -318,7 +355,7 @@
 
         // 提取所有 App 名字作为 Y 轴
         const apps = summary.map(item => item.app_name);
-        
+
         // 生成过去30天的日期数组作为 X 轴
         const dates = [];
         for (let i = 29; i >= 0; i--) {
@@ -393,6 +430,138 @@
         };
 
         heatmapChart.setOption(option);
+    }
+
+    // 4. 渲染今日应用使用量柱状图
+    function renderBarChart(summary) {
+        if (!barChart) initChart();
+
+        // 提取应用名称和对应的总token数
+        const appNames = summary.map(item => item.app_name);
+        const tokenCounts = summary.map(item => item.total_tokens || 0);
+        const requestCounts = summary.map(item => item.count || 0);
+
+        const option = {
+            backgroundColor: 'transparent',
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: {
+                    type: 'shadow'
+                },
+                formatter: function (params) {
+                    const app = params[0].name;
+                    const tokens = params[0].value;
+                    const requests = params[1].value;
+                    return `${app}<br/>Token数: ${tokens.toLocaleString()}<br/>请求数: ${requests.toLocaleString()}`;
+                }
+            },
+            legend: {
+                data: ['Token数', '请求数'],
+                textStyle: {
+                    color: '#c5c6c7'
+                }
+            },
+            grid: {
+                left: '3%',
+                right: '4%',
+                bottom: '3%',
+                containLabel: true
+            },
+            xAxis: [
+                {
+                    type: 'category',
+                    data: appNames,
+                    axisTick: {
+                        alignWithLabel: true
+                    },
+                    axisLabel: {
+                        color: '#c5c6c7',
+                        rotate: 45
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#45a29e'
+                        }
+                    }
+                }
+            ],
+            yAxis: [
+                {
+                    type: 'value',
+                    name: 'Token数',
+                    position: 'left',
+                    axisLabel: {
+                        color: '#c5c6c7'
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#45a29e'
+                        }
+                    }
+                }
+            ],
+            series: [
+                {
+                    name: 'Token数',
+                    type: 'bar',
+                    yAxisIndex: 0,
+                    data: tokenCounts,
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: '#66fcf1' },
+                            { offset: 1, color: '#45a29e' }
+                        ])
+                    }
+                },
+                {
+                    name: '请求数',
+                    type: 'bar',
+                    yAxisIndex: 0,
+                    data: requestCounts,
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: '#c5c6c7' },
+                            { offset: 1, color: '#1f2833' }
+                        ])
+                    }
+                }
+            ]
+        };
+
+        barChart.setOption(option);
+    }
+
+    // 5. 渲染各应用总量统计数据表
+    function renderAppStatsTable(summary) {
+        const tableBody = document.getElementById('appStatsBody');
+
+        if (!summary || summary.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; opacity: 0.5;">暂无数据</td></tr>';
+            return;
+        }
+
+        // 按总token数排序
+        const sortedSummary = [...summary].sort((a, b) => (b.total_tokens || 0) - (a.total_tokens || 0));
+
+        let tableHTML = '';
+
+        sortedSummary.forEach(item => {
+            const appName = item.app_name || '未知应用';
+            const count = item.count || 0;
+            const totalTokens = item.total_tokens || 0;
+            const avgTokens = count > 0 ? Math.round(totalTokens / count) : 0;
+
+            tableHTML += `
+                <tr style="border-bottom: 1px solid var(--border-color);">
+                    <td style="padding: 10px; color: var(--accent-cyan);">${appName}</td>
+                    <td style="padding: 10px; text-align: right; color: #fff;">${count.toLocaleString()}</td>
+                    <td style="padding: 10px; text-align: right; color: #66fcf1;">${totalTokens.toLocaleString()}</td>
+                    <td style="padding: 10px; text-align: right; color: #c5c6c7;">${avgTokens.toLocaleString()}</td>
+                </tr>
+            `;
+        });
+
+        tableBody.innerHTML = tableHTML;
     }
 
     // 启动
