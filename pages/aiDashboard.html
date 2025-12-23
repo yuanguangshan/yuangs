@@ -268,6 +268,20 @@
     let heatmapChart = null;
     let barChart = null;
 
+    // 应用名称映射表
+    const appNameMap = {
+        'shici': '诗词雅苑',
+        'music': '广山音乐',
+        'ai': 'AI助手',
+        'proxy': '代理服务'
+        // 可以继续添加更多映射
+    };
+
+    // 获取显示名称的函数
+    function getDisplayName(appName) {
+        return appNameMap[appName] || appName;
+    }
+
     // 初始化 ECharts 实例
     function initChart() {
         const heatmapChartDom = document.getElementById('heatmapChart');
@@ -343,12 +357,13 @@
         logs.forEach(log => {
             const time = log.created_at ? log.created_at.split(' ')[1] : 'Unknown'; // 只取时间部分
             const model = log.model_name || 'unknown-model';
-            
+            const displayName = getDisplayName(log.app_name);
+
             const div = document.createElement('div');
             div.className = 'log-item';
             div.innerHTML = `
                 <div class="log-header">
-                    <span class="app-badge">[${log.app_name}]</span>
+                    <span class="app-badge">[${displayName}]</span>
                     <span style="font-family:'JetBrains Mono'">${time}</span>
                 </div>
                 <div class="log-content">Model: ${model}</div>
@@ -362,8 +377,8 @@
     function renderHeatmap(rawData, summary) {
         if (!heatmapChart) initChart();
 
-        // 提取所有 App 名字作为 Y 轴
-        const apps = summary.map(item => item.app_name);
+        // 提取所有 App 名字作为 Y 轴，并转换为显示名称
+        const apps = summary.map(item => getDisplayName(item.app_name));
 
         // 生成过去30天的日期数组作为 X 轴
         const dates = [];
@@ -377,7 +392,8 @@
         // x: dateIndex, y: appIndex, value: tokens
         const seriesData = rawData.map(item => {
             const dateIndex = dates.indexOf(item.date);
-            const appIndex = apps.indexOf(item.app_name);
+            // 使用原始名称查找索引，但显示时使用映射名称
+            const appIndex = summary.map(s => s.app_name).indexOf(item.app_name);
             if (dateIndex !== -1 && appIndex !== -1) {
                 return [dateIndex, appIndex, item.daily_tokens];
             }
@@ -389,7 +405,10 @@
             tooltip: {
                 position: 'top',
                 formatter: function (params) {
-                    return `${dates[params.value[0]]}<br/>${apps[params.value[1]]}: ${params.value[2]} tokens`;
+                    // 这里需要获取原始app_name对应的显示名称
+                    const originalAppName = summary[params.value[1]] ? summary[params.value[1]].app_name : '';
+                    const displayName = getDisplayName(originalAppName);
+                    return `${dates[params.value[0]]}<br/>${displayName}: ${params.value[2]} tokens`;
                 }
             },
             grid: {
@@ -445,8 +464,8 @@
     function renderBarChart(summary) {
         if (!barChart) initChart();
 
-        // 提取应用名称和对应的总token数
-        const appNames = summary.map(item => item.app_name);
+        // 提取应用名称和对应的总token数，使用映射名称
+        const appNames = summary.map(item => getDisplayName(item.app_name));
         const tokenCounts = summary.map(item => item.total_tokens || 0);
         const requestCounts = summary.map(item => item.count || 0);
 
@@ -458,10 +477,12 @@
                     type: 'shadow'
                 },
                 formatter: function (params) {
-                    const app = params[0].name;
+                    // 获取原始app_name，然后转换为显示名称
+                    const originalAppName = summary[params.dataIndex] ? summary[params.dataIndex].app_name : '';
+                    const displayName = getDisplayName(originalAppName);
                     const tokens = params[0].value;
                     const requests = params[1].value;
-                    return `${app}<br/>Token数: ${tokens.toLocaleString()}<br/>请求数: ${requests.toLocaleString()}`;
+                    return `${displayName}<br/>Token数: ${tokens}<br/>请求数: ${requests}`;
                 }
             },
             legend: {
@@ -568,17 +589,18 @@
         let tableHTML = '';
 
         sortedSummary.forEach(item => {
-            const appName = item.app_name || '未知应用';
+            const originalAppName = item.app_name || '未知应用';
+            const displayName = getDisplayName(originalAppName);
             const count = item.count || 0;
             const totalTokens = item.total_tokens || 0;
             const avgTokens = count > 0 ? Math.round(totalTokens / count) : 0;
 
             tableHTML += `
                 <tr style="border-bottom: 1px solid var(--border-color);">
-                    <td style="padding: 10px; color: var(--accent-cyan);">${appName}</td>
-                    <td style="padding: 10px; text-align: right; color: #fff;">${count.toLocaleString()}</td>
-                    <td style="padding: 10px; text-align: right; color: #66fcf1;">${totalTokens.toLocaleString()}</td>
-                    <td style="padding: 10px; text-align: right; color: #c5c6c7;">${avgTokens.toLocaleString()}</td>
+                    <td style="padding: 10px; color: var(--accent-cyan);">${displayName}</td>
+                    <td style="padding: 10px; text-align: right; color: #fff;">${count}</td>
+                    <td style="padding: 10px; text-align: right; color: #66fcf1;">${totalTokens}</td>
+                    <td style="padding: 10px; text-align: right; color: #c5c6c7;">${avgTokens}</td>
                 </tr>
             `;
         });
