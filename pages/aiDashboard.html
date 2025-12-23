@@ -484,7 +484,8 @@
                 ]
             };
 
-            pieChart.on('click', function (params) {
+            // 提取展示逻辑
+            function showPieInfo(name, value, percent, autoHide = true) {
                 let floatDiv = document.getElementById('pie-click-info');
                 if (!floatDiv) {
                     floatDiv = document.createElement('div');
@@ -503,22 +504,37 @@
                     floatDiv.style.fontFamily = "'JetBrains Mono', monospace";
                     floatDiv.style.fontSize = '12px';
                     floatDiv.style.textAlign = 'center';
-                    floatDiv.style.wordBreak = 'break-all'; // 允许长单词换行
+                    floatDiv.style.wordBreak = 'break-all';
                     floatDiv.style.pointerEvents = 'none';
                     document.getElementById('pieChart').parentNode.appendChild(floatDiv);
                 }
 
-                floatDiv.innerHTML = `<strong>${params.name}</strong><br/>${params.value.toLocaleString()} tokens (${params.percent}%)`;
+                floatDiv.innerHTML = `<strong>${name}</strong><br/>${value.toLocaleString()} tokens (${percent}%)`;
 
                 if (window._pieTimer) clearTimeout(window._pieTimer);
-                window._pieTimer = setTimeout(() => {
-                    if (floatDiv && floatDiv.parentNode) {
-                        floatDiv.parentNode.removeChild(floatDiv);
-                    }
-                }, 4000);
+                if (autoHide) {
+                    window._pieTimer = setTimeout(() => {
+                        if (floatDiv && floatDiv.parentNode) {
+                            floatDiv.parentNode.removeChild(floatDiv);
+                        }
+                    }, 5000);
+                }
+            }
+
+            pieChart.off('click'); // 移除旧监听，防止重复
+            pieChart.on('click', function (params) {
+                showPieInfo(params.name, params.value, params.percent, true);
             });
 
             pieChart.setOption(option);
+
+            // 默认显示最大占比的模型
+            if (chartData.length > 0) {
+                const maxItem = [...chartData].sort((a, b) => b.value - a.value)[0];
+                const total = chartData.reduce((sum, i) => sum + i.value, 0);
+                const percent = ((maxItem.value / total) * 100).toFixed(2);
+                showPieInfo(maxItem.name, maxItem.value, percent, false); // 默认显示不自动隐藏
+            }
         }
 
         // 1. 更新顶部指标
