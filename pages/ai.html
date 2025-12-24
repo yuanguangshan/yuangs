@@ -59,7 +59,7 @@
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 12px;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
         }
 
         .stat-card {
@@ -68,7 +68,7 @@
             -webkit-backdrop-filter: blur(20px);
             border: 1px solid var(--border-color);
             border-radius: 16px;
-            padding: 12px;
+            padding: 6px;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
@@ -106,7 +106,7 @@
             color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 1px;
-            margin-bottom: 8px;
+            margin-bottom: 0;
         }
 
         .stat-card p {
@@ -264,33 +264,6 @@
             transform: scale(0.98);
         }
 
-        .refresh-btn.loading {
-            position: relative;
-            pointer-events: none;
-            opacity: 0.8;
-        }
-
-        .refresh-btn.loading::after {
-            content: '';
-            position: absolute;
-            width: 20px;
-            height: 20px;
-            top: 50%;
-            left: 50%;
-            margin-left: -10px;
-            margin-top: -10px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
         @media (max-width: 1024px) {
             .monitor-row,
             .analysis-row {
@@ -300,21 +273,21 @@
 
         @media (max-width: 768px) {
             body {
-                padding: 20px 15px;
+                padding: 5px 5px;
             }
 
             h1 {
                 font-size: 2rem;
-                margin-bottom: 30px;
+                margin-bottom: 15px;
             }
 
             .grid-header {
                 grid-template-columns: repeat(2, 1fr);
-                gap: 15px;
+                gap: 10px;
             }
 
             .stat-card {
-                padding: 18px;
+                padding: 10px;
             }
 
             .stat-card p {
@@ -329,7 +302,7 @@
             .chart-container,
             .table-container {
                 height: 320px;
-                padding: 15px;
+                padding: 8px;
             }
 
             .refresh-btn {
@@ -459,7 +432,7 @@
         </div>
     </div>
 
-    <button id="refresh-btn" class="refresh-btn">刷新数据</button>
+    <button class="refresh-btn" onclick="fetchStats()">🔄</button>
 
     <script>
         let stackedBarChart, modelPieChart, perfLineChart;
@@ -489,120 +462,15 @@
             });
         }
 
-        // 防抖函数
-        function debounce(func, wait) {
-            let timeout;
-            return function executedFunction(...args) {
-                const later = () => {
-                    clearTimeout(timeout);
-                    func(...args);
-                };
-                clearTimeout(timeout);
-                timeout = setTimeout(later, wait);
-            };
-        }
-
-        // 显示临时消息的函数
-        function showToast(message, isError = false) {
-            // 移除现有的toast（如果有）
-            const existingToast = document.querySelector('.toast-notification');
-            if (existingToast) {
-                existingToast.remove();
-            }
-
-            const toast = document.createElement('div');
-            toast.className = `toast-notification ${isError ? 'error' : 'success'}`;
-            toast.textContent = message;
-            toast.style.cssText = `
-                position: fixed;
-                bottom: 100px;
-                left: 50%;
-                transform: translateX(-50%);
-                padding: 12px 24px;
-                border-radius: 8px;
-                color: white;
-                font-weight: 500;
-                z-index: 1000;
-                animation: slideIn 0.3s ease, fadeOut 0.5s ease 2.5s forwards;
-                min-width: 200px;
-                text-align: center;
-            `;
-
-            if (isError) {
-                toast.style.background = 'linear-gradient(135deg, #ff416c, #ff4b2b)';
-            } else {
-                toast.style.background = 'linear-gradient(135deg, #00b09b, #96c93d)';
-            }
-
-            document.body.appendChild(toast);
-
-            // 3秒后自动移除
-            setTimeout(() => {
-                if (toast.parentNode) {
-                    toast.parentNode.removeChild(toast);
-                }
-            }, 3000);
-        }
-
-        // 添加CSS动画
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideIn {
-                from { bottom: -50px; opacity: 0; }
-                to { bottom: 100px; opacity: 1; }
-            }
-
-            @keyframes fadeOut {
-                from { opacity: 1; }
-                to { opacity: 0; }
-            }
-
-            .toast-notification {
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            }
-        `;
-        document.head.appendChild(style);
-
         async function fetchStats() {
-            const refreshBtn = document.getElementById('refresh-btn');
-
-            // 显示加载状态
-            refreshBtn.classList.add('loading');
-            refreshBtn.disabled = true;
-
             try {
                 const response = await fetch('/api/stats');
-
-                if (!response.ok) {
-                    throw new Error(`数据获取失败: ${response.status} ${response.statusText}`);
-                }
-
                 const data = await response.json();
                 updateUI(data);
-
-                // 显示成功消息
-                showToast('数据刷新成功');
             } catch (e) {
-                console.error('数据获取错误:', e);
-                // 显示错误消息
-                showToast(`数据刷新失败: ${e.message}`, true);
-            } finally {
-                // 移除加载状态
-                refreshBtn.classList.remove('loading');
-                refreshBtn.disabled = false;
+                console.error('Data error:', e);
             }
         }
-
-        // 防抖处理的刷新函数（防止用户频繁点击）
-        const debouncedFetchStats = debounce(fetchStats, 1000);
-
-        // 为刷新按钮添加事件监听器
-        document.addEventListener('DOMContentLoaded', () => {
-            const refreshBtn = document.getElementById('refresh-btn');
-            if (refreshBtn) {
-                refreshBtn.addEventListener('click', debouncedFetchStats);
-            }
-        });
 
         function getDisplayName(name) {
             const map = {
