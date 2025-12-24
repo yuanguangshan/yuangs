@@ -363,6 +363,57 @@
             color: var(--accent-orange);
             font-weight: 600;
         }
+
+        /* 最新记录显示样式 */
+        .latest-record {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(52, 199, 89, 0.08);
+        }
+
+        .record-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--accent-green);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.4;
+                transform: scale(0.8);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .label {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .value {
+            color: var(--text-primary);
+            font-weight: 600;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
     </style>
 </head>
 
@@ -392,6 +443,13 @@
         <div class="monitor-row">
             <div class="table-container">
                 <div class="table-title">实时流水</div>
+                <div class="latest-record" id="latestRecord">
+                    <div class="record-item">
+                        <span class="dot"></span>
+                        <span class="label">最新记录:</span>
+                        <span class="value" id="latestRecordValue">等待数据...</span>
+                    </div>
+                </div>
                 <div class="table-wrapper">
                     <table>
                         <thead>
@@ -503,6 +561,7 @@
                 </tr>
             `).join('');
 
+            // 更新实时流水表格
             document.getElementById('latestLogsBody').innerHTML = data.latest.map(item => `
                 <tr>
                     <td><span class="tag">${getDisplayName(item.app_name)}</span></td>
@@ -512,6 +571,15 @@
                     <td>${item.created_at.split(' ')[1]}</td>
                 </tr>
             `).join('');
+
+            // 更新最新记录显示
+            if (data.latest && data.latest.length > 0) {
+                const latest = data.latest[0]; // 最后一条记录（假设数组是按时间倒序排列）
+                const latestRecordText = `${getDisplayName(latest.app_name)} | ${latest.model_name} | ${latest.tokens.toLocaleString()} tokens | ${(latest.duration / 1000).toFixed(2)}s`;
+                document.getElementById('latestRecordValue').textContent = latestRecordText;
+            } else {
+                document.getElementById('latestRecordValue').textContent = '暂无数据';
+            }
 
             renderStackedBar(data.heatmap);
             renderModelPie(data.models);
@@ -767,8 +835,15 @@
             });
         }
 
+        // 自动刷新最新数据
+        function startAutoRefresh() {
+            // 每5秒刷新一次
+            setInterval(fetchStats, 5000);
+        }
+
         initCharts();
         fetchStats();
+        startAutoRefresh();
     </script>
 </body>
 
