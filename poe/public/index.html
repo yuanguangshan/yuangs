@@ -2807,7 +2807,7 @@
 
         async function initApp() {
             setupEventListeners();
-            loadModels();
+            await loadModels();
             await loadHistory();
             loadUserProfile();
             updateTokenCounter();
@@ -2817,6 +2817,12 @@
             // Apply saved color scheme on app initialization
             const savedColorScheme = localStorage.getItem('colorScheme') || 'default';
             applyColorScheme(savedColorScheme);
+
+            // Load user's last selected model from localStorage
+            const savedModel = localStorage.getItem('selectedModel');
+            if (savedModel && modelSelector.querySelector(`option[value="${savedModel}"]`)) {
+                modelSelector.value = savedModel;
+            }
 
             const sessionId = window.location.hash.substring(1);
             if (sessionId && conversations[sessionId]) {
@@ -2975,6 +2981,11 @@
             if (userProfile) {
                 userProfile.addEventListener('click', changeUsername);
             }
+
+            // Add event listener for model selector to save user's choice
+            modelSelector.addEventListener('change', function() {
+                localStorage.setItem('selectedModel', this.value);
+            });
 
             // New Features Event Listeners
             if (stopButton) {
@@ -3790,7 +3801,10 @@
                     });
                 }
 
-                modelSelector.value = conv.model || 'GPT-4o-mini';
+                // 仅在对话有特定模型时才设置，否则保留用户当前选择的模型
+                if (conv.model) {
+                    modelSelector.value = conv.model;
+                }
 
                 document.querySelectorAll('.history-item').forEach(item => {
                     item.classList.toggle('active', item.dataset.sessionId === sessionId);
