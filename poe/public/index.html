@@ -5367,11 +5367,27 @@
                 const selectedText = selection.toString().trim();
 
                 if (selectedText && selection.rangeCount > 0) {
-                    // 在输入框中插入选中的文本
-                    const inputBox = document.querySelector('.input-box');
+                    // 尝试多种可能的输入框选择器
+                    const inputSelectors = [
+                        '.input-box',
+                        'textarea',
+                        '.chat-input',
+                        '#chat-input',
+                        '.message-input',
+                        'input[type="text"]',
+                        'input[type="search"]',
+                        '[contenteditable="true"]'
+                    ];
+
+                    let inputBox = null;
+                    for (const selector of inputSelectors) {
+                        inputBox = document.querySelector(selector);
+                        if (inputBox) break;
+                    }
+
                     if (inputBox) {
                         // 如果输入框有内容，先添加换行，再添加选中的文本
-                        if (inputBox.value.trim()) {
+                        if (inputBox.value && inputBox.value.trim()) {
                             inputBox.value += '\n\n"' + selectedText + '"';
                         } else {
                             inputBox.value = '"' + selectedText + '"';
@@ -5379,6 +5395,7 @@
 
                         // 触发输入框内容变化事件
                         inputBox.dispatchEvent(new Event('input', { bubbles: true }));
+                        inputBox.dispatchEvent(new Event('change', { bubbles: true }));
 
                         // 清除选择
                         window.getSelection().removeAllRanges();
@@ -5387,8 +5404,21 @@
                         inputBox.focus();
 
                         // 将光标移动到文本末尾
-                        const textLength = inputBox.value.length;
-                        inputBox.setSelectionRange(textLength, textLength);
+                        if (inputBox.setSelectionRange) {
+                            const textLength = inputBox.value.length;
+                            inputBox.setSelectionRange(textLength, textLength);
+                        } else if (inputBox.createTextRange) {
+                            // 兼容旧版 IE
+                            const range = inputBox.createTextRange();
+                            range.collapse(true);
+                            range.moveEnd('character', textLength);
+                            range.moveStart('character', textLength);
+                            range.select();
+                        }
+
+                        console.log('Text inserted into input:', selectedText); // 调试信息
+                    } else {
+                        console.log('No input box found with selectors:', inputSelectors); // 调试信息
                     }
                 }
             }
