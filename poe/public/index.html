@@ -5359,132 +5359,49 @@
             }
         });
 
-        // 选中文字问AI功能
+        // 选中文字问AI功能 - 自动填入输入框
         function initAskAIOnSelect() {
-            const askAIFloat = document.getElementById('ask-ai-float');
-
-            // 获取选中文本并显示按钮
-            function showAskAIBtn() {
+            // 监听选择变化事件
+            function handleSelectionChange() {
                 const selection = window.getSelection();
                 const selectedText = selection.toString().trim();
 
                 if (selectedText && selection.rangeCount > 0) {
-                    const range = selection.getRangeAt(0);
-                    const rect = range.getBoundingClientRect();
+                    // 在输入框中插入选中的文本
+                    const inputBox = document.querySelector('.input-box');
+                    if (inputBox) {
+                        // 如果输入框有内容，先添加换行，再添加选中的文本
+                        if (inputBox.value.trim()) {
+                            inputBox.value += '\n\n"' + selectedText + '"';
+                        } else {
+                            inputBox.value = '"' + selectedText + '"';
+                        }
 
-                    // 计算按钮位置，显示在选中文本的右下角
-                    let buttonX = rect.right + window.scrollX - 25;
-                    let buttonY = rect.bottom + window.scrollY + 10;
+                        // 触发输入框内容变化事件
+                        inputBox.dispatchEvent(new Event('input', { bubbles: true }));
 
-                    // 确保按钮在视窗范围内
-                    const maxX = window.innerWidth - 60;
-                    const maxY = window.innerHeight - 60;
+                        // 清除选择
+                        window.getSelection().removeAllRanges();
 
-                    buttonX = Math.max(10, Math.min(buttonX, maxX));
-                    buttonY = Math.max(10, Math.min(buttonY, maxY));
+                        // 尝试聚焦到输入框
+                        inputBox.focus();
 
-                    // 设置按钮位置
-                    askAIFloat.style.left = buttonX + 'px';
-                    askAIFloat.style.top = buttonY + 'px';
-
-                    // 显示按钮
-                    askAIFloat.classList.add('visible');
-
-                    // 存储选中的文本
-                    askAIFloat.dataset.selectedText = selectedText;
-                } else {
-                    // 隐藏按钮
-                    askAIFloat.classList.remove('visible');
+                        // 将光标移动到文本末尾
+                        const textLength = inputBox.value.length;
+                        inputBox.setSelectionRange(textLength, textLength);
+                    }
                 }
-            }
-
-            // 监听选择变化事件
-            function handleSelectionChange() {
-                setTimeout(showAskAIBtn, 100); // 延迟确保选择完成
             }
 
             // 监听鼠标/触摸抬起事件来检测文字选择完成
             document.addEventListener('mouseup', handleSelectionChange);
-            document.addEventListener('touchend', handleSelectionChange);
+            document.addEventListener('touchend', function(e) {
+                // 添加延迟确保选择完成
+                setTimeout(handleSelectionChange, 50);
+            });
 
             // 也监听选择变化事件作为备用
             document.addEventListener('selectionchange', handleSelectionChange);
-
-            // 点击页面其他地方隐藏按钮
-            document.addEventListener('click', function(e) {
-                if (!askAIFloat.contains(e.target)) {
-                    setTimeout(() => {
-                        if (!window.getSelection().toString().trim()) {
-                            askAIFloat.classList.remove('visible');
-                        }
-                    }, 50);
-                }
-            });
-
-            document.addEventListener('touchstart', function(e) {
-                if (!askAIFloat.contains(e.target)) {
-                    setTimeout(() => {
-                        if (!window.getSelection().toString().trim()) {
-                            askAIFloat.classList.remove('visible');
-                        }
-                    }, 50);
-                }
-            });
-
-            // 点击问AI按钮的处理 - 使用更通用的事件处理
-            function handleAskAI(e) {
-                e.preventDefault();
-                e.stopPropagation();
-
-                const selectedText = askAIFloat.dataset.selectedText;
-                if (!selectedText) return;
-
-                // 隐藏按钮
-                askAIFloat.classList.remove('visible');
-
-                // 清除选择
-                window.getSelection().removeAllRanges();
-
-                // 在输入框中插入选中的文本并发送
-                const inputBox = document.querySelector('.input-box');
-                if (inputBox) {
-                    // 如果输入框有内容，先添加换行，再添加选中的文本
-                    if (inputBox.value.trim()) {
-                        inputBox.value += '\n\n"' + selectedText + '"';
-                    } else {
-                        inputBox.value = '"' + selectedText + '"';
-                    }
-
-                    // 触发输入框内容变化事件
-                    inputBox.dispatchEvent(new Event('input', { bubbles: true }));
-
-                    // 自动发送消息
-                    const sendButton = document.querySelector('.send-button') ||
-                                     document.querySelector('.input-container button');
-                    if (sendButton) {
-                        // 添加小延迟确保内容已更新
-                        setTimeout(() => {
-                            sendButton.click();
-                        }, 50);
-                    }
-                }
-            }
-
-            // 为浮动按钮添加多种事件监听
-            askAIFloat.addEventListener('click', handleAskAI);
-            askAIFloat.addEventListener('touchend', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                // 使用 setTimeout 确保在下一个事件循环中执行
-                setTimeout(() => {
-                    handleAskAI(e);
-                }, 10);
-            });
-
-            // 防止按钮上的默认触摸行为
-            askAIFloat.addEventListener('touchstart', function(e) {
-                e.preventDefault();
-            });
         }
 
         // 初始化选中文字问AI功能
