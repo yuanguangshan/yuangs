@@ -5262,6 +5262,62 @@
         document.addEventListener('DOMContentLoaded', checkStandaloneMode);
         window.addEventListener('load', checkStandaloneMode);
         document.addEventListener('visibilitychange', checkStandaloneMode);
+
+        // Heartbeat mechanism to keep Workers alive and prevent "Load failed" after inactivity
+        let heartbeatInterval = null;
+
+        function startHeartbeat() {
+            // Clear any existing heartbeat
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+            }
+
+            // Create a new heartbeat interval (every 4 minutes to stay under 5 min idle limit)
+            heartbeatInterval = setInterval(async () => {
+                try {
+                    // Send a lightweight health check request to keep the worker active
+                    const response = await fetch('/api/health', {
+                        method: 'GET',
+                        cache: 'no-cache' // Prevent caching of health check
+                    });
+
+                    if (!response.ok) {
+                        console.warn('Health check failed:', response.status);
+                    } else {
+                        const data = await response.json();
+                        console.log('Worker heartbeat successful:', data.timestamp);
+                    }
+                } catch (error) {
+                    console.warn('Heartbeat failed:', error.message);
+                    // Don't worry too much about failures, the next heartbeat will retry
+                }
+            }, 4 * 60 * 1000); // Every 4 minutes (240 seconds)
+        }
+
+        // Start heartbeat when page loads
+        startHeartbeat();
+
+        // Pause heartbeat when page is not visible to save resources
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // Pause heartbeat when tab is not visible
+                if (heartbeatInterval) {
+                    clearInterval(heartbeatInterval);
+                    heartbeatInterval = null;
+                }
+            } else {
+                // Resume heartbeat when tab becomes visible again
+                startHeartbeat();
+            }
+        });
+
+        // Clean up heartbeat when page is unloaded
+        window.addEventListener('beforeunload', () => {
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+        });
     </script>
 </body>
 

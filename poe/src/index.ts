@@ -34,6 +34,11 @@ export default {
                 return new Response(null, { headers: corsHeaders });
             }
 
+            // 检查是否为 API 健康检查请求
+            if (pathname === '/api/health' || pathname === '/health') {
+                return jsonResponse({ status: 'ok', timestamp: Date.now() });
+            }
+
             // --- 历史记录 API (/api/history) ---
             if (pathname.replace(/\/$/, '') === '/api/history') {
                 try {
