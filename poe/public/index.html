@@ -81,6 +81,41 @@
             --primary-hover: #8c7050;
             --primary-light: rgba(168, 139, 102, 0.1);
             --background-dark: #2a2420;
+        }
+
+        /* 选中文字问AI功能的样式 */
+        #ask-ai-float {
+            position: fixed;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            font-size: 20px;
+            transition: var(--transition);
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(10px);
+        }
+
+        #ask-ai-float.visible {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0);
+        }
+
+        #ask-ai-float:hover {
+            background: var(--primary-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+        }
             --sidebar-bg: #3a322d;
             --input-bg: #4a423d;
             --text-light: #e0d8d0;
@@ -2505,6 +2540,11 @@
 </head>
 
 <body>
+    <!-- 选中文字问AI浮动按钮 -->
+    <button id="ask-ai-float" title="问AI">
+        <i class="fas fa-robot"></i>
+    </button>
+
     <!-- Mobile Header with Mobile History -->
     <div class="mobile-header">
         <div class="mobile-history-layout">
@@ -5318,6 +5358,81 @@
                 heartbeatInterval = null;
             }
         });
+
+        // 选中文字问AI功能
+        function initAskAIOnSelect() {
+            const askAIFloat = document.getElementById('ask-ai-float');
+            let isSelecting = false;
+
+            // 监听鼠标抬起事件来检测文字选择完成
+            document.addEventListener('mouseup', function(e) {
+                const selection = window.getSelection();
+                const selectedText = selection.toString().trim();
+
+                if (selectedText) {
+                    // 获取选中文本的位置
+                    const range = selection.getRangeAt(0);
+                    const rect = range.getBoundingClientRect();
+
+                    // 计算按钮位置，显示在选中文本的右下角
+                    const buttonX = rect.right + window.scrollX - 25; // 减去按钮宽度的一半以居中
+                    const buttonY = rect.bottom + window.scrollY + 10; // 在选中文本下方10px
+
+                    // 设置按钮位置
+                    askAIFloat.style.left = buttonX + 'px';
+                    askAIFloat.style.top = buttonY + 'px';
+
+                    // 显示按钮
+                    askAIFloat.classList.add('visible');
+
+                    // 存储选中的文本
+                    askAIFloat.dataset.selectedText = selectedText;
+                } else {
+                    // 隐藏按钮
+                    askAIFloat.classList.remove('visible');
+                }
+            });
+
+            // 点击页面其他地方隐藏按钮
+            document.addEventListener('click', function(e) {
+                if (!askAIFloat.contains(e.target)) {
+                    askAIFloat.classList.remove('visible');
+                }
+            });
+
+            // 点击问AI按钮的处理
+            askAIFloat.addEventListener('click', async function() {
+                const selectedText = this.dataset.selectedText;
+                if (!selectedText) return;
+
+                // 隐藏按钮
+                this.classList.remove('visible');
+
+                // 在输入框中插入选中的文本并发送
+                const inputBox = document.querySelector('.input-box');
+                if (inputBox) {
+                    // 如果输入框有内容，先添加换行，再添加选中的文本
+                    if (inputBox.value.trim()) {
+                        inputBox.value += '\n\n"' + selectedText + '"';
+                    } else {
+                        inputBox.value = '"' + selectedText + '"';
+                    }
+
+                    // 触发输入框内容变化事件
+                    inputBox.dispatchEvent(new Event('input', { bubbles: true }));
+
+                    // 自动发送消息
+                    const sendButton = document.querySelector('.send-button') ||
+                                     document.querySelector('.input-container button');
+                    if (sendButton) {
+                        sendButton.click();
+                    }
+                }
+            });
+        }
+
+        // 初始化选中文字问AI功能
+        document.addEventListener('DOMContentLoaded', initAskAIOnSelect);
     </script>
 </body>
 
