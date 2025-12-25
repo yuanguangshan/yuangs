@@ -5359,79 +5359,56 @@
             }
         });
 
-        // 选中文字问AI功能 - 自动填入输入框
+        // 选中文字问AI功能 - 简化版
         function initAskAIOnSelect() {
-            // 监听选择变化事件
-            function handleSelectionChange() {
-                const selection = window.getSelection();
-                const selectedText = selection.toString().trim();
+            let isProcessing = false; // 防止重复处理
 
-                if (selectedText && selection.rangeCount > 0) {
-                    // 尝试多种可能的输入框选择器
-                    const inputSelectors = [
-                        '.input-box',
-                        'textarea',
-                        '.chat-input',
-                        '#chat-input',
-                        '.message-input',
-                        'input[type="text"]',
-                        'input[type="search"]',
-                        '[contenteditable="true"]'
-                    ];
+            function handleTextSelection() {
+                if (isProcessing) return; // 防止重复处理
 
-                    let inputBox = null;
-                    for (const selector of inputSelectors) {
-                        inputBox = document.querySelector(selector);
-                        if (inputBox) break;
-                    }
+                // 添加小延迟确保选择完成
+                setTimeout(() => {
+                    const selection = window.getSelection();
+                    const selectedText = selection.toString().trim();
 
-                    if (inputBox) {
-                        // 如果输入框有内容，先添加换行，再添加选中的文本
-                        if (inputBox.value && inputBox.value.trim()) {
-                            inputBox.value += '\n\n"' + selectedText + '"';
-                        } else {
-                            inputBox.value = '"' + selectedText + '"';
-                        }
+                    if (selectedText && selection.rangeCount > 0) {
+                        // 查找输入框
+                        const inputBox = document.querySelector('.input-box') ||
+                                       document.querySelector('textarea') ||
+                                       document.querySelector('#chat-input') ||
+                                       document.querySelector('.chat-input');
 
-                        // 触发输入框内容变化事件
-                        inputBox.dispatchEvent(new Event('input', { bubbles: true }));
-                        inputBox.dispatchEvent(new Event('change', { bubbles: true }));
+                        if (inputBox) {
+                            // 如果输入框有内容，先添加换行，再添加选中的文本
+                            if (inputBox.value && inputBox.value.trim()) {
+                                inputBox.value += '\n\n"' + selectedText + '"';
+                            } else {
+                                inputBox.value = '"' + selectedText + '"';
+                            }
 
-                        // 清除选择
-                        window.getSelection().removeAllRanges();
+                            // 触发输入框内容变化事件
+                            inputBox.dispatchEvent(new Event('input', { bubbles: true }));
 
-                        // 尝试聚焦到输入框
-                        inputBox.focus();
+                            // 尝试聚焦到输入框
+                            inputBox.focus();
 
-                        // 将光标移动到文本末尾
-                        if (inputBox.setSelectionRange) {
+                            // 将光标移动到文本末尾
                             const textLength = inputBox.value.length;
                             inputBox.setSelectionRange(textLength, textLength);
-                        } else if (inputBox.createTextRange) {
-                            // 兼容旧版 IE
-                            const range = inputBox.createTextRange();
-                            range.collapse(true);
-                            range.moveEnd('character', textLength);
-                            range.moveStart('character', textLength);
-                            range.select();
-                        }
 
-                        console.log('Text inserted into input:', selectedText); // 调试信息
-                    } else {
-                        console.log('No input box found with selectors:', inputSelectors); // 调试信息
+                            isProcessing = true; // 标记正在处理
+                            // 重置标记，防止过于频繁的处理
+                            setTimeout(() => {
+                                isProcessing = false;
+                            }, 300);
+                        }
                     }
-                }
+                }, 100);
             }
 
-            // 监听鼠标/触摸抬起事件来检测文字选择完成
-            document.addEventListener('mouseup', handleSelectionChange);
-            document.addEventListener('touchend', function(e) {
-                // 添加延迟确保选择完成
-                setTimeout(handleSelectionChange, 50);
-            });
-
-            // 也监听选择变化事件作为备用
-            document.addEventListener('selectionchange', handleSelectionChange);
+            // 只监听 mouseup 和 touchend 事件
+            document.addEventListener('mouseup', handleTextSelection);
+            document.addEventListener('touchend', handleTextSelection);
         }
 
         // 初始化选中文字问AI功能
