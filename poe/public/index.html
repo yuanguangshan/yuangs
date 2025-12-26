@@ -3698,6 +3698,9 @@
         }
 
         function enterRenameMode(id, currentTitle, itemElement) {
+            // 清除当前的文字选中状态，防止触发"自动填入"
+            window.getSelection().removeAllRanges();
+
             const isDropdown = itemElement.classList.contains('dropdown-option');
             const titleSelector = isDropdown ? '.dropdown-title' : '.history-title';
             const actionsSelector = isDropdown ? '.dropdown-actions' : '.history-actions';
@@ -5364,6 +5367,12 @@
             let isProcessing = false; // 防止重复处理
 
             function handleTextSelection() {
+                // 检查当前活动元素是否为改名输入框，如果是则直接返回
+                const activeElement = document.activeElement;
+                if (activeElement && activeElement.classList.contains('rename-input')) {
+                    return;
+                }
+
                 if (isProcessing) return; // 防止重复处理
 
                 // 添加小延迟确保选择完成
@@ -5371,12 +5380,26 @@
                     const selection = window.getSelection();
                     const selectedText = selection.toString().trim();
 
-                    if (selectedText && selection.rangeCount > 0) {
-                        // 只对主输入框生效，排除改名相关的输入框
-                        const inputBox = document.getElementById('userInput');
+                    if (!selectedText) return;
 
+                    // --- 修复关键：范围检查 ---
+                    // 1. 检查选中的内容是否在聊天容器内
+                    const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+                    if (!range) return;
+
+                    // 获取选中内容的容器
+                    const container = range.commonAncestorContainer;
+                    const element = container.nodeType === 3 ? container.parentElement : container;
+
+                    // 检查：如果选中的文字是在侧边栏、标题栏、或任何输入框内，则不触发
+                    const isInsideChat = element.closest('#chatContainer') || element.closest('.chat-container');
+                    const isInsideInput = element.closest('input, textarea, .rename-input, .sidebar, .header, .history-item, .dropdown-option');
+
+                    // 只有在聊天内容区选中，且不在任何输入组件内选中时才执行
+                    if (isInsideChat && !isInsideInput) {
+                        const inputBox = document.getElementById('userInput');
                         if (inputBox) {
-                            // 如果输入框有内容，先添加换行，再添加选中的文本（不带引号）
+                            // 如果输入框有内容，先添加换行
                             if (inputBox.value && inputBox.value.trim()) {
                                 inputBox.value += '\n\n' + selectedText;
                             } else {
@@ -5386,18 +5409,15 @@
                             // 触发输入框内容变化事件
                             inputBox.dispatchEvent(new Event('input', { bubbles: true }));
 
-                            // 尝试聚焦到输入框
-                            inputBox.focus();
+                            // 只有当用户不是在改名时才尝试聚焦
+                            if (!document.querySelector('.rename-input')) {
+                                inputBox.focus();
+                                const textLength = inputBox.value.length;
+                                inputBox.setSelectionRange(textLength, textLength);
+                            }
 
-                            // 将光标移动到文本末尾
-                            const textLength = inputBox.value.length;
-                            inputBox.setSelectionRange(textLength, textLength);
-
-                            isProcessing = true; // 标记正在处理
-                            // 重置标记，防止过于频繁的处理
-                            setTimeout(() => {
-                                isProcessing = false;
-                            }, 300);
+                            isProcessing = true;
+                            setTimeout(() => { isProcessing = false; }, 300);
                         }
                     }
                 }, 100);
