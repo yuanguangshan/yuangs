@@ -5535,13 +5535,18 @@
                 // Once Prism is fully loaded, highlight any existing code blocks
                 setTimeout(() => {
                     document.querySelectorAll('pre code').forEach((block) => {
+                        // Check if it already has a language class, otherwise default to none
                         if (!block.className.includes('language-')) {
                             block.classList.add('language-none');
                         }
-                        try {
-                            Prism.highlightElement(block);
-                        } catch (e) {
-                            console.log('Prism highlighting error:', e);
+                        // Check if already highlighted to avoid re-highlighting
+                        if (!block.classList.contains('tokenized')) {
+                            try {
+                                Prism.highlightElement(block);
+                                block.classList.add('tokenized'); // Mark as highlighted
+                            } catch (e) {
+                                console.log('Prism highlighting error:', e);
+                            }
                         }
                     });
                 }, 100); // Small delay to ensure everything is ready
@@ -5553,21 +5558,6 @@
         // Configure Prism to work with autoloader
         window.Prism = window.Prism || {};
         Prism.manual = true; // Prevent automatic highlighting on page load
-
-        // Update addCopyButtonsToCodeBlocks to apply syntax highlighting
-        function applySyntaxHighlighting(container) {
-            // Find all <pre><code> blocks and apply Prism highlighting
-            const codeBlocks = container.querySelectorAll('pre code');
-            codeBlocks.forEach((block) => {
-                // If the code block already has a language class, use it
-                if (!block.className.includes('language-')) {
-                    // Default to plain text if no language specified
-                    block.classList.add('language-none');
-                }
-                // Apply Prism highlighting
-                Prism.highlightElement(block);
-            });
-        }
 
         // Override the addCopyButtonsToCodeBlocks function to also apply syntax highlighting
         function addCopyButtonsToCodeBlocks(container) {
@@ -5641,6 +5631,20 @@
                             pre.style.position = 'relative';
                             pre.appendChild(langDisplay);
                         }
+                    }
+                    // Check if this code block has already been highlighted
+                    if (typeof Prism !== 'undefined' && typeof Prism.highlightElement === 'function' &&
+                        code && !code.classList.contains('tokenized')) {
+                        // Apply syntax highlighting to existing code block
+                        setTimeout(() => {
+                            try {
+                                Prism.highlightElement(code);
+                                // Mark as highlighted to avoid re-highlighting
+                                code.classList.add('tokenized');
+                            } catch (e) {
+                                console.log('Prism highlighting error:', e);
+                            }
+                        }, 10);
                     }
                     return; // Skip if copy button already exists
                 }
@@ -5740,6 +5744,8 @@
                         setTimeout(() => {
                             try {
                                 Prism.highlightElement(code);
+                                // Mark as highlighted to avoid re-highlighting
+                                code.classList.add('tokenized');
                             } catch (e) {
                                 console.log('Prism highlighting error:', e);
                             }
@@ -5755,10 +5761,14 @@
         // Helper function to wait for Prism and highlight when available
         function waitForPrismAndHighlight(codeElement) {
             if (typeof Prism !== 'undefined' && typeof Prism.highlightElement === 'function') {
-                try {
-                    Prism.highlightElement(codeElement);
-                } catch (e) {
-                    console.log('Prism highlighting error:', e);
+                // Check if already highlighted to avoid re-highlighting
+                if (!codeElement.classList.contains('tokenized')) {
+                    try {
+                        Prism.highlightElement(codeElement);
+                        codeElement.classList.add('tokenized'); // Mark as highlighted
+                    } catch (e) {
+                        console.log('Prism highlighting error:', e);
+                    }
                 }
             } else {
                 setTimeout(() => {
