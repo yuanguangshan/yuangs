@@ -1,10 +1,15 @@
-const CACHE_NAME = 'ai-monitor-v1.0.0';
+const CACHE_NAME = 'ai-monitor-v1.0.1';
 const urlsToCache = [
   '/pages/ai.html',
+  '/poe/public/index.html',
   '/manifest.json',
   '/favicon.ico',
   'https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js',
-  'https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@400;500;600;700&display=swap'
+  'https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@400;500;600;700&display=swap',
+  'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css',
+  'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
 ];
 
 // 安装 Service Worker
@@ -52,7 +57,8 @@ self.addEventListener('fetch', event => {
           // 否则发起实际网络请求
           return fetch(event.request).then(response => {
             // 检查收到的响应是否有效
-            if(!response || response.status !== 200 || response.type !== 'basic') {
+            // 修改这里：允许 basic 和 cors 类型的响应（支持 CDN 资源）
+            if(!response || response.status !== 200 || (response.type !== 'basic' && response.type !== 'cors')) {
               return response;
             }
 
