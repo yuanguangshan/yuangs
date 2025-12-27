@@ -1406,7 +1406,7 @@ async function searchAndDisplayPoem(title, author) {
 const API_DOMAIN = 'https://aiproxy.want.biz/';
 const API_PREFIX = API_DOMAIN.replace(/\/+$/, '');
 const DEFAULT_TIMEOUT = 120;
-const DEFAULT_MODEL_ID = 'gemini-pro-latest';
+const DEFAULT_MODEL_ID = 'DeepSeek-V3.2';
 const AI_MODEL_PREFERENCE_KEY = 'preferred_ai_model';
 const AI_INTERFACE_PREFERENCE_KEY = 'preferred_ai_interface'; // 新增：AI接口偏好设置
 const AI_CACHE_KEY = 'poem_ai_interpretations_v1';
