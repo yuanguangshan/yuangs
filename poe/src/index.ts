@@ -95,11 +95,36 @@ export default {
 
                 // 【优化】获取详情：使用 Promise.all 并行查询，减少 Worker 等待时间
                 if (request.method === 'GET') {
-                    const [msgResult, conv] = await Promise.all([
-                        env.DB.prepare("SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC").bind(id).all(),
-                        env.DB.prepare("SELECT * FROM conversations WHERE id = ?").bind(id).first()
-                    ]);
-                    return jsonResponse({ ...conv, messages: msgResult.results });
+                    // 获取分页参数
+                    const url = new URL(request.url);
+                    const offset = parseInt(url.searchParams.get('offset') || '0');
+                    const limit = parseInt(url.searchParams.get('limit') || '20');
+
+                    // 获取消息总数
+                    const countResult = await env.DB.prepare(
+                        "SELECT COUNT(*) as count FROM messages WHERE conversation_id = ?"
+                    ).bind(id).first<{ count: number }>();
+
+                    // 计算实际偏移量，确保获取的是最新的消息
+                    const totalCount = countResult.count;
+                    const actualOffset = Math.max(0, totalCount - limit - offset);
+
+                    // 获取分页消息（按时间戳排序，获取最新的消息）
+                    const msgResult = await env.DB.prepare(
+                        "SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC LIMIT ? OFFSET ?"
+                    ).bind(id, limit, actualOffset).all();
+
+                    const conv = await env.DB.prepare(
+                        "SELECT * FROM conversations WHERE id = ?"
+                    ).bind(id).first();
+
+                    return jsonResponse({
+                        ...conv,
+                        messages: msgResult.results,
+                        totalCount: totalCount,
+                        offset: actualOffset,
+                        limit: limit
+                    });
                 }
 
                 if (request.method === 'DELETE') {

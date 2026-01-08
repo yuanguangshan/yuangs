@@ -3428,13 +3428,16 @@
 
             const messages = [];
             document.querySelectorAll('.message').forEach(msg => {
-                messages.push({
-                    role: msg.classList.contains('user') ? 'user' : 'assistant',
-                    content: msg.querySelector('.content').innerHTML,
-                    rawContent: msg.querySelector('.content').dataset.raw || '',
-                    timestamp: msg.dataset.timestamp || Date.now(),
-                    model: msg.dataset.model || null // Harvest the specific model for this message
-                });
+                // 排除加载更多按钮相关的元素
+                if (!msg.id || (msg.id !== 'load-more-container' && msg.id !== 'loading-more')) {
+                    messages.push({
+                        role: msg.classList.contains('user') ? 'user' : 'assistant',
+                        content: msg.querySelector('.content').innerHTML,
+                        rawContent: msg.querySelector('.content').dataset.raw || '',
+                        timestamp: msg.dataset.timestamp || Date.now(),
+                        model: msg.dataset.model || null // Harvest the specific model for this message
+                    });
+                }
             });
 
             const conversationData = {
@@ -3897,21 +3900,34 @@
             }
         }
 
-        async function loadConversation(sessionId) {
+        async function loadConversation(sessionId, offset = 0, limit = 20) {
             try {
-                const res = await fetch(`/api/history/${sessionId}`);
+                // 构建带分页参数的API请求URL
+                const url = new URL(`/api/history/${sessionId}`, window.location.origin);
+                url.searchParams.set('offset', offset);
+                url.searchParams.set('limit', limit);
+
+                const res = await fetch(url.toString());
                 if (!res.ok) throw new Error('Failed to load');
                 const conv = await res.json();
 
                 conversations[sessionId] = conv;
 
-                chatContainer.innerHTML = '';
+                // 如果是首次加载（offset为0），清空聊天容器
+                if (offset === 0) {
+                    chatContainer.innerHTML = '';
+                }
 
                 if (conv.messages) {
-                    conv.messages.forEach(msg => {
-                        // Pass msg.model from database to addMessageToDOM
+                    // 显示消息（按需分页）
+                    for (const msg of conv.messages) {
                         addMessageToDOM(msg.role, msg.raw_content || msg.rawContent, msg.content, msg.timestamp, msg.model);
-                    });
+                    }
+
+                    // 如果是首次加载且还有更早的消息，添加"查看更多"按钮
+                    if (offset === 0 && conv.offset > 0) {
+                        addLoadMoreButton(sessionId, conv.offset, limit);
+                    }
                 }
 
                 // 仅在对话有特定模型时才设置，否则保留用户当前选择的模型
@@ -3925,6 +3941,129 @@
             } catch (e) {
                 console.error("Error loading conversation:", e);
             }
+        }
+
+        // 添加"查看更多"按钮的函数
+        function addLoadMoreButton(sessionId, currentOffset, currentLimit) {
+            // 检查是否已经存在"查看更多"按钮
+            if (document.getElementById('load-more-button')) {
+                return;
+            }
+
+            const loadMoreDiv = document.createElement('div');
+            loadMoreDiv.id = 'load-more-container';
+            loadMoreDiv.style.cssText = `
+                display: flex;
+                justify-content: center;
+                margin: 20px 0;
+            `;
+
+            const loadMoreButton = document.createElement('button');
+            loadMoreButton.id = 'load-more-button';
+            loadMoreButton.textContent = '加载更多消息';
+            loadMoreButton.style.cssText = `
+                background: linear-gradient(135deg, var(--primary-color) 0%, #0d8a6a 100%);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                cursor: pointer;
+                font-size: 14px;
+                transition: var(--transition);
+                box-shadow: var(--shadow-sm);
+            `;
+
+            loadMoreButton.addEventListener('click', async () => {
+                // 显示加载指示器
+                const loadingIndicator = document.createElement('div');
+                loadingIndicator.id = 'loading-more';
+                loadingIndicator.textContent = '正在加载更多消息...';
+                loadingIndicator.style.cssText = `
+                    text-align: center;
+                    padding: 10px;
+                    color: var(--text-muted);
+                `;
+
+                // 将加载指示器放在现有消息之前
+                chatContainer.insertBefore(loadingIndicator, chatContainer.firstChild);
+
+                try {
+                    // 计算新的偏移量以获取更早的消息
+                    const newOffset = Math.max(0, currentOffset - currentLimit);
+                    const url = new URL(`/api/history/${sessionId}`, window.location.origin);
+                    url.searchParams.set('offset', newOffset.toString());
+                    url.searchParams.set('limit', currentLimit.toString());
+
+                    const res = await fetch(url.toString());
+                    if (!res.ok) throw new Error('Failed to load more messages');
+                    const conv = await res.json();
+
+                    // 移除加载指示器
+                    loadingIndicator.remove();
+
+                    if (conv.messages && conv.messages.length > 0) {
+                        // 保存当前滚动位置
+                        const scrollTopBefore = chatContainer.scrollTop;
+                        const scrollHeightBefore = chatContainer.scrollHeight;
+
+                        // 创建一个临时容器来存储新消息
+                        const tempContainer = document.createElement('div');
+
+                        // 添加新消息到临时容器
+                        for (const msg of conv.messages) {
+                            // 使用一个临时容器来构建消息元素
+                            const tempMsgContainer = document.createElement('div');
+                            document.body.appendChild(tempMsgContainer);
+                            tempMsgContainer.style.display = 'none';
+
+                            // 添加消息到临时容器
+                            addMessageToDOM(msg.role, msg.raw_content || msg.rawContent, msg.content, msg.timestamp, msg.model);
+
+                            // 获取刚添加的消息元素（它是临时容器的最后一个子元素）
+                            const newMessage = tempMsgContainer.lastChild;
+                            if (newMessage) {
+                                // 将消息添加到临时主容器的开头
+                                tempContainer.insertBefore(newMessage, tempContainer.firstChild);
+                            }
+
+                            // 移除临时消息容器
+                            document.body.removeChild(tempMsgContainer);
+                        }
+
+                        // 将所有新消息一次性添加到聊天容器的开头（在加载按钮之后）
+                        const loadMoreContainer = document.getElementById('load-more-container');
+                        while(tempContainer.firstChild) {
+                            chatContainer.insertBefore(tempContainer.firstChild, loadMoreContainer.nextSibling);
+                        }
+
+                        // 恢复滚动位置
+                        const scrollHeightAfter = chatContainer.scrollHeight;
+                        chatContainer.scrollTop = scrollTopBefore + (scrollHeightAfter - scrollHeightBefore);
+
+                        // 移除当前的"查看更多"按钮
+                        const existingButton = document.getElementById('load-more-button');
+                        if (existingButton) {
+                            existingButton.closest('#load-more-container').remove();
+                        }
+
+                        // 如果还有更多消息，重新添加"查看更多"按钮
+                        if (conv.offset > 0) {
+                            // 如果还有更多消息可加载，添加新按钮
+                            addLoadMoreButton(sessionId, conv.offset, currentLimit);
+                        }
+                    }
+                } catch (e) {
+                    // 移除加载指示器
+                    loadingIndicator.remove();
+                    console.error("Error loading more messages:", e);
+                    alert("加载更多消息失败: " + e.message);
+                }
+            });
+
+            loadMoreDiv.appendChild(loadMoreButton);
+
+            // 将按钮添加到聊天容器的顶部
+            chatContainer.insertBefore(loadMoreDiv, chatContainer.firstChild);
         }
 
         async function loadHistory() {
