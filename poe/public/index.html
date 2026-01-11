@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
     />
     <title>Poe API Interface</title>
 
@@ -1711,6 +1711,38 @@
           }
       }
 
+      /* iOS-specific styles for better input handling */
+      @media screen and (max-width: 1024px) and (-webkit-min-device-pixel-ratio: 1) {
+        .ios-device .input-container {
+          position: relative;
+          z-index: 100;
+        }
+
+        .ios-device textarea {
+          /* Ensure proper font size to prevent zoom on focus */
+          font-size: 16px !important;
+          transform: translateZ(0); /* Enable hardware acceleration */
+          -webkit-transform: translateZ(0);
+        }
+
+        .ios-device body {
+          /* Prevent default zoom behavior on input focus */
+          font-size: 16px;
+        }
+
+        /* Ensure input area stays visible when keyboard is active */
+        .ios-device .main-content {
+          min-height: auto;
+          height: auto;
+          overflow: visible;
+        }
+
+        .ios-device .chat-container {
+          max-height: 70vh; /* Limit height to leave room for keyboard */
+          overflow-y: auto;
+        }
+      }
+
       /* Cute thinking animations */
       .thinking-bubbles {
           display: flex;
@@ -2867,6 +2899,81 @@
       const searchInput = document.getElementById("searchInput");
       const shortcutModal = document.getElementById("shortcutModal");
 
+      // iPad/Safari specific input handling
+      function handleIOSInput() {
+        // Check if device is iOS
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+        if (isIOS) {
+          // Add iOS-specific CSS class to body
+          document.body.classList.add('ios-device');
+
+          // Handle input focus events to adjust layout when keyboard appears
+          userInput.addEventListener('focus', function() {
+            // Add a small delay to ensure keyboard is fully rendered
+            setTimeout(() => {
+              // Adjust the input container position to account for virtual keyboard
+              const inputContainer = document.querySelector('.input-container');
+              if (inputContainer) {
+                // Scroll the input into view
+                inputContainer.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'end'
+                });
+
+                // Ensure the input remains visible
+                userInput.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'end'
+                });
+              }
+            }, 300); // Delay to account for keyboard animation
+          });
+
+          // Handle input blur events
+          userInput.addEventListener('blur', function() {
+            // Optionally restore original layout
+            setTimeout(() => {
+              window.scrollTo(0, 0);
+            }, 300);
+          });
+
+          // Listen for orientation changes which often happen when keyboard appears on iOS
+          window.addEventListener('orientationchange', function() {
+            setTimeout(() => {
+              // Ensure proper layout after orientation change
+              if (document.activeElement === userInput) {
+                userInput.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'end'
+                });
+              }
+            }, 100);
+          });
+
+          // Additional iOS-specific fixes for input handling
+          // Prevent page zoom on input focus
+          userInput.addEventListener('focus', function() {
+            // Ensure the viewport doesn't zoom when input is focused
+            const viewport = document.querySelector('meta[name="viewport"]');
+            if (viewport) {
+              viewport.setAttribute('content',
+                'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
+            }
+          });
+
+          userInput.addEventListener('blur', function() {
+            // Restore viewport settings when input loses focus
+            const viewport = document.querySelector('meta[name="viewport"]');
+            if (viewport) {
+              viewport.setAttribute('content',
+                'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
+            }
+          });
+        }
+      }
+
       // State variables
       let currentSession = null;
       let conversations =
@@ -2874,6 +2981,7 @@
       let abortController = null;
       let isRecording = false;
       let recognition = null;
+      let isIOSKeyboardVisible = false;
 
       // Search state
       let searchMatches = [];
@@ -2910,6 +3018,48 @@
           voiceButton.classList.remove("recording");
           voiceButton.innerHTML = '<i class="fas fa-microphone"></i>';
         };
+      }
+
+      // iOS Virtual Keyboard Detection and Handling
+      function setupIOSKeyboardDetection() {
+        // Check if device is iOS
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+        if (!isIOS) return;
+
+        let initialWindowHeight = window.innerHeight;
+
+        // Monitor window height changes to detect keyboard visibility
+        window.addEventListener('resize', function() {
+          const currentHeight = window.innerHeight;
+
+          // If window height decreased, keyboard might be visible
+          if (currentHeight < initialWindowHeight) {
+            isIOSKeyboardVisible = true;
+
+            // Add class to body to indicate keyboard is visible
+            document.body.classList.add('ios-keyboard-visible');
+
+            // Ensure input remains visible
+            setTimeout(() => {
+              if (document.activeElement === userInput) {
+                userInput.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'end'
+                });
+              }
+            }, 100);
+          } else {
+            isIOSKeyboardVisible = false;
+
+            // Remove class when keyboard is hidden
+            document.body.classList.remove('ios-keyboard-visible');
+          }
+
+          // Update initial height for next comparison
+          initialWindowHeight = currentHeight;
+        });
       }
 
       // Handle responsive button placement
@@ -2974,6 +3124,9 @@
         updateTokenCounter();
         updateSendButtonState(); // Initialize send button state
         handleResponsiveButton();
+
+        // Handle iOS input issues
+        handleIOSInput();
 
         // Apply saved color scheme on app initialization
         const savedColorScheme =
