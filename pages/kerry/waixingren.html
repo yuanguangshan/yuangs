@@ -352,7 +352,7 @@
     function initThreeJS() {
         GAME.scene = new THREE.Scene();
         GAME.scene.background = new THREE.Color(0x1a1a1a);
-        GAME.scene.fog = new THREE.Fog(0x1a1a1a, 10, 80);
+        GAME.scene.fog = new THREE.Fog(0x1a1a1a, 20, 100); // 增加可见距离
 
         // 相机
         GAME.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -361,13 +361,14 @@
         GAME.renderer = new THREE.WebGLRenderer({ antialias: true });
         GAME.renderer.setSize(window.innerWidth, window.innerHeight);
         GAME.renderer.shadowMap.enabled = true;
+        GAME.renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 软阴影
         document.getElementById('game-container').appendChild(GAME.renderer.domElement);
 
         // 灯光 - 创建更符合外星场景的氛围
-        const amb = new THREE.AmbientLight(0x44ff44, 0.3); // 绿色环境光
+        const amb = new THREE.AmbientLight(0xffffff, 0.6); // 增加环境光强度
         GAME.scene.add(amb);
 
-        const dir = new THREE.DirectionalLight(0x88ff88, 0.7);
+        const dir = new THREE.DirectionalLight(0xffffff, 1.0); // 增加直射光强度
         dir.position.set(20, 50, 20);
         dir.castShadow = true;
         GAME.scene.add(dir);
@@ -481,32 +482,40 @@
         // 身体
         const body = new THREE.Mesh(
             new THREE.CapsuleGeometry(0.6, 1.8, 4, 8),
-            new THREE.MeshStandardMaterial({
+            new THREE.MeshPhongMaterial({ // 使用 PhongMaterial
                 color: 0x00ff00,
                 emissive: 0x00ff00,
-                emissiveIntensity: 0.6
+                emissiveIntensity: 0.5,
+                shininess: 30
             })
         );
+        body.castShadow = true; // 添加阴影
         body.position.y = 1.5; // 重要：将身体抬高
 
         // 头部
         const head = new THREE.Mesh(
             new THREE.SphereGeometry(0.5, 16, 16),
-            new THREE.MeshLambertMaterial({
+            new THREE.MeshPhongMaterial({
                 color: 0x00cc00,
-                emissive: 0x008800
+                emissive: 0x008800,
+                emissiveIntensity: 0.5,
+                shininess: 30
             })
         );
+        head.castShadow = true;
         head.position.y = 2.5; // 头部位置调整
 
         // 眼睛
         const eye1 = new THREE.Mesh(
             new THREE.SphereGeometry(0.15, 16, 16),
-            new THREE.MeshLambertMaterial({
+            new THREE.MeshPhongMaterial({
                 color: 0xff0000,
-                emissive: 0xaa0000
+                emissive: 0xaa0000,
+                emissiveIntensity: 0.5,
+                shininess: 30
             })
         );
+        eye1.castShadow = true;
         eye1.position.set(0.2, 2.6, 0.4);
 
         const eye2 = eye1.clone();
@@ -525,12 +534,25 @@
         ring.rotation.x = -Math.PI / 2;
         ring.position.y = 0.1;
 
+        // 添加发光效果
+        const glow = new THREE.PointLight(0x00ff00, 1, 3);
+        glow.position.y = 2;
+        alienGroup.add(glow);
+
         // 添加所有部件到组
         alienGroup.add(body);
         alienGroup.add(head);
         alienGroup.add(eye1);
         alienGroup.add(eye2);
         alienGroup.add(ring);
+
+        // 确保所有部件都能投射和接收阴影
+        alienGroup.traverse(object => {
+            if (object instanceof THREE.Mesh) {
+                object.castShadow = true;
+                object.receiveShadow = true;
+            }
+        });
 
         // 设置组的位置
         alienGroup.position.set(x, 0, z); // y设为0，因为部件已经有高度了
@@ -552,6 +574,16 @@
 
         GAME.scene.add(alienGroup);
         GAME.enemies.push(alienGroup);
+
+        // 添加调试辅助（仅对第一个敌人）
+        if (GAME.enemies.length === 1) {
+            const helper = new THREE.BoxHelper(alienGroup, 0xff0000);
+            GAME.scene.add(helper);
+
+            // 添加坐标轴辅助
+            const axesHelper = new THREE.AxesHelper(2);
+            alienGroup.add(axesHelper);
+        }
 
         // 添加调试信息
         log("外星人出现! 当前数量: " + GAME.enemies.length);
@@ -596,7 +628,7 @@
         } else {
             GAME.camera.fov = 70;
             // 第三人称
-            const targetPos = new THREE.Vector3(0, 5, 8).applyMatrix4(GAME.player.matrixWorld);
+            const targetPos = new THREE.Vector3(0, 8, 12).applyMatrix4(GAME.player.matrixWorld);
             if (targetPos.y < 1) targetPos.y = 1; // 防穿地
             GAME.camera.position.lerp(targetPos, 0.2);
             GAME.camera.lookAt(GAME.player.position.x, GAME.player.position.y+2, GAME.player.position.z);
@@ -743,6 +775,11 @@
                 en.userData.hpBar.remove(); // 移除血条DOM
                 GAME.enemies.splice(i, 1);
             }
+        });
+
+        // 调试输出外星人位置
+        GAME.enemies.forEach(enemy => {
+            console.log('Enemy position:', enemy.position);
         });
 
         // 6. 子弹更新(火箭弹)
