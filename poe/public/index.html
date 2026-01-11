@@ -3044,6 +3044,63 @@
                 transform: scale(0.9);
             }
         }
+
+        /* Navigation Arrows */
+        .nav-arrows {
+            position: fixed;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 100;
+        }
+
+        .nav-arrow {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s ease;
+            opacity: 0.8;
+        }
+
+        .nav-arrow:hover {
+            opacity: 1;
+            transform: scale(1.1);
+            background: var(--primary-hover);
+        }
+
+        .nav-up {
+            margin-bottom: 5px;
+        }
+
+        .nav-arrow:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        @media (max-width: 768px) {
+            .nav-arrows {
+                right: 15px;
+                width: 35px;
+                height: 35px;
+            }
+
+            .nav-arrow {
+                width: 35px;
+                height: 35px;
+            }
+        }
     </style>
 </head>
 
@@ -3232,6 +3289,16 @@
         </div>
     </div>
 
+    <!-- Navigation Arrows -->
+    <div class="nav-arrows">
+        <button id="navUp" class="nav-arrow nav-up" title="Previous message">
+            <i class="fas fa-chevron-up"></i>
+        </button>
+        <button id="navDown" class="nav-arrow nav-down" title="Next message">
+            <i class="fas fa-chevron-down"></i>
+        </button>
+    </div>
+
     <!-- Shortcut Modal -->
     <div class="modal-overlay" id="shortcutModal">
         <div class="modal-content">
@@ -3314,6 +3381,20 @@
                 voiceButton.innerHTML = '<i class="fas fa-microphone"></i>';
             };
         }
+
+        // Add event listeners for navigation arrows
+        document.addEventListener('DOMContentLoaded', function() {
+            const navUp = document.getElementById('navUp');
+            const navDown = document.getElementById('navDown');
+
+            if (navUp) {
+                navUp.addEventListener('click', goToPreviousMessage);
+            }
+
+            if (navDown) {
+                navDown.addEventListener('click', goToNextMessage);
+            }
+        });
 
         // Handle responsive button placement
         function handleResponsiveButton() {
@@ -6509,6 +6590,183 @@
                     waitForPrismAndHighlight(codeElement);
                 }, 100); // Check every 100ms
             }
+        }
+
+        // Auto focus mode on scroll functionality
+        let scrollTimer = null;
+        let isAutoFocusMode = false;
+
+        function enableAutoFocusMode() {
+            if (!isAutoFocusMode) {
+                document.body.classList.add('focus-mode');
+                const focusToggle = document.getElementById('focusToggle');
+                if (focusToggle) {
+                    const icon = focusToggle.querySelector('i');
+                    if (icon) icon.className = 'fas fa-compress';
+                }
+                isAutoFocusMode = true;
+            }
+
+            // Clear any existing timer
+            if (scrollTimer) {
+                clearTimeout(scrollTimer);
+            }
+
+            // Set timer to exit focus mode after 2 seconds of inactivity
+            scrollTimer = setTimeout(() => {
+                disableAutoFocusMode();
+            }, 2000);
+        }
+
+        function disableAutoFocusMode() {
+            if (isAutoFocusMode) {
+                document.body.classList.remove('focus-mode');
+                const focusToggle = document.getElementById('focusToggle');
+                if (focusToggle) {
+                    const icon = focusToggle.querySelector('i');
+                    if (icon) icon.className = 'fas fa-expand';
+                }
+                isAutoFocusMode = false;
+            }
+        }
+
+        // Add scroll event listener to detect scrolling
+        let isScrolling = false;
+        let scrollTimeout = null;
+
+        document.addEventListener('scroll', function() {
+            // Enable focus mode when scrolling starts
+            enableAutoFocusMode();
+
+            // Track scrolling state
+            isScrolling = true;
+
+            // Clear timeout if it exists
+            if (scrollTimeout) {
+                clearTimeout(scrollTimeout);
+            }
+
+            // Set timeout to mark scrolling as ended
+            scrollTimeout = setTimeout(function() {
+                isScrolling = false;
+            }, 150); // 150ms after scroll stops
+        });
+
+        // Also add wheel event for more responsive detection
+        document.addEventListener('wheel', function() {
+            if (!isScrolling) {
+                enableAutoFocusMode();
+            }
+        }, { passive: true });
+
+        // Touchmove event for mobile devices
+        document.addEventListener('touchmove', function() {
+            enableAutoFocusMode();
+        }, { passive: true });
+
+        // Navigation arrows functionality
+        let messageElements = [];
+        let currentIndex = -1;
+
+        function updateNavigationArrows() {
+            const upArrow = document.getElementById('navUp');
+            const downArrow = document.getElementById('navDown');
+
+            if (!upArrow || !downArrow) return;
+
+            // Enable/disable arrows based on current position
+            upArrow.style.opacity = currentIndex > 0 ? '1' : '0.3';
+            upArrow.style.pointerEvents = currentIndex > 0 ? 'auto' : 'none';
+
+            downArrow.style.opacity = currentIndex < messageElements.length - 1 ? '1' : '0.3';
+            downArrow.style.pointerEvents = currentIndex < messageElements.length - 1 ? 'auto' : 'none';
+        }
+
+        function scrollToMessage(index) {
+            if (index >= 0 && index < messageElements.length) {
+                const element = messageElements[index];
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                // Highlight the message temporarily
+                element.style.transition = 'background-color 0.3s';
+                element.style.backgroundColor = 'rgba(16, 163, 127, 0.2)';
+                setTimeout(() => {
+                    element.style.backgroundColor = '';
+                }, 1000);
+
+                currentIndex = index;
+                updateNavigationArrows();
+            }
+        }
+
+        function goToPreviousMessage() {
+            if (currentIndex > 0) {
+                scrollToMessage(currentIndex - 1);
+            }
+        }
+
+        function goToNextMessage() {
+            if (currentIndex < messageElements.length - 1) {
+                scrollToMessage(currentIndex + 1);
+            }
+        }
+
+        function initializeNavigation() {
+            // Get all message elements
+            messageElements = Array.from(document.querySelectorAll('.message'));
+
+            // Find the message closest to the current view
+            const chatContainer = document.getElementById('chatContainer');
+            if (chatContainer) {
+                const visibleElement = messageElements.find(element => {
+                    const rect = element.getBoundingClientRect();
+                    const chatRect = chatContainer.getBoundingClientRect();
+
+                    // Check if element is in view (with some tolerance)
+                    return rect.top >= chatRect.top - 100 && rect.top <= chatRect.bottom - 100;
+                });
+
+                currentIndex = visibleElement ? messageElements.indexOf(visibleElement) : -1;
+            }
+
+            updateNavigationArrows();
+        }
+
+        // Initialize navigation when DOM is loaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                initializeNavigation();
+
+                // Reinitialize when new messages are added
+                const chatContainer = document.getElementById('chatContainer');
+                if (chatContainer) {
+                    const observer = new MutationObserver(function(mutations) {
+                        let shouldReinitialize = false;
+
+                        mutations.forEach(function(mutation) {
+                            if (mutation.type === 'childList') {
+                                mutation.addedNodes.forEach(function(node) {
+                                    if (node.nodeType === 1 && node.classList && node.classList.contains('message')) {
+                                        shouldReinitialize = true;
+                                    }
+                                });
+                            }
+                        });
+
+                        if (shouldReinitialize) {
+                            // Small delay to ensure DOM is updated
+                            setTimeout(initializeNavigation, 100);
+                        }
+                    });
+
+                    observer.observe(chatContainer, {
+                        childList: true,
+                        subtree: true
+                    });
+                }
+            });
+        } else {
+            initializeNavigation();
         }
     </script>
 </body>
