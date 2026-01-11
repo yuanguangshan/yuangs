@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+  content="width=device-width, height=device-height,
+  initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>外星人入侵 - 竖屏版</title>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #000;
+  touch-action: none;
+}
+
+#ui {
+  position: absolute;
+  top: 10px;
+  width: 100%;
+  text-align: center;
+  color: white;
+  font-family: sans-serif;
+  z-index: 10;
+}
+
+#joystick {
+  position: absolute;
+  left: 20px;
+  bottom: 20px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+}
+
+#stick {
+  position: absolute;
+  left: 40px;
+  top: 40px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.5);
+}
+</style>
+</head>
+
+<body>
+<div id="ui">左下角移动 · 右侧点击射击</div>
+<div id="joystick"><div id="stick"></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+<script>
+/* ======================
+   Three.js 基础
+====================== */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+
+const camera = new THREE.PerspectiveCamera(
+  70, window.innerWidth / window.innerHeight, 0.1, 1000
+);
+camera.position.set(0, 28, 22);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(10, 20, 10);
+scene.add(light);
+
+/* 地面 */
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(100, 100),
+  new THREE.MeshStandardMaterial({ color: 0x222222 })
+);
+ground.rotation.x = -Math.PI / 2;
+scene.add(ground);
+
+/* ======================
+   玩家
+====================== */
+const player = new THREE.Mesh(
+  new THREE.BoxGeometry(1, 1, 1),
+  new THREE.MeshStandardMaterial({ color: 0x00ff00 })
+);
+player.position.y = 0.5;
+scene.add(player);
+
+/* ======================
+   子弹 & 外星人
+====================== */
+const bullets = [];
+const aliens = [];
+
+function shoot() {
+  const bullet = new THREE.Mesh(
+    new THREE.SphereGeometry(0.2, 8, 8),
+    new THREE.MeshStandardMaterial({ color: 0xffff00 })
+  );
+  bullet.position.copy(player.position);
+  bullet.velocity = new THREE.Vector3(0, 0, -1.2);
+  scene.add(bullet);
+  bullets.push(bullet);
+}
+
+function spawnAlien() {
+  const alien = new THREE.Mesh(
+    new THREE.SphereGeometry(0.6, 16, 16),
+    new THREE.MeshStandardMaterial({ color: 0xff3333 })
+  );
+  alien.position.set(
+    (Math.random() - 0.5) * 20,
+    0.6,
+    -30
+  );
+  scene.add(alien);
+  aliens.push(alien);
+}
+
+setInterval(spawnAlien, 1600);
+
+/* ======================
+   虚拟摇杆
+====================== */
+const joystick = document.getElementById('joystick');
+const stick = document.getElementById('stick');
+
+let joyActive = false;
+let joyX = 0;
+let joyY = 0;
+
+joystick.addEventListener('touchstart', e => {
+  joyActive = true;
+});
+
+joystick.addEventListener('touchmove', e => {
+  const rect = joystick.getBoundingClientRect();
+  const touch = e.touches[0];
+  const x = touch.clientX - rect.left - 60;
+  const y = touch.clientY - rect.top - 60;
+
+  const dist = Math.min(40, Math.hypot(x, y));
+  const angle = Math.atan2(y, x);
+
+  joyX = Math.cos(angle) * (dist / 40);
+  joyY = Math.sin(angle) * (dist / 40);
+
+  stick.style.left = 40 + joyX * 40 + 'px';
+  stick.style.top  = 40 + joyY * 40 + 'px';
+});
+
+joystick.addEventListener('touchend', e => {
+  joyActive = false;
+  joyX = joyY = 0;
+  stick.style.left = '40px';
+  stick.style.top = '40px';
+});
+
+/* 右侧点击射击 */
+window.addEventListener('touchstart', e => {
+  if (e.touches[0].clientX > window.innerWidth / 2) {
+    shoot();
+  }
+});
+
+/* ======================
+   游戏循环
+====================== */
+function animate() {
+  requestAnimationFrame(animate);
+
+  /* 玩家移动 */
+  player.position.x += joyX * 0.15;
+  player.position.z += joyY * 0.15;
+
+  /* 子弹 */
+  bullets.forEach((b, i) => {
+    b.position.add(b.velocity);
+    if (b.position.z < -50) {
+      scene.remove(b);
+      bullets.splice(i, 1);
+    }
+  });
+
+  /* 外星人 AI */
+  aliens.forEach((a, ai) => {
+    const dir = player.position.clone().sub(a.position).normalize();
+    a.position.add(dir.multiplyScalar(0.04));
+
+    bullets.forEach((b, bi) => {
+      if (a.position.distanceTo(b.position) < 0.7) {
+        scene.remove(a);
+        scene.remove(b);
+        aliens.splice(ai, 1);
+        bullets.splice(bi, 1);
+      }
+    });
+
+    if (a.position.distanceTo(player.position) < 1) {
+      alert('游戏结束');
+      location.reload();
+    }
+  });
+
+  renderer.render(scene, camera);
+}
+animate();
+
+/* 竖屏自适应 */
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
