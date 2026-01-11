@@ -766,8 +766,8 @@
 
             .chat-container {
                 flex: 1;
-                height: calc(100vh - 120px); /* 使用视口高度减去header和input区域的高度 */
-                min-height: auto; /* 允许容器收缩 */
+                height: calc(var(--vh, 1vh) * 100 - 120px); /* 使用动态vh变量减去header和input区域的高度 */
+                min-height: 200px; /* 设置最小高度，防止过度收缩 */
                 padding-bottom: 6px; /* 减少底部内边距 */
                 overflow-y: auto;
                 display: flex;
@@ -795,7 +795,7 @@
 
             .chat-container {
                 padding-bottom: 2px; /* 进一步减少聊天容器的底部内边距 */
-                height: calc(100vh - 110px) !important; /* 更精确的高度计算 */
+                height: calc(var(--vh, 1vh) * 100 - 110px) !important; /* 使用动态vh变量进行更精确的高度计算 */
             }
 
             textarea {
@@ -813,7 +813,7 @@
 
             .chat-container {
                 padding-bottom: 2px;
-                height: calc(100vh - 110px) !important; /* 更精确的高度计算 */
+                height: calc(var(--vh, 1vh) * 100 - 110px) !important; /* 使用动态vh变量进行更精确的高度计算 */
             }
 
             textarea {
@@ -830,7 +830,7 @@
 
             .chat-container {
                 padding-bottom: 2px;
-                height: calc(100vh - 110px) !important; /* 更精确的高度计算 */
+                height: calc(var(--vh, 1vh) * 100 - 110px) !important; /* 使用动态vh变量进行更精确的高度计算 */
             }
 
             textarea {
@@ -847,7 +847,7 @@
 
             .chat-container {
                 padding-bottom: 2px;
-                height: calc(100vh - 110px) !important; /* 更精确的高度计算 */
+                height: calc(var(--vh, 1vh) * 100 - 110px) !important; /* 使用动态vh变量进行更精确的高度计算 */
             }
 
             textarea {
@@ -981,8 +981,8 @@
 
         @media (max-width: 768px) {
             .chat-container {
-                padding: 12px 10px; /* 移动端更小的内边距 */
-                gap: 12px; /* 移动端更小的消息间距 */
+                padding: 8px 10px; /* 移动端更小的内边距 */
+                gap: 8px; /* 移动端更小的消息间距 */
             }
         }
 
@@ -5710,15 +5710,25 @@
             // On mobile, adjust main content height to account for dynamic viewport changes
             if (window.innerWidth <= 768) {
                 const mainContent = document.querySelector('.main-content');
+                const chatContainer = document.querySelector('.chat-container');
+                const inputContainer = document.querySelector('.input-container');
+
                 if (mainContent) {
                     // Calculate height considering header and input area
                     mainContent.style.height = `calc(var(--vh, 1vh) * 100 - 48px)`;
                 }
 
-                // Also update chat container height
-                const chatContainer = document.querySelector('.chat-container');
+                // Adjust chat container height dynamically based on available space
                 if (chatContainer) {
-                    chatContainer.style.height = `calc(var(--vh, 1vh) * 100 - 120px)`;
+                    // Calculate input container height dynamically
+                    const inputHeight = inputContainer ? inputContainer.offsetHeight : 50;
+                    const headerHeight = 48; // Fixed header height
+
+                    // Use more accurate calculation for chat container height
+                    chatContainer.style.height = `calc(var(--vh, 1vh) * 100 - ${headerHeight + inputHeight}px)`;
+
+                    // Ensure minimum height to prevent excessive shrinking
+                    chatContainer.style.minHeight = '200px';
                 }
             }
         }
@@ -5726,8 +5736,37 @@
         // Set initial height
         setMobileViewportHeight();
 
-        // Reset on resize (which happens when address bar appears/disappears)
+        // Reset on resize (which happens when address bar appears/disappears or keyboard opens/closes)
         window.addEventListener('resize', setMobileViewportHeight);
+
+        // Also listen for focus and blur events on input to handle keyboard appearance
+        window.addEventListener('load', () => {
+            const userInput = document.getElementById('userInput');
+            if (userInput) {
+                userInput.addEventListener('focus', () => {
+                    // Small delay to ensure the keyboard has started opening
+                    setTimeout(setMobileViewportHeight, 300);
+                });
+
+                userInput.addEventListener('blur', () => {
+                    // Small delay to ensure the keyboard has started closing
+                    setTimeout(setMobileViewportHeight, 100);
+                });
+            }
+
+            // Also handle textarea elements in general
+            document.addEventListener('focusin', (e) => {
+                if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') {
+                    setTimeout(setMobileViewportHeight, 300);
+                }
+            });
+
+            document.addEventListener('focusout', (e) => {
+                if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') {
+                    setTimeout(setMobileViewportHeight, 100);
+                }
+            });
+        });
 
         document.addEventListener('DOMContentLoaded', initApp);
 
