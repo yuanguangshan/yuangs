@@ -74,6 +74,49 @@
             text-shadow: 1px 1px 2px #000; width: 100%; pointer-events: none;
         }
 
+        /* 虚拟摇杆样式 */
+        .joystick {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            bottom: 60px;
+            z-index: 102;
+            pointer-events: auto;
+        }
+
+        #joystick-left {
+            left: 40px;
+        }
+
+        #joystick-right {
+            right: 40px;
+        }
+
+        .joystick-base {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: rgba(20, 30, 40, 0.6);
+            border: 2px solid rgba(100, 200, 255, 0.5);
+            box-shadow: 0 0 10px rgba(0, 150, 255, 0.3);
+            backdrop-filter: blur(4px);
+        }
+
+        .joystick-handle {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(100, 200, 255, 0.8);
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px rgba(0, 150, 255, 0.5);
+            cursor: move;
+        }
+
         /* 选枪界面 */
         #menu {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -119,11 +162,23 @@
         </div>
         <div id="crosshair"></div>
 
+        <!-- 左侧虚拟摇杆 - 方向控制 -->
+        <div id="joystick-left" class="joystick">
+            <div class="joystick-base"></div>
+            <div class="joystick-handle"></div>
+        </div>
+
+        <!-- 右侧虚拟摇杆 - 视角旋转 -->
+        <div id="joystick-right" class="joystick">
+            <div class="joystick-base"></div>
+            <div class="joystick-handle"></div>
+        </div>
+
         <div id="btn-fire" class="btn" onmousedown="GAME.inputs.fire=true" onmouseup="GAME.inputs.fire=false">🔥</div>
         <div id="btn-reload" class="btn" onclick="doReload()">♻️</div>
         <div id="btn-switch" class="btn" onclick="doSwitch()">⚔️</div>
         <div id="btn-scope" class="btn" onclick="doScope()">🎯</div>
-        
+
         <div id="controls-hint">
             [W/A/S/D] 移动 &nbsp; [↑/↓/←/→] 瞄准 &nbsp; [Space] 开火 &nbsp; [R] 换弹 &nbsp; [Q] 切枪 &nbsp; [Shift] 瞄准镜
         </div>
@@ -186,6 +241,7 @@
             GAME.weapons.push({...w, curAmmo: w.mag, lastFire: 0});
         });
         initThree();
+        initJoysticks(); // 初始化虚拟摇杆
     }
 
     // --- 键盘监听 ---
@@ -553,6 +609,117 @@
             if(p.life<=0 || p.mesh.position.y<0) { GAME.scene.remove(p.mesh); GAME.particles.splice(i,1); }
         }
     }
+    // 虚拟摇杆类
+    class VirtualJoystick {
+        constructor(containerId, callback) {
+            this.container = document.getElementById(containerId);
+            this.base = this.container.querySelector('.joystick-base');
+            this.handle = this.container.querySelector('.joystick-handle');
+            this.callback = callback;
+
+            this.active = false;
+            this.centerX = 0;
+            this.centerY = 0;
+            this.maxDistance = 50; // 最大移动距离
+
+            this.init();
+        }
+
+        init() {
+            // 计算中心位置
+            const rect = this.base.getBoundingClientRect();
+            this.centerX = rect.left + rect.width / 2;
+            this.centerY = rect.top + rect.height / 2;
+
+            // 触摸事件
+            this.container.addEventListener('touchstart', this.start.bind(this));
+            this.container.addEventListener('touchmove', this.move.bind(this));
+            this.container.addEventListener('touchend', this.end.bind(this));
+            this.container.addEventListener('touchcancel', this.end.bind(this));
+
+            // 鼠标事件（用于调试）
+            this.container.addEventListener('mousedown', this.start.bind(this));
+            document.addEventListener('mousemove', this.move.bind(this));
+            document.addEventListener('mouseup', this.end.bind(this));
+        }
+
+        start(e) {
+            e.preventDefault();
+            this.active = true;
+            this.updatePosition(e);
+        }
+
+        move(e) {
+            if (!this.active) return;
+            e.preventDefault();
+            this.updatePosition(e);
+        }
+
+        end(e) {
+            if (!this.active) return;
+            e.preventDefault();
+            this.active = false;
+
+            // 回到中心位置
+            this.handle.style.transform = 'translate(-50%, -50%)';
+
+            // 重置输入
+            if (this.callback) {
+                this.callback(0, 0);
+            }
+        }
+
+        updatePosition(e) {
+            const touch = e.touches && e.touches[0] ? e.touches[0] : e;
+            const x = touch.clientX - this.centerX;
+            const y = touch.clientY - this.centerY;
+
+            // 计算距离和角度
+            const distance = Math.min(Math.sqrt(x * x + y * y), this.maxDistance);
+            const angle = Math.atan2(y, x);
+
+            // 计算归一化值 (-1 到 1)
+            const normalizedX = Math.min(Math.max(x / this.maxDistance, -1), 1);
+            const normalizedY = Math.min(Math.max(y / this.maxDistance, -1), 1);
+
+            // 限制在最大距离内
+            const clampedX = Math.cos(angle) * distance;
+            const clampedY = Math.sin(angle) * distance;
+
+            // 更新手柄位置
+            this.handle.style.transform = `translate(calc(-50% + ${clampedX}px), calc(-50% + ${clampedY}px))`;
+
+            // 调用回调函数
+            if (this.callback) {
+                this.callback(normalizedX, normalizedY);
+            }
+        }
+    }
+
+    // 初始化摇杆
+    let movementJoystick;
+    let rotationJoystick;
+
+    function initJoysticks() {
+        // 左侧移动摇杆
+        movementJoystick = new VirtualJoystick('joystick-left', (x, y) => {
+            // 将摇杆输入映射到WASD
+            GAME.inputs.w = y < -0.3;
+            GAME.inputs.s = y > 0.3;
+            GAME.inputs.a = x < -0.3;
+            GAME.inputs.d = x > 0.3;
+        });
+
+        // 右侧视角摇杆
+        rotationJoystick = new VirtualJoystick('joystick-right', (x, y) => {
+            // 将摇杆输入映射到视角控制
+            GAME.inputs.left = x < -0.3;
+            GAME.inputs.right = x > 0.3;
+            GAME.inputs.up = y < -0.3;
+            GAME.inputs.down = y > 0.3;
+        });
+    }
+
     function updateUI() {
         const w = GAME.weapons[GAME.curIdx];
         document.getElementById('ui-wp').innerText = w.name;
