@@ -3989,7 +3989,7 @@
 
             const messages = [];
             document.querySelectorAll('.message').forEach(msg => {
-                // 排除加载更多按��相关的元素
+                // 排除加载更多按������相关的元素
                 if (!msg.id || (msg.id !== 'load-more-container' && msg.id !== 'loading-more')) {
                     messages.push({
                         role: msg.classList.contains('user') ? 'user' : 'assistant',
@@ -6725,6 +6725,9 @@
         }
 
         function scrollToMessage(index) {
+            // Refresh message elements to ensure we have the latest elements
+            messageElements = Array.from(document.querySelectorAll('.message'));
+
             if (index >= 0 && index < messageElements.length) {
                 const element = messageElements[index];
 
@@ -6753,13 +6756,17 @@
         }
 
         function goToPreviousMessage() {
-            if (currentIndex > 0) {
+            // Refresh message elements before navigating
+            messageElements = Array.from(document.querySelectorAll('.message'));
+            if (currentIndex > 0 && messageElements.length > 0) {
                 scrollToMessage(currentIndex - 1);
             }
         }
 
         function goToNextMessage() {
-            if (currentIndex < messageElements.length - 1) {
+            // Refresh message elements before navigating
+            messageElements = Array.from(document.querySelectorAll('.message'));
+            if (currentIndex < messageElements.length - 1 && messageElements.length > 0) {
                 scrollToMessage(currentIndex + 1);
             }
         }
@@ -6780,7 +6787,13 @@
                     return rect.top >= chatRect.top - 100 && rect.top <= chatRect.bottom - 100;
                 });
 
-                currentIndex = visibleElement ? messageElements.indexOf(visibleElement) : -1;
+                // If there are messages and we found a visible one, set current index
+                // Otherwise, if there are messages but none are visible, default to the last one
+                if (messageElements.length > 0) {
+                    currentIndex = visibleElement ? messageElements.indexOf(visibleElement) : messageElements.length - 1;
+                } else {
+                    currentIndex = -1;
+                }
             }
 
             updateNavigationArrows();
@@ -6798,12 +6811,24 @@
                         let shouldReinitialize = false;
 
                         mutations.forEach(function(mutation) {
+                            // Check for childList mutations (new nodes added)
                             if (mutation.type === 'childList') {
                                 mutation.addedNodes.forEach(function(node) {
-                                    if (node.nodeType === 1 && node.classList && node.classList.contains('message')) {
-                                        shouldReinitialize = true;
+                                    if (node.nodeType === 1) { // Element node
+                                        // Check if the added node is a message
+                                        if (node.classList && node.classList.contains('message')) {
+                                            shouldReinitialize = true;
+                                        }
+                                        // Or check if any descendants are messages
+                                        else if (node.querySelector && node.querySelector('.message')) {
+                                            shouldReinitialize = true;
+                                        }
                                     }
                                 });
+                            }
+                            // Check for attributes mutations (in case of innerHTML changes)
+                            else if (mutation.type === 'attributes' && mutation.target.classList.contains('message')) {
+                                shouldReinitialize = true;
                             }
                         });
 
@@ -6815,7 +6840,9 @@
 
                     observer.observe(chatContainer, {
                         childList: true,
-                        subtree: true
+                        subtree: true,
+                        attributes: true,  // Listen for attribute changes too
+                        attributeFilter: ['class']  // Only care about class changes
                     });
                 }
             });
