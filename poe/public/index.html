@@ -6799,12 +6799,21 @@
                 // Calculate offset to account for fixed header when in focus mode
                 const headerOffset = document.body.classList.contains('focus-mode') ? 0 : 60; // Adjust for header height
 
-                // Use a custom scroll method to account for header offset
-                const elementPosition = element.getBoundingClientRect().top + window.pageYOffset;
-                const offsetPosition = elementPosition - headerOffset;
+                // Calculate the element's position relative to the document
+                let elementTop = 0;
+                let currentElement = element;
+
+                // Sum up all the offsetTop values up to the document root
+                while (currentElement) {
+                    elementTop += currentElement.offsetTop;
+                    currentElement = currentElement.offsetParent;
+                }
+
+                // Adjust for header offset
+                const finalScrollPosition = elementTop - headerOffset;
 
                 window.scrollTo({
-                    top: offsetPosition,
+                    top: finalScrollPosition,
                     behavior: 'smooth'
                 });
 
@@ -6823,18 +6832,54 @@
         function goToPreviousMessage() {
             // Refresh message elements before navigating
             const currentMessageElements = Array.from(document.querySelectorAll('.message'));
-            if (currentIndex > 0 && currentMessageElements.length > 0) {
+            if (currentMessageElements.length > 0) {
                 messageElements = currentMessageElements;
-                scrollToMessage(currentIndex - 1);
+                // Recalculate current index based on the actual element in the view
+                const chatContainer = document.getElementById('chatContainer');
+                if (chatContainer) {
+                    const elementInView = currentMessageElements.find(element => {
+                        const rect = element.getBoundingClientRect();
+                        const chatRect = chatContainer.getBoundingClientRect();
+                        return rect.top >= chatRect.top - 100 && rect.top <= chatRect.bottom - 100;
+                    });
+                    if (elementInView) {
+                        currentIndex = currentMessageElements.indexOf(elementInView);
+                    }
+                }
+                // Make sure we have a valid current index
+                if (currentIndex <= 0) {
+                    currentIndex = Math.min(1, currentMessageElements.length - 1);
+                }
+                if (currentIndex > 0) {
+                    scrollToMessage(currentIndex - 1);
+                }
             }
         }
 
         function goToNextMessage() {
             // Refresh message elements before navigating
             const currentMessageElements = Array.from(document.querySelectorAll('.message'));
-            if (currentIndex < currentMessageElements.length - 1 && currentMessageElements.length > 0) {
+            if (currentMessageElements.length > 0) {
                 messageElements = currentMessageElements;
-                scrollToMessage(currentIndex + 1);
+                // Recalculate current index based on the actual element in the view
+                const chatContainer = document.getElementById('chatContainer');
+                if (chatContainer) {
+                    const elementInView = currentMessageElements.find(element => {
+                        const rect = element.getBoundingClientRect();
+                        const chatRect = chatContainer.getBoundingClientRect();
+                        return rect.top >= chatRect.top - 100 && rect.top <= chatRect.bottom - 100;
+                    });
+                    if (elementInView) {
+                        currentIndex = currentMessageElements.indexOf(elementInView);
+                    }
+                }
+                // Make sure we have a valid current index
+                if (currentIndex < 0) {
+                    currentIndex = Math.max(0, currentMessageElements.length - 2);
+                }
+                if (currentIndex < currentMessageElements.length - 1) {
+                    scrollToMessage(currentIndex + 1);
+                }
             }
         }
 
