@@ -6769,7 +6769,8 @@
             }
         }, { passive: true });
 
-        // Navigation arrows functionality
+        // --- Navigation Logic Fixes ---
+
         let messageElements = [];
         let currentIndex = -1;
 
@@ -6780,49 +6781,37 @@
             if (!upArrow || !downArrow) return;
 
             // Enable/disable arrows based on current position
+            // Up arrow disabled if at first message (index 0) or no messages
             upArrow.style.opacity = currentIndex > 0 ? '1' : '0.3';
             upArrow.style.pointerEvents = currentIndex > 0 ? 'auto' : 'none';
 
-            downArrow.style.opacity = currentIndex < messageElements.length - 1 ? '1' : '0.3';
-            downArrow.style.pointerEvents = currentIndex < messageElements.length - 1 ? 'auto' : 'none';
+            // Down arrow disabled if at last message or no messages
+            downArrow.style.opacity = (currentIndex < messageElements.length - 1 && currentIndex !== -1) ? '1' : '0.3';
+            downArrow.style.pointerEvents = (currentIndex < messageElements.length - 1 && currentIndex !== -1) ? 'auto' : 'none';
         }
 
         function scrollToMessage(index) {
-            // Use the current messageElements array, but refresh if needed
-            if (!messageElements || messageElements.length === 0) {
-                messageElements = Array.from(document.querySelectorAll('.message'));
-            }
+            // Ensure messageElements is fresh
+            messageElements = Array.from(document.querySelectorAll('.message'));
 
             if (index >= 0 && index < messageElements.length) {
                 const element = messageElements[index];
+                const chatContainer = document.getElementById('chatContainer');
 
-                // Calculate offset to account for fixed header when in focus mode
-                const headerOffset = document.body.classList.contains('focus-mode') ? 0 : 60; // Adjust for header height
+                if (!chatContainer) return;
 
-                // Calculate the element's position relative to the document
-                let elementTop = 0;
-                let currentElement = element;
+                // Use scrollIntoView on the element to scroll the chat container
+                // block: 'start' aligns top of element to top of container
+                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-                // Sum up all the offsetTop values up to the document root
-                while (currentElement) {
-                    elementTop += currentElement.offsetTop;
-                    currentElement = currentElement.offsetParent;
-                }
-
-                // Adjust for header offset
-                const finalScrollPosition = elementTop - headerOffset;
-
-                window.scrollTo({
-                    top: finalScrollPosition,
-                    behavior: 'smooth'
-                });
-
-                // Highlight the message temporarily
-                element.style.transition = 'background-color 0.3s';
-                element.style.backgroundColor = 'rgba(16, 163, 127, 0.2)';
+                // Highlight effect
                 setTimeout(() => {
-                    element.style.backgroundColor = '';
-                }, 1000);
+                    element.style.transition = 'background-color 0.3s';
+                    element.style.backgroundColor = 'rgba(16, 163, 127, 0.2)';
+                    setTimeout(() => {
+                        element.style.backgroundColor = '';
+                    }, 1000);
+                }, 300);
 
                 currentIndex = index;
                 updateNavigationArrows();
@@ -6830,131 +6819,108 @@
         }
 
         function goToPreviousMessage() {
-            // Refresh message elements before navigating
-            const currentMessageElements = Array.from(document.querySelectorAll('.message'));
-            if (currentMessageElements.length > 0) {
-                messageElements = currentMessageElements;
-                // Recalculate current index based on the actual element in the view
-                const chatContainer = document.getElementById('chatContainer');
-                if (chatContainer) {
-                    const elementInView = currentMessageElements.find(element => {
-                        const rect = element.getBoundingClientRect();
-                        const chatRect = chatContainer.getBoundingClientRect();
-                        return rect.top >= chatRect.top - 100 && rect.top <= chatRect.bottom - 100;
-                    });
-                    if (elementInView) {
-                        currentIndex = currentMessageElements.indexOf(elementInView);
-                    }
-                }
-                // Make sure we have a valid current index
-                if (currentIndex <= 0) {
-                    currentIndex = Math.min(1, currentMessageElements.length - 1);
-                }
-                if (currentIndex > 0) {
-                    scrollToMessage(currentIndex - 1);
-                }
+            // Refresh list
+            messageElements = Array.from(document.querySelectorAll('.message'));
+
+            // If we don't have a valid index, try to find the current visible one
+            if (currentIndex === -1) {
+                initializeNavigation();
+            }
+
+            if (currentIndex > 0) {
+                scrollToMessage(currentIndex - 1);
             }
         }
 
         function goToNextMessage() {
-            // Refresh message elements before navigating
-            const currentMessageElements = Array.from(document.querySelectorAll('.message'));
-            if (currentMessageElements.length > 0) {
-                messageElements = currentMessageElements;
-                // Recalculate current index based on the actual element in the view
-                const chatContainer = document.getElementById('chatContainer');
-                if (chatContainer) {
-                    const elementInView = currentMessageElements.find(element => {
-                        const rect = element.getBoundingClientRect();
-                        const chatRect = chatContainer.getBoundingClientRect();
-                        return rect.top >= chatRect.top - 100 && rect.top <= chatRect.bottom - 100;
-                    });
-                    if (elementInView) {
-                        currentIndex = currentMessageElements.indexOf(elementInView);
-                    }
-                }
-                // Make sure we have a valid current index
-                if (currentIndex < 0) {
-                    currentIndex = Math.max(0, currentMessageElements.length - 2);
-                }
-                if (currentIndex < currentMessageElements.length - 1) {
-                    scrollToMessage(currentIndex + 1);
-                }
+            // Refresh list
+            messageElements = Array.from(document.querySelectorAll('.message'));
+
+            // If we don't have a valid index, try to find the current visible one
+            if (currentIndex === -1) {
+                initializeNavigation();
+            }
+
+            if (currentIndex < messageElements.length - 1) {
+                scrollToMessage(currentIndex + 1);
             }
         }
 
         function initializeNavigation() {
-            // Get all message elements
-            messageElements = Array.from(document.querySelectorAll('.message'));
-
-            // Find the message closest to the current view
             const chatContainer = document.getElementById('chatContainer');
-            if (chatContainer) {
-                // Find the first message that is visible in the container
-                const visibleElement = messageElements.find(element => {
-                    const rect = element.getBoundingClientRect();
-                    const chatRect = chatContainer.getBoundingClientRect();
+            if (!chatContainer) return;
 
-                    // Check if element is in view (with some tolerance)
-                    return rect.top >= chatRect.top - 100 && rect.top <= chatRect.bottom - 100;
-                });
+            messageElements = Array.from(document.querySelectorAll('.message'));
+            if (messageElements.length === 0) {
+                currentIndex = -1;
+                updateNavigationArrows();
+                return;
+            }
 
-                // If there are messages and we found a visible one, set current index
-                // Otherwise, if there are messages but none are visible, default to the last one
-                if (messageElements.length > 0) {
-                    currentIndex = visibleElement ? messageElements.indexOf(visibleElement) : messageElements.length - 1;
-                } else {
-                    currentIndex = -1;
+            // Find the first message that is roughly at the top of the view
+            const containerRect = chatContainer.getBoundingClientRect();
+
+            // Default to the last message if nothing is found (often logical for chat)
+            let visibleIndex = messageElements.length - 1;
+
+            for (let i = 0; i < messageElements.length; i++) {
+                const rect = messageElements[i].getBoundingClientRect();
+
+                // If the element's top is visible within the container (with a small buffer)
+                // rect.top is relative to viewport. containerRect.top is also relative to viewport.
+                // We check if the element top is close to the container top
+                if (rect.top >= containerRect.top - 50 && rect.top < containerRect.bottom) {
+                    visibleIndex = i;
+                    break;
                 }
             }
 
+            currentIndex = visibleIndex;
             updateNavigationArrows();
         }
 
-        // Initialize navigation when DOM is loaded
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function() {
-                initializeNavigation();
+        // Initialize and setup Observer
+        document.addEventListener('DOMContentLoaded', function() {
+            const navUp = document.getElementById('navUp');
+            const navDown = document.getElementById('navDown');
 
-                // Reinitialize when new messages are added
-                const chatContainer = document.getElementById('chatContainer');
-                if (chatContainer) {
-                    const observer = new MutationObserver(function(mutations) {
-                        let shouldReinitialize = false;
+            if (navUp) navUp.addEventListener('click', goToPreviousMessage);
+            if (navDown) navDown.addEventListener('click', goToNextMessage);
 
-                        mutations.forEach(function(mutation) {
-                            // Check for childList mutations (new nodes added)
-                            if (mutation.type === 'childList') {
-                                mutation.addedNodes.forEach(function(node) {
-                                    if (node.nodeType === 1) { // Element node
-                                        // Check if the added node is a message
-                                        if (node.classList && node.classList.contains('message')) {
-                                            shouldReinitialize = true;
-                                        }
-                                        // Or check if any descendants are messages
-                                        else if (node.querySelector && node.querySelector('.message')) {
-                                            shouldReinitialize = true;
-                                        }
-                                    }
-                                });
-                            }
-                        });
+            // Initial setup
+            setTimeout(initializeNavigation, 500); // Wait for content to load
 
-                        if (shouldReinitialize) {
-                            // Small delay to ensure DOM is updated
-                            setTimeout(initializeNavigation, 100);
+            // Observe chat container for added nodes to update the list
+            const chatContainer = document.getElementById('chatContainer');
+            if (chatContainer) {
+                // Update currentIndex when user manually scrolls
+                let isScrollingTimer;
+                chatContainer.addEventListener('scroll', () => {
+                    clearTimeout(isScrollingTimer);
+                    isScrollingTimer = setTimeout(() => {
+                        initializeNavigation();
+                    }, 150);
+                });
+
+                const observer = new MutationObserver((mutations) => {
+                    let shouldUpdate = false;
+                    mutations.forEach((mutation) => {
+                        if (mutation.addedNodes.length > 0) {
+                            shouldUpdate = true;
                         }
                     });
 
-                    observer.observe(chatContainer, {
-                        childList: true,
-                        subtree: true
-                    });
-                }
-            });
-        } else {
-            initializeNavigation();
-        }
+                    if (shouldUpdate) {
+                        messageElements = Array.from(document.querySelectorAll('.message'));
+                        // If we are at the bottom (new message added), update index to last
+                        // Otherwise keep current index logic
+                        updateNavigationArrows();
+                    }
+                });
+
+                observer.observe(chatContainer, { childList: true, subtree: true });
+            }
+        });
     </script>
 </body>
 
