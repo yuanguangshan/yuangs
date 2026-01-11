@@ -3048,18 +3048,18 @@
         /* Navigation Arrows */
         .nav-arrows {
             position: fixed;
-            right: 20px;
+            right: 25px;
             top: 50%;
             transform: translateY(-50%);
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 20px;  /* 增加间距，使其更容易点击 */
             z-index: 100;
         }
 
         .nav-arrow {
-            width: 40px;
-            height: 40px;
+            width: 45px;  /* 增大按钮尺寸 */
+            height: 45px;
             border-radius: 50%;
             background: var(--primary-color);
             color: white;
@@ -3091,14 +3091,12 @@
 
         @media (max-width: 768px) {
             .nav-arrows {
-                right: 15px;
-                width: 35px;
-                height: 35px;
+                right: 20px;  /* 调整移动端右边距 */
             }
 
             .nav-arrow {
-                width: 35px;
-                height: 35px;
+                width: 40px;  /* 移动端也增大按钮尺寸 */
+                height: 40px;
             }
         }
     </style>
@@ -3770,6 +3768,18 @@
                     if (focusToggle) {
                         const icon = focusToggle.querySelector('i');
                         if (icon) icon.className = 'fas fa-expand';
+                    }
+                });
+            }
+
+            // Also add click handler to the focus toggle button to ensure it works properly in all cases
+            if (focusToggle) {
+                focusToggle.addEventListener('click', () => {
+                    const isFocusMode = document.body.classList.contains('focus-mode');
+                    document.body.classList.toggle('focus-mode');
+                    const icon = focusToggle.querySelector('i');
+                    if (icon) {
+                        icon.className = isFocusMode ? 'fas fa-expand' : 'fas fa-compress';
                     }
                 });
             }
@@ -6595,6 +6605,9 @@
         // Auto focus mode on scroll functionality
         let scrollTimer = null;
         let isAutoFocusMode = false;
+        let startY = 0;
+        let scrollDistance = 0;
+        const SCROLL_THRESHOLD = window.innerHeight * 0.25; // 25% of screen height as threshold
 
         function enableAutoFocusMode() {
             if (!isAutoFocusMode) {
@@ -6634,9 +6647,19 @@
         let isScrolling = false;
         let scrollTimeout = null;
 
+        // Track scroll position to determine if enough distance scrolled
+        let lastScrollTop = 0;
+
         document.addEventListener('scroll', function() {
-            // Enable focus mode when scrolling starts
-            enableAutoFocusMode();
+            const currentScrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const scrollAmount = Math.abs(currentScrollTop - lastScrollTop);
+
+            // Only enable focus mode if scrolled more than threshold
+            if (scrollAmount > SCROLL_THRESHOLD) {
+                enableAutoFocusMode();
+            }
+
+            lastScrollTop = currentScrollTop;
 
             // Track scrolling state
             isScrolling = true;
@@ -6653,15 +6676,34 @@
         });
 
         // Also add wheel event for more responsive detection
-        document.addEventListener('wheel', function() {
+        document.addEventListener('wheel', function(e) {
             if (!isScrolling) {
-                enableAutoFocusMode();
+                // Calculate cumulative scroll distance
+                scrollDistance += Math.abs(e.deltaY);
+
+                if (scrollDistance > SCROLL_THRESHOLD) {
+                    enableAutoFocusMode();
+                    scrollDistance = 0; // Reset after triggering
+                }
             }
         }, { passive: true });
 
-        // Touchmove event for mobile devices
-        document.addEventListener('touchmove', function() {
-            enableAutoFocusMode();
+        // Touch events for mobile devices
+        document.addEventListener('touchstart', function(e) {
+            startY = e.touches[0].pageY;
+            scrollDistance = 0;
+        }, { passive: true });
+
+        document.addEventListener('touchmove', function(e) {
+            const currentY = e.touches[0].pageY;
+            scrollDistance = Math.abs(currentY - startY);
+
+            if (scrollDistance > SCROLL_THRESHOLD) {
+                enableAutoFocusMode();
+                // Reset the start position after triggering to avoid repeated triggers
+                startY = currentY;
+                scrollDistance = 0;
+            }
         }, { passive: true });
 
         // Navigation arrows functionality
