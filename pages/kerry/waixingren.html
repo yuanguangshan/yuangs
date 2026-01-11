@@ -6,6 +6,7 @@
     <title>最后防线: 星际战场</title>
     <style>
         /* --- 核心基础设置 --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { 
             margin: 0; overflow: hidden; background-color: #000; 
             font-family: 'Segoe UI', Arial, sans-serif; user-select: none;
@@ -14,12 +15,12 @@
         /* 游戏画面层 */
         #game-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
 
-        /* 受伤红屏特效 */
+        /* 受伤红屏特效 - 增强版 */
         #damage-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: radial-gradient(circle, transparent 50%, red 100%);
+            background: radial-gradient(circle at center, transparent 30%, rgba(255,0,0,0.4) 100%);
             opacity: 0; pointer-events: none; z-index: 99;
-            transition: opacity 0.1s;
+            transition: opacity 0.15s ease-out;
         }
 
         /* UI 容器 */
@@ -28,171 +29,449 @@
             z-index: 100; pointer-events: none; 
         }
 
-        /* 按钮组 */
+        /* 按钮组 - 现代化设计 */
         .btn {
             position: absolute; z-index: 102; pointer-events: auto; cursor: pointer;
-            background: rgba(20, 30, 40, 0.6); border: 2px solid rgba(100, 200, 255, 0.5); 
-            border-radius: 50%; color: white; font-weight: bold; 
+            background: linear-gradient(135deg, rgba(20, 30, 50, 0.85), rgba(10, 20, 40, 0.9)); 
+            border: 2px solid rgba(100, 200, 255, 0.6); 
+            border-radius: 50%; color: white; font-weight: bold; font-size: 22px;
             display: flex; justify-content: center; align-items: center;
-            box-shadow: 0 0 10px rgba(0, 150, 255, 0.3); transition: 0.1s;
-            backdrop-filter: blur(4px);
+            box-shadow: 0 4px 15px rgba(0, 150, 255, 0.4), inset 0 1px 2px rgba(255,255,255,0.2);
+            transition: all 0.15s ease;
+            backdrop-filter: blur(8px);
         }
-        .btn:active { background: rgba(100, 200, 255, 0.5); transform: scale(0.95); }
+        .btn:active { 
+            background: linear-gradient(135deg, rgba(100, 200, 255, 0.7), rgba(50, 150, 255, 0.8)); 
+            transform: scale(0.92); 
+            box-shadow: 0 2px 8px rgba(0, 150, 255, 0.6), inset 0 1px 2px rgba(255,255,255,0.3);
+        }
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 5px; left: 5px; right: 5px; bottom: 50%;
+            background: linear-gradient(to bottom, rgba(255,255,255,0.15), transparent);
+            border-radius: 50%;
+            pointer-events: none;
+        }
 
-        /* 按钮位置调整 - 避开右摇杆中心 */
+        /* 按钮位置 */
         #btn-fire { 
-            bottom: 70px; 
-            right: 170px; /* 移到摇杆左侧，方便左手或右手跨屏操作，或右手大拇指内侧 */
-            width: 90px; 
-            height: 90px; 
-            background: rgba(255, 50, 50, 0.4); 
-            border-color: #ff5555;
+            bottom: 80px; right: 180px; 
+            width: 95px; height: 95px; 
+            background: linear-gradient(135deg, rgba(255, 50, 50, 0.75), rgba(200, 0, 0, 0.85)); 
+            border-color: #ff6666;
             z-index: 110;
+            font-size: 32px;
         }
-        #btn-fire::after { content: 'SPACE'; font-size: 10px; position: absolute; bottom: 15px; opacity: 0.7; }
+        #btn-fire::after { 
+            content: 'FIRE'; 
+            font-size: 9px; 
+            position: absolute; 
+            bottom: 12px; 
+            opacity: 0.8;
+            letter-spacing: 1px;
+        }
 
-        #btn-reload { bottom: 180px; right: 120px; width: 55px; height: 55px; }
-        #btn-reload::after { content: 'R'; font-size: 10px; position: absolute; bottom: 5px; opacity: 0.7; }
+        #btn-reload { bottom: 195px; right: 130px; width: 58px; height: 58px; }
+        #btn-reload::after { content: 'RELOAD'; font-size: 8px; position: absolute; bottom: 4px; opacity: 0.75; }
 
-        #btn-switch { bottom: 160px; right: 40px; width: 55px; height: 55px; }
-        #btn-switch::after { content: 'Q'; font-size: 10px; position: absolute; bottom: 5px; opacity: 0.7; }
+        #btn-switch { bottom: 175px; right: 45px; width: 58px; height: 58px; }
+        #btn-switch::after { content: 'SWITCH'; font-size: 8px; position: absolute; bottom: 4px; opacity: 0.75; }
 
-        #btn-scope { display: none; bottom: 250px; right: 60px; width: 65px; height: 65px; background: rgba(0, 255, 255, 0.2); }
-        #btn-scope::after { content: 'SHIFT'; font-size: 10px; position: absolute; bottom: 10px; opacity: 0.7; }
+        #btn-scope { 
+            display: none; 
+            bottom: 265px; right: 65px; 
+            width: 68px; height: 68px; 
+            background: linear-gradient(135deg, rgba(0, 255, 255, 0.3), rgba(0, 200, 200, 0.4)); 
+        }
+        #btn-scope::after { content: 'SCOPE'; font-size: 8px; position: absolute; bottom: 8px; opacity: 0.75; }
+        #btn-scope.active {
+            background: linear-gradient(135deg, rgba(0, 255, 255, 0.8), rgba(0, 200, 200, 0.9));
+            border-color: #00ffff;
+        }
 
-        /* HUD */
+        /* HUD - 现代化仪表盘 */
         #hud {
             position: absolute; top: 20px; left: 20px; z-index: 105;
-            color: #00ffff; background: rgba(0, 20, 40, 0.6); padding: 15px; border-radius: 8px;
-            font-size: 16px; pointer-events: none; border: 1px solid rgba(0, 255, 255, 0.3);
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            color: #00ffff; 
+            background: linear-gradient(135deg, rgba(0, 20, 40, 0.85), rgba(0, 10, 30, 0.9)); 
+            padding: 18px 20px; 
+            border-radius: 12px;
+            font-size: 15px; 
+            pointer-events: none; 
+            border: 2px solid rgba(0, 255, 255, 0.4);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), inset 0 1px 2px rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            min-width: 200px;
         }
-        #hud span { font-weight: bold; color: white; }
-        #log { font-size: 12px; color: #ffaa00; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); padding-top:5px; }
+        #hud .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 6px 0;
+            padding: 4px 0;
+        }
+        #hud .stat-label {
+            color: rgba(255,255,255,0.7);
+            font-size: 13px;
+            margin-right: 15px;
+        }
+        #hud .stat-value {
+            font-weight: bold; 
+            color: white;
+            font-size: 16px;
+            text-shadow: 0 0 8px rgba(0,255,255,0.6);
+        }
+        #hud .hp-value {
+            color: #00ff88;
+        }
+        #hud .hp-value.low {
+            color: #ff4444;
+            animation: pulse-red 0.5s infinite;
+        }
+        @keyframes pulse-red {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        #log { 
+            font-size: 12px; 
+            color: #ffcc00; 
+            margin-top: 10px; 
+            padding-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.15);
+            font-style: italic;
+        }
 
+        /* 准星 - 动态设计 */
         #crosshair {
-            position: absolute; top: 50%; left: 50%; width: 24px; height: 24px;
-            transform: translate(-50%, -50%); pointer-events: none; z-index: 105;
-            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="cyan" stroke-width="2"/><line x1="12" y1="2" x2="12" y2="8" stroke="cyan"/><line x1="12" y1="16" x2="12" y2="22" stroke="cyan"/><line x1="2" y1="12" x2="8" y2="12" stroke="cyan"/><line x1="16" y1="12" x2="22" y2="12" stroke="cyan"/></svg>');
-            opacity: 0.8;
+            position: absolute; top: 50%; left: 50%; 
+            width: 30px; height: 30px;
+            transform: translate(-50%, -50%); 
+            pointer-events: none; z-index: 105;
+            transition: all 0.2s ease;
+        }
+        #crosshair::before,
+        #crosshair::after,
+        #crosshair .h-line,
+        #crosshair .v-line {
+            content: '';
+            position: absolute;
+            background: rgba(0, 255, 255, 0.8);
+            box-shadow: 0 0 8px rgba(0, 255, 255, 0.6);
+        }
+        #crosshair::before { /* 上 */
+            width: 2px; height: 10px;
+            top: 0; left: 50%;
+            transform: translateX(-50%);
+        }
+        #crosshair::after { /* 下 */
+            width: 2px; height: 10px;
+            bottom: 0; left: 50%;
+            transform: translateX(-50%);
+        }
+        #crosshair .h-line { /* 左 */
+            width: 10px; height: 2px;
+            left: 0; top: 50%;
+            transform: translateY(-50%);
+        }
+        #crosshair .v-line { /* 右 */
+            width: 10px; height: 2px;
+            right: 0; top: 50%;
+            transform: translateY(-50%);
+        }
+        #crosshair .center-dot {
+            position: absolute;
+            width: 4px; height: 4px;
+            background: rgba(255, 0, 0, 0.7);
+            border-radius: 50%;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 6px rgba(255, 0, 0, 0.8);
         }
         
         #controls-hint {
             position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-            color: rgba(255,255,255,0.6); font-size: 14px; text-align: center;
-            text-shadow: 1px 1px 2px #000; width: 100%; pointer-events: none;
+            color: rgba(255,255,255,0.5); font-size: 13px; text-align: center;
+            text-shadow: 1px 1px 3px #000; width: 100%; pointer-events: none;
+            background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);
+            padding: 15px 10px 10px;
         }
 
-        /* 虚拟摇杆样式 */
+        /* 虚拟摇杆样式 - 优化版 */
         .joystick {
             position: absolute;
-            width: 120px;
-            height: 120px;
-            bottom: 60px;
+            width: 130px; height: 130px;
+            bottom: 70px;
             z-index: 102;
             pointer-events: auto;
         }
 
-        #joystick-left {
-            left: 40px;
-        }
-
-        #joystick-right {
-            right: 40px;
-        }
+        #joystick-left { left: 45px; }
+        #joystick-right { right: 45px; }
 
         .joystick-base {
             position: absolute;
-            width: 100%;
-            height: 100%;
+            width: 100%; height: 100%;
             border-radius: 50%;
-            background: rgba(20, 30, 40, 0.6);
-            border: 2px solid rgba(100, 200, 255, 0.5);
-            box-shadow: 0 0 10px rgba(0, 150, 255, 0.3);
-            backdrop-filter: blur(4px);
+            background: linear-gradient(135deg, rgba(20, 30, 50, 0.7), rgba(10, 20, 40, 0.8));
+            border: 3px solid rgba(100, 200, 255, 0.5);
+            box-shadow: 0 4px 20px rgba(0, 150, 255, 0.4), inset 0 2px 4px rgba(255,255,255,0.1);
+            backdrop-filter: blur(8px);
+        }
+        .joystick-base::before {
+            content: '';
+            position: absolute;
+            top: 10px; left: 10px; right: 10px; bottom: 50%;
+            background: linear-gradient(to bottom, rgba(255,255,255,0.1), transparent);
+            border-radius: 50%;
         }
 
         .joystick-handle {
             position: absolute;
-            width: 50px;
-            height: 50px;
+            width: 55px; height: 55px;
             border-radius: 50%;
-            background: rgba(100, 200, 255, 0.8);
-            border: 2px solid rgba(255, 255, 255, 0.8);
-            top: 50%;
-            left: 50%;
+            background: linear-gradient(135deg, rgba(100, 200, 255, 0.9), rgba(50, 150, 255, 0.95));
+            border: 3px solid rgba(255, 255, 255, 0.9);
+            top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            box-shadow: 0 0 10px rgba(0, 150, 255, 0.5);
+            box-shadow: 0 3px 12px rgba(0, 150, 255, 0.6), inset 0 1px 3px rgba(255,255,255,0.4);
             cursor: move;
+            transition: transform 0.1s ease;
+        }
+        .joystick-handle::before {
+            content: '';
+            position: absolute;
+            top: 5px; left: 5px; right: 5px; bottom: 50%;
+            background: linear-gradient(to bottom, rgba(255,255,255,0.4), transparent);
+            border-radius: 50%;
+        }
+        .joystick.active .joystick-handle {
+            box-shadow: 0 2px 8px rgba(0, 150, 255, 0.8), inset 0 1px 3px rgba(255,255,255,0.5);
         }
 
-        /* 选枪界面 */
+        /* 选枪界面 - 精美优化 */
         #menu {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(135deg, #050510 0%, #101020 100%); z-index: 200;
+            background: linear-gradient(135deg, #0a0a1e 0%, #1a1a3e 50%, #0a0a1e 100%); 
+            z-index: 200;
             display: flex; flex-direction: column; align-items: center; 
-            padding-top: 40px; padding-bottom: 60px; /* 增加底部间距 */
-            overflow-y: auto; /* 开启垂直滚动 */
-            -webkit-overflow-scrolling: touch; /* 优化 iOS 滚动顺滑度 */
+            padding-top: 40px; padding-bottom: 80px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
             pointer-events: auto;
         }
-        .card {
-            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); 
-            width: 85%; max-width: 450px; padding: 18px; margin: 8px; /* 使用百分比宽度适配 iPad */
-            color: #ccc; border-radius: 8px; cursor: pointer; user-select: none;
-            transition: 0.2s; display: flex; justify-content: space-between;
-            align-items: center;
+        #menu h1 {
+            color: #00d4ff; 
+            text-shadow: 0 0 20px #00d4ff, 0 0 40px #0088ff; 
+            margin-bottom: 5px;
+            font-size: 36px;
+            letter-spacing: 2px;
         }
-        .card:hover { background: rgba(255,255,255,0.1); transform: translateX(10px); }
-        .card.selected { border-color: #00ff00; background: rgba(0, 255, 0, 0.1); color: white; box-shadow: 0 0 15px rgba(0,255,0,0.2); }
-        #start-btn {
-            margin-top: 20px; margin-bottom: 20px; padding: 15px 60px; font-size: 24px; 
-            background: #333; color: #666; font-weight: bold; flex-shrink: 0; /* 防止按钮被压缩 */
-            border: none; border-radius: 4px; pointer-events: none; transition: 0.3s;
+        #menu h3 {
+            color: #aaa; 
+            margin-bottom: 25px;
+            font-weight: 400;
+            font-size: 16px;
         }
-        #start-btn.active { background: #00aaff; color: white; pointer-events: auto; cursor: pointer; box-shadow: 0 0 20px #00aaff; }
         
-        /* --- iPad / Tablet 专属优化 --- */
+        .card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)); 
+            border: 2px solid rgba(100, 200, 255, 0.3); 
+            width: 85%; max-width: 450px; 
+            padding: 20px 22px; 
+            margin: 8px; 
+            color: #ddd; 
+            border-radius: 12px; 
+            cursor: pointer; 
+            user-select: none;
+            transition: all 0.25s ease;
+            display: flex; 
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .card:hover { 
+            background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.08)); 
+            transform: translateX(8px) scale(1.02);
+            border-color: rgba(100, 200, 255, 0.6);
+            box-shadow: 0 6px 20px rgba(0, 150, 255, 0.3);
+        }
+        .card.selected { 
+            border-color: #00ff88; 
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.15), rgba(0, 200, 100, 0.1)); 
+            color: white; 
+            box-shadow: 0 6px 25px rgba(0,255,136,0.4);
+            transform: translateX(8px) scale(1.03);
+        }
+        .card .weapon-name {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .card small {
+            color: #999;
+            font-size: 13px;
+        }
+        .card.selected small {
+            color: #aaffcc;
+        }
+        
+        #start-btn {
+            margin-top: 25px; margin-bottom: 20px; 
+            padding: 16px 70px; 
+            font-size: 22px; 
+            background: linear-gradient(135deg, #333, #222); 
+            color: #666; 
+            font-weight: bold; 
+            flex-shrink: 0;
+            border: 2px solid #444; 
+            border-radius: 50px; 
+            pointer-events: none; 
+            transition: all 0.3s ease;
+            cursor: not-allowed;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+        }
+        #start-btn.active { 
+            background: linear-gradient(135deg, #00ccff, #0088ff); 
+            color: white; 
+            pointer-events: auto; 
+            cursor: pointer; 
+            border-color: #00ddff;
+            box-shadow: 0 6px 30px rgba(0, 170, 255, 0.6);
+            transform: scale(1.05);
+        }
+        #start-btn.active:hover {
+            background: linear-gradient(135deg, #00ddff, #0099ff);
+            box-shadow: 0 8px 35px rgba(0, 170, 255, 0.8);
+        }
+        #start-btn.active:active {
+            transform: scale(0.98);
+        }
+        
+        /* iPad / Tablet 专属优化 */
         @media (min-width: 768px) {
-            .btn { width: 65px; height: 65px; font-size: 18px; }
+            .btn { width: 70px; height: 70px; font-size: 24px; }
             #btn-fire { 
-                width: 110px; height: 110px; 
-                right: 220px; bottom: 80px;
-                border-width: 4px;
+                width: 120px; height: 120px; 
+                right: 230px; bottom: 90px;
+                font-size: 38px;
             }
-            #btn-reload { bottom: 220px; right: 140px; width: 60px; height: 60px; }
-            #btn-switch { bottom: 200px; right: 50px; width: 60px; height: 60px; }
-            #btn-scope { bottom: 300px; right: 70px; width: 75px; height: 75px; }
+            #btn-reload { bottom: 240px; right: 150px; width: 65px; height: 65px; }
+            #btn-switch { bottom: 220px; right: 55px; width: 65px; height: 65px; }
+            #btn-scope { bottom: 330px; right: 75px; width: 80px; height: 80px; }
             
-            .joystick { width: 160px; height: 160px; bottom: 80px; }
-            #joystick-left { left: 60px; }
-            #joystick-right { right: 60px; }
-            .joystick-handle { width: 70px; height: 70px; }
+            .joystick { width: 170px; height: 170px; bottom: 90px; }
+            #joystick-left { left: 70px; }
+            #joystick-right { right: 70px; }
+            .joystick-handle { width: 75px; height: 75px; }
             
             #hud { 
                 top: 30px; left: 30px; 
-                font-size: 20px; padding: 22px; 
-                border-width: 2px;
+                font-size: 17px; padding: 22px 25px; 
+                min-width: 240px;
             }
+            #hud .stat-label { font-size: 14px; }
+            #hud .stat-value { font-size: 18px; }
             #log { font-size: 14px; }
             
-            #menu h1 { font-size: 48px; }
-            .card { width: 500px; padding: 25px; font-size: 20px; }
+            #menu h1 { font-size: 52px; }
+            #menu h3 { font-size: 18px; }
+            .card { width: 500px; padding: 25px 28px; }
+            .card .weapon-name { font-size: 20px; }
+            .card small { font-size: 14px; }
         }
 
-        /* 呼吸灯动画 */
+        /* 呼吸灯动画 - 柔和版 */
         @keyframes pulse-glow {
-            0% { box-shadow: 0 0 10px rgba(0, 150, 255, 0.3); }
-            50% { box-shadow: 0 0 20px rgba(0, 150, 255, 0.6); }
-            100% { box-shadow: 0 0 10px rgba(0, 150, 255, 0.3); }
+            0%, 100% { box-shadow: 0 4px 15px rgba(0, 150, 255, 0.4), inset 0 1px 2px rgba(255,255,255,0.2); }
+            50% { box-shadow: 0 6px 25px rgba(0, 150, 255, 0.6), inset 0 1px 2px rgba(255,255,255,0.3); }
         }
-
         .btn { animation: pulse-glow 3s infinite ease-in-out; }
         
+        /* 敌人血条 */
         .hp-bar { 
-            position: absolute; height: 6px; background: #ff3333; 
-            z-index: 90; pointer-events: none; display: none; 
-            box-shadow: 0 0 8px red; border-radius: 3px;
+            position: absolute; 
+            height: 5px; 
+            background: linear-gradient(90deg, #ff3333, #ff6666); 
+            z-index: 90; 
+            pointer-events: none; 
+            display: none; 
+            box-shadow: 0 0 10px rgba(255, 50, 50, 0.8); 
+            border-radius: 3px;
+            border: 1px solid rgba(255, 100, 100, 0.5);
+        }
+
+        /* 加载动画 */
+        #loading {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 300;
+            display: none;
+            color: white;
+            text-align: center;
+        }
+        #loading.active { display: block; }
+        .spinner {
+            width: 60px; height: 60px;
+            border: 4px solid rgba(255,255,255,0.1);
+            border-top-color: #00ccff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 击杀提示 */
+        #kill-feed {
+            position: absolute;
+            top: 120px; right: 20px;
+            z-index: 105;
+            pointer-events: none;
+        }
+        .kill-msg {
+            background: linear-gradient(90deg, transparent, rgba(255, 100, 0, 0.8), transparent);
+            color: white;
+            padding: 8px 15px;
+            margin: 5px 0;
+            border-radius: 4px;
+            font-size: 14px;
+            animation: slideIn 0.3s ease, fadeOut 0.5s ease 2.5s forwards;
+            box-shadow: 0 2px 10px rgba(255, 100, 0, 0.5);
+        }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes fadeOut {
+            to { opacity: 0; transform: translateY(-10px); }
+        }
+
+        /* 波次提示 */
+        #wave-alert {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 150;
+            font-size: 48px;
+            font-weight: bold;
+            color: #00ffff;
+            text-shadow: 0 0 30px #00ffff, 0 0 60px #0088ff;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        #wave-alert.show {
+            animation: waveAnnounce 3s ease;
+        }
+        @keyframes waveAnnounce {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+            80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -201,24 +480,42 @@
 
     <div id="game-container"></div>
     <div id="damage-overlay"></div>
+    <div id="loading"><div class="spinner"></div><div>加载中...</div></div>
 
     <!-- UI -->
     <div id="ui-layer">
         <div id="hud">
-            <div>装甲: <span id="ui-hp">100</span>%</div>
-            <div>武器: <span id="ui-wp">--</span></div>
-            <div>弹药: <span id="ui-ammo">--</span></div>
-            <div id="log">指挥官: 等待部署...</div>
+            <div class="stat-row">
+                <span class="stat-label">装甲</span>
+                <span class="stat-value hp-value" id="ui-hp">100</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">武器</span>
+                <span class="stat-value" id="ui-wp">--</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">弹药</span>
+                <span class="stat-value" id="ui-ammo">--</span>
+            </div>
+            <div id="log">等待部署指令...</div>
         </div>
-        <div id="crosshair"></div>
+        
+        <div id="crosshair">
+            <div class="h-line"></div>
+            <div class="v-line"></div>
+            <div class="center-dot"></div>
+        </div>
 
-        <!-- 左侧虚拟摇杆 - 方向控制 -->
+        <div id="kill-feed"></div>
+        <div id="wave-alert"></div>
+
+        <!-- 左侧虚拟摇杆 -->
         <div id="joystick-left" class="joystick">
             <div class="joystick-base"></div>
             <div class="joystick-handle"></div>
         </div>
 
-        <!-- 右侧虚拟摇杆 - 视角旋转 -->
+        <!-- 右侧虚拟摇杆 -->
         <div id="joystick-right" class="joystick">
             <div class="joystick-base"></div>
             <div class="joystick-handle"></div>
@@ -233,20 +530,35 @@
         <div id="btn-scope" class="btn" onclick="doScope()">🎯</div>
 
         <div id="controls-hint">
-            [W/A/S/D] 移动 &nbsp; [↑/↓/←/→] 瞄准 &nbsp; [Space] 开火 &nbsp; [R] 换弹 &nbsp; [Q] 切枪 &nbsp; [Shift] 瞄准镜
+            PC: [WASD] 移动 | [方向键] 瞄准 | [Space] 开火 | [R] 换弹 | [Q] 切枪 | [Shift] 瞄准镜
         </div>
     </div>
 
     <!-- 菜单 -->
     <div id="menu">
-        <h1 style="color:#00aaff; text-shadow: 0 0 10px #00aaff; margin-bottom: 10px;">行星防卫军</h1>
-        <h3 style="color:#888; margin-bottom: 30px;">选择 2 把主武器</h3>
-        <div class="card" onclick="selectWp(0, this)"><span>1. 死神狙击</span><small style="color:#888">8倍镜/高伤</small></div>
-        <div class="card" onclick="selectWp(1, this)"><span>2. 疾风冲锋枪</span><small style="color:#888">高射速</small></div>
-        <div class="card" onclick="selectWp(2, this)"><span>3. 雷霆电枪</span><small style="color:#888">连锁闪电</small></div>
-        <div class="card" onclick="selectWp(3, this)"><span>4. 加特林机炮</span><small style="color:#888">弹雨压制</small></div>
-        <div class="card" onclick="selectWp(4, this)"><span>5. 毁灭火箭筒</span><small style="color:#888">范围爆炸</small></div>
-        <button id="start-btn" onclick="startGame()">启动引擎</button>
+        <h1>⚔️ 行星防卫军 ⚔️</h1>
+        <h3>选择 2 把主武器开始战斗</h3>
+        <div class="card" onclick="selectWp(0, this)">
+            <span class="weapon-name">🎯 死神狙击</span>
+            <small>8倍镜 | 高伤害</small>
+        </div>
+        <div class="card" onclick="selectWp(1, this)">
+            <span class="weapon-name">⚡ 疾风冲锋枪</span>
+            <small>高射速 | 压制力</small>
+        </div>
+        <div class="card" onclick="selectWp(2, this)">
+            <span class="weapon-name">⚡ 雷霆电枪</span>
+            <small>连锁闪电 | 范围杀伤</small>
+        </div>
+        <div class="card" onclick="selectWp(3, this)">
+            <span class="weapon-name">🔫 加特林机炮</span>
+            <small>弹雨压制 | 超大弹匣</small>
+        </div>
+        <div class="card" onclick="selectWp(4, this)">
+            <span class="weapon-name">🚀 毁灭火箭筒</span>
+            <small>范围爆炸 | 群体伤害</small>
+        </div>
+        <button id="start-btn" onclick="startGame()">🚀 启动作战引擎</button>
     </div>
 
 <script>
@@ -254,13 +566,11 @@
     const GAME = {
         scene: null, camera: null, renderer: null, player: null, 
         ground: null, groundGrid: null,
-        // 输入
         inputs: { w:false, a:false, s:false, d:false, up:false, down:false, left:false, right:false, fire: false },
         camPitch: 0,
-        // 游戏对象
         weapons: [], selected: [], curIdx: 0,
-        bullets: [], enemies: [], allies: [], particles: [], decor: [], // 装饰物
-        isScoped: false, hp: 100, wave: 1, 
+        bullets: [], enemies: [], allies: [], particles: [], decor: [],
+        isScoped: false, hp: 100, wave: 1, killCount: 0,
         isPlaying: false
     };
 
@@ -289,12 +599,19 @@
     function startGame() {
         if(GAME.selected.length !== 2) return;
         document.getElementById('menu').style.display = 'none';
+        document.getElementById('loading').classList.add('active');
+        
         GAME.selected.forEach(id => {
             const w = WEAPONS[id];
             GAME.weapons.push({...w, curAmmo: w.mag, lastFire: 0});
         });
-        initThree();
-        initJoysticks(); // 初始化虚拟摇杆
+        
+        setTimeout(() => {
+            initThree();
+            initJoysticks();
+            document.getElementById('loading').classList.remove('active');
+            showWaveAlert(1);
+        }, 500);
     }
 
     // --- 键盘监听 ---
@@ -330,14 +647,32 @@
         }
     });
 
-    function doReload() { GAME.weapons[GAME.curIdx].curAmmo = GAME.weapons[GAME.curIdx].mag; updateUI(); }
-    function doSwitch() { GAME.curIdx = (GAME.curIdx + 1) % 2; GAME.isScoped = false; updateUI(); }
-    function doScope() { GAME.isScoped = !GAME.isScoped; updateUI(); }
+    function doReload() { 
+        const w = GAME.weapons[GAME.curIdx];
+        if(w.curAmmo < w.mag) {
+            w.curAmmo = w.mag; 
+            updateUI();
+            showLog('弹药已补充');
+        }
+    }
+    function doSwitch() { 
+        GAME.curIdx = (GAME.curIdx + 1) % 2; 
+        GAME.isScoped = false; 
+        updateUI();
+        showLog(`切换至 ${GAME.weapons[GAME.curIdx].name}`);
+    }
+    function doScope() { 
+        const w = GAME.weapons[GAME.curIdx];
+        if(w.sniper) {
+            GAME.isScoped = !GAME.isScoped; 
+            updateUI();
+            showLog(GAME.isScoped ? '瞄准镜启动' : '瞄准镜关闭');
+        }
+    }
 
     // --- Three.js ---
     function initThree() {
         GAME.scene = new THREE.Scene();
-        // 1. 背景高亮：深蓝色星云背景 + 雾气
         const bgColor = new THREE.Color(0x1a1a2e); 
         GAME.scene.background = bgColor;
         GAME.scene.fog = new THREE.Fog(bgColor, 30, 90);
@@ -347,20 +682,16 @@
         GAME.renderer = new THREE.WebGLRenderer({ antialias: true });
         GAME.renderer.setSize(window.innerWidth, window.innerHeight);
         GAME.renderer.shadowMap.enabled = true;
-        GAME.renderer.toneMapping = THREE.ACESFilmicToneMapping; // 电影级色调
+        GAME.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         document.getElementById('game-container').appendChild(GAME.renderer.domElement);
 
-        // 2. 灯光增强
-        // 半球光 (天光蓝，地光褐)
         const hemiLight = new THREE.HemisphereLight(0x444488, 0x442200, 0.6);
         GAME.scene.add(hemiLight);
-        // 主阳光
         const dir = new THREE.DirectionalLight(0xffeeb1, 1.2);
         dir.position.set(50, 80, 50); dir.castShadow = true;
         dir.shadow.mapSize.width = 2048; dir.shadow.mapSize.height = 2048;
         GAME.scene.add(dir);
 
-        // 地面 (深色材质)
         const planeMat = new THREE.MeshStandardMaterial({ 
             color: 0x222225, 
             roughness: 0.9,
@@ -370,11 +701,9 @@
         GAME.ground.rotation.x = -Math.PI/2; GAME.ground.receiveShadow = true;
         GAME.scene.add(GAME.ground);
 
-        // 网格辅助 (更淡一点)
         GAME.groundGrid = new THREE.GridHelper(2000, 200, 0x333344, 0x1a1a20);
         GAME.scene.add(GAME.groundGrid);
 
-        // 玩家 (增加一个跟随点光源，照亮脚下)
         const pGeo = new THREE.ConeGeometry(0.5, 1.5, 8); pGeo.rotateX(Math.PI/2);
         GAME.player = new THREE.Mesh(pGeo, new THREE.MeshLambertMaterial({color: 0x00ccff, emissive: 0x004488}));
         GAME.player.position.y = 1; GAME.player.castShadow = true;
@@ -384,14 +713,12 @@
         GAME.player.add(playerLight);
         GAME.scene.add(GAME.player);
 
-        // 军队
         for(let i=0; i<10; i++) {
             const ally = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.6,0.6), new THREE.MeshLambertMaterial({color: 0x0055ff}));
             ally.castShadow = true; ally.userData = { lastFire: 0, offsetAngle: (i/10)*Math.PI*2 };
             GAME.scene.add(ally); GAME.allies.push(ally);
         }
 
-        // 3. 初始化地面装饰 (花草石子)
         initDecorations();
 
         GAME.isPlaying = true;
@@ -401,7 +728,6 @@
         requestAnimationFrame(loop);
     }
 
-    // --- 环境装饰系统 ---
     function initDecorations() {
         const rockGeo = new THREE.DodecahedronGeometry(0.4, 0);
         const rockMat = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.8 });
@@ -410,25 +736,24 @@
         const grassMat = new THREE.MeshLambertMaterial({ color: 0x33aa33 });
         
         const flowerGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-        const flowerMat = new THREE.MeshBasicMaterial({ color: 0xff00ff }); // 发光花朵
+        const flowerMat = new THREE.MeshBasicMaterial({ color: 0xff00ff });
 
         for(let i=0; i<300; i++) {
             let type = Math.random();
             let mesh;
             
-            if(type < 0.5) { // 50% 石头
+            if(type < 0.5) {
                 mesh = new THREE.Mesh(rockGeo, rockMat);
                 mesh.scale.setScalar(0.5 + Math.random());
                 mesh.position.y = 0.2;
-            } else if(type < 0.9) { // 40% 草
+            } else if(type < 0.9) {
                 mesh = new THREE.Mesh(grassGeo, grassMat);
                 mesh.position.y = 0.3;
-            } else { // 10% 异星花
+            } else {
                 mesh = new THREE.Mesh(flowerGeo, flowerMat);
                 mesh.position.y = 0.5;
             }
             
-            // 随机分布在玩家周围
             const angle = Math.random() * Math.PI * 2;
             const dist = 10 + Math.random() * 80;
             mesh.position.x = Math.cos(angle) * dist;
@@ -443,15 +768,13 @@
         }
     }
 
-    // 更新装饰物位置 (无限循环逻辑)
     function updateDecorations() {
         GAME.decor.forEach(obj => {
             const dist = obj.position.distanceTo(GAME.player.position);
-            // 如果物体离玩家太远(>70)，把它移动到前方视线范围内，营造无限感觉
             if(dist > 70) {
-                const angle = GAME.player.rotation.y + (Math.random()-0.5) * Math.PI; // 玩家前方扇形区域
+                const angle = GAME.player.rotation.y + (Math.random()-0.5) * Math.PI;
                 const newDist = 60 + Math.random() * 10;
-                obj.position.x = GAME.player.position.x - Math.sin(angle) * newDist; // 注意ThreeJS旋转坐标系
+                obj.position.x = GAME.player.position.x - Math.sin(angle) * newDist;
                 obj.position.z = GAME.player.position.z - Math.cos(angle) * newDist;
             }
         });
@@ -463,7 +786,6 @@
         const group = new THREE.Group();
         group.position.set(GAME.player.position.x + Math.sin(angle)*dist, 0, GAME.player.position.z + Math.cos(angle)*dist);
         
-        // 敌人外观稍微复杂一点 (背影调亮)
         const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.4,1.8,6), new THREE.MeshStandardMaterial({color:0x88ee44, roughness:0.5}));
         body.position.y = 0.9;
         const head = new THREE.Mesh(new THREE.DodecahedronGeometry(0.5), new THREE.MeshStandardMaterial({color:0x66aa44}));
@@ -488,7 +810,6 @@
         if(!GAME.isPlaying) return;
         const dt = 0.016; const now = time/1000;
 
-        // 1. WASD 移动
         const moveSpd = 12;
         const camDir = new THREE.Vector3(); GAME.camera.getWorldDirection(camDir); camDir.y=0; camDir.normalize();
         const camRight = new THREE.Vector3().crossVectors(camDir, new THREE.Vector3(0,1,0));
@@ -498,16 +819,13 @@
         if(GAME.inputs.d) GAME.player.position.addScaledVector(camRight, moveSpd * dt);
         if(GAME.inputs.a) GAME.player.position.addScaledVector(camRight, -moveSpd * dt);
 
-        // 无限地面跟随
         GAME.ground.position.x = GAME.player.position.x;
         GAME.ground.position.z = GAME.player.position.z;
         GAME.groundGrid.position.x = Math.floor(GAME.player.position.x / 10) * 10;
         GAME.groundGrid.position.z = Math.floor(GAME.player.position.z / 10) * 10;
         
-        // 更新花草石子 (无限循环)
         updateDecorations();
 
-        // 2. 箭头键 瞄准
         const rotSpd = 2.5 * dt;
         if(GAME.inputs.left) GAME.player.rotation.y += rotSpd;
         if(GAME.inputs.right) GAME.player.rotation.y -= rotSpd;
@@ -515,7 +833,6 @@
         if(GAME.inputs.down) GAME.camPitch -= rotSpd * 10;
         GAME.camPitch = Math.max(-10, Math.min(20, GAME.camPitch));
 
-        // 3. 相机跟随
         const targetPos = new THREE.Vector3(0, GAME.isScoped?1.5:5, GAME.isScoped?1.5:8).applyMatrix4(GAME.player.matrixWorld);
         const lookOff = new THREE.Vector3(0, 1 + GAME.camPitch*0.2, GAME.isScoped?-50:-20); 
         
@@ -524,13 +841,11 @@
         GAME.camera.lookAt(lookOff.applyMatrix4(GAME.player.matrixWorld));
         GAME.camera.updateProjectionMatrix();
 
-        // 4. 军队
         GAME.allies.forEach(a => {
             const tX = GAME.player.position.x + Math.cos(a.userData.offsetAngle)*3;
             const tZ = GAME.player.position.z + Math.sin(a.userData.offsetAngle)*3;
             a.position.x += (tX - a.position.x)*0.1;
             a.position.z += (tZ - a.position.z)*0.1;
-            // 简单呼吸动画
             a.position.y = 0.6 + Math.sin(now*5 + a.userData.offsetAngle)*0.1;
 
             if(now - a.userData.lastFire > 1.0) {
@@ -544,7 +859,6 @@
             }
         });
 
-        // 5. 射击
         const wp = GAME.weapons[GAME.curIdx];
         if(GAME.inputs.fire && now - wp.lastFire > wp.rate && wp.curAmmo > 0) {
             wp.lastFire = now; wp.curAmmo--; updateUI();
@@ -583,17 +897,15 @@
             }
         }
 
-        // 6. 敌人逻辑
         if(Math.random()<0.015) spawnEnemy();
         GAME.enemies.forEach((e, i) => {
             const dir = new THREE.Vector3().subVectors(GAME.player.position, e.position).normalize();
             e.position.addScaledVector(dir, e.userData.speed*dt);
-            // 减慢旋转速度，使用插值方式平滑转向
             const targetRotation = Math.atan2(
                 GAME.player.position.x - e.position.x,
                 GAME.player.position.z - e.position.z
             );
-            e.rotation.y += (targetRotation - e.rotation.y) * 0.05; // 降低旋转速度
+            e.rotation.y += (targetRotation - e.rotation.y) * 0.05;
 
             const bar = e.userData.bar;
             const screen = e.position.clone().add(new THREE.Vector3(0,2.5,0)).project(GAME.camera);
@@ -607,16 +919,23 @@
             if(e.position.distanceTo(GAME.player.position) < 2.5) {
                 GAME.hp -= 0.5; updateUI();
                 const overlay = document.getElementById('damage-overlay');
-                overlay.style.opacity = 0.5; setTimeout(() => overlay.style.opacity = 0, 100);
-                if(GAME.hp <= 0) { alert('防线失守!'); location.reload(); }
+                overlay.style.opacity = 0.6; setTimeout(() => overlay.style.opacity = 0, 150);
+                if(GAME.hp <= 0) { 
+                    GAME.isPlaying = false;
+                    setTimeout(() => {
+                        alert('防线失守! 你坚持了 ' + GAME.wave + ' 波，击杀 ' + GAME.killCount + ' 敌人');
+                        location.reload();
+                    }, 500);
+                }
             }
             if(e.userData.hp <= 0) {
                 createExplosion(e.position, 0x00ff00);
                 bar.remove(); GAME.scene.remove(e); GAME.enemies.splice(i, 1);
+                GAME.killCount++;
+                showKillFeed();
             }
         });
 
-        // 7. 粒子更新
         for(let i=GAME.bullets.length-1; i>=0; i--) {
             const b = GAME.bullets[i]; b.position.addScaledVector(b.userData.vel, dt);
             if(b.userData.type==='rocket' && b.position.y < 0) {
@@ -632,7 +951,6 @@
         GAME.renderer.render(GAME.scene, GAME.camera);
     }
 
-    // --- 特效 ---
     function createTracer(start, end) {
         const mat = new THREE.LineBasicMaterial({color: 0xffaa00, transparent:true, opacity:0.8});
         const geo = new THREE.BufferGeometry().setFromPoints([start, end]);
@@ -662,6 +980,28 @@
             if(p.life<=0 || p.mesh.position.y<0) { GAME.scene.remove(p.mesh); GAME.particles.splice(i,1); }
         }
     }
+
+    // UI 辅助函数
+    function showLog(msg) {
+        document.getElementById('log').textContent = msg;
+    }
+
+    function showKillFeed() {
+        const feed = document.getElementById('kill-feed');
+        const msg = document.createElement('div');
+        msg.className = 'kill-msg';
+        msg.textContent = `💥 敌人消灭 +1 (${GAME.killCount})`;
+        feed.appendChild(msg);
+        setTimeout(() => msg.remove(), 3000);
+    }
+
+    function showWaveAlert(wave) {
+        const alert = document.getElementById('wave-alert');
+        alert.textContent = `第 ${wave} 波来袭!`;
+        alert.classList.add('show');
+        setTimeout(() => alert.classList.remove('show'), 3000);
+    }
+
     // 虚拟摇杆类
     class VirtualJoystick {
         constructor(containerId, callback) {
@@ -673,24 +1013,21 @@
             this.active = false;
             this.centerX = 0;
             this.centerY = 0;
-            this.maxDistance = 50; // 最大移动距离
+            this.maxDistance = 55;
 
             this.init();
         }
 
         init() {
-            // 计算中心位置
             const rect = this.base.getBoundingClientRect();
             this.centerX = rect.left + rect.width / 2;
             this.centerY = rect.top + rect.height / 2;
 
-            // 触摸事件
             this.container.addEventListener('touchstart', this.start.bind(this));
             this.container.addEventListener('touchmove', this.move.bind(this));
             this.container.addEventListener('touchend', this.end.bind(this));
             this.container.addEventListener('touchcancel', this.end.bind(this));
 
-            // 鼠标事件（用于调试）
             this.container.addEventListener('mousedown', this.start.bind(this));
             document.addEventListener('mousemove', this.move.bind(this));
             document.addEventListener('mouseup', this.end.bind(this));
@@ -699,6 +1036,7 @@
         start(e) {
             e.preventDefault();
             this.active = true;
+            this.container.classList.add('active');
             this.updatePosition(e);
         }
 
@@ -712,11 +1050,10 @@
             if (!this.active) return;
             e.preventDefault();
             this.active = false;
+            this.container.classList.remove('active');
 
-            // 回到中心位置
             this.handle.style.transform = 'translate(-50%, -50%)';
 
-            // 重置输入
             if (this.callback) {
                 this.callback(0, 0);
             }
@@ -727,45 +1064,35 @@
             const x = touch.clientX - this.centerX;
             const y = touch.clientY - this.centerY;
 
-            // 计算距离和角度
             const distance = Math.min(Math.sqrt(x * x + y * y), this.maxDistance);
             const angle = Math.atan2(y, x);
 
-            // 计算归一化值 (-1 到 1)
             const normalizedX = Math.min(Math.max(x / this.maxDistance, -1), 1);
             const normalizedY = Math.min(Math.max(y / this.maxDistance, -1), 1);
 
-            // 限制在最大距离内
             const clampedX = Math.cos(angle) * distance;
             const clampedY = Math.sin(angle) * distance;
 
-            // 更新手柄位置
             this.handle.style.transform = `translate(calc(-50% + ${clampedX}px), calc(-50% + ${clampedY}px))`;
 
-            // 调用回调函数
             if (this.callback) {
                 this.callback(normalizedX, normalizedY);
             }
         }
     }
 
-    // 初始化摇杆
     let movementJoystick;
     let rotationJoystick;
 
     function initJoysticks() {
-        // 左侧移动摇杆
         movementJoystick = new VirtualJoystick('joystick-left', (x, y) => {
-            // 将摇杆输入映射到WASD
             GAME.inputs.w = y < -0.3;
             GAME.inputs.s = y > 0.3;
             GAME.inputs.a = x < -0.3;
             GAME.inputs.d = x > 0.3;
         });
 
-        // 右侧视角摇杆
         rotationJoystick = new VirtualJoystick('joystick-right', (x, y) => {
-            // 将摇杆输入映射到视角控制
             GAME.inputs.left = x < -0.3;
             GAME.inputs.right = x > 0.3;
             GAME.inputs.up = y < -0.3;
@@ -777,9 +1104,21 @@
         const w = GAME.weapons[GAME.curIdx];
         document.getElementById('ui-wp').innerText = w.name;
         document.getElementById('ui-ammo').innerText = w.curAmmo + '/' + w.mag;
-        document.getElementById('ui-hp').innerText = Math.floor(GAME.hp);
-        document.getElementById('btn-scope').style.display = w.sniper ? 'flex':'none';
-        document.getElementById('btn-scope').style.background = GAME.isScoped?'rgba(0,255,255,0.8)':'rgba(0,255,255,0.2)';
+        const hpEl = document.getElementById('ui-hp');
+        hpEl.innerText = Math.floor(GAME.hp);
+        if(GAME.hp < 30) {
+            hpEl.classList.add('low');
+        } else {
+            hpEl.classList.remove('low');
+        }
+        
+        const scopeBtn = document.getElementById('btn-scope');
+        scopeBtn.style.display = w.sniper ? 'flex':'none';
+        if(GAME.isScoped) {
+            scopeBtn.classList.add('active');
+        } else {
+            scopeBtn.classList.remove('active');
+        }
     }
 
     window.addEventListener('resize', () => {
