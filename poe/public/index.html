@@ -3811,11 +3811,11 @@
             }
 
             // Add event listener for all textareas to exit focus mode when clicked/focused
-            document.addEventListener('focus', function(e) {
+            document.addEventListener('focusin', function(e) {  // Use focusin instead of focus for bubbling
                 if (e.target.tagName === 'TEXTAREA' && document.body.classList.contains('focus-mode')) {
                     disableAutoFocusMode();
                 }
-            }, true); // Use capture phase to catch focus events
+            });
 
             document.addEventListener('click', function(e) {
                 if (e.target.tagName === 'TEXTAREA' && document.body.classList.contains('focus-mode')) {
@@ -6764,8 +6764,10 @@
         }
 
         function scrollToMessage(index) {
-            // Refresh message elements to ensure we have the latest elements
-            messageElements = Array.from(document.querySelectorAll('.message'));
+            // Use the current messageElements array, but refresh if needed
+            if (!messageElements || messageElements.length === 0) {
+                messageElements = Array.from(document.querySelectorAll('.message'));
+            }
 
             if (index >= 0 && index < messageElements.length) {
                 const element = messageElements[index];
@@ -6796,16 +6798,18 @@
 
         function goToPreviousMessage() {
             // Refresh message elements before navigating
-            messageElements = Array.from(document.querySelectorAll('.message'));
-            if (currentIndex > 0 && messageElements.length > 0) {
+            const currentMessageElements = Array.from(document.querySelectorAll('.message'));
+            if (currentIndex > 0 && currentMessageElements.length > 0) {
+                messageElements = currentMessageElements;
                 scrollToMessage(currentIndex - 1);
             }
         }
 
         function goToNextMessage() {
             // Refresh message elements before navigating
-            messageElements = Array.from(document.querySelectorAll('.message'));
-            if (currentIndex < messageElements.length - 1 && messageElements.length > 0) {
+            const currentMessageElements = Array.from(document.querySelectorAll('.message'));
+            if (currentIndex < currentMessageElements.length - 1 && currentMessageElements.length > 0) {
+                messageElements = currentMessageElements;
                 scrollToMessage(currentIndex + 1);
             }
         }
@@ -6865,10 +6869,6 @@
                                     }
                                 });
                             }
-                            // Check for attributes mutations (in case of innerHTML changes)
-                            else if (mutation.type === 'attributes' && mutation.target.classList.contains('message')) {
-                                shouldReinitialize = true;
-                            }
                         });
 
                         if (shouldReinitialize) {
@@ -6879,9 +6879,7 @@
 
                     observer.observe(chatContainer, {
                         childList: true,
-                        subtree: true,
-                        attributes: true,  // Listen for attribute changes too
-                        attributeFilter: ['class']  // Only care about class changes
+                        subtree: true
                     });
                 }
             });
