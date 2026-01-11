@@ -471,14 +471,14 @@
 
     function spawnEnemy() {
         const angle = Math.random() * Math.PI * 2;
-        const dist = 12 + Math.random() * 4; // 距离12-16米生成，更容易看到
+        const dist = 12 + Math.random() * 4;
         const x = Math.sin(angle) * dist + GAME.player.position.x;
         const z = Math.cos(angle) * dist + GAME.player.position.z;
 
-        // 创建外星人模型 - 使用更显眼的颜色
+        // 创建外星人组
         const alienGroup = new THREE.Group();
 
-        // 外星人身体 - 发光材质，更显眼
+        // 身体
         const body = new THREE.Mesh(
             new THREE.CapsuleGeometry(0.6, 1.8, 4, 8),
             new THREE.MeshStandardMaterial({
@@ -487,58 +487,68 @@
                 emissiveIntensity: 0.6
             })
         );
+        body.position.y = 1.5; // 重要：将身体抬高
 
-        // 外星人头部 - 稍深的绿色
+        // 头部
         const head = new THREE.Mesh(
             new THREE.SphereGeometry(0.5, 16, 16),
-            new THREE.MeshLambertMaterial({ color: 0x00cc00, emissive: 0x008800 })
+            new THREE.MeshLambertMaterial({
+                color: 0x00cc00,
+                emissive: 0x008800
+            })
         );
-        head.position.y = 1.5;
+        head.position.y = 2.5; // 头部位置调整
 
-        // 外星人眼睛 - 亮红色
+        // 眼睛
         const eye1 = new THREE.Mesh(
             new THREE.SphereGeometry(0.15, 16, 16),
-            new THREE.MeshLambertMaterial({ color: 0xff0000, emissive: 0xaa0000 })
+            new THREE.MeshLambertMaterial({
+                color: 0xff0000,
+                emissive: 0xaa0000
+            })
         );
-        eye1.position.set(0.2, 1.6, 0.4);
+        eye1.position.set(0.2, 2.6, 0.4);
 
-        const eye2 = new THREE.Mesh(
-            new THREE.SphereGeometry(0.15, 16, 16),
-            new THREE.MeshLambertMaterial({ color: 0xff0000, emissive: 0xaa0000 })
-        );
-        eye2.position.set(-0.2, 1.6, 0.4);
+        const eye2 = eye1.clone();
+        eye2.position.set(-0.2, 2.6, 0.4);
 
-        // 添加发光效果
-        const light = new THREE.PointLight(0x00ff00, 0.5, 5);
-        light.position.set(0, 1, 0);
-        alienGroup.add(light);
-
-        // 添加地面红色标识环，更容易看到
+        // 地面标记环
         const ring = new THREE.Mesh(
-            new THREE.RingGeometry(0.6, 0.9, 32),
-            new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide })
+            new THREE.RingGeometry(0.8, 1.0, 32),
+            new THREE.MeshBasicMaterial({
+                color: 0xff0000,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.5
+            })
         );
-        ring.rotation.x = -Math.PI / 2; // 使圆环水平
-        ring.position.y = 0.05; // 稍微高一点，避免与地面重叠
-        alienGroup.add(ring);
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.y = 0.1;
 
-        // 添加到组
+        // 添加所有部件到组
         alienGroup.add(body);
         alienGroup.add(head);
         alienGroup.add(eye1);
         alienGroup.add(eye2);
+        alienGroup.add(ring);
 
-        // 设置位置
-        alienGroup.position.set(x, 1, z);
-        alienGroup.userData = { hp: 50, speed: 4, type: 'alien' };
+        // 设置组的位置
+        alienGroup.position.set(x, 0, z); // y设为0，因为部件已经有高度了
 
-        // 创建血条DOM元素
+        // 添加数据
+        alienGroup.userData = {
+            hp: 50,
+            maxHp: 50,
+            speed: 4,
+            type: 'alien'
+        };
+
+        // 创建血条
         const hpBar = document.createElement('div');
         hpBar.className = 'enemy-hp';
         hpBar.innerHTML = '<div class="hp-inner"></div>';
         document.body.appendChild(hpBar);
         alienGroup.userData.hpBar = hpBar;
-        alienGroup.userData.maxHp = 50;
 
         GAME.scene.add(alienGroup);
         GAME.enemies.push(alienGroup);
