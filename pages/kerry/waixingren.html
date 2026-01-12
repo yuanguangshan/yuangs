@@ -306,6 +306,59 @@
             box-shadow: 0 0 6px rgba(255, 0, 0, 0.8);
         }
 
+        /* 准星红圈 - 锁定提示 */
+        #target-circle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 60px;
+            height: 60px;
+            transform: translate(-50%, -50%) scale(1.5);
+            border: 2px solid rgba(255, 0, 0, 0);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 104;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            opacity: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #target-circle::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 2px solid rgba(255, 50, 50, 0.8);
+            border-radius: 50%;
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.6), inset 0 0 10px rgba(255, 0, 0, 0.4);
+            animation: targetPulse 1.5s infinite;
+        }
+
+        #target-circle.locked {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+            border-color: rgba(255, 0, 0, 0.8);
+        }
+
+        @keyframes targetPulse {
+            0% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+
+            50% {
+                transform: scale(1.1);
+                opacity: 0.4;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+        }
+
         #controls-hint {
             position: absolute;
             bottom: 20px;
@@ -786,6 +839,8 @@
             <div class="center-dot"></div>
         </div>
 
+        <div id="target-circle"></div>
+
         <div id="kill-feed"></div>
         <div id="wave-alert"></div>
 
@@ -1118,6 +1173,21 @@
             GAME.camera.position.lerp(targetPos, 0.15);
             GAME.camera.lookAt(lookOff.applyMatrix4(GAME.player.matrixWorld));
             GAME.camera.updateProjectionMatrix();
+
+            // --- 实时自动准星检测 ---
+            const targetCircle = document.getElementById('target-circle');
+            if (targetCircle) {
+                const ray = new THREE.Raycaster();
+                ray.setFromCamera(new THREE.Vector2(0, 0), GAME.camera);
+                const hits = ray.intersectObjects(GAME.enemies, true);
+
+                // 检测是否存在属于敌人的碰撞体
+                if (hits.length > 0) {
+                    targetCircle.classList.add('locked');
+                } else {
+                    targetCircle.classList.remove('locked');
+                }
+            }
 
             GAME.allies.forEach(a => {
                 const tX = GAME.player.position.x + Math.cos(a.userData.offsetAngle) * 3;
