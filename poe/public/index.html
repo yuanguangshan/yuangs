@@ -1792,17 +1792,19 @@
         }
 
         .markdown-body pre {
-            background: #1e1e1e;
+            background: #252526;
             border-radius: 8px;
             padding: 35px 8px;
             overflow-x: auto;
             /* Allow horizontal scroll for code blocks only */
             overflow-y: visible;
             margin: 18px 0;
-            border: thin solid rgba(102, 126, 234, 0.3);
+            border: 1px solid rgba(82, 82, 110, 0.5);
             max-width: 100%;
             word-wrap: normal;
             /* Don't break words in code blocks */
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+            position: relative;
         }
 
         .markdown-body code {
@@ -1819,15 +1821,128 @@
         }
 
         .markdown-body pre code {
-            background: none;
+            background: transparent;
             padding: 35px 8px;
             /* Add top padding to make space for language label */
             border: none;
-            color: inherit;
+            color: #dcdcdc;
             overflow-x: auto;
             line-height: 1.5;
             word-wrap: normal;
             /* Preserve code formatting */
+        }
+
+        /* Enhanced code block styles for different themes */
+        :root[data-theme="dark-green"] .markdown-body pre {
+            background: #2a2d2f;
+            border: 1px solid rgba(102, 175, 80, 0.3);
+        }
+
+        :root[data-theme="amber"] .markdown-body pre {
+            background: #2a251a;
+            border: 1px solid rgba(255, 179, 0, 0.3);
+        }
+
+        :root[data-theme="sepia"] .markdown-body pre {
+            background: #2a2420;
+            border: 1px solid rgba(168, 139, 102, 0.3);
+        }
+
+        :root[data-theme="high-contrast"] .markdown-body pre {
+            background: #111111;
+            border: 1px solid rgba(255, 255, 0, 0.3);
+        }
+
+        :root[data-theme="solarized"] .markdown-body pre {
+            background: #1a4a5a;
+            border: 1px solid rgba(38, 139, 210, 0.3);
+        }
+
+        :root[data-theme="monokai"] .markdown-body pre {
+            background: #3e3d32;
+            border: 1px solid rgba(249, 38, 114, 0.3);
+        }
+
+        :root[data-theme="dracula"] .markdown-body pre {
+            background: #44475a;
+            border: 1px solid rgba(189, 147, 249, 0.3);
+        }
+
+        :root[data-theme="github-light"] .markdown-body pre {
+            background: #ffffff;
+            color: #24292f;
+            border: 1px solid rgba(9, 105, 218, 0.3);
+        }
+
+        :root[data-theme="nord-light"] .markdown-body pre {
+            background: #d8dee9;
+            color: #24292f;
+            border: 1px solid rgba(94, 129, 172, 0.3);
+        }
+
+        :root[data-theme="one-dark"] .markdown-body pre {
+            background: #3a3f4b;
+            border: 1px solid rgba(97, 175, 239, 0.3);
+        }
+
+        :root[data-theme="tokyo-night"] .markdown-body pre {
+            background: #24283b;
+            border: 1px solid rgba(122, 162, 247, 0.3);
+        }
+
+        :root[data-theme="catppuccin"] .markdown-body pre {
+            background: #313244;
+            border: 1px solid rgba(203, 166, 247, 0.3);
+        }
+
+        :root[data-theme="rose-pine"] .markdown-body pre {
+            background: #26233a;
+            border: 1px solid rgba(235, 188, 186, 0.3);
+        }
+
+        /* Animation for newly added code blocks */
+        .markdown-body pre.new-code-block {
+            animation: highlightNewBlock 0.5s ease-in-out;
+        }
+
+        /* Special styling for incomplete code blocks during streaming */
+        .markdown-body pre.incomplete-code-block {
+            background: linear-gradient(135deg, #252526 0%, #3a3a3a 100%);
+            border: 2px dashed var(--primary-color);
+            position: relative;
+        }
+
+        .markdown-body pre.incomplete-code-block::after {
+            content: '...';
+            position: absolute;
+            right: 10px;
+            top: 5px;
+            color: var(--primary-color);
+            font-weight: bold;
+            animation: pulse-dot 1.5s infinite;
+        }
+
+        .code-generation-indicator {
+            position: absolute;
+            top: 5px;
+            right: 30px;
+            font-size: 12px;
+            color: var(--primary-color);
+            z-index: 5;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        @keyframes highlightNewBlock {
+            0% {
+                box-shadow: 0 0 0 2px var(--primary-color);
+            }
+            100% {
+                box-shadow: 0 0 0 0 transparent;
+            }
         }
 
         .markdown-body blockquote {
@@ -2049,15 +2164,6 @@
         }
 
         /* Code Copy Button Styles */
-        .markdown-body pre {
-            position: relative;
-            margin: 35px 8px;
-            border: thin solid rgba(102, 126, 234, 0.3);
-            max-width: 100%;
-            word-wrap: normal;
-            overflow-y: visible;
-        }
-
         .code-copy-btn {
             position: absolute;
             top: 8px;
@@ -5328,16 +5434,64 @@
             return messageDiv;
         }
 
+        // Preprocess content to handle incomplete code blocks during streaming
+        function preprocessContentForStreaming(content) {
+            // Check if content contains an odd number of triple backticks (indicating incomplete code block)
+            const backtickMatches = content.match(/```/g);
+            const hasUnmatchedBackticks = backtickMatches && backtickMatches.length % 2 === 1;
+
+            if (hasUnmatchedBackticks) {
+                // Temporarily close the code block with a marker we can identify later
+                const tempClosingMarker = '__TEMP_CODE_BLOCK_CLOSURE__';
+                return content + '```\n' + tempClosingMarker;
+            }
+
+            return content;
+        }
+
+        // Postprocess content to remove temporary markers and handle incomplete code blocks
+        function postprocessContentForDisplay(content, originalContent) {
+            // Check if we had an unmatched backtick situation
+            const backtickMatches = originalContent.match(/```/g);
+            const hasUnmatchedBackticks = backtickMatches && backtickMatches.length % 2 === 1;
+
+            if (hasUnmatchedBackticks) {
+                // Remove the temporary closure marker and add special styling for incomplete code blocks
+                let processedContent = content.replace(/<pre><code>[\s\S]*?<\/code><\/pre>/g, function(match) {
+                    // Find the temporary marker and split the content
+                    if (match.includes('__TEMP_CODE_BLOCK_CLOSURE__')) {
+                        // Remove the temporary marker and add a class for incomplete code blocks
+                        const cleanMatch = match
+                            .replace(/__TEMP_CODE_BLOCK_CLOSURE__/g, '')
+                            .replace('<pre>', '<pre class="incomplete-code-block">');
+                        return cleanMatch;
+                    }
+                    return match;
+                });
+
+                return processedContent;
+            }
+
+            return content;
+        }
+
         // Update the temporary assistant message content with fancy animations
         function updateTemporaryAssistantContent(content) {
             const tempContent = document.getElementById('temp-assistant-content');
             if (tempContent) {
                 tempContent.setAttribute('data-raw', content);
+
+                // Preprocess content to handle incomplete code blocks during streaming
+                const preprocessedContent = preprocessContentForStreaming(content);
+
                 // Parse and render markdown
-                const markdownHtml = marked.parse(content);
+                const markdownHtml = marked.parse(preprocessedContent);
+
+                // Postprocess to clean up temporary markers and handle incomplete code blocks
+                const finalHtml = postprocessContentForDisplay(markdownHtml, content);
 
                 // Add fancy typing effect with blinking cursor
-                tempContent.innerHTML = markdownHtml;
+                tempContent.innerHTML = finalHtml;
                 // Remove any previous typing cursor
                 const cursor = tempContent.querySelector('.typing-cursor');
                 if (cursor) cursor.remove();
@@ -5348,10 +5502,8 @@
                 // Apply fancy glow effect to the content for streaming
                 tempContent.classList.add('stream-highlight');
 
-                // Add copy buttons to code blocks
-                setTimeout(() => {
-                    addCopyButtonsToCodeBlocks(tempContent);
-                }, 10);
+                // Immediately add copy buttons to any existing code blocks and apply syntax highlighting
+                addCopyButtonsToCodeBlocks(tempContent);
 
                 // Enhanced scrolling to ensure content is visible during streaming
                 // Use multiple approaches to ensure scrolling works reliably
@@ -5398,10 +5550,41 @@
                 // If button already exists, skip
                 if (pre.querySelector('.code-copy-btn')) return;
 
+                // Add animation class to newly detected code blocks
+                if (!pre.classList.contains('new-code-block')) {
+                    pre.classList.add('new-code-block');
+
+                    // Remove the class after animation completes to reset for future animations
+                    setTimeout(() => {
+                        pre.classList.remove('new-code-block');
+                    }, 500);
+                }
+
                 const button = document.createElement('button');
                 button.className = 'code-copy-btn';
                 button.innerHTML = '<i class="far fa-copy"></i> Copy';
                 button.title = 'Copy code';
+
+                // For incomplete code blocks, add a special indicator
+                if (pre.classList.contains('incomplete-code-block')) {
+                    // Add a visual indicator that this code block is still being generated
+                    const indicator = document.createElement('div');
+                    indicator.className = 'code-generation-indicator';
+                    indicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+                    indicator.style.cssText = `
+                        position: absolute;
+                        top: 5px;
+                        right: 30px;
+                        font-size: 12px;
+                        color: var(--primary-color);
+                        z-index: 5;
+                    `;
+
+                    // Make sure the pre element has relative positioning for the indicator
+                    pre.style.position = 'relative';
+
+                    pre.appendChild(indicator);
+                }
 
                 const code = pre.querySelector('code');
                 // Use textContent to preserve formatting and whitespace
@@ -5413,6 +5596,27 @@
                 };
 
                 pre.appendChild(button);
+
+                // For incomplete code blocks, add a special indicator
+                if (pre.classList.contains('incomplete-code-block')) {
+                    // Add a visual indicator that this code block is still being generated
+                    const indicator = document.createElement('div');
+                    indicator.className = 'code-generation-indicator';
+                    indicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+                    indicator.style.cssText = `
+                        position: absolute;
+                        top: 5px;
+                        right: 30px;
+                        font-size: 12px;
+                        color: var(--primary-color);
+                        z-index: 5;
+                    `;
+
+                    // Make sure the pre element has relative positioning for the indicator
+                    pre.style.position = 'relative';
+
+                    pre.appendChild(indicator);
+                }
             });
 
             // After adding copy buttons, ensure the chat container is scrolled to the bottom
@@ -5476,11 +5680,20 @@
                 tempMessage.remove();
             }
 
-            // Ensure content is not empty if stopped or failed
-            const finalContent = content || '...';
+            // Clean up any temporary markers from incomplete code blocks
+            let cleanedContent = content || '...';
+            // Remove the temporary closure marker if present
+            cleanedContent = cleanedContent.replace(/```[\s\n]*__TEMP_CODE_BLOCK_CLOSURE__[\s\n]*```/g, '');
+            // If there's still an unmatched backtick situation, try to handle it gracefully
+            const backtickMatches = cleanedContent.match(/```/g);
+            const hasOddBackticks = backtickMatches && backtickMatches.length % 2 === 1;
+            if (hasOddBackticks) {
+                // Close the final code block
+                cleanedContent += '\n```';
+            }
 
             // Add the final message with the model name used during generation
-            addMessageToDOM('assistant', finalContent, null, timestamp, modelName);
+            addMessageToDOM('assistant', cleanedContent, null, timestamp, modelName);
         }
 
         async function callPoeAPI(messages, model, onContentUpdate, signal = null) {
@@ -6764,10 +6977,41 @@
                     return; // Skip if copy button already exists
                 }
 
+                // Add animation class to newly detected code blocks
+                if (!pre.classList.contains('new-code-block')) {
+                    pre.classList.add('new-code-block');
+
+                    // Remove the class after animation completes to reset for future animations
+                    setTimeout(() => {
+                        pre.classList.remove('new-code-block');
+                    }, 500);
+                }
+
                 const button = document.createElement('button');
                 button.className = 'code-copy-btn';
                 button.innerHTML = '<i class="far fa-copy"></i> Copy';
                 button.title = 'Copy code';
+
+                // For incomplete code blocks, add a special indicator
+                if (pre.classList.contains('incomplete-code-block')) {
+                    // Add a visual indicator that this code block is still being generated
+                    const indicator = document.createElement('div');
+                    indicator.className = 'code-generation-indicator';
+                    indicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+                    indicator.style.cssText = `
+                        position: absolute;
+                        top: 5px;
+                        right: 30px;
+                        font-size: 12px;
+                        color: var(--primary-color);
+                        z-index: 5;
+                    `;
+
+                    // Make sure the pre element has relative positioning for the indicator
+                    pre.style.position = 'relative';
+
+                    pre.appendChild(indicator);
+                }
 
                 const code = pre.querySelector('code');
                 if (code) {
