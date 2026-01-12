@@ -1163,10 +1163,14 @@
         function loop(time) {
             requestAnimationFrame(loop);
             if (!GAME.isPlaying) return;
-            const dt = 0.016; const now = time / 1000;
+            const dt = 0.016;
+            const now = time / 1000;
 
             const moveSpd = 12;
-            const camDir = new THREE.Vector3(); GAME.camera.getWorldDirection(camDir); camDir.y = 0; camDir.normalize();
+            const camDir = new THREE.Vector3();
+            GAME.camera.getWorldDirection(camDir);
+            camDir.y = 0;
+            camDir.normalize();
             const camRight = new THREE.Vector3().crossVectors(camDir, new THREE.Vector3(0, 1, 0));
 
             if (GAME.inputs.w) GAME.player.position.addScaledVector(camDir, moveSpd * dt);
@@ -1196,21 +1200,17 @@
             GAME.camera.lookAt(lookOff.applyMatrix4(GAME.player.matrixWorld));
             GAME.camera.updateProjectionMatrix();
 
-            // --- 实时自动准星检测 ---
+            // --- 实时自动准星检测 (Crosshair Red Circle) ---
             const targetCircle = document.getElementById('target-circle');
             if (targetCircle) {
                 const ray = new THREE.Raycaster();
                 ray.setFromCamera(new THREE.Vector2(0, 0), GAME.camera);
                 const hits = ray.intersectObjects(GAME.enemies, true);
-
-                // 检测是否存在属于敌人的碰撞体
-                if (hits.length > 0) {
-                    targetCircle.classList.add('locked');
-                } else {
-                    targetCircle.classList.remove('locked');
-                }
+                if (hits.length > 0) targetCircle.classList.add('locked');
+                else targetCircle.classList.remove('locked');
             }
 
+            // --- 盟友逻辑 ---
             GAME.allies.forEach(a => {
                 const tX = GAME.player.position.x + Math.cos(a.userData.offsetAngle) * 3;
                 const tZ = GAME.player.position.z + Math.sin(a.userData.offsetAngle) * 3;
@@ -1229,13 +1229,14 @@
                 }
             });
 
+            const wp = GAME.weapons[GAME.curIdx];
+
+            // --- 火箭炮地面落点预测 ---
             if (wp.type === 'rocket' && GAME.isPlaying) {
                 const ray = new THREE.Raycaster();
                 ray.setFromCamera(new THREE.Vector2(0, 0), GAME.camera);
                 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
                 const targetPoint = new THREE.Vector3();
-
-                // 计算准星在地面上的实际落点
                 if (ray.ray.intersectPlane(groundPlane, targetPoint)) {
                     GAME.rocketReticle.position.copy(targetPoint);
                     GAME.rocketReticle.position.y = 0.05;
@@ -1243,27 +1244,23 @@
                     GAME.rocketReticle.rotation.y += dt;
                     const s = 1 + Math.sin(now * 10) * 0.05;
                     GAME.rocketReticle.scale.set(s, 1, s);
-                    // 保存落点供开火逻辑使用
                     GAME.rocketTargetPoint = targetPoint.clone();
                 } else {
                     GAME.rocketReticle.visible = false;
                     GAME.rocketTargetPoint = null;
                 }
-            } else {
-                if (GAME.rocketReticle) GAME.rocketReticle.visible = false;
+            } else if (GAME.rocketReticle) {
+                GAME.rocketReticle.visible = false;
             }
 
-            const wp = GAME.weapons[GAME.curIdx];
+            // --- 真正的开火逻辑 ---
             if (GAME.inputs.fire && now - wp.lastFire > wp.rate && wp.curAmmo > 0) {
                 wp.lastFire = now; wp.curAmmo--; updateUI();
-
                 const gunPos = GAME.player.position.clone().add(new THREE.Vector3(0, 1, 0));
 
                 if (wp.type === 'rocket') {
                     const b = new THREE.Mesh(new THREE.SphereGeometry(0.3), new THREE.MeshBasicMaterial({ color: 'red' }));
                     b.position.copy(gunPos);
-
-                    // --- 修复偏差：让火箭弹从枪口飞向准星落点 ---
                     let fireDir;
                     if (GAME.rocketTargetPoint) {
                         fireDir = GAME.rocketTargetPoint.clone().sub(gunPos).normalize();
@@ -1271,7 +1268,6 @@
                         fireDir = new THREE.Vector3();
                         GAME.camera.getWorldDirection(fireDir);
                     }
-
                     b.userData = { vel: fireDir.multiplyScalar(35), type: 'rocket' };
                     GAME.scene.add(b); GAME.bullets.push(b);
                 } else {
@@ -1279,7 +1275,6 @@
                     ray.setFromCamera(new THREE.Vector2(0, 0), GAME.camera);
                     const hits = ray.intersectObjects(GAME.enemies, true);
                     const endPoint = hits.length ? hits[0].point : ray.ray.at(100, new THREE.Vector3());
-
                     createTracer(gunPos, endPoint);
                     if (hits.length) {
                         const group = hits[0].object.parent;
@@ -1299,38 +1294,12 @@
                 }
             }
 
-            // --- 火箭炮地面落点预测 ---
-            if (wp.type === 'rocket' && GAME.isPlaying) {
-                const dir = new THREE.Vector3();
-                GAME.camera.getWorldDirection(dir);
-
-                if (dir.y < -0.01) { // 只有向下看时才显示
-                    const origin = GAME.camera.position;
-                    const t = -origin.y / dir.y;
-                    const impactPos = origin.clone().add(dir.multiplyScalar(t));
-
-                    GAME.rocketReticle.position.x = impactPos.x;
-                    GAME.rocketReticle.position.z = impactPos.z;
-                    GAME.rocketReticle.visible = true;
-                    // 让圈圈有微弱的旋转和缩放动画
-                    GAME.rocketReticle.rotation.y += dt;
-                    const s = 1 + Math.sin(now * 10) * 0.05;
-                    GAME.rocketReticle.scale.set(s, 1, s);
-                } else {
-                    GAME.rocketReticle.visible = false;
-                }
-            } else {
-                if (GAME.rocketReticle) GAME.rocketReticle.visible = false;
-            }
-
+            // --- 敌人管理 ---
             if (Math.random() < 0.015) spawnEnemy();
             GAME.enemies.forEach((e, i) => {
                 const dir = new THREE.Vector3().subVectors(GAME.player.position, e.position).normalize();
                 e.position.addScaledVector(dir, e.userData.speed * dt);
-                const targetRotation = Math.atan2(
-                    GAME.player.position.x - e.position.x,
-                    GAME.player.position.z - e.position.z
-                );
+                const targetRotation = Math.atan2(GAME.player.position.x - e.position.x, GAME.player.position.z - e.position.z);
                 e.rotation.y += (targetRotation - e.rotation.y) * 0.05;
 
                 const bar = e.userData.bar;
@@ -1362,37 +1331,29 @@
                 }
             });
 
+            // --- 子弹管理 ---
             for (let i = GAME.bullets.length - 1; i >= 0; i--) {
                 const b = GAME.bullets[i];
                 b.position.addScaledVector(b.userData.vel, dt);
-
                 if (b.userData.type === 'rocket') {
                     let exploded = false;
-                    // 地面碰撞
                     if (b.position.y < 0) exploded = true;
-                    // 敌人直接碰撞
                     if (!exploded) {
                         for (let e of GAME.enemies) {
-                            if (b.position.distanceTo(e.position) < 1.5) {
-                                exploded = true;
-                                break;
-                            }
+                            if (b.position.distanceTo(e.position) < 1.5) { exploded = true; break; }
                         }
                     }
-
                     if (exploded) {
                         createExplosion(b.position, 0xff5500);
-                        GAME.enemies.forEach(e => {
-                            if (e.position.distanceTo(b.position) < 15) e.userData.hp -= 35;
-                        });
+                        GAME.enemies.forEach(e => { if (e.position.distanceTo(b.position) < 15) e.userData.hp -= 35; });
                         GAME.scene.remove(b); GAME.bullets.splice(i, 1);
                     }
                 } else if (b.position.distanceTo(GAME.player.position) > 120) {
                     GAME.scene.remove(b); GAME.bullets.splice(i, 1);
                 }
             }
-            updateParticles(dt);
 
+            updateParticles(dt);
             GAME.renderer.render(GAME.scene, GAME.camera);
         }
 
