@@ -25,6 +25,22 @@ self.addEventListener('install', event => {
 
 // 拦截网络请求
 self.addEventListener('fetch', event => {
+  // 检查请求是否来自 chrome-extension 方案
+  if (event.request.url.startsWith('chrome-extension://')) {
+    // 对于 chrome-extension 请求，直接跳过缓存处理
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // 检查请求是否是跨域资源（如CDN资源），这些资源可能无法缓存
+  if (event.request.mode === 'no-cors') {
+    // 对于 no-cors 请求，直接返回网络请求结果，不进行缓存
+    event.respondWith(
+      fetch(event.request)
+    );
+    return;
+  }
+
   if (event.request.url.includes('/api/stats')) {
     // 对于 API 请求，提供一个模拟的离线响应
     event.respondWith(
@@ -71,6 +87,10 @@ self.addEventListener('fetch', event => {
               });
 
             return response;
+          }).catch(error => {
+            // 如果网络请求失败，尝试从缓存中获取
+            console.error('Fetch failed:', error);
+            return caches.match(event.request);
           });
         })
     );

@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.json">
 
     <!-- iOS Safari compatibility -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Poe Chat">
     <link rel="apple-touch-icon" href="/icon-192x192.png">
@@ -22,8 +22,7 @@
     <meta name="msapplication-TileColor" content="#10a37f">
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css"
-        integrity="sha512-i2U9+UbhPaoRAuJeYFzqwt2+J5nJlH2VuuUe1kHqcMU7HlLdV3ni2H9DhDp9z96JYB3oV3Nnzk7X1NQwguw==">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
     <style>
         /* Prevent unwanted zooming on mobile devices */
         @media (max-width: 768px) {
@@ -6655,105 +6654,89 @@
             }
         });
 
-        // 选中文字问AI功能 - 进一步优化版
+        // 选中文字问AI功能 - 最终修复版
         function initAskAIOnSelect() {
             let isProcessing = false;
-            let lastSelectedText = ''; // 防止重复触发
 
-            function handleTextSelection() {
+            function handleTextSelection(e) {
+                // 忽略在输入框或可编辑区域内的操作
+                if (e.target.closest('input, textarea, [contenteditable="true"]')) {
+                    return;
+                }
+
                 if (isProcessing) return;
-                isProcessing = true;
 
+                // 使用短延迟等待选区稳定
                 setTimeout(() => {
-                    try {
-                        const selection = window.getSelection();
-                        const selectedText = selection.toString().trim();
+                    const selection = window.getSelection();
+                    const selectedText = selection.toString().trim();
 
-                        // 1. 基础检查:文本为空或过短
-                        if (!selectedText || selectedText.length < 1) {
-                            isProcessing = false;
-                            return;
-                        }
+                    if (!selectedText) return;
 
-                        // 2. 防止重复触发相同文本
-                        if (selectedText === lastSelectedText) {
-                            isProcessing = false;
-                            return;
-                        }
-                        lastSelectedText = selectedText;
+                    // 获取选区范围
+                    if (selection.rangeCount === 0) return;
+                    const range = selection.getRangeAt(0);
 
-                        // 3. 获取选择的容器元素
-                        const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-                        if (!range) {
-                            isProcessing = false;
-                            return;
-                        }
+                    // 关键检查：选区必须在聊天容器内
+                    const chatContainer = document.getElementById('chatContainer');
+                    const commonAncestor = range.commonAncestorContainer;
+                    const containerElement = commonAncestor.nodeType === 3 ? commonAncestor.parentNode : commonAncestor;
 
-                        const container = range.commonAncestorContainer;
-                        const element = container.nodeType === 3 ? container.parentElement : container;
-
-                        // 4. 只排除这些区域(移除输入框检查)
-                        const forbiddenSelectors = [
-                            '.sidebar',           // 侧边栏
-                            '.header',            // 头部
-                            '.new-chat-dropdown', // 新建聊天下拉菜单
-                            '.logo-dropdown',     // Logo下拉菜单
-                            '.rename-input',      // 重命名输入框
-                            '.search-input-wrapper', // 搜索框
-                            '.dropdown-option',   // 下拉选项
-                            '.mobile-history-dialog' // 移动端历史对话框
-                        ];
-
-                        const isInsideForbidden = forbiddenSelectors.some(selector =>
-                            element.closest(selector)
-                        );
-
-                        if (isInsideForbidden) {
-                            isProcessing = false;
-                            return;
-                        }
-
-                        // 5. 自动填入输入框
-                        const inputBox = document.getElementById('userInput');
-                        if (inputBox) {
-                            // 如果输入框已有内容,追加换行后添加
-                            if (inputBox.value && inputBox.value.trim()) {
-                                inputBox.value += '\n\n' + selectedText;
-                            } else {
-                                inputBox.value = selectedText;
-                            }
-
-                            // 触发输入事件以更新UI状态
-                            inputBox.dispatchEvent(new Event('input', { bubbles: true }));
-
-                            // 聚焦并移动光标到末尾
-                            inputBox.focus();
-                            const len = inputBox.value.length;
-                            inputBox.setSelectionRange(len, len);
-                            inputBox.scrollTop = inputBox.scrollHeight;
-
-                            // 更新发送按钮状态
-                            if (typeof updateSendButtonState === 'function') {
-                                updateSendButtonState();
-                            }
-
-                            // 清除选择以避免视觉混乱
-                            window.getSelection().removeAllRanges();
-                        }
-                    } catch (error) {
-                        console.error('Error in text selection handler:', error);
-                    } finally {
-                        setTimeout(() => {
-                            isProcessing = false;
-                            lastSelectedText = ''; // 重置防重复标记
-                        }, 300);
+                    // 1. 必须在 chatContainer 内部
+                    if (!chatContainer.contains(containerElement)) {
+                        return;
                     }
-                }, 100);
+
+                    // 2. 且不能在某些特定的UI元素内（如代码复制按钮、消息操作按钮）
+                    if (containerElement.closest('.message-actions') ||
+                        containerElement.closest('.code-copy-btn') ||
+                        containerElement.closest('.header') || // 虽然header不在chatContainer内，但防万一
+                        containerElement.closest('.sidebar')) {
+                        return;
+                    }
+
+                    isProcessing = true;
+
+                    const inputBox = document.getElementById('userInput');
+                    if (inputBox) {
+                        const currentVal = inputBox.value;
+                        let newText = selectedText;
+
+                        // 如果输入框已有内容，智能换行
+                        if (currentVal && currentVal.trim().length > 0) {
+                            newText = "\n\n" + selectedText;
+                        }
+
+                        // 追加内容
+                        inputBox.value += newText;
+
+                        // 触发 input 事件以更新 UI（如高度自适应）
+                        inputBox.dispatchEvent(new Event('input', { bubbles: true }));
+
+                        // 视觉反馈：输入框背景闪烁一下
+                        inputBox.style.transition = 'background-color 0.2s';
+                        inputBox.style.backgroundColor = 'rgba(16, 163, 127, 0.2)';
+                        setTimeout(() => {
+                            inputBox.style.backgroundColor = '';
+                        }, 300);
+
+                        // 聚焦并将光标移至末尾
+                        inputBox.focus();
+                        inputBox.setSelectionRange(inputBox.value.length, inputBox.value.length);
+                        inputBox.scrollTop = inputBox.scrollHeight;
+
+                        // 清除选区，避免误操作（可选，有些人喜欢保留选区）
+                        // selection.removeAllRanges();
+                    }
+
+                    // 重置处理标志
+                    setTimeout(() => { isProcessing = false; }, 500);
+                }, 200); // 200ms 延迟，确保不是点击而是选择完成
             }
 
-            // 绑定事件
+            // 只监听 mouseup，因为在移动端 touchend 的处理比较复杂且容易与滚动冲突
+            // PC端主要靠 mouseup
             document.addEventListener('mouseup', handleTextSelection);
-            document.addEventListener('touchend', handleTextSelection);
 
             // 键盘快捷键支持
             document.addEventListener('keydown', function(e) {
@@ -6765,23 +6748,34 @@
                     if (selectedText) {
                         const inputBox = document.getElementById('userInput');
                         if (inputBox) {
-                            if (inputBox.value && inputBox.value.trim()) {
-                                inputBox.value += '\n\n' + selectedText;
-                            } else {
-                                inputBox.value = selectedText;
+                            const currentVal = inputBox.value;
+                            let newText = selectedText;
+
+                            // 如果输入框已有内容，智能换行
+                            if (currentVal && currentVal.trim().length > 0) {
+                                newText = "\n\n" + selectedText;
                             }
 
+                            // 追加内容
+                            inputBox.value += newText;
+
+                            // 触发 input 事件以更新 UI（如高度自适应）
                             inputBox.dispatchEvent(new Event('input', { bubbles: true }));
+
+                            // 视觉反馈：输入框背景闪烁一下
+                            inputBox.style.transition = 'background-color 0.2s';
+                            inputBox.style.backgroundColor = 'rgba(16, 163, 127, 0.2)';
+                            setTimeout(() => {
+                                inputBox.style.backgroundColor = '';
+                            }, 300);
+
+                            // 聚焦并将光标移至末尾
                             inputBox.focus();
-                            const len = inputBox.value.length;
-                            inputBox.setSelectionRange(len, len);
+                            inputBox.setSelectionRange(inputBox.value.length, inputBox.value.length);
                             inputBox.scrollTop = inputBox.scrollHeight;
 
-                            if (typeof updateSendButtonState === 'function') {
-                                updateSendButtonState();
-                            }
-
-                            window.getSelection().removeAllRanges();
+                            // 清除选区，避免误操作（可选，有些人喜欢保留选区）
+                            // selection.removeAllRanges();
                         }
                     }
                 }
@@ -6794,12 +6788,10 @@
         // Load Prism.js for syntax highlighting
         const script = document.createElement('script');
         script.src = 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js';
-        script.integrity = 'sha512-nyKC7iX6HYZbLQi5ekLVTIgyGfhGei8S4fqJbNDTlTzvD7g817U+Q9ZYK8l0YdJ6Q3xTMT9mTehpYrZTJo9BQ==';
         script.onload = function () {
             // Once Prism core is loaded, load the autoloader
             const prismAutoloader = document.createElement('script');
             prismAutoloader.src = 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js';
-            prismAutoloader.integrity = 'sha512-S2iIl8kHJf9PPclzY/J7pNfZmZ0yf+qQK8P9Wg7QzT/9Yp5Jl6VFQjUwCqfgDwv2Yg4xLWJEsVoeJHa1B4pw==';
             prismAutoloader.onload = function () {
                 // Once Prism is fully loaded, highlight any existing code blocks
                 setTimeout(() => {
