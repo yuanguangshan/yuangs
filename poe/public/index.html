@@ -5527,45 +5527,23 @@
         function updateTemporaryAssistantContent(content) {
             const tempContent = document.getElementById('temp-assistant-content');
             if (tempContent) {
-                // 1. 在更新内容之前，先判断用户是否处于底部（允许100px的误差）
-                // 如果用户正在往上翻看代码，这个值会为 false
-                const threshold = 100;
+                const threshold = 150; // 稍微放宽阈值
                 const isUserAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < threshold;
 
                 tempContent.setAttribute('data-raw', content);
-
-                // Preprocess content to handle incomplete code blocks during streaming
                 const preprocessedContent = preprocessContentForStreaming(content);
-
-                // Parse and render markdown
                 const markdownHtml = marked.parse(preprocessedContent);
-
-                // Postprocess to clean up temporary markers and handle incomplete code blocks
                 const finalHtml = postprocessContentForDisplay(markdownHtml, content);
 
-                // Add fancy typing effect with blinking cursor
                 tempContent.innerHTML = finalHtml;
-                // Remove any previous typing cursor
-                const cursor = tempContent.querySelector('.typing-cursor');
-                if (cursor) cursor.remove();
-
-                // Add the fancy typing cursor
                 tempContent.classList.add('fancy-typing');
-
-                // Apply fancy glow effect to the content for streaming
                 tempContent.classList.add('stream-highlight');
 
-                // Immediately add copy buttons to any existing code blocks and apply syntax highlighting
                 addCopyButtonsToCodeBlocks(tempContent);
 
-                // 2. 只有当用户原本就在底部时，才执行自动滚动
+                // 如果原本就在底部，立即滚动
                 if (isUserAtBottom) {
-                    requestAnimationFrame(() => {
-                        chatContainer.scrollTo({
-                            top: chatContainer.scrollHeight,
-                            behavior: 'instant' // 使用 instant 防止平滑滚动的延迟感
-                        });
-                    });
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
                 }
             }
         }
@@ -5781,53 +5759,16 @@
 
                                             // Call the update callback if provided
                                             if (onContentUpdate) {
-                                                // 1. 更新前检查位置
-                                                const container = document.getElementById('chatContainer');
-                                                const threshold = 100;
-                                                // 判断用户是否在查看历史消息（距离底部超过100px）
-                                                const shouldAutoScroll = container && (container.scrollHeight - container.scrollTop - container.clientHeight < threshold);
-
                                                 onContentUpdate(accumulatedContent);
-
-                                                // 2. 仅在应该滚动时滚动
-                                                if (shouldAutoScroll) {
-                                                    // 使用 requestAnimationFrame 替代 setTimeout 以获得更好的性能
-                                                    requestAnimationFrame(() => {
-                                                        if (container) {
-                                                            container.scrollTop = container.scrollHeight;
-                                                        }
-                                                    });
-                                                }
                                             }
                                         }
                                     } else {
-                                        // If it doesn't look like a complete JSON object, try to parse anyway but catch errors more carefully
                                         const data = JSON.parse(jsonDataStr);
                                         if (data.choices && data.choices[0]?.delta?.content) {
                                             const content = data.choices[0].delta.content;
-
-                                            // Add the new content to the accumulated content
                                             accumulatedContent += content;
-
-                                            // Call the update callback if provided
                                             if (onContentUpdate) {
-                                                // 1. 更新前检查位置
-                                                const container = document.getElementById('chatContainer');
-                                                const threshold = 100;
-                                                // 判断用户是否在查看历史消息（距离底部超过100px）
-                                                const shouldAutoScroll = container && (container.scrollHeight - container.scrollTop - container.clientHeight < threshold);
-
                                                 onContentUpdate(accumulatedContent);
-
-                                                // 2. 仅在应该滚动时滚动
-                                                if (shouldAutoScroll) {
-                                                    // 使用 requestAnimationFrame 替代 setTimeout 以获得更好的性能
-                                                    requestAnimationFrame(() => {
-                                                        if (container) {
-                                                            container.scrollTop = container.scrollHeight;
-                                                        }
-                                                    });
-                                                }
                                             }
                                         }
                                     }
@@ -5851,23 +5792,7 @@
                                 if (data.choices && data.choices[0]?.delta?.content) {
                                     accumulatedContent += data.choices[0].delta.content;
                                     if (onContentUpdate) {
-                                        // 1. 更新前检查位置
-                                        const container = document.getElementById('chatContainer');
-                                        const threshold = 100;
-                                        // 判断用户是否在查看历史消息（距离底部超过100px）
-                                        const shouldAutoScroll = container && (container.scrollHeight - container.scrollTop - container.clientHeight < threshold);
-
                                         onContentUpdate(accumulatedContent);
-
-                                        // 2. 仅在应该滚动时滚动
-                                        if (shouldAutoScroll) {
-                                            // 使用 requestAnimationFrame 替代 setTimeout 以获得更好的性能
-                                            requestAnimationFrame(() => {
-                                                if (container) {
-                                                    container.scrollTop = container.scrollHeight;
-                                                }
-                                            });
-                                        }
                                     }
                                 }
                             } else {
@@ -5876,23 +5801,7 @@
                                 if (data.choices && data.choices[0]?.delta?.content) {
                                     accumulatedContent += data.choices[0].delta.content;
                                     if (onContentUpdate) {
-                                        // 1. 更新前检查位置
-                                        const container = document.getElementById('chatContainer');
-                                        const threshold = 100;
-                                        // 判断用户是否在查看历史消息（距离底部超过100px）
-                                        const shouldAutoScroll = container && (container.scrollHeight - container.scrollTop - container.clientHeight < threshold);
-
                                         onContentUpdate(accumulatedContent);
-
-                                        // 2. 仅在应该滚动时滚动
-                                        if (shouldAutoScroll) {
-                                            // 使用 requestAnimationFrame 替代 setTimeout 以获得更好的性能
-                                            requestAnimationFrame(() => {
-                                                if (container) {
-                                                    container.scrollTop = container.scrollHeight;
-                                                }
-                                            });
-                                        }
                                     }
                                 }
                             }
@@ -6694,62 +6603,58 @@
 
         // 选中文字问AI功能 - 简化版
         function initAskAIOnSelect() {
-            let isProcessing = false; // 防止重复处理
+            let isProcessing = false;
 
             function handleTextSelection() {
-                // 检查当前活动元素是否为改名输入框，如果是则直接返回
                 const activeElement = document.activeElement;
-                if (activeElement && activeElement.classList.contains('rename-input')) {
-                    return;
-                }
+                if (activeElement && activeElement.classList.contains('rename-input')) return;
 
-                if (isProcessing) return; // 防止重复处理
+                if (isProcessing) return;
+                isProcessing = true;
 
                 // ��加小延迟确保选择完成
                 setTimeout(() => {
                     const selection = window.getSelection();
                     const selectedText = selection.toString().trim();
 
-                    if (!selectedText) return;
+                    if (!selectedText) {
+                        isProcessing = false;
+                        return;
+                    }
 
                     // --- 修复关键：范围检查 ---
                     // 1. 检查选中的内容是否在聊天容器内
                     const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-                    if (!range) return;
+                    if (!range) {
+                        isProcessing = false;
+                        return;
+                    }
 
                     // 获取选中内容的容器
                     const container = range.commonAncestorContainer;
                     const element = container.nodeType === 3 ? container.parentElement : container;
 
                     // 检查：如果选中的文字是在侧边栏、标题栏、或任何���������入框内，则不触发
-                    const isInsideChat = element.closest('#chatContainer') || element.closest('.chat-container');
-                    const isInsideInput = element.closest('input, textarea, .rename-input, .sidebar, .header, .history-item, .dropdown-option');
+                    const isInsideChat = element.closest('#chatContainer, .chat-container, .main-content');
+                    const isInsideForbidden = element.closest('.rename-input, .dropdown-option, textarea, input, .sidebar');
 
-                    // 只有在聊天内容区选中，且不在任何输入组件内选中时才执行
-                    if (isInsideChat && !isInsideInput) {
+                    if (isInsideChat && !isInsideForbidden) {
                         const inputBox = document.getElementById('userInput');
                         if (inputBox) {
-                            // 如果输入框有内容，先添加换行
                             if (inputBox.value && inputBox.value.trim()) {
                                 inputBox.value += '\n\n' + selectedText;
                             } else {
                                 inputBox.value = selectedText;
                             }
-
-                            // 触发输入框内容变化事件
                             inputBox.dispatchEvent(new Event('input', { bubbles: true }));
-
-                            // 只有当用户不是在改名时才尝试聚焦
                             if (!document.querySelector('.rename-input')) {
                                 inputBox.focus();
                                 const textLength = inputBox.value.length;
                                 inputBox.setSelectionRange(textLength, textLength);
                             }
-
-                            isProcessing = true;
-                            setTimeout(() => { isProcessing = false; }, 300);
                         }
                     }
+                    setTimeout(() => { isProcessing = false; }, 300);
                 }, 100);
             }
 
