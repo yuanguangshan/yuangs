@@ -5536,11 +5536,33 @@
                 const markdownHtml = marked.parse(preprocessedContent);
                 const finalHtml = postprocessContentForDisplay(markdownHtml, content);
 
+                // 保存当前滚动位置
+                const previousScrollTop = chatContainer.scrollTop;
+                const previousScrollHeight = chatContainer.scrollHeight;
+
                 tempContent.innerHTML = finalHtml;
                 tempContent.classList.add('fancy-typing');
                 tempContent.classList.add('stream-highlight');
 
+                // 添加代码块复制按钮
                 addCopyButtonsToCodeBlocks(tempContent);
+
+                // 确保在内容更新后立即处理语法高亮
+                if (typeof Prism !== 'undefined' && typeof Prism.highlightAllUnder !== 'undefined') {
+                    Prism.highlightAllUnder(tempContent);
+                } else if (typeof Prism !== 'undefined' && typeof Prism.highlightElement !== 'undefined') {
+                    // 手动对每个代码块应用高亮
+                    tempContent.querySelectorAll('pre code').forEach(function(block) {
+                        if (!block.classList.contains('tokenized')) {
+                            try {
+                                Prism.highlightElement(block);
+                                block.classList.add('tokenized');
+                            } catch (e) {
+                                console.warn('Prism highlighting error:', e);
+                            }
+                        }
+                    });
+                }
 
                 // 只有当用户此前就在底部附近时，才执行自动滚动
                 if (isUserAtBottom) {
@@ -5550,6 +5572,10 @@
                             chatContainer.scrollTop = chatContainer.scrollHeight;
                         });
                     });
+                } else {
+                    // 如果用户不在底部，则保持相对滚动位置
+                    const scrollDiff = chatContainer.scrollHeight - previousScrollHeight;
+                    chatContainer.scrollTop = previousScrollTop + scrollDiff;
                 }
             }
         }
@@ -5627,6 +5653,16 @@
                     pre.style.position = 'relative';
 
                     pre.appendChild(indicator);
+                }
+
+                // 立即尝试语法高亮
+                if (code && typeof Prism !== 'undefined' && typeof Prism.highlightElement !== 'undefined') {
+                    try {
+                        Prism.highlightElement(code);
+                        code.classList.add('tokenized');
+                    } catch (e) {
+                        console.warn('Prism highlighting error:', e);
+                    }
                 }
             });
 
@@ -5723,7 +5759,7 @@
             }
 
             if (shouldStream) {
-                // Handle streaming response
+                // Handle streaming response with improved real-time updates
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder('utf-8');
                 let accumulatedContent = '';
@@ -5763,9 +5799,16 @@
                                             // Add the new content to the accumulated content
                                             accumulatedContent += content;
 
-                                            // Call the update callback if provided
+                                            // Call the update callback if provided - throttle updates for better performance
                                             if (onContentUpdate) {
-                                                onContentUpdate(accumulatedContent);
+                                                // Throttle updates to prevent excessive DOM updates
+                                                if (!this.updateThrottle) {
+                                                    this.updateThrottle = true;
+                                                    requestAnimationFrame(() => {
+                                                        onContentUpdate(accumulatedContent);
+                                                        this.updateThrottle = false;
+                                                    });
+                                                }
                                             }
                                         }
                                     } else {
@@ -5774,7 +5817,14 @@
                                             const content = data.choices[0].delta.content;
                                             accumulatedContent += content;
                                             if (onContentUpdate) {
-                                                onContentUpdate(accumulatedContent);
+                                                // Throttle updates to prevent excessive DOM updates
+                                                if (!this.updateThrottle) {
+                                                    this.updateThrottle = true;
+                                                    requestAnimationFrame(() => {
+                                                        onContentUpdate(accumulatedContent);
+                                                        this.updateThrottle = false;
+                                                    });
+                                                }
                                             }
                                         }
                                     }
@@ -6618,8 +6668,6 @@
                         const selection = window.getSelection();
                         const selectedText = selection.toString().trim();
 
-                        console.log('[Selection Debug] Selected text:', selectedText ? `"${selectedText.substring(0, 50)}..."` : 'NONE');
-
                         if (!selectedText || selectedText.length < 1) {
                             isProcessing = false;
                             return;
@@ -6627,7 +6675,6 @@
 
                         const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
                         if (!range) {
-                            console.log('[Selection Debug] No range found');
                             isProcessing = false;
                             return;
                         }
@@ -6635,29 +6682,26 @@
                         const container = range.commonAncestorContainer;
                         const element = container.nodeType === 3 ? container.parentElement : container;
 
-                        console.log('[Selection Debug] Element:', element.tagName, element.className);
+                        // 检查是否是从输入框中选择的文本
+                        const isFromInputBox = element.closest('#userInput') || element.id === 'userInput';
 
-                        // 只排除真正不应该触发的区域：侧边栏、头部、下拉菜单、改名输入框
+                        // 只排除真正不应该触发的区域：侧边栏、头部、下拉菜单、改名输入框、搜索输入框
                         const isInsideSidebar = element.closest('.sidebar');
                         const isInsideHeader = element.closest('.header');
                         const isInsideDropdown = element.closest('.dropdown-option, .new-chat-dropdown, .logo-dropdown');
                         const isInsideRenameInput = element.closest('.rename-input');
                         const isInsideSearchInput = element.closest('.search-input-wrapper');
 
-                        const isInsideForbidden = isInsideSidebar || isInsideHeader || isInsideDropdown || isInsideRenameInput || isInsideSearchInput;
+                        // 如果选择来自输入框本身，则不应触发自动填充功能（避免循环）
+                        if (isFromInputBox) {
+                            isProcessing = false;
+                            return;
+                        }
 
-                        console.log('[Selection Debug] Forbidden check:', {
-                            sidebar: !!isInsideSidebar,
-                            header: !!isInsideHeader,
-                            dropdown: !!isInsideDropdown,
-                            rename: !!isInsideRenameInput,
-                            search: !!isInsideSearchInput,
-                            final: isInsideForbidden
-                        });
+                        const isInsideForbidden = isInsideSidebar || isInsideHeader || isInsideDropdown || isInsideRenameInput || isInsideSearchInput;
 
                         if (!isInsideForbidden) {
                             const inputBox = document.getElementById('userInput');
-                            console.log('[Selection Debug] Input box found:', !!inputBox);
 
                             if (inputBox) {
                                 if (inputBox.value && inputBox.value.trim()) {
@@ -6666,27 +6710,57 @@
                                     inputBox.value = selectedText;
                                 }
 
-                                console.log('[Selection Debug] ✓ Text filled successfully');
-
+                                // 触发输入事件以更新token计数和发送按钮状态
                                 inputBox.dispatchEvent(new Event('input', { bubbles: true }));
+
+                                // 聚焦到输入框并移动光标到末尾
                                 inputBox.focus();
                                 const len = inputBox.value.length;
                                 inputBox.setSelectionRange(len, len);
                                 inputBox.scrollTop = inputBox.scrollHeight;
+
+                                // 更新发送按钮状态
+                                updateSendButtonState();
                             }
-                        } else {
-                            console.log('[Selection Debug] ✗ Selection in forbidden area, skipped');
                         }
                     } catch (error) {
-                        console.error('[Selection Debug] Error:', error);
+                        console.error('Error in text selection handler:', error);
                     } finally {
                         setTimeout(() => { isProcessing = false; }, 300);
                     }
-                }, 200);
+                }, 100); // 减少延迟时间以提高响应性
             }
 
             document.addEventListener('mouseup', handleTextSelection);
             document.addEventListener('touchend', handleTextSelection);
+
+            // 添加键盘快捷键支持
+            document.addEventListener('keydown', function(e) {
+                // Ctrl/Cmd + Shift + C 复制选中文本到输入框
+                if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
+                    e.preventDefault();
+                    const selection = window.getSelection();
+                    const selectedText = selection.toString().trim();
+
+                    if (selectedText) {
+                        const inputBox = document.getElementById('userInput');
+                        if (inputBox) {
+                            if (inputBox.value && inputBox.value.trim()) {
+                                inputBox.value += '\n\n' + selectedText;
+                            } else {
+                                inputBox.value = selectedText;
+                            }
+
+                            inputBox.dispatchEvent(new Event('input', { bubbles: true }));
+                            inputBox.focus();
+                            const len = inputBox.value.length;
+                            inputBox.setSelectionRange(len, len);
+                            inputBox.scrollTop = inputBox.scrollHeight;
+                            updateSendButtonState();
+                        }
+                    }
+                }
+            });
         }
 
         // 初始化选中文字问AI功能
