@@ -6654,13 +6654,13 @@
             }
         });
 
-        // 选中文字问AI功能 - 最终修复版
+        // 选中文字问AI功能 - 移动端增强版
         function initAskAIOnSelect() {
             let isProcessing = false;
 
             function handleTextSelection(e) {
                 // 忽略在输入框或可编辑区域内的操作
-                if (e.target.closest('input, textarea, [contenteditable="true"]')) {
+                if (e && e.target && e.target.closest('input, textarea, [contenteditable="true"]')) {
                     return;
                 }
 
@@ -6679,6 +6679,11 @@
 
                     // 关键检查：选区必须在聊天容器内
                     const chatContainer = document.getElementById('chatContainer');
+                    if (!chatContainer) {
+                        console.error('chatContainer not found');
+                        return;
+                    }
+
                     const commonAncestor = range.commonAncestorContainer;
                     const containerElement = commonAncestor.nodeType === 3 ? commonAncestor.parentNode : commonAncestor;
 
@@ -6731,12 +6736,81 @@
 
                     // 重置处理标志
                     setTimeout(() => { isProcessing = false; }, 500);
-                }, 200); // 200ms 延迟，确保不是点击而是选择完成
+                }, 300); // 增加延迟以适应移动端
             }
 
-            // 只监听 mouseup，因为在移动端 touchend 的处理比较复杂且容易与滚动冲突
-            // PC端主要靠 mouseup
+            // 监听 mouseup 事件（PC端）
             document.addEventListener('mouseup', handleTextSelection);
+
+            // 为移动端添加触摸选择处理
+            let touchStartTime = 0;
+
+            // 记录触摸开始时间
+            document.addEventListener('touchstart', function(e) {
+                touchStartTime = Date.now();
+            });
+
+            // 监听 touchend 事件（移动端）
+            document.addEventListener('touchend', function(e) {
+                // 在移动端，需要检查是否进行了文本选择操作
+                const touchDuration = Date.now() - touchStartTime;
+
+                // 如果触摸时间较长，可能是选择了文本
+                if (touchDuration > 300) { // 300ms 以上认为是选择操作
+                    setTimeout(() => {
+                        const selectedText = window.getSelection().toString().trim();
+                        if (selectedText) {
+                            // 检查选择是否在聊天容器内
+                            const selection = window.getSelection();
+                            if (selection.rangeCount > 0) {
+                                const range = selection.getRangeAt(0);
+                                const commonAncestor = range.commonAncestorContainer;
+                                const containerElement = commonAncestor.nodeType === 3 ? commonAncestor.parentNode : commonAncestor;
+
+                                const chatContainer = document.getElementById('chatContainer');
+
+                                if (chatContainer && chatContainer.contains(containerElement)) {
+                                    // 检查是否在禁止区域
+                                    if (!containerElement.closest('.message-actions') &&
+                                        !containerElement.closest('.code-copy-btn') &&
+                                        !containerElement.closest('.header') &&
+                                        !containerElement.closest('.sidebar')) {
+                                        handleTextSelection(e);
+                                    }
+                                }
+                            }
+                        }
+                    }, 150); // 稍微增加延迟以确保选择完成
+                }
+            });
+
+            // 为移动端添加额外的 selectionchange 事件监听，以处理长按选择的情况
+            document.addEventListener('selectionchange', function() {
+                if (window.getSelection().toString().trim() && !isProcessing) {
+                    // 检查选择是否在允许的区域内
+                    const selection = window.getSelection();
+                    if (selection.rangeCount > 0) {
+                        const range = selection.getRangeAt(0);
+                        const commonAncestor = range.commonAncestorContainer;
+                        const containerElement = commonAncestor.nodeType === 3 ? commonAncestor.parentNode : commonAncestor;
+
+                        const chatContainer = document.getElementById('chatContainer');
+
+                        // 只在聊天容器内触发
+                        if (chatContainer && chatContainer.contains(containerElement)) {
+                            // 检查是否在禁止区域
+                            if (!containerElement.closest('.message-actions') &&
+                                !containerElement.closest('.code-copy-btn') &&
+                                !containerElement.closest('.header') &&
+                                !containerElement.closest('.sidebar')) {
+                                setTimeout(() => {
+                                    handleTextSelection({ target: containerElement });
+                                }, 100); // 增加延迟以确保选择完全就绪
+                            }
+                        }
+                    }
+                }
+            });
 
             // 键盘快捷键支持
             document.addEventListener('keydown', function(e) {
