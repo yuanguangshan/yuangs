@@ -6605,63 +6605,94 @@
             }
         });
 
-        // 选中文字问AI功能 - 简化版
-        function initAskAIOnSelect() {
-            let isProcessing = false;
+// 选中文字问AI功能 - 修复版
+function initAskAIOnSelect() {
+    let isProcessing = false;
 
-            function handleTextSelection() {
-                if (isProcessing) return;
-                isProcessing = true;
+    function handleTextSelection() {
+        if (isProcessing) return;
+        isProcessing = true;
 
-                // ��加小延迟确保选择完成
-                setTimeout(() => {
-                    const selection = window.getSelection();
-                    const selectedText = selection.toString().trim();
+        setTimeout(() => {
+            try {
+                const selection = window.getSelection();
+                const selectedText = selection.toString().trim();
 
-                    if (!selectedText || selectedText.length < 1) {
-                        isProcessing = false;
-                        return;
-                    }
+                console.log('[Selection Debug] Selected text:', selectedText ? `"${selectedText.substring(0, 50)}..."` : 'NONE');
 
-                    // Range check
-                    const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-                    if (!range) {
-                        isProcessing = false;
-                        return;
-                    }
+                if (!selectedText || selectedText.length < 1) {
+                    isProcessing = false;
+                    return;
+                }
 
-                    // Get container element
-                    const container = range.commonAncestorContainer;
-                    const element = container.nodeType === 3 ? container.parentElement : container;
+                const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+                if (!range) {
+                    console.log('[Selection Debug] No range found');
+                    isProcessing = false;
+                    return;
+                }
 
-                    // 检查：如果选中的文字是在侧边栏、标题栏、或任何���������入框内，则不触发
-                    const isInsideForbidden = element.closest('.sidebar, .header, .dropdown-option, .rename-input, textarea, input, .mobile-exit-focus-btn');
-                    if (!isInsideForbidden) {
-                        const inputBox = document.getElementById('userInput');
-                        if (inputBox) {
-                            if (inputBox.value && inputBox.value.trim()) {
-                                inputBox.value += '\n\n' + selectedText;
-                            } else {
-                                inputBox.value = selectedText;
-                            }
-                            inputBox.dispatchEvent(new Event('input', { bubbles: true }));
-                            inputBox.focus();
-                            const len = inputBox.value.length;
-                            inputBox.setSelectionRange(len, len);
-                            inputBox.scrollTop = inputBox.scrollHeight;
+                const container = range.commonAncestorContainer;
+                const element = container.nodeType === 3 ? container.parentElement : container;
+
+                console.log('[Selection Debug] Element:', element.tagName, element.className);
+
+                // 只排除真正不应该触发的区域：侧边栏、头部、下拉菜单、改名输入框
+                const isInsideSidebar = element.closest('.sidebar');
+                const isInsideHeader = element.closest('.header');
+                const isInsideDropdown = element.closest('.dropdown-option, .new-chat-dropdown, .logo-dropdown');
+                const isInsideRenameInput = element.closest('.rename-input');
+                const isInsideSearchInput = element.closest('.search-input-wrapper');
+
+                const isInsideForbidden = isInsideSidebar || isInsideHeader || isInsideDropdown || isInsideRenameInput || isInsideSearchInput;
+
+                console.log('[Selection Debug] Forbidden check:', {
+                    sidebar: !!isInsideSidebar,
+                    header: !!isInsideHeader,
+                    dropdown: !!isInsideDropdown,
+                    rename: !!isInsideRenameInput,
+                    search: !!isInsideSearchInput,
+                    final: isInsideForbidden
+                });
+
+                if (!isInsideForbidden) {
+                    const inputBox = document.getElementById('userInput');
+                    console.log('[Selection Debug] Input box found:', !!inputBox);
+
+                    if (inputBox) {
+                        if (inputBox.value && inputBox.value.trim()) {
+                            inputBox.value += '
+
+' + selectedText;
+                        } else {
+                            inputBox.value = selectedText;
                         }
+
+                        console.log('[Selection Debug] ✓ Text filled successfully');
+
+                        inputBox.dispatchEvent(new Event('input', { bubbles: true }));
+                        inputBox.focus();
+                        const len = inputBox.value.length;
+                        inputBox.setSelectionRange(len, len);
+                        inputBox.scrollTop = inputBox.scrollHeight;
                     }
-                    setTimeout(() => { isProcessing = false; }, 300);
-                }, 200);
+                } else {
+                    console.log('[Selection Debug] ✗ Selection in forbidden area, skipped');
+                }
+            } catch (error) {
+                console.error('[Selection Debug] Error:', error);
+            } finally {
+                setTimeout(() => { isProcessing = false; }, 300);
             }
+        }, 200);
+    }
 
-            // Listen for mouse and touch events
-            document.addEventListener('mouseup', handleTextSelection);
-            document.addEventListener('touchend', handleTextSelection);
-        }
+    document.addEventListener('mouseup', handleTextSelection);
+    document.addEventListener('touchend', handleTextSelection);
+}
 
-        // 初始化选中文字问AI功能
-        document.addEventListener('DOMContentLoaded', initAskAIOnSelect);
+// 初始化选中文字问AI功能
+document.addEventListener('DOMContentLoaded', initAskAIOnSelect);
 
         // Load Prism.js for syntax highlighting
         const script = document.createElement('script');
