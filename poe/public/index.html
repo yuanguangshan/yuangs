@@ -7311,13 +7311,14 @@
             if (!upArrow || !downArrow) return;
 
             // Enable/disable arrows based on current position
-            // Up arrow disabled if at first message (index 0) or no messages
+            // Up arrow visually dimmed if at first message (index 0) or no messages
             upArrow.style.opacity = currentIndex > 0 ? '1' : '0.3';
-            upArrow.style.pointerEvents = currentIndex > 0 ? 'auto' : 'none';
-
-            // Down arrow disabled if at last message or no messages
+            // Down arrow visually dimmed if at last message or no messages
             downArrow.style.opacity = (currentIndex < messageElements.length - 1 && currentIndex !== -1) ? '1' : '0.3';
-            downArrow.style.pointerEvents = (currentIndex < messageElements.length - 1 && currentIndex !== -1) ? 'auto' : 'none';
+
+            // Keep pointerEvents enabled to allow double-click for jump to top/bottom at any time
+            upArrow.style.pointerEvents = 'auto';
+            downArrow.style.pointerEvents = 'auto';
         }
 
         function scrollToMessage(index) {
@@ -7413,15 +7414,53 @@
         document.addEventListener('DOMContentLoaded', function () {
             const navUp = document.getElementById('navUp');
             const navDown = document.getElementById('navDown');
+            const chatContainer = document.getElementById('chatContainer');
 
-            if (navUp) navUp.addEventListener('click', goToPreviousMessage);
-            if (navDown) navDown.addEventListener('click', goToNextMessage);
+            let upClickTimer = null;
+            let downClickTimer = null;
+
+            if (navUp) {
+                navUp.addEventListener('click', function () {
+                    if (upClickTimer) {
+                        clearTimeout(upClickTimer);
+                        upClickTimer = null;
+                        // Double click action: Go to absolute top
+                        if (chatContainer) chatContainer.scrollTo({ top: 0, behavior: 'smooth' });
+                        currentIndex = 0;
+                        updateNavigationArrows();
+                    } else {
+                        upClickTimer = setTimeout(() => {
+                            goToPreviousMessage();
+                            upClickTimer = null;
+                        }, 250);
+                    }
+                });
+            }
+
+            if (navDown) {
+                navDown.addEventListener('click', function () {
+                    if (downClickTimer) {
+                        clearTimeout(downClickTimer);
+                        downClickTimer = null;
+                        // Double click action: Go to absolute bottom
+                        if (chatContainer) chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: 'smooth' });
+                        if (messageElements.length > 0) {
+                            currentIndex = messageElements.length - 1;
+                            updateNavigationArrows();
+                        }
+                    } else {
+                        downClickTimer = setTimeout(() => {
+                            goToNextMessage();
+                            downClickTimer = null;
+                        }, 250);
+                    }
+                });
+            }
 
             // Initial setup
             setTimeout(initializeNavigation, 500); // Wait for content to load
 
             // Observe chat container for added nodes to update the list
-            const chatContainer = document.getElementById('chatContainer');
             if (chatContainer) {
                 // Update currentIndex when user manually scrolls
                 let isScrollingTimer;
