@@ -6655,13 +6655,18 @@
             }
         });
 
-        // 选中文字问AI功能 - 修复版
+        // 选中文字问AI功能 - 优化版
         function initAskAIOnSelect() {
             let isProcessing = false;
 
-            function handleTextSelection() {
+            function handleTextSelection(e) {
+                // 如果正在处理，直接返回
                 if (isProcessing) return;
-                isProcessing = true;
+
+                // 检查点击的目标是否是交互元素（按钮、链接等），如果是则不触发
+                if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.input-area')) {
+                    return;
+                }
 
                 setTimeout(() => {
                     try {
@@ -6669,70 +6674,79 @@
                         const selectedText = selection.toString().trim();
 
                         if (!selectedText || selectedText.length < 1) {
-                            isProcessing = false;
                             return;
                         }
 
-                        const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-                        if (!range) {
-                            isProcessing = false;
+                        // 获取选区所在的容器
+                        let anchorNode = selection.anchorNode;
+                        // 如果是文本节点，获取其父元素
+                        if (anchorNode && anchorNode.nodeType === 3) {
+                            anchorNode = anchorNode.parentNode;
+                        }
+
+                        // 核心检查：选区必须在 chat-container 内部
+                        const chatContainer = document.getElementById('chatContainer');
+                        if (!chatContainer.contains(anchorNode)) {
                             return;
                         }
 
-                        const container = range.commonAncestorContainer;
-                        const element = container.nodeType === 3 ? container.parentElement : container;
-
-                        // 检查是否是从输入框中选择的文本
-                        const isFromInputBox = element.closest('#userInput') || element.id === 'userInput';
-
-                        // 只排除真正不应该触发的区域：侧边栏、头部、下拉菜单、改名输入框、搜索输入框
-                        const isInsideSidebar = element.closest('.sidebar');
-                        const isInsideHeader = element.closest('.header');
-                        const isInsideDropdown = element.closest('.dropdown-option, .new-chat-dropdown, .logo-dropdown');
-                        const isInsideRenameInput = element.closest('.rename-input');
-                        const isInsideSearchInput = element.closest('.search-input-wrapper');
-
-                        // 如果选择来自输入框本身，则不应触发自动填充功能（避免循环）
-                        if (isFromInputBox) {
-                            isProcessing = false;
+                        // 再次检查：确保选区不在任何输入框或代码块的复制按钮等UI元素内
+                        if (anchorNode.closest('input') || anchorNode.closest('textarea') ||
+                            anchorNode.closest('.sidebar') || anchorNode.closest('.header')) {
                             return;
                         }
 
-                        const isInsideForbidden = isInsideSidebar || isInsideHeader || isInsideDropdown || isInsideRenameInput || isInsideSearchInput;
+                        isProcessing = true;
 
-                        if (!isInsideForbidden) {
-                            const inputBox = document.getElementById('userInput');
+                        const inputBox = document.getElementById('userInput');
+                        if (inputBox) {
+                            // 保存当前的滚动位置
+                            const scrollTop = inputBox.scrollTop;
 
-                            if (inputBox) {
-                                if (inputBox.value && inputBox.value.trim()) {
-                                    inputBox.value += '\n\n' + selectedText;
-                                } else {
-                                    inputBox.value = selectedText;
-                                }
+                            const currentVal = inputBox.value;
 
-                                // 触发输入事件以更新token计数和发送按钮状态
-                                inputBox.dispatchEvent(new Event('input', { bubbles: true }));
-
-                                // 聚焦到输入框并移动光标到末尾
-                                inputBox.focus();
-                                const len = inputBox.value.length;
-                                inputBox.setSelectionRange(len, len);
-                                inputBox.scrollTop = inputBox.scrollHeight;
-
-                                // 更新发送按钮状态
-                                updateSendButtonState();
+                            // 如果输入框已有内容，且不以换行符结尾，则添加换行
+                            let newText = selectedText;
+                            if (currentVal && currentVal.trim().length > 0) {
+                                newText = "\n\n" + selectedText;
                             }
+
+                            // 简单地追加内容
+                            inputBox.value += newText;
+
+                            // 触发 input 事件以更新 UI (如高度调整、发送按钮状态)
+                            inputBox.dispatchEvent(new Event('input', { bubbles: true }));
+
+                            // 视觉反馈：稍微闪烁一下输入框
+                            inputBox.style.transition = 'background-color 0.2s';
+                            const originalBg = inputBox.style.backgroundColor;
+                            inputBox.style.backgroundColor = 'rgba(16, 163, 127, 0.1)';
+                            setTimeout(() => {
+                                inputBox.style.backgroundColor = originalBg;
+                            }, 200);
+
+                            // 聚焦到输入框并移动光标到末尾
+                            inputBox.focus();
+                            const len = inputBox.value.length;
+                            inputBox.setSelectionRange(len, len);
+                            inputBox.scrollTop = inputBox.scrollHeight;
+
+                            // 更新发送按钮状态
+                            updateSendButtonState();
                         }
+
                     } catch (error) {
-                        console.error('Error in text selection handler:', error);
+                        console.error('Error handling selection:', error);
                     } finally {
                         setTimeout(() => { isProcessing = false; }, 300);
                     }
-                }, 100); // 减少延迟时间以提高响应性
+                }, 100); // 稍微延迟以确保选区完成
             }
 
+            // 仅监听 mouseup，这覆盖了鼠标松开。
+            // 移动端选中文本通常有系统菜单，自动填入可能会干扰系统菜单，
+            // 且移动端 "selectionchange" 更复杂，这里暂只针对鼠标操作优化。
             document.addEventListener('mouseup', handleTextSelection);
-            document.addEventListener('touchend', handleTextSelection);
 
             // 添加键盘快捷键支持
             document.addEventListener('keydown', function(e) {
