@@ -5527,7 +5527,8 @@
         function updateTemporaryAssistantContent(content) {
             const tempContent = document.getElementById('temp-assistant-content');
             if (tempContent) {
-                const threshold = 150; // 稍微放宽阈值
+                // 判断用户是否接近底部 (250px 保证在大屏幕或快速滚动时也能捕捉)
+                const threshold = 250;
                 const isUserAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < threshold;
 
                 tempContent.setAttribute('data-raw', content);
@@ -5541,9 +5542,14 @@
 
                 addCopyButtonsToCodeBlocks(tempContent);
 
-                // 如果原本就在底部，立即滚动
+                // 只有当用户此前就在底部附近时，才执行自动滚动
                 if (isUserAtBottom) {
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                    // 使用两次 requestAnimationFrame 确保在浏览器完成所有排版计算后滚动
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            chatContainer.scrollTop = chatContainer.scrollHeight;
+                        });
+                    });
                 }
             }
         }
@@ -5996,19 +6002,17 @@
                 messageDiv.style.transform = 'translateY(0)';
             }, 10);
 
-            // Smart scrolling to ensure the new message is visible only if user is at bottom
+            // 智能滚动：仅在用户本就在底部时才自动滚动
             setTimeout(() => {
-                const threshold = 100;
+                const threshold = 250;
                 const isUserAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < threshold;
 
-                // Only scroll to bottom if user is already near the bottom
                 if (isUserAtBottom) {
-                    chatContainer.scrollTo({
-                        top: chatContainer.scrollHeight,
-                        behavior: 'instant' // Use instant to prevent smooth scroll delay
+                    requestAnimationFrame(() => {
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
                     });
                 }
-            }, 10);
+            }, 50);
 
             // Add event listeners for all action buttons within the message
             const copyBtns = messageDiv.querySelectorAll('.copy-btn');
@@ -6606,9 +6610,6 @@
             let isProcessing = false;
 
             function handleTextSelection() {
-                const activeElement = document.activeElement;
-                if (activeElement && activeElement.classList.contains('rename-input')) return;
-
                 if (isProcessing) return;
                 isProcessing = true;
 
@@ -6617,28 +6618,25 @@
                     const selection = window.getSelection();
                     const selectedText = selection.toString().trim();
 
-                    if (!selectedText) {
+                    if (!selectedText || selectedText.length < 1) {
                         isProcessing = false;
                         return;
                     }
 
-                    // --- 修复关键：范围检查 ---
-                    // 1. 检查选中的内容是否在聊天容器内
+                    // Range check
                     const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
                     if (!range) {
                         isProcessing = false;
                         return;
                     }
 
-                    // 获取选中内容的容器
+                    // Get container element
                     const container = range.commonAncestorContainer;
                     const element = container.nodeType === 3 ? container.parentElement : container;
 
                     // 检查：如果选中的文字是在侧边栏、标题栏、或任何���������入框内，则不触发
-                    const isInsideChat = element.closest('#chatContainer, .chat-container, .main-content');
-                    const isInsideForbidden = element.closest('.rename-input, .dropdown-option, textarea, input, .sidebar');
-
-                    if (isInsideChat && !isInsideForbidden) {
+                    const isInsideForbidden = element.closest('.sidebar, .header, .dropdown-option, .rename-input, textarea, input, .mobile-exit-focus-btn');
+                    if (!isInsideForbidden) {
                         const inputBox = document.getElementById('userInput');
                         if (inputBox) {
                             if (inputBox.value && inputBox.value.trim()) {
@@ -6647,18 +6645,17 @@
                                 inputBox.value = selectedText;
                             }
                             inputBox.dispatchEvent(new Event('input', { bubbles: true }));
-                            if (!document.querySelector('.rename-input')) {
-                                inputBox.focus();
-                                const textLength = inputBox.value.length;
-                                inputBox.setSelectionRange(textLength, textLength);
-                            }
+                            inputBox.focus();
+                            const len = inputBox.value.length;
+                            inputBox.setSelectionRange(len, len);
+                            inputBox.scrollTop = inputBox.scrollHeight;
                         }
                     }
                     setTimeout(() => { isProcessing = false; }, 300);
-                }, 100);
+                }, 200);
             }
 
-            // 只监听 mouseup 和 touchend 事件
+            // Listen for mouse and touch events
             document.addEventListener('mouseup', handleTextSelection);
             document.addEventListener('touchend', handleTextSelection);
         }
