@@ -3665,6 +3665,30 @@
             });
         }
 
+        // Prevent auto focus mode from triggering when clicking on other parts of the interface
+        document.addEventListener('click', function(e) {
+            // Don't trigger auto focus mode when clicking on inputs, buttons, or other interactive elements
+            if (e.target.tagName === 'INPUT' ||
+                e.target.tagName === 'BUTTON' ||
+                e.target.tagName === 'TEXTAREA' ||
+                e.target.closest('button') ||
+                e.target.closest('.message-actions') ||
+                e.target.closest('.action-btn') ||
+                e.target.classList.contains('avatar') ||
+                e.target.closest('.avatar') ||
+                e.target.closest('.stop-btn') ||
+                e.target.closest('.send-btn') ||
+                e.target.closest('.voice-btn') ||
+                e.target.closest('.focus-toggle') ||
+                e.target.closest('.model-selector') ||
+                e.target.closest('.search-input') ||
+                e.target.closest('.search-controls') ||
+                e.target.closest('.nav-arrow') ||
+                e.target.closest('.mobile-exit-focus-btn')) {
+                pauseAutoFocusMode(3000); // Pause auto focus mode when interacting with UI elements
+            }
+        });
+
         // Add event listener for all textareas to exit focus mode when clicked/focused
         document.addEventListener('focusin', function (e) {  // Use focusin instead of focus for bubbling
             if (e.target.tagName === 'TEXTAREA' && document.body.classList.contains('focus-mode')) {
@@ -3675,7 +3699,8 @@
         });
 
         document.addEventListener('click', function (e) {
-            if (e.target.tagName === 'TEXTAREA' && document.body.classList.contains('focus-mode')) {
+            // Only exit focus mode if clicking on textarea or input, not other parts of the interface
+            if ((e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') && document.body.classList.contains('focus-mode')) {
                 disableAutoFocusMode();
                 pauseAutoFocusMode(5000); // Pause auto focus mode for 5 seconds after interaction
                 e.stopPropagation(); // Prevent event bubbling
@@ -7291,6 +7316,12 @@
                 return;
             }
 
+            // Don't enable if we're on mobile and the user just tapped/clicked somewhere
+            if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+                // On mobile devices, only enable after sufficient scrolling
+                // This prevents auto-enabling when tapping UI elements
+            }
+
             if (!isAutoFocusMode) {
                 document.body.classList.add('focus-mode');
                 const focusToggle = document.getElementById('focusToggle');
@@ -7325,7 +7356,7 @@
         }
 
         // Function to temporarily pause auto focus mode after user interaction
-        function pauseAutoFocusMode(duration = 3000) { // Pause for 3 seconds by default
+        function pauseAutoFocusMode(duration = 5000) { // Pause for 5 seconds by default to improve UX
             interactionPause = true;
             setTimeout(() => {
                 interactionPause = false;
@@ -7345,7 +7376,12 @@
 
             // Only enable focus mode if scrolled more than threshold
             if (scrollAmount > SCROLL_THRESHOLD) {
-                enableAutoFocusMode();
+                // Check if this is a real scroll vs just clicking/tapping
+                const timeSinceLastInteraction = Date.now() - (window.lastInteractionTime || 0);
+                // Only enable auto focus if there was no recent interaction (300ms)
+                if (timeSinceLastInteraction > 300) {
+                    enableAutoFocusMode();
+                }
             }
 
             lastScrollTop = currentScrollTop;
@@ -7371,8 +7407,13 @@
                 scrollDistance += Math.abs(e.deltaY);
 
                 if (scrollDistance > SCROLL_THRESHOLD) {
-                    enableAutoFocusMode();
-                    scrollDistance = 0; // Reset after triggering
+                    // Check if this is a real scroll vs just clicking/tapping
+                    const timeSinceLastInteraction = Date.now() - (window.lastInteractionTime || 0);
+                    // Only enable auto focus if there was no recent interaction (300ms)
+                    if (timeSinceLastInteraction > 300) {
+                        enableAutoFocusMode();
+                        scrollDistance = 0; // Reset after triggering
+                    }
                 }
             }
         }, { passive: true });
@@ -7381,6 +7422,8 @@
         document.addEventListener('touchstart', function (e) {
             startY = e.touches[0].pageY;
             scrollDistance = 0;
+            // Record interaction time to prevent auto focus immediately after touch
+            window.lastInteractionTime = Date.now();
         }, { passive: true });
 
         document.addEventListener('touchmove', function (e) {
@@ -7388,12 +7431,22 @@
             scrollDistance = Math.abs(currentY - startY);
 
             if (scrollDistance > SCROLL_THRESHOLD) {
-                enableAutoFocusMode();
-                // Reset the start position after triggering to avoid repeated triggers
-                startY = currentY;
-                scrollDistance = 0;
+                // Check if this is a real scroll vs just clicking/tapping
+                const timeSinceLastInteraction = Date.now() - (window.lastInteractionTime || 0);
+                // Only enable auto focus if there was no recent interaction (300ms)
+                if (timeSinceLastInteraction > 300) {
+                    enableAutoFocusMode();
+                    // Reset the start position after triggering to avoid repeated triggers
+                    startY = currentY;
+                    scrollDistance = 0;
+                }
             }
         }, { passive: true });
+
+        // Record interaction time on any click
+        document.addEventListener('click', function(e) {
+            window.lastInteractionTime = Date.now();
+        });
 
         // --- Navigation Logic Fixes ---
 
