@@ -2048,17 +2048,24 @@
             }
         }
 
-        /* 确保在有 stream-highlight 类的元素内的代码块文字可见 */
-        /* 确保在有 stream-highlight 类的元素内的代码块文字可见 */
-        pre .stream-highlight,
-        code .stream-highlight {
-            color: inherit !important;
-            background: transparent !important;
-            -webkit-background-clip: border-box !important;
-            background-clip: border-box !important;
-            -webkit-text-fill-color: currentColor !important;
+        /* 修复：流式输出时，代码块内的文字强制取消渐变特效，改为实心亮色 */
+        .stream-highlight pre,
+        .stream-highlight code,
+        .stream-highlight pre *,
+        .stream-highlight code * {
+            color: #e0e0e0 !important; /* 强制设为亮白色/浅灰色 */
+            background: none !important; /* 移除文字背景的渐变 */
+            -webkit-background-clip: initial !important;
+            background-clip: initial !important;
+            -webkit-text-fill-color: initial !important; /* 取消文字透明 */
             text-shadow: none !important;
             animation: none !important;
+        }
+
+        /* 保持代码块容器本身的背景色不变 (确保 Prism 主题生效) */
+        .markdown-body pre {
+            /* 这里的背景色由 Prism 主题决定，不需要改，上面的代码只重置文字颜色 */
+            position: relative;
         }
 
         @keyframes gradient-shift {
@@ -5350,31 +5357,17 @@
                 messageDiv.style.transform = 'translateY(0)';
             }, 10);
 
-            // Enhanced scrolling to ensure the temporary message is visible
+            // Smart scrolling to ensure the temporary message is visible only if user is at bottom
             setTimeout(() => {
-                // Force scroll to bottom using multiple methods to ensure compatibility
-                chatContainer.scrollTop = chatContainer.scrollHeight;
+                const threshold = 100;
+                const isUserAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < threshold;
 
-                // Additional method for ensuring scroll to bottom (especially for desktop)
-                chatContainer.scrollTo({
-                    top: chatContainer.scrollHeight,
-                    behavior: 'instant'  // Use instant for immediate scroll during streaming
-                });
-
-                // Additional check to ensure we're scrolled to the bottom
-                const isScrolledToBottom = chatContainer.scrollHeight - chatContainer.clientHeight <= chatContainer.scrollTop + 1;
-                if (!isScrolledToBottom) {
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                    // For desktop layouts, ensure container has proper height calculation
-                    // Force a reflow to recalculate dimensions
-                    chatContainer.style.height = chatContainer.scrollHeight + 'px';
-                    chatContainer.style.height = ''; // Reset to allow flex behavior
-
-                    // Final attempt to scroll to bottom after reflow
-                    setTimeout(() => {
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
-                    }, 50);
+                // Only scroll to bottom if user is already near the bottom
+                if (isUserAtBottom) {
+                    chatContainer.scrollTo({
+                        top: chatContainer.scrollHeight,
+                        behavior: 'instant' // Use instant to prevent smooth scroll delay
+                    });
                 }
             }, 10);
 
@@ -5479,6 +5472,11 @@
         function updateTemporaryAssistantContent(content) {
             const tempContent = document.getElementById('temp-assistant-content');
             if (tempContent) {
+                // 1. 在更新内容之前，先判断用户是否处于底部（允许100px的误差）
+                // 如果用户正在往上翻看代码，这个值会为 false
+                const threshold = 100;
+                const isUserAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < threshold;
+
                 tempContent.setAttribute('data-raw', content);
 
                 // Preprocess content to handle incomplete code blocks during streaming
@@ -5505,41 +5503,15 @@
                 // Immediately add copy buttons to any existing code blocks and apply syntax highlighting
                 addCopyButtonsToCodeBlocks(tempContent);
 
-                // Enhanced scrolling to ensure content is visible during streaming
-                // Use multiple approaches to ensure scrolling works reliably
-                requestAnimationFrame(() => {
-                    // Method 1: Scroll to bottom using scrollHeight
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                    // Method 2: Use scrollTo with behavior smooth for better UX
-                    chatContainer.scrollTo({
-                        top: chatContainer.scrollHeight,
-                        behavior: 'instant'  // Use instant for immediate scroll during streaming
+                // 2. 只有当用户原本就在底部时，才执行自动滚动
+                if (isUserAtBottom) {
+                    requestAnimationFrame(() => {
+                        chatContainer.scrollTo({
+                            top: chatContainer.scrollHeight,
+                            behavior: 'instant' // 使用 instant 防止平滑滚动的延迟感
+                        });
                     });
-
-                    // Method 3: As a fallback, force scroll to bottom after a short delay
-                    setTimeout(() => {
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                        // Additional check to ensure we're scrolled to the bottom
-                        // This handles cases where content changes rapidly
-                        const isScrolledToBottom = chatContainer.scrollHeight - chatContainer.clientHeight <= chatContainer.scrollTop + 1;
-                        if (!isScrolledToBottom) {
-                            chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                            // For desktop layouts, ensure container has proper height calculation
-                            // Force a reflow to recalculate dimensions
-                            chatContainer.style.height = chatContainer.scrollHeight + 'px';
-                            chatContainer.style.height = ''; // Reset to allow flex behavior
-
-                            // For very long content (especially code), ensure we maintain scroll position at bottom
-                            // Check again after a little more time to handle extremely long code blocks
-                            setTimeout(() => {
-                                chatContainer.scrollTop = chatContainer.scrollHeight;
-                            }, 100);
-                        }
-                    }, 50);
-                });
+                }
             }
         }
 
@@ -5619,34 +5591,20 @@
                 }
             });
 
-            // After adding copy buttons, ensure the chat container is scrolled to the bottom
+            // Smart scrolling to ensure the chat container remains at bottom if user is there
             // This is important because adding buttons might change the height of the content
             setTimeout(() => {
                 const chatContainer = document.getElementById('chatContainer');
                 if (chatContainer) {
-                    // Enhanced scrolling for desktop compatibility
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                    const threshold = 100;
+                    const isUserAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < threshold;
 
-                    // Additional method for ensuring scroll to bottom (especially for desktop)
-                    chatContainer.scrollTo({
-                        top: chatContainer.scrollHeight,
-                        behavior: 'instant'  // Use instant for immediate scroll
-                    });
-
-                    // Additional check to ensure we're scrolled to the bottom
-                    const isScrolledToBottom = chatContainer.scrollHeight - chatContainer.clientHeight <= chatContainer.scrollTop + 1;
-                    if (!isScrolledToBottom) {
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                        // For desktop layouts, ensure container has proper height calculation
-                        // Force a reflow to recalculate dimensions
-                        chatContainer.style.height = chatContainer.scrollHeight + 'px';
-                        chatContainer.style.height = ''; // Reset to allow flex behavior
-
-                        // Final attempt to scroll to bottom after reflow
-                        setTimeout(() => {
-                            chatContainer.scrollTop = chatContainer.scrollHeight;
-                        }, 50);
+                    // Only scroll to bottom if user is already near the bottom
+                    if (isUserAtBottom) {
+                        chatContainer.scrollTo({
+                            top: chatContainer.scrollHeight,
+                            behavior: 'instant'  // Use instant for immediate scroll
+                        });
                     }
                 }
             }, 10);
@@ -5768,27 +5726,23 @@
 
                                             // Call the update callback if provided
                                             if (onContentUpdate) {
+                                                // 1. 更新前检查位置
+                                                const container = document.getElementById('chatContainer');
+                                                const threshold = 100;
+                                                // 判断用户是否在查看历史消息（距离底部超过100px）
+                                                const shouldAutoScroll = container && (container.scrollHeight - container.scrollTop - container.clientHeight < threshold);
+
                                                 onContentUpdate(accumulatedContent);
 
-                                                // Ensure scrolling happens after each content update
-                                                setTimeout(() => {
-                                                    const chatContainer = document.getElementById('chatContainer');
-                                                    if (chatContainer) {
-                                                        // Enhanced scrolling for desktop compatibility
-                                                        chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                                                        // Additional method for ensuring scroll to bottom (especially for desktop)
-                                                        chatContainer.scrollTo({
-                                                            top: chatContainer.scrollHeight,
-                                                            behavior: 'instant'  // Use instant for immediate scroll during streaming
-                                                        });
-
-                                                        // For desktop layouts, ensure container has proper height calculation
-                                                        // Force a reflow to recalculate dimensions
-                                                        chatContainer.style.height = chatContainer.scrollHeight + 'px';
-                                                        chatContainer.style.height = ''; // Reset to allow flex behavior
-                                                    }
-                                                }, 10);
+                                                // 2. 仅在应该滚动时滚动
+                                                if (shouldAutoScroll) {
+                                                    // 使用 requestAnimationFrame 替代 setTimeout 以获得更好的性能
+                                                    requestAnimationFrame(() => {
+                                                        if (container) {
+                                                            container.scrollTop = container.scrollHeight;
+                                                        }
+                                                    });
+                                                }
                                             }
                                         }
                                     } else {
@@ -5802,27 +5756,23 @@
 
                                             // Call the update callback if provided
                                             if (onContentUpdate) {
+                                                // 1. 更新前检查位置
+                                                const container = document.getElementById('chatContainer');
+                                                const threshold = 100;
+                                                // 判断用户是否在查看历史消息（距离底部超过100px）
+                                                const shouldAutoScroll = container && (container.scrollHeight - container.scrollTop - container.clientHeight < threshold);
+
                                                 onContentUpdate(accumulatedContent);
 
-                                                // Ensure scrolling happens after each content update
-                                                setTimeout(() => {
-                                                    const chatContainer = document.getElementById('chatContainer');
-                                                    if (chatContainer) {
-                                                        // Enhanced scrolling for desktop compatibility
-                                                        chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                                                        // Additional method for ensuring scroll to bottom (especially for desktop)
-                                                        chatContainer.scrollTo({
-                                                            top: chatContainer.scrollHeight,
-                                                            behavior: 'instant'  // Use instant for immediate scroll during streaming
-                                                        });
-
-                                                        // For desktop layouts, ensure container has proper height calculation
-                                                        // Force a reflow to recalculate dimensions
-                                                        chatContainer.style.height = chatContainer.scrollHeight + 'px';
-                                                        chatContainer.style.height = ''; // Reset to allow flex behavior
-                                                    }
-                                                }, 10);
+                                                // 2. 仅在应该滚动时滚动
+                                                if (shouldAutoScroll) {
+                                                    // 使用 requestAnimationFrame 替代 setTimeout 以获得更好的性能
+                                                    requestAnimationFrame(() => {
+                                                        if (container) {
+                                                            container.scrollTop = container.scrollHeight;
+                                                        }
+                                                    });
+                                                }
                                             }
                                         }
                                     }
@@ -5846,15 +5796,23 @@
                                 if (data.choices && data.choices[0]?.delta?.content) {
                                     accumulatedContent += data.choices[0].delta.content;
                                     if (onContentUpdate) {
+                                        // 1. 更新前检查位置
+                                        const container = document.getElementById('chatContainer');
+                                        const threshold = 100;
+                                        // 判断用户是否在查看历史消息（距离底部超过100px）
+                                        const shouldAutoScroll = container && (container.scrollHeight - container.scrollTop - container.clientHeight < threshold);
+
                                         onContentUpdate(accumulatedContent);
 
-                                        // Ensure scrolling happens after the final content update
-                                        setTimeout(() => {
-                                            const chatContainer = document.getElementById('chatContainer');
-                                            if (chatContainer) {
-                                                chatContainer.scrollTop = chatContainer.scrollHeight;
-                                            }
-                                        }, 10);
+                                        // 2. 仅在应该滚动时滚动
+                                        if (shouldAutoScroll) {
+                                            // 使用 requestAnimationFrame 替代 setTimeout 以获得更好的性能
+                                            requestAnimationFrame(() => {
+                                                if (container) {
+                                                    container.scrollTop = container.scrollHeight;
+                                                }
+                                            });
+                                        }
                                     }
                                 }
                             } else {
@@ -5863,15 +5821,23 @@
                                 if (data.choices && data.choices[0]?.delta?.content) {
                                     accumulatedContent += data.choices[0].delta.content;
                                     if (onContentUpdate) {
+                                        // 1. 更新前检查位置
+                                        const container = document.getElementById('chatContainer');
+                                        const threshold = 100;
+                                        // 判断用户是否在查看历史消息（距离底部超过100px）
+                                        const shouldAutoScroll = container && (container.scrollHeight - container.scrollTop - container.clientHeight < threshold);
+
                                         onContentUpdate(accumulatedContent);
 
-                                        // Ensure scrolling happens after the final content update
-                                        setTimeout(() => {
-                                            const chatContainer = document.getElementById('chatContainer');
-                                            if (chatContainer) {
-                                                chatContainer.scrollTop = chatContainer.scrollHeight;
-                                            }
-                                        }, 10);
+                                        // 2. 仅在应该滚动时滚动
+                                        if (shouldAutoScroll) {
+                                            // 使用 requestAnimationFrame 替代 setTimeout 以获得更好的性能
+                                            requestAnimationFrame(() => {
+                                                if (container) {
+                                                    container.scrollTop = container.scrollHeight;
+                                                }
+                                            });
+                                        }
                                     }
                                 }
                             }
@@ -6066,31 +6032,17 @@
                 messageDiv.style.transform = 'translateY(0)';
             }, 10);
 
-            // Enhanced scrolling to ensure the new message is visible
+            // Smart scrolling to ensure the new message is visible only if user is at bottom
             setTimeout(() => {
-                // Force scroll to bottom using multiple methods to ensure compatibility
-                chatContainer.scrollTop = chatContainer.scrollHeight;
+                const threshold = 100;
+                const isUserAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < threshold;
 
-                // Additional method for ensuring scroll to bottom (especially for desktop)
-                chatContainer.scrollTo({
-                    top: chatContainer.scrollHeight,
-                    behavior: 'instant'  // Use instant for immediate scroll
-                });
-
-                // Additional check to ensure we're scrolled to the bottom
-                const isScrolledToBottom = chatContainer.scrollHeight - chatContainer.clientHeight <= chatContainer.scrollTop + 1;
-                if (!isScrolledToBottom) {
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                    // For desktop layouts, ensure container has proper height calculation
-                    // Force a reflow to recalculate dimensions
-                    chatContainer.style.height = chatContainer.scrollHeight + 'px';
-                    chatContainer.style.height = ''; // Reset to allow flex behavior
-
-                    // Final attempt to scroll to bottom after reflow
-                    setTimeout(() => {
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
-                    }, 50);
+                // Only scroll to bottom if user is already near the bottom
+                if (isUserAtBottom) {
+                    chatContainer.scrollTo({
+                        top: chatContainer.scrollHeight,
+                        behavior: 'instant' // Use instant to prevent smooth scroll delay
+                    });
                 }
             }, 10);
 
@@ -6222,31 +6174,17 @@
 
             chatContainer.appendChild(typingDiv);
 
-            // Enhanced scrolling to ensure the typing indicator is visible
+            // Smart scrolling to ensure the typing indicator is visible only if user is at bottom
             setTimeout(() => {
-                // Force scroll to bottom using multiple methods to ensure compatibility
-                chatContainer.scrollTop = chatContainer.scrollHeight;
+                const threshold = 100;
+                const isUserAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < threshold;
 
-                // Additional method for ensuring scroll to bottom (especially for desktop)
-                chatContainer.scrollTo({
-                    top: chatContainer.scrollHeight,
-                    behavior: 'instant'  // Use instant for immediate scroll
-                });
-
-                // Additional check to ensure we're scrolled to the bottom
-                const isScrolledToBottom = chatContainer.scrollHeight - chatContainer.clientHeight <= chatContainer.scrollTop + 1;
-                if (!isScrolledToBottom) {
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                    // For desktop layouts, ensure container has proper height calculation
-                    // Force a reflow to recalculate dimensions
-                    chatContainer.style.height = chatContainer.scrollHeight + 'px';
-                    chatContainer.style.height = ''; // Reset to allow flex behavior
-
-                    // Final attempt to scroll to bottom after reflow
-                    setTimeout(() => {
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
-                    }, 50);
+                // Only scroll to bottom if user is already near the bottom
+                if (isUserAtBottom) {
+                    chatContainer.scrollTo({
+                        top: chatContainer.scrollHeight,
+                        behavior: 'instant' // Use instant to prevent smooth scroll delay
+                    });
                 }
             }, 10);
         }
@@ -6281,31 +6219,17 @@
 
             chatContainer.appendChild(messageDiv);
 
-            // Enhanced scrolling to ensure the error message is visible
+            // Smart scrolling to ensure the error message is visible only if user is at bottom
             setTimeout(() => {
-                // Force scroll to bottom using multiple methods to ensure compatibility
-                chatContainer.scrollTop = chatContainer.scrollHeight;
+                const threshold = 100;
+                const isUserAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < threshold;
 
-                // Additional method for ensuring scroll to bottom (especially for desktop)
-                chatContainer.scrollTo({
-                    top: chatContainer.scrollHeight,
-                    behavior: 'instant'  // Use instant for immediate scroll
-                });
-
-                // Additional check to ensure we're scrolled to the bottom
-                const isScrolledToBottom = chatContainer.scrollHeight - chatContainer.clientHeight <= chatContainer.scrollTop + 1;
-                if (!isScrolledToBottom) {
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                    // For desktop layouts, ensure container has proper height calculation
-                    // Force a reflow to recalculate dimensions
-                    chatContainer.style.height = chatContainer.scrollHeight + 'px';
-                    chatContainer.style.height = ''; // Reset to allow flex behavior
-
-                    // Final attempt to scroll to bottom after reflow
-                    setTimeout(() => {
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
-                    }, 50);
+                // Only scroll to bottom if user is already near the bottom
+                if (isUserAtBottom) {
+                    chatContainer.scrollTo({
+                        top: chatContainer.scrollHeight,
+                        behavior: 'instant' // Use instant to prevent smooth scroll delay
+                    });
                 }
             }, 10);
         }
@@ -6726,7 +6650,7 @@
 
                 if (isProcessing) return; // 防止重复处理
 
-                // 添加小延迟确保选择完成
+                // ��加小延迟确保选择完成
                 setTimeout(() => {
                     const selection = window.getSelection();
                     const selectedText = selection.toString().trim();
@@ -6742,7 +6666,7 @@
                     const container = range.commonAncestorContainer;
                     const element = container.nodeType === 3 ? container.parentElement : container;
 
-                    // 检查：如果选中的文字是在侧边栏、标题栏、或任何输入框内，则不触发
+                    // 检查：如果选中的文字是在侧边栏、标题栏、或任何���������入框内，则不触发
                     const isInsideChat = element.closest('#chatContainer') || element.closest('.chat-container');
                     const isInsideInput = element.closest('input, textarea, .rename-input, .sidebar, .header, .history-item, .dropdown-option');
 
@@ -6938,33 +6862,19 @@
                                     code.classList.add('tokenized');
 
                                     // After syntax highlighting, the content height might change
-                                    // So we need to ensure we're still scrolled to the bottom
+                                    // So we need to ensure we're still scrolled to the bottom if user is there
                                     setTimeout(() => {
                                         const chatContainer = document.getElementById('chatContainer');
                                         if (chatContainer) {
-                                            // Enhanced scrolling for desktop compatibility
-                                            chatContainer.scrollTop = chatContainer.scrollHeight;
+                                            const threshold = 100;
+                                            const isUserAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < threshold;
 
-                                            // Additional method for ensuring scroll to bottom (especially for desktop)
-                                            chatContainer.scrollTo({
-                                                top: chatContainer.scrollHeight,
-                                                behavior: 'instant'  // Use instant for immediate scroll
-                                            });
-
-                                            // Additional check to ensure we're scrolled to the bottom
-                                            const isScrolledToBottom = chatContainer.scrollHeight - chatContainer.clientHeight <= chatContainer.scrollTop + 1;
-                                            if (!isScrolledToBottom) {
-                                                chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                                                // For desktop layouts, ensure container has proper height calculation
-                                                // Force a reflow to recalculate dimensions
-                                                chatContainer.style.height = chatContainer.scrollHeight + 'px';
-                                                chatContainer.style.height = ''; // Reset to allow flex behavior
-
-                                                // Final attempt to scroll to bottom after reflow
-                                                setTimeout(() => {
-                                                    chatContainer.scrollTop = chatContainer.scrollHeight;
-                                                }, 50);
+                                            // Only scroll to bottom if user is already near the bottom
+                                            if (isUserAtBottom) {
+                                                chatContainer.scrollTo({
+                                                    top: chatContainer.scrollHeight,
+                                                    behavior: 'instant'  // Use instant for immediate scroll
+                                                });
                                             }
                                         }
                                     }, 10);
@@ -7127,33 +7037,19 @@
                                 code.classList.add('tokenized');
 
                                 // After syntax highlighting, the content height might change
-                                // So we need to ensure we're still scrolled to the bottom
+                                // So we need to ensure we're still scrolled to the bottom if user is there
                                 setTimeout(() => {
                                     const chatContainer = document.getElementById('chatContainer');
                                     if (chatContainer) {
-                                        // Enhanced scrolling for desktop compatibility
-                                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                                        const threshold = 100;
+                                        const isUserAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < threshold;
 
-                                        // Additional method for ensuring scroll to bottom (especially for desktop)
-                                        chatContainer.scrollTo({
-                                            top: chatContainer.scrollHeight,
-                                            behavior: 'instant'  // Use instant for immediate scroll
-                                        });
-
-                                        // Additional check to ensure we're scrolled to the bottom
-                                        const isScrolledToBottom = chatContainer.scrollHeight - chatContainer.clientHeight <= chatContainer.scrollTop + 1;
-                                        if (!isScrolledToBottom) {
-                                            chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                                            // For desktop layouts, ensure container has proper height calculation
-                                            // Force a reflow to recalculate dimensions
-                                            chatContainer.style.height = chatContainer.scrollHeight + 'px';
-                                            chatContainer.style.height = ''; // Reset to allow flex behavior
-
-                                            // Final attempt to scroll to bottom after reflow
-                                            setTimeout(() => {
-                                                chatContainer.scrollTop = chatContainer.scrollHeight;
-                                            }, 50);
+                                        // Only scroll to bottom if user is already near the bottom
+                                        if (isUserAtBottom) {
+                                            chatContainer.scrollTo({
+                                                top: chatContainer.scrollHeight,
+                                                behavior: 'instant'  // Use instant for immediate scroll
+                                            });
                                         }
                                     }
                                 }, 10);
@@ -7168,34 +7064,20 @@
                 }
             });
 
-            // After adding all code blocks and elements, ensure the chat container is scrolled to the bottom
+            // After adding all code blocks and elements, smart scroll to bottom if user is there
             // This is important because adding buttons and language labels might change the height of the content
             setTimeout(() => {
                 const chatContainer = document.getElementById('chatContainer');
                 if (chatContainer) {
-                    // Enhanced scrolling for desktop compatibility
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                    const threshold = 100;
+                    const isUserAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < threshold;
 
-                    // Additional method for ensuring scroll to bottom (especially for desktop)
-                    chatContainer.scrollTo({
-                        top: chatContainer.scrollHeight,
-                        behavior: 'instant'  // Use instant for immediate scroll
-                    });
-
-                    // Additional check to ensure we're scrolled to the bottom
-                    const isScrolledToBottom = chatContainer.scrollHeight - chatContainer.clientHeight <= chatContainer.scrollTop + 1;
-                    if (!isScrolledToBottom) {
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                        // For desktop layouts, ensure container has proper height calculation
-                        // Force a reflow to recalculate dimensions
-                        chatContainer.style.height = chatContainer.scrollHeight + 'px';
-                        chatContainer.style.height = ''; // Reset to allow flex behavior
-
-                        // Final attempt to scroll to bottom after reflow
-                        setTimeout(() => {
-                            chatContainer.scrollTop = chatContainer.scrollHeight;
-                        }, 50);
+                    // Only scroll to bottom if user is already near the bottom
+                    if (isUserAtBottom) {
+                        chatContainer.scrollTo({
+                            top: chatContainer.scrollHeight,
+                            behavior: 'instant'  // Use instant for immediate scroll
+                        });
                     }
                 }
             }, 20);
@@ -7211,33 +7093,19 @@
                         codeElement.classList.add('tokenized'); // Mark as highlighted
 
                         // After syntax highlighting, the content height might change
-                        // So we need to ensure we're still scrolled to the bottom
+                        // So we need to ensure we're still scrolled to the bottom if user is there
                         setTimeout(() => {
                             const chatContainer = document.getElementById('chatContainer');
                             if (chatContainer) {
-                                // Enhanced scrolling for desktop compatibility
-                                chatContainer.scrollTop = chatContainer.scrollHeight;
+                                const threshold = 100;
+                                const isUserAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < threshold;
 
-                                // Additional method for ensuring scroll to bottom (especially for desktop)
-                                chatContainer.scrollTo({
-                                    top: chatContainer.scrollHeight,
-                                    behavior: 'instant'  // Use instant for immediate scroll
-                                });
-
-                                // Additional check to ensure we're scrolled to the bottom
-                                const isScrolledToBottom = chatContainer.scrollHeight - chatContainer.clientHeight <= chatContainer.scrollTop + 1;
-                                if (!isScrolledToBottom) {
-                                    chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                                    // For desktop layouts, ensure container has proper height calculation
-                                    // Force a reflow to recalculate dimensions
-                                    chatContainer.style.height = chatContainer.scrollHeight + 'px';
-                                    chatContainer.style.height = ''; // Reset to allow flex behavior
-
-                                    // Final attempt to scroll to bottom after reflow
-                                    setTimeout(() => {
-                                        chatContainer.scrollTop = chatContainer.scrollHeight;
-                                    }, 50);
+                                // Only scroll to bottom if user is already near the bottom
+                                if (isUserAtBottom) {
+                                    chatContainer.scrollTo({
+                                        top: chatContainer.scrollHeight,
+                                        behavior: 'instant'  // Use instant for immediate scroll
+                                    });
                                 }
                             }
                         }, 10);
