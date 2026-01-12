@@ -904,7 +904,8 @@
             weapons: [], selected: [], curIdx: 0,
             bullets: [], enemies: [], allies: [], particles: [], decor: [],
             isScoped: false, hp: 100, wave: 1, killCount: 0,
-            isPlaying: false
+            isPlaying: false,
+            rocketReticle: null
         };
 
         const WEAPONS = [
@@ -1053,6 +1054,27 @@
             }
 
             initDecorations();
+
+            // 火箭炮准星 (地面投影)
+            const reticleGeo = new THREE.RingGeometry(14.5, 15, 64);
+            reticleGeo.rotateX(-Math.PI / 2);
+            const reticleMat = new THREE.MeshBasicMaterial({
+                color: 0xff3300,
+                transparent: true,
+                opacity: 0.4,
+                side: THREE.DoubleSide
+            });
+            GAME.rocketReticle = new THREE.Mesh(reticleGeo, reticleMat);
+            GAME.rocketReticle.position.y = 0.1;
+            GAME.rocketReticle.visible = false;
+            GAME.scene.add(GAME.rocketReticle);
+
+            // 内部实心装饰圈
+            const innerReticle = new THREE.Mesh(
+                new THREE.CircleGeometry(2, 32).rotateX(-Math.PI / 2),
+                new THREE.MeshBasicMaterial({ color: 0xff3300, transparent: true, opacity: 0.2 })
+            );
+            GAME.rocketReticle.add(innerReticle);
 
             GAME.isPlaying = true;
             updateUI();
@@ -1243,6 +1265,30 @@
                         }
                     }
                 }
+            }
+
+            // --- 火箭炮地面落点预测 ---
+            if (wp.type === 'rocket' && GAME.isPlaying) {
+                const dir = new THREE.Vector3();
+                GAME.camera.getWorldDirection(dir);
+
+                if (dir.y < -0.01) { // 只有向下看时才显示
+                    const origin = GAME.camera.position;
+                    const t = -origin.y / dir.y;
+                    const impactPos = origin.clone().add(dir.multiplyScalar(t));
+
+                    GAME.rocketReticle.position.x = impactPos.x;
+                    GAME.rocketReticle.position.z = impactPos.z;
+                    GAME.rocketReticle.visible = true;
+                    // 让圈圈有微弱的旋转和缩放动画
+                    GAME.rocketReticle.rotation.y += dt;
+                    const s = 1 + Math.sin(now * 10) * 0.05;
+                    GAME.rocketReticle.scale.set(s, 1, s);
+                } else {
+                    GAME.rocketReticle.visible = false;
+                }
+            } else {
+                if (GAME.rocketReticle) GAME.rocketReticle.visible = false;
             }
 
             if (Math.random() < 0.015) spawnEnemy();
