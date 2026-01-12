@@ -1507,7 +1507,7 @@
             padding: 12px 70px 12px 10px;
             /* 进一步减少内边距 */
             /* Increased right padding to make space for token counter */
-            font-size: 14px;
+            font-size: 16px; /* 至少16px防止iOS缩放 */
             /* 减小字体 */
             line-height: 1.4;
             height: 64px;
@@ -1515,6 +1515,9 @@
             max-height: 240px;
             /* 最大高度翻倍 */
             outline: none;
+            /* 防止iOS Safari缩放 */
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
         }
 
         @media (max-width: 768px) {
@@ -1523,7 +1526,10 @@
                 /* 移动端高度翻倍 */
                 padding: 10px 70px 10px 10px;
                 /* 移动端内边距翻倍 */
-                font-size: 14px;
+                font-size: 16px; /* 至少16px防止iOS缩放 */
+                /* 防止iOS Safari缩放 */
+                -webkit-text-size-adjust: 100%;
+                text-size-adjust: 100%;
             }
         }
 
@@ -1563,6 +1569,31 @@
                 /* 移动端更小的按钮 */
                 height: 24px;
                 /* 移动端保持垂直居中 */
+                right: 6px; /* 确保在移动设备上有足够的右边距 */
+            }
+        }
+
+        /* 针对移动设备的输入区域优化 */
+        @media (max-width: 768px) {
+            .input-area {
+                padding: 2px 8px; /* 减少左右内边距以留出更多空间给按钮 */
+            }
+        }
+
+        /* 当输入框聚焦时的移动端样式优化 */
+        @media (max-width: 768px) {
+            body.input-focused .input-area {
+                padding: 2px 8px; /* 确保在聚焦时有足够的内边距 */
+            }
+
+            body.input-focused .send-btn {
+                width: 24px;
+                height: 24px;
+                right: 6px; /* 确保按钮在聚焦状态下也能完全显示 */
+            }
+
+            body.input-focused .chat-container {
+                padding-bottom: 20px; /* 增加底部内边距，为虚拟键盘留出空间 */
             }
         }
 
@@ -3665,6 +3696,37 @@
             });
         }
 
+        // Handle mobile input focus to prevent layout issues
+        document.addEventListener('focusin', function(e) {
+            if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') {
+                // On mobile devices, ensure proper layout when virtual keyboard appears
+                if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+                    // Add a class to body to indicate input is focused
+                    document.body.classList.add('input-focused');
+
+                    // Ensure the input area is visible
+                    setTimeout(() => {
+                        const inputArea = e.target.closest('.input-area');
+                        if (inputArea) {
+                            // Scroll the input area into view if needed
+                            inputArea.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'center'
+                            });
+                        }
+                    }, 300); // Delay to allow the virtual keyboard to appear
+                }
+            }
+        });
+
+        // Handle when input loses focus
+        document.addEventListener('focusout', function(e) {
+            if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') {
+                // Remove the class when input loses focus
+                document.body.classList.remove('input-focused');
+            }
+        });
+
         // Prevent auto focus mode from triggering when clicking on other parts of the interface
         document.addEventListener('click', function(e) {
             // Don't trigger auto focus mode when clicking on inputs, buttons, or other interactive elements
@@ -3693,7 +3755,7 @@
         document.addEventListener('focusin', function (e) {  // Use focusin instead of focus for bubbling
             if (e.target.tagName === 'TEXTAREA' && document.body.classList.contains('focus-mode')) {
                 disableAutoFocusMode();
-                pauseAutoFocusMode(5000); // Pause auto focus mode for 5 seconds after interaction
+                pauseAutoFocusMode(8000); // Pause auto focus mode for 8 seconds after interaction to prevent reactivation
                 e.stopPropagation(); // Prevent event bubbling
             }
         });
@@ -3702,7 +3764,7 @@
             // Only exit focus mode if clicking on textarea or input, not other parts of the interface
             if ((e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') && document.body.classList.contains('focus-mode')) {
                 disableAutoFocusMode();
-                pauseAutoFocusMode(5000); // Pause auto focus mode for 5 seconds after interaction
+                pauseAutoFocusMode(8000); // Pause auto focus mode for 8 seconds after interaction to prevent reactivation
                 e.stopPropagation(); // Prevent event bubbling
             }
         });
