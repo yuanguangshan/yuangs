@@ -1229,18 +1229,50 @@
                 }
             });
 
+            if (wp.type === 'rocket' && GAME.isPlaying) {
+                const ray = new THREE.Raycaster();
+                ray.setFromCamera(new THREE.Vector2(0, 0), GAME.camera);
+                const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+                const targetPoint = new THREE.Vector3();
+
+                // 计算准星在地面上的实际落点
+                if (ray.ray.intersectPlane(groundPlane, targetPoint)) {
+                    GAME.rocketReticle.position.copy(targetPoint);
+                    GAME.rocketReticle.position.y = 0.05;
+                    GAME.rocketReticle.visible = true;
+                    GAME.rocketReticle.rotation.y += dt;
+                    const s = 1 + Math.sin(now * 10) * 0.05;
+                    GAME.rocketReticle.scale.set(s, 1, s);
+                    // 保存落点供开火逻辑使用
+                    GAME.rocketTargetPoint = targetPoint.clone();
+                } else {
+                    GAME.rocketReticle.visible = false;
+                    GAME.rocketTargetPoint = null;
+                }
+            } else {
+                if (GAME.rocketReticle) GAME.rocketReticle.visible = false;
+            }
+
             const wp = GAME.weapons[GAME.curIdx];
             if (GAME.inputs.fire && now - wp.lastFire > wp.rate && wp.curAmmo > 0) {
                 wp.lastFire = now; wp.curAmmo--; updateUI();
 
                 const gunPos = GAME.player.position.clone().add(new THREE.Vector3(0, 1, 0));
-                const origin = GAME.isScoped ? GAME.camera.position.clone() : gunPos;
 
                 if (wp.type === 'rocket') {
                     const b = new THREE.Mesh(new THREE.SphereGeometry(0.3), new THREE.MeshBasicMaterial({ color: 'red' }));
                     b.position.copy(gunPos);
-                    const dir = new THREE.Vector3(); GAME.camera.getWorldDirection(dir);
-                    b.userData = { vel: dir.multiplyScalar(30), type: 'rocket' };
+
+                    // --- 修复偏差：让火箭弹从枪口飞向准星落点 ---
+                    let fireDir;
+                    if (GAME.rocketTargetPoint) {
+                        fireDir = GAME.rocketTargetPoint.clone().sub(gunPos).normalize();
+                    } else {
+                        fireDir = new THREE.Vector3();
+                        GAME.camera.getWorldDirection(fireDir);
+                    }
+
+                    b.userData = { vel: fireDir.multiplyScalar(35), type: 'rocket' };
                     GAME.scene.add(b); GAME.bullets.push(b);
                 } else {
                     const ray = new THREE.Raycaster();
@@ -1331,12 +1363,31 @@
             });
 
             for (let i = GAME.bullets.length - 1; i >= 0; i--) {
-                const b = GAME.bullets[i]; b.position.addScaledVector(b.userData.vel, dt);
-                if (b.userData.type === 'rocket' && b.position.y < 0) {
-                    createExplosion(b.position, 0xff5500);
-                    GAME.enemies.forEach(e => { if (e.position.distanceTo(b.position) < 15) e.userData.hp -= 30; });
-                    GAME.scene.remove(b); GAME.bullets.splice(i, 1);
-                } else if (b.position.distanceTo(GAME.player.position) > 100) {
+                const b = GAME.bullets[i];
+                b.position.addScaledVector(b.userData.vel, dt);
+
+                if (b.userData.type === 'rocket') {
+                    let exploded = false;
+                    // 地面碰撞
+                    if (b.position.y < 0) exploded = true;
+                    // 敌人直接碰撞
+                    if (!exploded) {
+                        for (let e of GAME.enemies) {
+                            if (b.position.distanceTo(e.position) < 1.5) {
+                                exploded = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (exploded) {
+                        createExplosion(b.position, 0xff5500);
+                        GAME.enemies.forEach(e => {
+                            if (e.position.distanceTo(b.position) < 15) e.userData.hp -= 35;
+                        });
+                        GAME.scene.remove(b); GAME.bullets.splice(i, 1);
+                    }
+                } else if (b.position.distanceTo(GAME.player.position) > 120) {
                     GAME.scene.remove(b); GAME.bullets.splice(i, 1);
                 }
             }
