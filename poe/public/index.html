@@ -6585,29 +6585,30 @@
 
         function deleteMessage(messageElement, role, content) {
             if (confirm('Are you sure you want to delete this message?')) {
-                // Get the timestamp of the message to be deleted
+                // 1. 获取要删除消息的时间戳
                 const timestamp = messageElement.dataset.timestamp;
 
-                // Remove the message element from the DOM
+                // 2. 从 DOM 中移除元素
                 messageElement.remove();
 
-                // Update the conversation in local storage
-                if (currentSession) {
-                    const conversations = JSON.parse(localStorage.getItem('conversations')) || {};
-                    if (conversations[currentSession]) {
-                        // Filter out the message with the matching timestamp
-                        conversations[currentSession].messages =
-                            conversations[currentSession].messages.filter(msg => msg.timestamp != timestamp);
+                // 3. 更新数据源
+                if (currentSession && conversations[currentSession]) {
+                    // 从全局变量中过滤掉该消息
+                    // 注意：这里使用 loose inequality (!=) 以兼容字符串和数字类型的时间戳
+                    conversations[currentSession].messages =
+                        conversations[currentSession].messages.filter(msg => msg.timestamp != timestamp);
 
-                        // Save the updated conversations back to localStorage
-                        localStorage.setItem('conversations', JSON.stringify(conversations));
-                    }
+                    // 4. 同步到 localStorage
+                    localStorage.setItem('conversations', JSON.stringify(conversations));
 
-                    // Also save the updated session to the backend to persist the deletion
-                    saveCurrentSession();
+                    console.log('Message deleted from localStorage');
+
+                    // 5. 尝试同步到后端（如果配置了）
+                    // 即使后端同步失败，本地数据也已经删除了
+                    saveCurrentSession().catch(err => console.warn('Backend sync failed but local delete ok', err));
                 }
 
-                // For temporary messages during streaming, also remove the typing indicator if it was the last message
+                // 如果删除的是最后一条正在生成的消息，移除输入指示器
                 if (messageElement.id === 'temp-assistant-message') {
                     removeTypingIndicator();
                 }
