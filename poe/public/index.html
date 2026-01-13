@@ -5635,6 +5635,8 @@
 
             // Store the model name in the dataset so finalize can use it
             messageDiv.dataset.model = modelName;
+            // 修复：必须设置时间戳，否则无法删除正在生成的临时消息
+            messageDiv.dataset.timestamp = Date.now().toString();
 
             const timeDiv = document.createElement('div');
             timeDiv.className = 'message-time breathing-text';
@@ -6668,14 +6670,15 @@
                 let url;
                 let method = 'DELETE';
 
-                // 优先使用数据库 ID 删除，这是最准确的
                 if (messageId) {
                     url = `/api/messages/${messageId}`;
                     console.log(`Attempting to delete message by ID: ${messageId}`);
                 } else {
-                    // 降级方案：使用 timestamp (为了兼容旧逻辑或未保存的消息)
-                    url = `/api/history/${sessionId}/messages/${timestamp}`;
-                    console.log(`Attempting to delete message by Timestamp: ${timestamp}`);
+                    // 降级方案：使用 timestamp
+                    // 确保传递的是纯数字字符串
+                    const ts = String(timestamp).replace(/\D/g, '');
+                    url = `/api/history/${sessionId}/messages/${ts}`;
+                    console.log(`Attempting to delete message by Timestamp: ${ts}`);
                 }
 
                 const response = await fetch(url, {
