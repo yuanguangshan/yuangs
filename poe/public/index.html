@@ -3416,6 +3416,10 @@
                     <i class="fas fa-plus"></i>
                     <span>New Chat</span>
                 </div>
+                <div class="dropdown-option" id="newAgentOption">
+                    <i class="fas fa-robot"></i>
+                    <span>New Agent Session</span>
+                </div>
                 <div class="dropdown-divider"></div>
                 <div class="dropdown-option">
                     <i class="fas fa-key"></i>
@@ -3927,6 +3931,20 @@
                 });
             }
 
+            // Add click listener for new agent option in dropdown
+            const newAgentOption = document.getElementById('newAgentOption');
+            if (newAgentOption) {
+                newAgentOption.addEventListener('click', function () {
+                    startNewAgentSession();
+                    newChatDropdown.classList.remove('show');
+                    // 点击新agent选项后，将按钮恢复为半透明
+                    const newChatBtn = document.getElementById('newChatBtn');
+                    if (newChatBtn) {
+                        newChatBtn.classList.remove('active');
+                    }
+                });
+            }
+
             // Add click listener for refresh button in dropdown
             const refreshButton = document.getElementById('refreshButton');
             if (refreshButton) {
@@ -4395,6 +4413,38 @@
             window.location.hash = currentSession;
 
             addToHistory(currentSession, 'New Chat', Date.now());
+
+            document.querySelectorAll('.history-item').forEach(item => {
+                item.classList.remove('active');
+            });
+        }
+
+        function startNewAgentSession() {
+            if (currentSession && !confirm('Start a new agent session? Current conversation will be saved.')) {
+                return;
+            }
+
+            if (currentSession) {
+                saveCurrentSession();
+            }
+
+            currentSession = 'agent_session_' + Date.now();
+            chatContainer.innerHTML = '';
+            userInput.value = '';
+            updateTokenCounter();
+
+            // 显示agent模式的欢迎信息
+            chatContainer.innerHTML = `
+                <div class="welcome-message">
+                    <h1>Agent Mode</h1>
+                    <p>You're now in Agent Mode. The AI assistant can use tools to help answer your questions.</p>
+                    <p>Try asking complex questions that might require research or calculations.</p>
+                </div>
+            `;
+
+            window.location.hash = currentSession;
+
+            addToHistory(currentSession, 'New Agent Session', Date.now());
 
             document.querySelectorAll('.history-item').forEach(item => {
                 item.classList.remove('active');
@@ -5428,6 +5478,9 @@
             try {
                 const messages = getRecentMessages(5);
 
+                // Check if current session is an agent session
+                const isAgentSession = currentSession && currentSession.startsWith('agent_session_');
+
                 // Always use streaming for better user experience
                 // Create temporary assistant message for streaming
                 createTemporaryAssistantMessage();
@@ -5443,7 +5496,7 @@
                     // Call the streaming API with a callback to update content
                     const response = await callPoeAPI(messages, modelSelector.value, (content) => {
                         updateTemporaryAssistantContent(content);
-                    }, abortController.signal);
+                    }, abortController.signal, isAgentSession);
 
                     // Finalize the message with the complete content
                     finalizeAssistantMessage(response, Date.now());
@@ -5934,7 +5987,7 @@
             addMessageToDOM('assistant', cleanedContent, null, timestamp, modelName);
         }
 
-        async function callPoeAPI(messages, model, onContentUpdate, signal = null) {
+        async function callPoeAPI(messages, model, onContentUpdate, signal = null, isAgentSession = false) {
             const apiBaseUrl = '';
             const shouldStream = typeof onContentUpdate === 'function';
 
@@ -5944,6 +5997,19 @@
             // Get the current account type from localStorage, default to 'free'
             const accountType = localStorage.getItem('accountType') || 'free';
 
+            // Prepare request body
+            const requestBody = {
+                model: model,
+                messages: messages,
+                temperature: 0.7,
+                stream: shouldStream
+            };
+
+            // If it's an agent session, add agent-specific parameters
+            if (isAgentSession) {
+                requestBody.agent_mode = true; // Indicate this is an agent request
+            }
+
             const response = await fetch(`${apiBaseUrl}/v1/chat/completions`, {
                 method: 'POST',
                 headers: {
@@ -5951,12 +6017,7 @@
                     'Authorization': `Bearer ${FRONTEND_API_KEY}`,
                     'X-Client-ID': 'poe-app'
                 },
-                body: JSON.stringify({
-                    model: model,
-                    messages: messages,
-                    temperature: 0.7,
-                    stream: shouldStream
-                }),
+                body: JSON.stringify(requestBody),
                 signal: signal
             });
 
