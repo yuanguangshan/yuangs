@@ -4870,76 +4870,89 @@
 
         async function deleteConversation(id) {
             if (confirm("Are you sure you want to delete this chat?")) {
-                try {
-                    await fetch(`/api/history/${id}`, { method: 'DELETE' });
-
-                    // Also remove from local storage
-                    const conversations = JSON.parse(localStorage.getItem('conversations')) || {};
+                // 1. 先从内存变量中删除
+                if (conversations[id]) {
                     delete conversations[id];
-                    localStorage.setItem('conversations', JSON.stringify(conversations));
-
-                    if (currentSession === id) {
-                        currentSession = null;
-                        chatContainer.innerHTML = '';
-                        window.location.hash = '';
-
-                        chatContainer.innerHTML = `
-                            <div class="welcome-message">
-                                <h1>Welcome to Poe API Interface</h1>
-                                <p>Ask anything and get responses from various AI models.</p>
-                                <p>Supports markdown rendering and history tracking (up to 5 messages).</p>
-                            </div>
-                        `;
-                    }
-
-                    loadHistory();
-                } catch (e) {
-                    console.error("Delete failed", e);
-                    alert("Failed to delete");
                 }
+
+                // 2. 从 localStorage 中删除 (这是关键修复)
+                try {
+                    const savedConversations = JSON.parse(localStorage.getItem('conversations')) || {};
+                    if (savedConversations[id]) {
+                        delete savedConversations[id];
+                        localStorage.setItem('conversations', JSON.stringify(savedConversations));
+                    }
+                } catch (e) {
+                    console.error("Error updating localStorage:", e);
+                }
+
+                // 3. 尝试调用后端 API (如果存在)
+                try {
+                    // 使用 fire-and-forget 方式，或者根据实际情况决定是否等待
+                    // 如果没有后端，这一步会失败，但不应影响本地删除
+                    await fetch(`/api/history/${id}`, { method: 'DELETE' });
+                } catch (e) {
+                    // 忽略 API 错误，因为我们已经处理了本地数据
+                    console.warn("API delete failed or API not available:", e);
+                }
+
+                // 4. 更新 UI
+                if (currentSession === id) {
+                    currentSession = null;
+                    chatContainer.innerHTML = '';
+                    window.location.hash = '';
+
+                    chatContainer.innerHTML = `
+                        <div class="welcome-message">
+                            <h1>Welcome to Poe API Interface</h1>
+                            <p>Ask anything and get responses from various AI models.</p>
+                            <p>Supports markdown rendering and history tracking (up to 5 messages).</p>
+                        </div>
+                    `;
+                }
+
+                loadHistory();
             }
         }
 
         function deleteHistoryItem(id) {
             if (confirm("Are you sure you want to delete this chat?")) {
+                // 1. 先从内存变量中删除
+                if (conversations[id]) {
+                    delete conversations[id];
+                }
+
+                // 2. 从 localStorage 中删除
                 try {
-                    fetch(`/api/history/${id}`, { method: 'DELETE' })
-                        .then(response => {
-                            if (!response.ok) {
-                                throw new Error(`HTTP error! status: ${response.status}`);
-                            }
-                            return response.json();
-                        })
-                        .then(() => {
-                            // Also remove from local storage
-                            const conversations = JSON.parse(localStorage.getItem('conversations')) || {};
-                            delete conversations[id];
-                            localStorage.setItem('conversations', JSON.stringify(conversations));
+                    const savedConversations = JSON.parse(localStorage.getItem('conversations')) || {};
+                    if (savedConversations[id]) {
+                        delete savedConversations[id];
+                        localStorage.setItem('conversations', JSON.stringify(savedConversations));
+                    }
+                } catch (e) {
+                    console.error("Error updating localStorage:", e);
+                }
 
-                            if (currentSession === id) {
-                                currentSession = null;
-                                chatContainer.innerHTML = '';
-                                window.location.hash = '';
+                // 3. 尝试 API 删除
+                fetch(`/api/history/${id}`, { method: 'DELETE' })
+                    .catch(e => console.warn("API delete failed:", e)) // 捕获错误但不阻止后续流程
+                    .finally(() => {
+                        // 4. 更新 UI
+                        if (currentSession === id) {
+                            currentSession = null;
+                            chatContainer.innerHTML = '';
+                            window.location.hash = '';
 
-                                chatContainer.innerHTML = `
+                            chatContainer.innerHTML = `
                                 <div class="welcome-message">
                                     <h1>Welcome to Poe API Interface</h1>
                                     <p>Ask anything and get responses from various AI models.</p>
                                     <p>Supports markdown rendering and history tracking (up to 5 messages).</p>
                                 </div>
                             `;
-                            }
-
-                            loadHistory(); // Refresh all history displays
-                        })
-                        .catch(error => {
-                            console.error("Delete failed", error);
-                            alert("Failed to delete");
-                        });
-                } catch (e) {
-                    console.error("Delete failed", e);
-                    alert("Failed to delete");
-                }
+                        }
+                        loadHistory(); // Refresh all history displays
+                    });
             }
         }
 
