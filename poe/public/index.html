@@ -4732,6 +4732,37 @@
             }, 100); // Small delay to ensure original listeners are attached first
         });
 
+        // Paste event listener for images
+        userInput.addEventListener('paste', async (e) => {
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            let hasImage = false;
+
+            for (const item of items) {
+                if (item.type.indexOf('image') !== -1) {
+                    e.preventDefault(); // Prevent pasting image filename/metadata
+                    hasImage = true;
+
+                    const file = item.getAsFile();
+                    const base64 = await readFileAsDataURL(file);
+
+                    // Generate a name for the pasted image
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                    const name = `pasted-image-${timestamp}.png`;
+
+                    pendingImages.push({
+                        name: name,
+                        data: base64
+                    });
+                }
+            }
+
+            if (hasImage) {
+                updateImagePreview();
+                updateSendButtonState(); // Enable send button if it was disabled
+                showToast('✓ 已从剪贴板粘贴图片');
+            }
+        });
+
         // Helper function to show toast message
         function showToast(message, duration = 2000) {
             const toast = document.createElement('div');
