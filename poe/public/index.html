@@ -467,6 +467,58 @@
             padding: 20px;
             background: linear-gradient(0deg, var(--background-dark) 40%, transparent 100%);
             position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .image-preview-container {
+            display: flex;
+            gap: 10px;
+            padding: 10px;
+            overflow-x: auto;
+            max-width: 800px;
+            width: 100%;
+            margin-bottom: 10px;
+            display: none;
+            /* Hidden by default */
+        }
+
+        .preview-item {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .preview-remove {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .preview-remove:hover {
+            background: #ff6b6b;
         }
 
         .input-wrapper {
@@ -3702,12 +3754,14 @@
         </div>
 
         <div class="input-container">
+            <div class="image-preview-container" id="imagePreviewContainer"></div>
             <div class="input-wrapper">
                 <button class="file-upload-btn" id="fileUploadButton" title="Upload Files">
                     <i class="fas fa-paperclip"></i>
                 </button>
                 <input type="file" id="fileInput" multiple
-                    accept=".txt,.md,.js,.py,.java,.cpp,.c,.html,.css,.json,.xml,.csv,.log" style="display: none;">
+                    accept=".txt,.md,.js,.py,.java,.cpp,.c,.html,.css,.json,.xml,.csv,.log,.jpg,.jpeg,.png,.gif,.webp"
+                    style="display: none;">
                 <button class="stop-btn" id="stopButton" style="display: none;">
                     <i class="fas fa-stop"></i>
                 </button>
@@ -3816,6 +3870,10 @@
         // Search state
         let searchMatches = [];
         let currentMatchIndex = -1;
+
+        // Image upload state
+        let pendingImages = [];
+        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
 
         // Initialize Web Speech API if supported
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -4535,6 +4593,144 @@
                 reader.readAsText(file);
             });
         }
+
+        // Helper function to read file as Data URL
+        function readFileAsDataURL(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    resolve(e.target.result);
+                };
+                reader.onerror = (e) => {
+                    reject(new Error(`Failed to read file: ${file.name}`));
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function updateImagePreview() {
+            if (!imagePreviewContainer) return;
+
+            imagePreviewContainer.innerHTML = '';
+
+            if (pendingImages.length > 0) {
+                imagePreviewContainer.style.display = 'flex';
+
+                pendingImages.forEach((img, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'preview-item';
+
+                    const imageEl = document.createElement('img');
+                    imageEl.src = img.data;
+                    item.appendChild(imageEl);
+
+                    const removeBtn = document.createElement('div');
+                    removeBtn.className = 'preview-remove';
+                    removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+                    removeBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        pendingImages.splice(index, 1);
+                        updateImagePreview();
+                    };
+                    item.appendChild(removeBtn);
+
+                    imagePreviewContainer.appendChild(item);
+                });
+            } else {
+                imagePreviewContainer.style.display = 'none';
+            }
+        }
+
+        // Re-initialize file upload logic to support images
+        // We use a self-executing function to replace the DOM elements and attach new listeners
+        // This effectively overrides the previous text-only implementation
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                const oldBtn = document.getElementById('fileUploadButton');
+                const oldInput = document.getElementById('fileInput');
+
+                if (oldBtn && oldInput) {
+                    const newBtn = oldBtn.cloneNode(true);
+                    const newInput = oldInput.cloneNode(true);
+
+                    oldBtn.parentNode.replaceChild(newBtn, oldBtn);
+                    oldInput.parentNode.replaceChild(newInput, oldInput);
+
+                    // Re-bind click
+                    newBtn.addEventListener('click', () => newInput.click());
+
+                    // Bind new change listener
+                    newInput.addEventListener('change', async (e) => {
+                        const files = Array.from(e.target.files);
+                        if (files.length === 0) return;
+
+                        try {
+                            let combinedContent = '';
+                            let textFileCount = 0;
+                            let imageFileCount = 0;
+
+                            for (const file of files) {
+                                const isImage = file.type.startsWith('image/');
+                                const sizeLimit = isImage ? 5 * 1024 * 1024 : 1 * 1024 * 1024;
+
+                                if (file.size > sizeLimit) {
+                                    alert(`文件 "${file.name}" 超过 ${isImage ? '5MB' : '1MB'}，已跳过`);
+                                    continue;
+                                }
+
+                                if (isImage) {
+                                    const base64 = await readFileAsDataURL(file);
+                                    pendingImages.push({
+                                        name: file.name,
+                                        data: base64
+                                    });
+                                    imageFileCount++;
+                                } else {
+                                    const content = await readFileContent(file);
+                                    if (content) {
+                                        if (combinedContent) {
+                                            combinedContent += '\n\n';
+                                        }
+                                        combinedContent += `=== ${file.name} ===\n${content}`;
+                                        textFileCount++;
+                                    }
+                                }
+                            }
+
+                            if (combinedContent) {
+                                const currentValue = userInput.value.trim();
+                                if (currentValue) {
+                                    userInput.value = currentValue + '\n\n' + combinedContent;
+                                } else {
+                                    userInput.value = combinedContent;
+                                }
+                                autoResizeTextarea();
+                            }
+
+                            if (imageFileCount > 0) {
+                                updateImagePreview();
+                            }
+
+                            updateTokenCounter();
+                            updateSendButtonState();
+
+                            const parts = [];
+                            if (textFileCount > 0) parts.push(`${textFileCount} 个文本`);
+                            if (imageFileCount > 0) parts.push(`${imageFileCount} 张图片`);
+
+                            if (parts.length > 0) {
+                                showToast(`✓ 成功添加 ${parts.join(' 和 ')}`);
+                            }
+                        } catch (error) {
+                            console.error('Error reading files:', error);
+                            alert('读取文件时出错: ' + error.message);
+                        } finally {
+                            newInput.value = '';
+                        }
+                    });
+                }
+            }, 100); // Small delay to ensure original listeners are attached first
+        });
 
         // Helper function to show toast message
         function showToast(message, duration = 2000) {
@@ -5787,7 +5983,18 @@
         }
 
         async function sendMessage() {
-            const message = userInput.value.trim();
+            let message = userInput.value.trim();
+
+            // Check if we have pending images
+            if (pendingImages.length > 0) {
+                const imageContent = pendingImages.map(img => `![${img.name}](${img.data})`).join('\n\n');
+                if (message) {
+                    message += '\n\n' + imageContent;
+                } else {
+                    message = imageContent;
+                }
+            }
+
             if (!message || sendButton.disabled) return;
 
             const timestamp = Date.now();
@@ -5795,6 +6002,11 @@
 
             userInput.value = '';
             userInput.style.height = 'auto'; // Reset height
+
+            // Clear images
+            pendingImages = [];
+            updateImagePreview();
+
             updateTokenCounter();
             updateSendButtonState();
 
