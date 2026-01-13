@@ -28,6 +28,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // 【新增修复】检查请求 URL 协议，跳过不支持的协议
+  const url = new URL(event.request.url);
+  if (!url.protocol.startsWith('http')) {
+    // 跳过非 HTTP/HTTPS 协议的请求（如 chrome-extension://, moz-extension:// 等）
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {
@@ -41,8 +48,12 @@ self.addEventListener('fetch', (event) => {
         const responseToCache = response.clone();
 
         caches.open(CACHE_NAME).then((cache) => {
-          // 这里不需要 waitUntil，让它异步执行即可，不阻塞返回给用户
-          cache.put(event.request, responseToCache);
+          // 检查请求 URL 协议，确保可以缓存
+          try {
+            cache.put(event.request, responseToCache);
+          } catch (error) {
+            console.warn('Failed to cache request:', event.request.url, error);
+          }
         });
 
         return response; // 总是返回网络数据
