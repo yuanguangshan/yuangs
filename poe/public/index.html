@@ -380,16 +380,125 @@
             }
         }
 
-        /* Sidebar Styles */
-        .sidebar {
-            width: 280px;
-            background: linear-gradient(180deg, var(--sidebar-bg) 0%, #1a1b1e 100%);
+        /* Header Optimization */
+        .header {
+            background: rgba(18, 18, 24, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 12px 20px;
             display: flex;
-            flex-direction: column;
-            height: 100%;
-            border-right: 1px solid var(--border-color);
-            z-index: 101;
-            box-shadow: var(--shadow-md);
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .model-selector-container {
+            position: relative;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 4px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: var(--transition);
+        }
+
+        .model-selector-container:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--primary-color);
+        }
+
+        #modelSelector {
+            background: transparent;
+            border: none;
+            color: var(--text-light);
+            font-size: 14px;
+            font-weight: 600;
+            padding-right: 20px;
+            cursor: pointer;
+            outline: none;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+
+        .model-selector-container::after {
+            content: '\f107';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            position: absolute;
+            right: 12px;
+            pointer-events: none;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Input Container Optimization */
+        .input-container {
+            padding: 20px;
+            background: linear-gradient(0deg, var(--background-dark) 40%, transparent 100%);
+            position: relative;
+        }
+
+        .input-wrapper {
+            max-width: 800px;
+            margin: 0 auto;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 8px 12px;
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
+            box-shadow: var(--shadow-lg);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .input-wrapper:focus-within {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px var(--primary-light);
+        }
+
+        #userInput {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-light);
+            font-size: 16px;
+            line-height: 1.5;
+            padding: 8px 12px;
+            resize: none;
+            max-height: 200px;
+            outline: none;
+        }
+
+        .send-btn {
+            width: 40px;
+            height: 40px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: var(--transition);
+            margin-bottom: 2px;
+        }
+
+        .send-btn:disabled {
+            background: #4a4a4a;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .send-btn:not(:disabled):hover {
+            background: var(--primary-hover);
+            transform: scale(1.05);
         }
 
         .logo-section {
@@ -3515,11 +3624,14 @@
                 </div>
             </div>
             <div class="header-right">
-                <select class="model-selector" id="modelSelector">
-                    <option value="GPT-4o-mini">GPT-4o-mini</option>
-                    <option value="GPT-4o">GPT-4o</option>
-                    <option value="Claude-3.5-Sonnet">Claude-3.5-Sonnet</option>
-                </select>
+                <div class="model-selector-container">
+                    <i class="fas fa-microchip" style="font-size: 12px; color: var(--primary-color);"></i>
+                    <select id="modelSelector">
+                        <option value="GPT-4o-mini">GPT-4o-mini</option>
+                        <option value="GPT-4o">GPT-4o</option>
+                        <option value="Claude-3.5-Sonnet">Claude-3.5-Sonnet</option>
+                    </select>
+                </div>
                 <div class="search-container">
                     <div class="focus-toggle" id="searchToggle" title="Search in Chat">
                         <i class="fas fa-search"></i>
@@ -3553,17 +3665,14 @@
         </div>
 
         <div class="input-container">
-            <div class="input-area">
-                <button class="stop-btn" id="stopButton">
-                    <i class="fas fa-stop-circle"></i> Stop Generating
+            <div class="input-wrapper">
+                <button class="stop-btn" id="stopButton" style="display: none;">
+                    <i class="fas fa-stop"></i>
                 </button>
-                <textarea id="userInput" placeholder="遇事不决问AI..."></textarea>
-                <button class="voice-btn" id="voiceButton" title="Voice Input">
-                    <i class="fas fa-microphone"></i>
-                </button>
+                <textarea id="userInput" rows="1" placeholder="遇事不决问AI..."></textarea>
                 <div class="token-counter" id="tokenCounter">0</div>
                 <button class="send-btn" id="sendButton">
-                    <i class="fas fa-paper-plane"></i>
+                    <i class="fas fa-arrow-up"></i>
                 </button>
             </div>
         </div>
@@ -3904,8 +4013,14 @@
                 }
             });
 
-            userInput.addEventListener('input', updateTokenCounter);
-            userInput.addEventListener('input', updateSendButtonState);
+            userInput.addEventListener('input', function() {
+                updateTokenCounter();
+                updateSendButtonState();
+                
+                // Auto-grow
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+            });
 
             // Update new chat button to toggle dropdown instead of starting new chat directly
             newChatBtn.addEventListener('click', function (event) {
@@ -5521,11 +5636,11 @@
 
             const timestamp = Date.now();
             addMessageToDOM('user', message, null, timestamp);
-            const userMessageElement = document.querySelectorAll('.message.user')[document.querySelectorAll('.message.user').length - 1];
-
+            
             userInput.value = '';
+            userInput.style.height = 'auto'; // Reset height
             updateTokenCounter();
-            updateSendButtonState(); // Update button state after clearing input
+            updateSendButtonState();
 
             showTypingIndicator();
 
