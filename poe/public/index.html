@@ -26,8 +26,12 @@
     <style>
         /* Prevent unwanted zooming on mobile devices */
         @media (max-width: 768px) {
-            textarea {
-                font-size: 15px !important;
+
+            textarea,
+            input[type="text"],
+            input[type="password"] {
+                font-size: 16px !important;
+                /* iOS defaults to zooming if font-size < 16px */
                 /* 略微减小字体大小 */
                 padding: 6px 70px 6px 10px;
                 /* 进一步减少内边距 */
@@ -366,10 +370,113 @@
                 height: 100vh;
             }
 
+            .sidebar {
+                width: 260px;
+                max-width: 380px;
+                min-width: 200px;
+                position: relative;
+                transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                border-right: 1px solid var(--border-color);
+                z-index: 101;
+            }
+
+            .sidebar.collapsed {
+                width: 60px;
+                min-width: 60px;
+            }
+
+            /* Toggle Button Styles */
+            .sidebar-toggle-btn {
+                position: absolute;
+                top: 50%;
+                right: -12px;
+                transform: translateY(-50%);
+                width: 24px;
+                height: 24px;
+                background: var(--sidebar-bg);
+                border: 1px solid var(--border-color);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                color: var(--text-muted);
+                z-index: 102;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                transition: transform 0.3s ease, color 0.2s, background 0.2s;
+            }
+
+            .sidebar-toggle-btn:hover {
+                color: var(--primary-color);
+                background: var(--input-bg);
+            }
+
+            .sidebar.collapsed .sidebar-toggle-btn {
+                transform: translateY(-50%) rotate(180deg);
+            }
+
+            /* Hide content when collapsed */
+            .sidebar.collapsed .logo span,
+            .sidebar.collapsed .new-chat-btn span,
+            .sidebar.collapsed .history-title,
+            .sidebar.collapsed .history-item .history-title,
+            .sidebar.collapsed .history-item .history-time,
+            .sidebar.collapsed .history-item .history-actions,
+            .sidebar.collapsed .user-profile span {
+                display: none !important;
+            }
+
+            .sidebar.collapsed .logo {
+                justify-content: center;
+                padding: 0;
+            }
+
+            .sidebar.collapsed .logo-section {
+                padding: 24px 0;
+                display: flex;
+                justify-content: center;
+            }
+
+            .sidebar.collapsed .new-chat-btn {
+                width: 40px;
+                height: 40px;
+                padding: 10px;
+                margin: 12px auto;
+                justify-content: center;
+                border-radius: 50%;
+            }
+
+            .sidebar.collapsed .new-chat-btn i {
+                margin: 0;
+            }
+
+            .sidebar.collapsed .history-item {
+                padding: 12px 0;
+                justify-content: center;
+                align-items: center;
+            }
+
+            .sidebar.collapsed .history-title-row {
+                justify-content: center;
+            }
+
+            .sidebar.collapsed .user-profile {
+                justify-content: center;
+                padding: 12px 0;
+            }
+
+            .sidebar.collapsed .user-profile i {
+                margin: 0;
+            }
+
             .main-content {
                 display: flex;
                 flex-direction: column;
                 height: 100vh;
+                flex: 1;
+                /* Ensure it takes remaining space */
+                min-width: 0;
+                /* Prevent flex overflow */
             }
 
             .chat-container {
@@ -3585,7 +3692,11 @@
     </div>
 
     <!-- Sidebar (hidden on mobile) -->
-    <div class="sidebar">
+    <div class="sidebar" id="sidebar">
+        <!-- Sidebar Toggle Button -->
+        <div class="sidebar-toggle-btn" id="sidebarToggle" title="Toggle Sidebar">
+            <i class="fas fa-chevron-left"></i>
+        </div>
         <div class="logo-section">
             <div class="logo" id="logoContainer" style="cursor: pointer;">
                 <i class="fas fa-robot"></i>
@@ -3837,6 +3948,41 @@
             const saveBtn = document.getElementById('saveApiKeyBtn');
             if (saveBtn) {
                 saveBtn.addEventListener('click', saveApiKey);
+            }
+
+            // Sidebar Toggle Logic
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+
+            if (sidebar && sidebarToggle) {
+                // Load saved state
+                const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+                if (isCollapsed) {
+                    sidebar.classList.add('collapsed');
+                    sidebarToggle.title = '展开侧边栏';
+                    sidebarToggle.querySelector('i').className = 'fas fa-chevron-right';
+                }
+
+                sidebarToggle.addEventListener('click', () => {
+                    sidebar.classList.toggle('collapsed');
+                    const nowCollapsed = sidebar.classList.contains('collapsed');
+
+                    // Save state
+                    localStorage.setItem('sidebarCollapsed', nowCollapsed);
+
+                    // Update toggle icon and title
+                    const icon = sidebarToggle.querySelector('i');
+                    if (nowCollapsed) {
+                        icon.className = 'fas fa-chevron-right';
+                        sidebarToggle.title = '展开侧边栏';
+                    } else {
+                        icon.className = 'fas fa-chevron-left';
+                        sidebarToggle.title = '收起侧边栏';
+                    }
+
+                    // Trigger resize to fix layout of any dynamic components
+                    window.dispatchEvent(new Event('resize'));
+                });
             }
         });
 
