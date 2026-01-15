@@ -355,8 +355,8 @@
 
         /* Additional PWA standalone mode adjustments */
         body.pwa-standalone .main-content {
-            height: 100dvh;
-            min-height: 100dvh;
+            height: calc(var(--vh, 1vh) * 100);
+            min-height: calc(var(--vh, 1vh) * 100);
         }
 
         body.pwa-standalone .chat-container {
@@ -7593,20 +7593,29 @@
         // Prevent mobile browser from scrolling the body when input is focused,
         // which often pushes the fixed/flex header/input out of view.
         if ('ontouchstart' in window) {
+            // Removed aggressive scrollTo(0,0) to allow PWA input handling to work naturally
             window.addEventListener('scroll', () => {
-                if (document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'INPUT') {
-                    if (window.scrollY !== 0) {
-                        window.scrollTo(0, 0);
-                    }
+                // Only reset if we're not typing and it's a significant unintentional scroll
+                if (window.scrollY > 20 && !(document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'INPUT')) {
+                    window.scrollTo(0, 0);
                 }
             }, { passive: true });
 
             // Handle visualViewport resize for a smoother experience
             if (window.visualViewport) {
-                window.visualViewport.addEventListener('resize', setMobileViewportHeight);
+                window.visualViewport.addEventListener('resize', () => {
+                    setMobileViewportHeight();
+                    // Ensure input is visible when keyboard opens
+                    if (document.activeElement && (document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'INPUT')) {
+                        setTimeout(() => {
+                            document.activeElement.scrollIntoView({ block: 'nearest' });
+                        }, 100);
+                    }
+                });
                 window.visualViewport.addEventListener('scroll', () => {
-                    // Keep the page at the top within the visual viewport
-                    if (window.scrollY !== 0) window.scrollTo(0, 0);
+                    if (window.scrollY > 0 && !(document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'INPUT')) {
+                        window.scrollTo(0, 0);
+                    }
                 });
             }
         }
@@ -7623,7 +7632,10 @@
             if (userInput) {
                 userInput.addEventListener('focus', () => {
                     // Small delay to ensure the keyboard has started opening
-                    setTimeout(setMobileViewportHeight, 300);
+                    setTimeout(() => {
+                        setMobileViewportHeight();
+                        userInput.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                    }, 300);
                 });
 
                 userInput.addEventListener('blur', () => {
