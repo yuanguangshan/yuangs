@@ -572,9 +572,9 @@
 
         /* Input Container Optimization */
         .input-container {
-            padding: 20px;
+            padding: 8px 20px;
+            /* 从 20px 减小到 8px */
             background: rgba(18, 18, 24, 0.4);
-            /* Glass background instead of gradient */
             backdrop-filter: blur(12px) saturate(180%);
             -webkit-backdrop-filter: blur(12px) saturate(180%);
             border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -639,7 +639,8 @@
             background: var(--input-bg);
             border: 1px solid var(--border-color);
             border-radius: 24px;
-            padding: 4px 12px;
+            padding: 2px 8px;
+            /* 从 4px 12px 减小 */
             display: flex;
             align-items: center;
             /* Changed from flex-end to center */
@@ -661,10 +662,13 @@
             border: none;
             color: var(--text-light);
             font-size: 16px;
-            line-height: 1.5;
-            padding: 8px 12px;
+            line-height: 1.4;
+            /* 从 1.5 减小 */
+            padding: 6px 10px;
+            /* 从 8px 12px 减小 */
             resize: none;
-            max-height: 200px;
+            max-height: 150px;
+            /* 从 200px 减小 */
             outline: none;
         }
 
@@ -3107,9 +3111,9 @@
             }
 
             .input-container {
-                padding: 4px 6px;
+                padding: 4px 6px !important;
                 /* 进一步减少输入容器内边距 */
-                padding-bottom: env(safe-area-inset-bottom, 2px);
+                padding-bottom: env(safe-area-inset-bottom, 2px) !important;
                 margin-top: auto;
                 flex-shrink: 0;
             }
@@ -7567,21 +7571,43 @@
 
         // Handle mobile viewport height issues
         function setMobileViewportHeight() {
-            // Use the real viewport height to avoid issues with mobile browser UI
-            const vh = window.innerHeight * 0.01;
+            // Use visualViewport if available as it accurately reflects the usable area when keyboard is open
+            const viewport = window.visualViewport;
+            const height = viewport ? viewport.height : window.innerHeight;
+            const vh = height * 0.01;
             document.documentElement.style.setProperty('--vh', `${vh}px`);
 
             // On mobile, adjust main content height to account for dynamic viewport changes
             if (window.innerWidth <= 768) {
                 const mainContent = document.querySelector('.main-content');
-
                 if (mainContent) {
-                    // With flex layout, we just need to ensure the main container has the right height
-                    mainContent.style.height = '100vh';
+                    // Use the calculated --vh instead of 100vh to ensure it fits the visible area
+                    mainContent.style.height = `calc(var(--vh, 1vh) * 100)`;
                 }
 
-                // Since we're using flex layout, we don't need to manually set chat container height
-                // The flex: 1 property will handle it automatically
+                // Set body height too to be safe
+                document.body.style.height = `calc(var(--vh, 1vh) * 100)`;
+            }
+        }
+
+        // Prevent mobile browser from scrolling the body when input is focused,
+        // which often pushes the fixed/flex header/input out of view.
+        if ('ontouchstart' in window) {
+            window.addEventListener('scroll', () => {
+                if (document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'INPUT') {
+                    if (window.scrollY !== 0) {
+                        window.scrollTo(0, 0);
+                    }
+                }
+            }, { passive: true });
+
+            // Handle visualViewport resize for a smoother experience
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', setMobileViewportHeight);
+                window.visualViewport.addEventListener('scroll', () => {
+                    // Keep the page at the top within the visual viewport
+                    if (window.scrollY !== 0) window.scrollTo(0, 0);
+                });
             }
         }
 
