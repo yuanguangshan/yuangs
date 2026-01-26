@@ -94,14 +94,19 @@ var index_default = {
             const processMessageContent = (fullContent: string): ProcessedContent => {
               const lines = fullContent.split('\n');
               const lineCount = lines.length;
+              const isLarge = lineCount > 500; // 超过 500 行定义为大文件
               
-              // Only save first 1000 lines if content is too large
-              const contentToSave = lineCount > 1000 ? lines.slice(0, 1000).join('\n') : fullContent;
+              let contentToSave = fullContent;
+              if (isLarge) {
+                const first100 = lines.slice(0, 100).join('\n');
+                const last100 = lines.slice(-100).join('\n');
+                contentToSave = `${first100}\n\n... [中间 ${lineCount - 200} 行已省略] ...\n\n${last100}`;
+              }
               
               return {
                 content: contentToSave,
                 lineCount: lineCount,
-                isLargeFile: lineCount > 1000,
+                isLargeFile: isLarge,
                 fileSize: new Blob([fullContent]).size
               };
             };
@@ -113,22 +118,16 @@ var index_default = {
               );
 
               for (const msg of data.messages) {
-                // 1. 获取 HTML 内容 (msg.content) 和 Markdown 源码 (msg.rawContent)
                 const htmlContent = msg.content || "";
                 const markdownContent = msg.rawContent || msg.content || "";
-                
-                // 2. 处理内容（行数统计、大文件判断基于 Markdown）
                 const contentInfo = processMessageContent(markdownContent);
 
                 let r2Key = null;
-                // ✨ Support: 大文件上传到 R2
                 if (contentInfo.isLargeFile && env.R2_BUCKET) {
                   r2Key = `ai/${data.id}/${msg.timestamp || Date.now()}.txt`;
                   try {
                     await env.R2_BUCKET.put(r2Key, markdownContent, {
-                      httpMetadata: {
-                        contentType: "text/plain; charset=utf-8",
-                      },
+                      httpMetadata: { contentType: "text/plain; charset=utf-8" },
                       customMetadata: {
                         conversation_id: data.id,
                         role: msg.role,
@@ -140,19 +139,28 @@ var index_default = {
                   }
                 }
 
-                // 3. 安全处理：如果 HTML 依然非常巨大（超过 200KB），进行截断以防止 SQLITE_TOOBIG
-                let safeHtml = htmlContent;
-                if (htmlContent.length > 200000) {
+                // 3. 构建预览内容 (针对大文件优化)
+                let finalHtml = htmlContent;
+                if (contentInfo.isLargeFile) {
                    const fileUrl = r2Key ? `/api/files/${r2Key}` : "#";
-                   const linkText = r2Key ? `<a href='${fileUrl}' target='_blank' style='color: #10a37f; font-weight: bold; text-decoration: underline;'>点此查看完整内容</a>` : "请联系管理员";
-                   safeHtml = htmlContent.substring(0, 200000) + `\n\n<div class='system-note' style='margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.05); border-radius: 4px; border-left: 4px solid #10a37f;'>[内容过长，HTML 预览已截断。${linkText}已存入 R2 存储]</div>`;
+                   const link = `<a href='${fileUrl}' target='_blank' style='color: #10a37f; font-weight: bold; text-decoration: underline; margin: 0 4px;'>点此查看</a>`;
+                   
+                   finalHtml = `
+<div class='large-file-preview' style='border: 1px solid rgba(16,163,127,0.2); border-radius: 8px; overflow: hidden; margin: 10px 0; background: rgba(255,255,255,0.05);'>
+  <div style='background: rgba(16,163,127,0.1); padding: 8px 12px; font-size: 0.9em; border-bottom: 1px solid rgba(16,163,127,0.1); color: var(--text-color);'>
+    📄 <b>【大文件】</b>：完整内容${link}查看
+  </div>
+  <pre style='margin: 0; padding: 12px; font-size: 0.85em; max-height: 400px; overflow-y: auto; background: transparent; color: var(--text-color); white-space: pre-wrap; font-family: monospace;'><code>${contentInfo.content}</code></pre>
+  <div style='background: rgba(16,163,127,0.05); padding: 8px 12px; font-size: 0.85em; text-align: right; border-top: 1px solid rgba(16,163,127,0.1); color: var(--text-muted);'>
+    内容由于过长已折叠，${link}查看完整结果
+  </div>
+</div>`;
                 }
 
-                // 4. 绑定字段：content 存 HTML，raw_content 存 Markdown
                 batch.push(stmt.bind(
                   data.id,
                   msg.role,
-                  safeHtml, // 存入安全长度的 HTML
+                  finalHtml, 
                   r2Key ? `[Content moved to R2 Storage: ${r2Key}]` : markdownContent,
                   msg.timestamp || timestamp,
                   msg.model || null,
@@ -298,7 +306,7 @@ var index_default = {
           const headers = new Headers();
           object.writeHttpMetadata(headers);
           headers.set("Access-Control-Allow-Origin", "*");
-          headers.set("Content-Type", "text/plain; charset=utf-8"); // 强制 UTF-8 解决乱码
+          headers.set("Content-Type", "text/plain; charset=utf-8");
           
           return new Response(object.body, { headers });
         } catch (e) {
