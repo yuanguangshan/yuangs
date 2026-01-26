@@ -15,6 +15,11 @@ CREATE TABLE messages (
     raw_content TEXT,
     timestamp INTEGER,
     model TEXT,
+    is_large_file BOOLEAN DEFAULT 0,
+    ai_summary TEXT,
+    file_original_size INTEGER,
+    line_count INTEGER DEFAULT 0,
+    r2_key TEXT,
     FOREIGN KEY(conversation_id) REFERENCES conversations(id),
     UNIQUE(conversation_id, role, timestamp)
 );

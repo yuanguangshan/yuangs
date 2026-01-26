@@ -3693,6 +3693,41 @@
         .dropdown-option .api-key-input-wrapper {
             margin-left: auto;
         }
+        
+        /* 展开文件按钮样式 */
+        .expand-file-btn {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: rgba(16, 163, 127, 0.1);
+            border: 1px solid rgba(16, 163, 127, 0.2);
+            border-radius: 6px;
+            color: var(--primary-color);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            margin: 4px 0;
+        }
+
+        .expand-file-btn:hover:not(:disabled) {
+            background: rgba(16, 163, 127, 0.2);
+            border-color: var(--primary-color);
+            transform: translateY(-1px);
+        }
+
+        .expand-file-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .expand-file-btn.expanded {
+            background: rgba(16, 163, 127, 0.05);
+            border-color: rgba(16, 163, 127, 0.1);
+        }
     </style>
 </head>
 
@@ -4513,21 +4548,42 @@
                     try {
                         let combinedContent = '';
                         let fileCount = 0;
+                        let hasLargeFile = false;
+                        let totalLines = 0;
 
                         for (const file of files) {
-                            // Check file size (limit to 1MB per file)
-                            if (file.size > 1024 * 1024) {
-                                alert(`文件 "${file.name}" 超过 1MB，已跳过`);
+                            // Check file size (limit to 5MB per file)
+                            const sizeLimit = 5 * 1024 * 1024;
+                            if (file.size > sizeLimit) {
+                                alert(`文件 "${file.name}" 超过 5MB，已跳过`);
                                 continue;
                             }
 
                             const content = await readFileContent(file);
                             if (content) {
-                                // Add file separator with filename
-                                if (combinedContent) {
-                                    combinedContent += '\n\n';
+                                // Count lines in this file
+                                const lines = content.split('\n');
+                                const lineCount = lines.length;
+                                totalLines += lineCount;
+
+                                // Check if this is a large file (over 1000 lines)
+                                if (lineCount > 1000) {
+                                    hasLargeFile = true;
+                                    
+                                    // Truncate to first 1000 lines for storage
+                                    const truncatedContent = lines.slice(0, 1000).join('\n');
+                                    
+                                    if (combinedContent) {
+                                        combinedContent += '\n\n';
+                                    }
+                                    combinedContent += `=== ${file.name} ===\n${truncatedContent}\n\n[文件已截断：原始${lineCount}行，已保存前1000行]\n`;
+                                } else {
+                                    // Regular file, save all content
+                                    if (combinedContent) {
+                                        combinedContent += '\n\n';
+                                    }
+                                    combinedContent += `=== ${file.name} ===\n${content}`;
                                 }
-                                combinedContent += `=== ${file.name} ===\n${content}`;
                                 fileCount++;
                             }
                         }
@@ -4546,8 +4602,18 @@
                             updateSendButtonState();
                             autoResizeTextarea();
 
-                            // Show success message
-                            showToast(`✓ 成功上传 ${fileCount} 个文件`);
+                            // Show appropriate message based on file processing result
+                            if (hasLargeFile) {
+                                // Show detailed info about large files
+                                const fileSizeKB = (new Blob([combinedContent]).size / 1024).toFixed(2);
+                                showToast(`📤 检测到大文件（超过1000行）\n   ✓ 已保存前1000行到数据库\n   📊 原始文件：${totalLines}行，${fileSizeKB}KB\n   💡 建议：查看完整内容时，可从AI摘要中了解关键信息`, 5000);
+                                
+                                // Also log to console for debugging
+                                console.log(`Large file detected: ${totalLines} lines total, ${fileCount} file(s), ${fileSizeKB}KB`);
+                            } else if (fileCount > 0) {
+                                // Regular file upload
+                                showToast(`✓ 成功上传 ${fileCount} 个文件`);
+                            }
                         }
                     } catch (error) {
                         console.error('Error reading files:', error);
@@ -4779,6 +4845,83 @@
             });
         }
 
+        // 添加展开文件按钮点击事件监听器
+        document.addEventListener('click', async function (e) {
+            const expandBtn = e.target.closest('.expand-file-btn');
+            if (expandBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const filename = decodeURIComponent(expandBtn.dataset.filename);
+                const r2Url = decodeURIComponent(expandBtn.dataset.r2Url);
+                
+                try {
+                    // 显示加载状态
+                    expandBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 正在从R2加载...';
+                    expandBtn.disabled = true;
+                    
+                    // 从R2加载完整内容
+                    const response = await fetch(r2Url);
+                    if (!response.ok) {
+                        throw new Error(`Failed to load file from R2: ${response.status}`);
+                    }
+                    
+                    const fullContent = await response.text();
+                    
+                    // 找到对应的消息元素
+                    const messageElement = expandBtn.closest('.message');
+                    if (messageElement) {
+                        const contentDiv = messageElement.querySelector('.content');
+                        const currentRaw = contentDiv.dataset.raw || '';
+                        
+                        // 替换截断内容为完整内容
+                        const updatedRaw = currentRaw.replace(
+                            /\[文件已保存到R2存储（\d+行）-.*点击从R2加载完整内容.*\]\n/g,
+                            `=== ${filename} ===\n${fullContent}\n\n[✓ 已从R2加载完整文件]\n`
+                        );
+                        
+                        // 更新DOM
+                        contentDiv.dataset.raw = updatedRaw;
+                        contentDiv.innerHTML = marked.parse(updatedRaw);
+                        
+                        // 添加语法高亮
+                        if (typeof Prism !== 'undefined') {
+                            contentDiv.querySelectorAll('pre code').forEach((block) => {
+                                if (!block.classList.contains('tokenized')) {
+                                    try {
+                                        Prism.highlightElement(block);
+                                        block.classList.add('tokenized');
+                                    } catch (e) {
+                                        console.warn('Prism highlighting error:', e);
+                                    }
+                                }
+                            });
+                        }
+                        
+                        // 更新展开按钮
+                        expandBtn.innerHTML = '✓ 已展开';
+                        expandBtn.className = 'expand-file-btn expanded';
+                        expandBtn.disabled = true;
+                        expandBtn.style.cursor = 'default';
+                        expandBtn.style.color = 'var(--primary-color)';
+                        
+                        // 智能滚动到消息
+                        const chatContainer = document.getElementById('chatContainer');
+                        if (chatContainer) {
+                            messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }
+                    
+                    showToast(`✓ 已从R2加载完整文件：${filename}`, 2000);
+                } catch (error) {
+                    console.error('Error expanding file:', error);
+                    expandBtn.innerHTML = '❌ 加载失败';
+                    expandBtn.disabled = false;
+                    showToast(`❌ 从R2加载文件失败: ${error.message}`, 3000);
+                }
+            }
+        });
+
         function updateImagePreview() {
             if (!imagePreviewContainer) return;
 
@@ -4842,10 +4985,10 @@
 
                             for (const file of files) {
                                 const isImage = file.type.startsWith('image/');
-                                const sizeLimit = isImage ? 5 * 1024 * 1024 : 1 * 1024 * 1024;
+                                const sizeLimit = 5 * 1024 * 1024;
 
                                 if (file.size > sizeLimit) {
-                                    alert(`文件 "${file.name}" 超过 ${isImage ? '5MB' : '1MB'}，已跳过`);
+                                    alert(`文件 "${file.name}" 超过 5MB，已跳过`);
                                     continue;
                                 }
 

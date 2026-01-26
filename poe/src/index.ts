@@ -1,5 +1,34 @@
-var __defProp = Object.defineProperty;
-var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+// Type definitions
+interface Message {
+  role: string;
+  content?: string;
+  rawContent?: string;
+  timestamp?: number;
+  model?: string;
+}
+
+interface ConversationData {
+  id: string;
+  title: string;
+  model: string;
+  timestamp: number;
+  messages?: Message[];
+}
+
+interface FileUploadData {
+  id: string;
+  title?: string;
+  model?: string;
+  timestamp?: number;
+  messages?: Message[];
+}
+
+interface ProcessedContent {
+  content: string;
+  lineCount: number;
+  isLargeFile: boolean;
+  fileSize: number;
+}
 
 // src/index.ts
 var corsHeaders = {
@@ -9,15 +38,15 @@ var corsHeaders = {
   "Access-Control-Max-Age": "86400"
 };
 
-var jsonResponse = /* @__PURE__ */ __name((data, status = 200, extraHeaders = {}) => {
+var jsonResponse = /* @__PURE__ */ function(data: unknown, status = 200, extraHeaders: Record<string, string> = {}) {
   return new Response(JSON.stringify(data), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json", ...extraHeaders }
   });
-}, "jsonResponse");
+};
 
 var index_default = {
-  async fetch(request, env, ctx) {
+  async fetch(request: Request, env: any) {
     const url = new URL(request.url);
     const { pathname } = url;
 
@@ -38,20 +67,20 @@ var index_default = {
       if (pathname.replace(/\/$/, "") === "/api/history") {
         try {
           if (request.method === "GET") {
-            const { results } = await env.DB.prepare(
+            const results = await env.DB.prepare(
               "SELECT id, title, model, created_at FROM conversations ORDER BY created_at DESC LIMIT 50"
             ).all();
             return jsonResponse(
-              results.map((c) => ({ ...c, timestamp: c.created_at })),
+              (results.results || []).map((c: any) => ({ ...c, timestamp: c.created_at })),
               200,
               { "Cache-Control": "public, max-age=5" }
             );
           }
           if (request.method === "POST") {
-            const data = await request.json();
+            const data = await request.json() as ConversationData;
             if (!data.id) return jsonResponse({ error: "Missing ID" }, 400);
             
-            const batch = [];
+            const batch: any[] = [];
             const timestamp = data.timestamp || Date.now();
             
             // Upsert conversation metadata
@@ -61,18 +90,70 @@ var index_default = {
               ).bind(data.id, data.title || "New Chat", data.model || "GPT-4o-mini", timestamp)
             );
 
-            // Batch insert messages (INSERT OR IGNORE to prevent duplicates)
+            // Helper function to count lines and get first 1000 lines
+            const processMessageContent = (fullContent: string): ProcessedContent => {
+              const lines = fullContent.split('\n');
+              const lineCount = lines.length;
+              
+              // Only save first 1000 lines if content is too large
+              const contentToSave = lineCount > 1000 ? lines.slice(0, 1000).join('\n') : fullContent;
+              
+              return {
+                content: contentToSave,
+                lineCount: lineCount,
+                isLargeFile: lineCount > 1000,
+                fileSize: new Blob([fullContent]).size
+              };
+            };
+            
+            // Batch insert messages with line count optimization
             if (data.messages && Array.isArray(data.messages)) {
-              const stmt = env.DB.prepare("INSERT OR IGNORE INTO messages (conversation_id, role, content, raw_content, timestamp, model) VALUES (?, ?, ?, ?, ?, ?)");
-              data.messages.forEach((msg) => {
-                batch.push(stmt.bind(data.id, msg.role, msg.content, msg.rawContent || "", msg.timestamp || timestamp, msg.model || null));
-              });
+              const stmt = env.DB.prepare(
+                "INSERT INTO messages (conversation_id, role, content, raw_content, timestamp, model, is_large_file, ai_summary, file_original_size, line_count, r2_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+              );
+
+              for (const msg of data.messages) {
+                // Process content to get line count and truncate if needed
+                const contentToProcess = msg.rawContent || msg.content || "";
+                const contentInfo = processMessageContent(contentToProcess);
+
+                let r2Key = null;
+                // ✨ Support: Upload large files/code to R2 if bucket is bound
+                if (contentInfo.isLargeFile && env.R2_BUCKET) {
+                  r2Key = `chats/${data.id}/${msg.timestamp || Date.now()}.txt`;
+                  try {
+                    await env.R2_BUCKET.put(r2Key, contentToProcess, {
+                      customMetadata: {
+                        conversation_id: data.id,
+                        role: msg.role,
+                        size: contentInfo.fileSize.toString()
+                      }
+                    });
+                  } catch (r2Err) {
+                    console.error("R2 upload error:", r2Err);
+                  }
+                }
+
+                batch.push(stmt.bind(
+                  data.id,
+                  msg.role,
+                  contentInfo.content,
+                  r2Key ? `[Content moved to R2 Storage: ${r2Key}]` : contentToProcess,
+                  msg.timestamp || timestamp,
+                  msg.model || null,
+                  contentInfo.isLargeFile ? 1 : 0,
+                  null, // ai_summary placeholder
+                  contentInfo.fileSize,
+                  contentInfo.lineCount,
+                  r2Key
+                ));
+              }
             }
             
             await env.DB.batch(batch);
             return jsonResponse({ success: true });
           }
-        } catch (e) {
+        } catch (e: any) {
           return jsonResponse({ error: `DB Error: ${e}` }, 500);
         }
       }
@@ -80,7 +161,7 @@ var index_default = {
       // 2. Specific Message Deletion by Database ID (Most Reliable)
       if (pathname.match(/^\/api\/messages\/\d+$/)) {
         if (request.method === "DELETE") {
-          const messageId = pathname.split("/").pop();
+          const messageId = pathname.split("/").pop() || "";
           try {
             const result = await env.DB.prepare(
               "DELETE FROM messages WHERE id = ?"
@@ -91,7 +172,7 @@ var index_default = {
             } else {
               return jsonResponse({ error: "Database error during deletion" }, 500);
             }
-          } catch (e) {
+          } catch (e: any) {
             return jsonResponse({ error: `Delete Message Error: ${e}` }, 500);
           }
         }
@@ -102,9 +183,9 @@ var index_default = {
         if (request.method === "DELETE") {
           try {
             const parts = pathname.split("/");
-            const timestampStr = parts.pop();
+            const timestampStr = parts.pop() || "0";
             parts.pop(); // remove 'messages'
-            const conversationId = parts.pop();
+            const conversationId = parts.pop() || "";
             
             // 修复：显式转换为 BigInt/Number 以确保与 DB 中的 INTEGER 类型匹配
             const timestamp = parseInt(timestampStr);
@@ -118,7 +199,7 @@ var index_default = {
             } else {
               return jsonResponse({ error: "Database error during deletion" }, 500);
             }
-          } catch (e) {
+          } catch (e: any) {
             return jsonResponse({ error: `Delete Message Error: ${e}` }, 500);
           }
         }
@@ -126,7 +207,7 @@ var index_default = {
 
       // 4. Single Conversation Operations
       if (pathname.startsWith("/api/history/")) {
-        const id = pathname.split("/").pop();
+        const id = pathname.split("/").pop() || "";
 
         if (request.method === "GET") {
           const url2 = new URL(request.url);
@@ -180,23 +261,23 @@ var index_default = {
       // 5. Stats Endpoints
       if (pathname.startsWith("/api/stats/")) {
         if (request.method === "GET") {
-          const statType = pathname.split("/").pop();
+          const statType = pathname.split("/").pop() || "";
           if (statType === "client-usage") {
-            const { results } = await env.DB.prepare(
+            const results = await env.DB.prepare(
               "SELECT client_id, COUNT(*) as count FROM api_logs GROUP BY client_id ORDER BY count DESC"
             ).all();
             return jsonResponse({
-              clientUsage: results.map((r) => ({
+              clientUsage: (results.results || []).map((r: any) => ({
                 clientId: r.client_id,
                 count: r.count
               }))
             });
           } else if (statType === "recent-logs") {
-            const { results } = await env.DB.prepare(
+            const results = await env.DB.prepare(
               "SELECT client_id, path, method, timestamp FROM api_logs ORDER BY timestamp DESC LIMIT 20"
             ).all();
             return jsonResponse({
-              recentLogs: results
+              recentLogs: results.results || []
             });
           }
         }
@@ -214,18 +295,18 @@ var index_default = {
       }
 
       const targetUrl = new URL(targetPath, "https://aiproxy.want.biz");
-      url.searchParams.forEach((value, key) => targetUrl.searchParams.append(key, value));
+      url.searchParams.forEach((value: string, key: string) => targetUrl.searchParams.append(key, value));
       
       const proxyHeaders = new Headers(request.headers);
       const clientId = proxyHeaders.get("X-Client-ID") || "unknown";
       
-      ["Host", "Referer", "Origin", "cf-connecting-ip"].forEach((h) => proxyHeaders.delete(h));
+      ["Host", "Referer", "Origin", "cf-connecting-ip"].forEach((h: string) => proxyHeaders.delete(h));
       
       try {
         await env.DB.prepare(
           "INSERT INTO api_logs (client_id, path, method, timestamp) VALUES (?, ?, ?, ?)"
         ).bind(clientId, targetPath, request.method, Date.now()).run();
-      } catch (logErr) {
+      } catch (logErr: any) {
         console.warn("Failed to log API call:", logErr);
       }
 
@@ -238,14 +319,14 @@ var index_default = {
         });
         
         const newHeaders = new Headers(response.headers);
-        Object.entries(corsHeaders).forEach(([k, v]) => newHeaders.set(k, v));
+        Object.entries(corsHeaders).forEach(([k, v]: [string, string]) => newHeaders.set(k, v));
         
         return new Response(response.body, {
           status: response.status,
           statusText: response.statusText,
           headers: newHeaders
         });
-      } catch (e) {
+      } catch (e: any) {
         return jsonResponse({ error: { message: `Proxy error: ${e}` } }, 500);
       }
     }
