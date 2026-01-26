@@ -109,20 +109,23 @@ var index_default = {
             // Batch insert messages with line count optimization
             if (data.messages && Array.isArray(data.messages)) {
               const stmt = env.DB.prepare(
-                "INSERT INTO messages (conversation_id, role, content, raw_content, timestamp, model, is_large_file, ai_summary, file_original_size, line_count, r2_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                "INSERT INTO messages (conversation_id, role, content, raw_content, timestamp, model, is_large_file, ai_summary, file_original_size, line_count, r2_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(conversation_id, role, timestamp) DO UPDATE SET content=excluded.content, raw_content=excluded.raw_content, model=excluded.model, is_large_file=excluded.is_large_file, ai_summary=excluded.ai_summary, file_original_size=excluded.file_original_size, line_count=excluded.line_count, r2_key=excluded.r2_key"
               );
 
               for (const msg of data.messages) {
-                // Process content to get line count and truncate if needed
-                const contentToProcess = msg.rawContent || msg.content || "";
-                const contentInfo = processMessageContent(contentToProcess);
+                // 1. 获取 HTML 内容 (msg.content) 和 Markdown 源码 (msg.rawContent)
+                const htmlContent = msg.content || "";
+                const markdownContent = msg.rawContent || msg.content || ""; // 兜底
+                
+                // 2. 处理内容（行数统计、大文件判断基于 Markdown）
+                const contentInfo = processMessageContent(markdownContent);
 
                 let r2Key = null;
-                // ✨ Support: Upload large files/code to R2 if bucket is bound
+                // ✨ Support: 大文件上传到 R2 (存 Markdown 完整版)
                 if (contentInfo.isLargeFile && env.R2_BUCKET) {
                   r2Key = `chats/${data.id}/${msg.timestamp || Date.now()}.txt`;
                   try {
-                    await env.R2_BUCKET.put(r2Key, contentToProcess, {
+                    await env.R2_BUCKET.put(r2Key, markdownContent, {
                       customMetadata: {
                         conversation_id: data.id,
                         role: msg.role,
@@ -134,11 +137,12 @@ var index_default = {
                   }
                 }
 
+                // 3. 绑定字段：content 存 HTML，raw_content 存 Markdown
                 batch.push(stmt.bind(
                   data.id,
                   msg.role,
-                  contentInfo.content,
-                  r2Key ? `[Content moved to R2 Storage: ${r2Key}]` : contentToProcess,
+                  htmlContent, // 保持美观的 HTML 格式
+                  r2Key ? `[Content moved to R2 Storage: ${r2Key}]` : markdownContent,
                   msg.timestamp || timestamp,
                   msg.model || null,
                   contentInfo.isLargeFile ? 1 : 0,
