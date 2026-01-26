@@ -4548,45 +4548,27 @@
                     try {
                         let combinedContent = '';
                         let fileCount = 0;
-                        let hasLargeFile = false;
-                        let totalLines = 0;
+                        let hasLargeFile = false; // This flag is no longer used for truncation here, but kept for potential future use or other logic
+                        let totalLines = 0; // This is no longer used for truncation here, but kept for potential future use or other logic
 
-                        for (const file of files) {
-                            // Check file size (limit to 5MB per file)
-                            const sizeLimit = 5 * 1024 * 1024;
-                            if (file.size > sizeLimit) {
-                                alert(`文件 "${file.name}" 超过 5MB，已跳过`);
-                                continue;
-                            }
+                         for (const file of files) {
+                             // Check file size (limit to 5MB per file)
+                             const sizeLimit = 5 * 1024 * 1024;
+                             if (file.size > sizeLimit) {
+                                 alert(`文件 "${file.name}" 超过 5MB，已跳过`);
+                                 continue;
+                             }
 
-                            const content = await readFileContent(file);
-                            if (content) {
-                                // Count lines in this file
-                                const lines = content.split('\n');
-                                const lineCount = lines.length;
-                                totalLines += lineCount;
-
-                                // Check if this is a large file (over 1000 lines)
-                                if (lineCount > 1000) {
-                                    hasLargeFile = true;
-                                    
-                                    // Truncate to first 1000 lines for storage
-                                    const truncatedContent = lines.slice(0, 1000).join('\n');
-                                    
-                                    if (combinedContent) {
-                                        combinedContent += '\n\n';
-                                    }
-                                    combinedContent += `=== ${file.name} ===\n${truncatedContent}\n\n[文件已截断：原始${lineCount}行，已保存前1000行]\n`;
-                                } else {
-                                    // Regular file, save all content
-                                    if (combinedContent) {
-                                        combinedContent += '\n\n';
-                                    }
-                                    combinedContent += `=== ${file.name} ===\n${content}`;
-                                }
-                                fileCount++;
-                            }
-                        }
+                             const content = await readFileContent(file);
+                             if (content) {
+                                 // 保存完整内容，不再主动截断
+                                 if (combinedContent) {
+                                     combinedContent += '\n\n';
+                                 }
+                                 combinedContent += `=== ${file.name} ===\n${content}`;
+                                 fileCount++;
+                             }
+                         }
 
                         if (combinedContent) {
                             // Append to existing input or replace
@@ -6406,9 +6388,16 @@
             for (let i = messageElements.length - 1; i >= Math.max(0, messageElements.length - limit); i--) {
                 const element = messageElements[i];
                 const role = element.classList.contains('user') ? 'user' : 'assistant';
-                const content = element.querySelector('.content').dataset.raw || element.querySelector('.content').textContent;
+                const rawContent = element.querySelector('.content').dataset.raw || element.querySelector('.content').textContent || "";
+                
+                // ✨ 策略：如果是当前回合（最后一条消息），发送完整内容给 AI，确保初次分析准确
+                // 如果是历史回合（i < messageElements.length - 1），进行截断以节省 Context
+                let contextContent = rawContent;
+                if (i < messageElements.length - 1 && rawContent.length > 5000) {
+                    contextContent = rawContent.substring(0, 2500) + "\n\n... [此处历史内容较长已省略，AI 已知悉其存在] ...\n\n" + rawContent.substring(rawContent.length - 500);
+                }
 
-                messages.unshift({ role, content });
+                messages.unshift({ role, content: contextContent });
             }
 
             return messages;
@@ -7096,8 +7085,25 @@
             } else {
                 // Check if rawContent is valid before passing to marked.parse
                 const safeRawContent = rawContent || '';
-                const markdownHtml = marked.parse(safeRawContent);
-                contentDiv.innerHTML = markdownHtml;
+                const lines = safeRawContent.split('\n');
+                
+                // ✨ 前端 UI 优化：如果用户发送的内容非常长（> 500行），前端也用采样预览，防止卡顿
+                if (lines.length > 500 && role === 'user') {
+                    const first100 = lines.slice(0, 100).join('\n');
+                    const last100 = lines.slice(-100).join('\n');
+                    const previewText = `${first100}\n\n... [中间 ${lines.length - 200} 行内容已在 UI 中隐藏，AI 已获取全量数据进行分析] ...\n\n${last100}`;
+                    
+                    contentDiv.innerHTML = `
+<div class='large-file-preview' style='border: 1px solid rgba(16,163,127,0.2); border-radius: 8px; overflow: hidden; margin: 10px 0; background: rgba(255,255,255,0.05);'>
+  <div style='background: rgba(16,163,127,0.1); padding: 8px 12px; font-size: 0.9em; border-bottom: 1px solid rgba(16,163,127,0.1); color: var(--text-color);'>
+    📄 <b>【大文件发送中】</b>：包含 ${lines.length} 行内容，AI 将进行全量分析
+  </div>
+  <pre style='margin: 0; padding: 12px; font-size: 0.85em; max-height: 300px; overflow-y: auto; background: transparent; color: var(--text-color); white-space: pre-wrap; font-family: monospace;'><code>${previewText}</code></pre>
+</div>`;
+                } else {
+                    const markdownHtml = marked.parse(safeRawContent);
+                    contentDiv.innerHTML = markdownHtml;
+                }
             }
 
             contentDiv.setAttribute('data-raw', rawContent);

@@ -147,12 +147,13 @@ var index_default = {
                    
                    finalHtml = `
 <div class='large-file-preview' style='border: 1px solid rgba(16,163,127,0.2); border-radius: 8px; overflow: hidden; margin: 10px 0; background: rgba(255,255,255,0.05);'>
-  <div style='background: rgba(16,163,127,0.1); padding: 8px 12px; font-size: 0.9em; border-bottom: 1px solid rgba(16,163,127,0.1); color: var(--text-color);'>
-    📄 <b>【大文件】</b>：完整内容${link}查看
+  <div style='background: rgba(16,163,127,0.1); padding: 8px 12px; font-size: 0.9em; border-bottom: 1px solid rgba(16,163,127,0.1); color: var(--text-color); display: flex; justify-content: space-between; align-items: center;'>
+    <span>📄 <b>【大文件】</b>：内容共 ${contentInfo.lineCount} 行，建议${link}全文</span>
+    <span style='font-size: 0.8em; opacity: 0.6;'>Preview Mode</span>
   </div>
   <pre style='margin: 0; padding: 12px; font-size: 0.85em; max-height: 400px; overflow-y: auto; background: transparent; color: var(--text-color); white-space: pre-wrap; font-family: monospace;'><code>${contentInfo.content}</code></pre>
   <div style='background: rgba(16,163,127,0.05); padding: 8px 12px; font-size: 0.85em; text-align: right; border-top: 1px solid rgba(16,163,127,0.1); color: var(--text-muted);'>
-    内容由于过长已折叠，${link}查看完整结果
+    内容已折叠，${link}查看完整结果
   </div>
 </div>`;
                 }
