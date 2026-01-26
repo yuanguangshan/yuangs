@@ -5788,45 +5788,29 @@
                     chatContainer.innerHTML = '';
                 }
 
-                // 检查本地存储中是否存在已删除的消息记录
+                // 1. 优先使用服务器返回的消息数据 (DB 是真实数据源)
+                const serverMessages = conv.messages || [];
+                
+                // 2. 将服务器数据同步到本地存储，保持一致性
                 const localConversations = JSON.parse(localStorage.getItem('conversations')) || {};
-                let localMessages = [];
+                localConversations[sessionId] = conv;
+                localStorage.setItem('conversations', JSON.stringify(localConversations));
+                
+                // 3. 更新全局内存变量
+                conversations[sessionId] = conv;
 
-                if (localConversations[sessionId] && localConversations[sessionId].messages) {
-                    localMessages = localConversations[sessionId].messages;
-                }
+                if (serverMessages.length > 0) {
+                    // 显示消息（按需分页）
+                    for (const msg of serverMessages) {
+                        addMessageToDOM(msg.role, msg.raw_content || msg.rawContent, msg.content, msg.timestamp, msg.model, msg.id);
+                    }
 
-                // 优先使用本地存储中的消息数据（可能已被删除某些消息）
-                if (localMessages.length > 0) {
-                    // 使用本地存储的消息数据
-                    conversations[sessionId] = { ...conv, messages: localMessages };
-
-                    if (localMessages) {
-                        // 显示消息（按需分页）
-                        for (const msg of localMessages) {
-                            addMessageToDOM(msg.role, msg.raw_content || msg.rawContent, msg.content, msg.timestamp, msg.model, msg.id);
-                        }
-
-                        // 如果是首次加载且还有更早的消息，添加"查看更多"按钮
-                        if (offset === 0 && conv.offset > 0) {
-                            addLoadMoreButton(sessionId, conv.offset, limit);
-                        }
+                    // 如果是首次加载且还有更早的消息，添加"查看更多"按钮
+                    if (offset === 0 && conv.offset > 0) {
+                        addLoadMoreButton(sessionId, conv.offset, limit);
                     }
                 } else {
-                    // 如果本地没有消息数据，则使用从服务器获取的数据
-                    conversations[sessionId] = conv;
-
-                    if (conv.messages) {
-                        // 显示消息（按需分页）
-                        for (const msg of conv.messages) {
-                            addMessageToDOM(msg.role, msg.raw_content || msg.rawContent, msg.content, msg.timestamp, msg.model, msg.id);
-                        }
-
-                        // 如果是首次加载且还有更早的消息，添加"查看更多"按钮
-                        if (offset === 0 && conv.offset > 0) {
-                            addLoadMoreButton(sessionId, conv.offset, limit);
-                        }
-                    }
+                    console.log("No messages found on server for this session.");
                 }
 
                 // 仅在对话有特定模型时才设置，否则保留用户当前选择的模型

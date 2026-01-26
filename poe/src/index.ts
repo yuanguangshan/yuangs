@@ -115,17 +115,20 @@ var index_default = {
               for (const msg of data.messages) {
                 // 1. 获取 HTML 内容 (msg.content) 和 Markdown 源码 (msg.rawContent)
                 const htmlContent = msg.content || "";
-                const markdownContent = msg.rawContent || msg.content || ""; // 兜底
+                const markdownContent = msg.rawContent || msg.content || "";
                 
                 // 2. 处理内容（行数统计、大文件判断基于 Markdown）
                 const contentInfo = processMessageContent(markdownContent);
 
                 let r2Key = null;
-                // ✨ Support: 大文件上传到 R2 (存 Markdown 完整版)
+                // ✨ Support: 大文件上传到 R2
                 if (contentInfo.isLargeFile && env.R2_BUCKET) {
-                  r2Key = `chats/${data.id}/${msg.timestamp || Date.now()}.txt`;
+                  r2Key = `ai/${data.id}/${msg.timestamp || Date.now()}.txt`;
                   try {
                     await env.R2_BUCKET.put(r2Key, markdownContent, {
+                      httpMetadata: {
+                        contentType: "text/plain; charset=utf-8",
+                      },
                       customMetadata: {
                         conversation_id: data.id,
                         role: msg.role,
@@ -137,11 +140,19 @@ var index_default = {
                   }
                 }
 
-                // 3. 绑定字段：content 存 HTML，raw_content 存 Markdown
+                // 3. 安全处理：如果 HTML 依然非常巨大（超过 200KB），进行截断以防止 SQLITE_TOOBIG
+                let safeHtml = htmlContent;
+                if (htmlContent.length > 200000) {
+                   const fileUrl = r2Key ? `/api/files/${r2Key}` : "#";
+                   const linkText = r2Key ? `<a href='${fileUrl}' target='_blank' style='color: #10a37f; font-weight: bold; text-decoration: underline;'>点此查看完整内容</a>` : "请联系管理员";
+                   safeHtml = htmlContent.substring(0, 200000) + `\n\n<div class='system-note' style='margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.05); border-radius: 4px; border-left: 4px solid #10a37f;'>[内容过长，HTML 预览已截断。${linkText}已存入 R2 存储]</div>`;
+                }
+
+                // 4. 绑定字段：content 存 HTML，raw_content 存 Markdown
                 batch.push(stmt.bind(
                   data.id,
                   msg.role,
-                  htmlContent, // 保持美观的 HTML 格式
+                  safeHtml, // 存入安全长度的 HTML
                   r2Key ? `[Content moved to R2 Storage: ${r2Key}]` : markdownContent,
                   msg.timestamp || timestamp,
                   msg.model || null,
@@ -154,10 +165,12 @@ var index_default = {
               }
             }
             
+            console.log(`Saving conversation ${data.id} with ${data.messages?.length} messages`);
             await env.DB.batch(batch);
             return jsonResponse({ success: true });
           }
         } catch (e: any) {
+          console.error("Database error during save:", e);
           return jsonResponse({ error: `DB Error: ${e}` }, 500);
         }
       }
@@ -211,20 +224,28 @@ var index_default = {
 
       // 4. Single Conversation Operations
       if (pathname.startsWith("/api/history/")) {
-        const id = pathname.split("/").pop() || "";
-
+        // 去除首尾斜杠并获取 ID
+        const id = pathname.replace(/\/$/, "").split("/").pop() || "";
+        
         if (request.method === "GET") {
           const url2 = new URL(request.url);
           const offset = parseInt(url2.searchParams.get("offset") || "0");
-          const limit = parseInt(url2.searchParams.get("limit") || "20");
+          const limit = parseInt(url2.searchParams.get("limit") || "50"); // 默认取 50 条
           
+          console.log(`Loading history for session: ${id}, offset: ${offset}, limit: ${limit}`);
+
+          // 1. 获取消息总数
           const countResult = await env.DB.prepare(
             "SELECT COUNT(*) as count FROM messages WHERE conversation_id = ?"
           ).bind(id).first();
           
-          const totalCount = countResult.count;
+          const totalCount = (countResult as any)?.count || 0;
+          
+          // 2. 改进的实际偏移量逻辑：默认返回最后 limit 条消息
           const actualOffset = Math.max(0, totalCount - limit - offset);
           
+          console.log(`Total messages in DB: ${totalCount}, Effective Offset: ${actualOffset}`);
+
           const msgResult = await env.DB.prepare(
             "SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC LIMIT ? OFFSET ?"
           ).bind(id, limit, actualOffset).all();
@@ -234,12 +255,16 @@ var index_default = {
           ).bind(id).first();
           
           if (!conv) {
+             console.warn(`Conversation metadata not found for ID: ${id}`);
              return jsonResponse({ error: "Conversation not found" }, 404);
           }
 
+          const messages = msgResult.results || [];
+          console.log(`Returning ${messages.length} messages for session ${id}`);
+
           return jsonResponse({
             ...conv,
-            messages: msgResult.results,
+            messages: messages,
             totalCount,
             offset: actualOffset,
             limit
@@ -262,7 +287,26 @@ var index_default = {
         }
       }
 
-      // 5. Stats Endpoints
+      // 5. R2 File Proxy
+      if (pathname.startsWith("/api/files/")) {
+        try {
+          const key = pathname.replace("/api/files/", "");
+          const object = await env.R2_BUCKET.get(key);
+          
+          if (!object) return new Response("File Not Found", { status: 404 });
+          
+          const headers = new Headers();
+          object.writeHttpMetadata(headers);
+          headers.set("Access-Control-Allow-Origin", "*");
+          headers.set("Content-Type", "text/plain; charset=utf-8"); // 强制 UTF-8 解决乱码
+          
+          return new Response(object.body, { headers });
+        } catch (e) {
+          return new Response(`Error fetching file: ${e}`, { status: 500 });
+        }
+      }
+
+      // 6. Stats Endpoints
       if (pathname.startsWith("/api/stats/")) {
         if (request.method === "GET") {
           const statType = pathname.split("/").pop() || "";
