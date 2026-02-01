@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>CF 无限地图暴力版</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{overflow:hidden;touch-action:none;background:#000;font-family:Arial,Helvetica,sans-serif}
+    #canvas{width:100vw;height:100vh;display:block}
+    #hud{position:fixed;left:0;top:0;width:100%;padding:10px;color:#fff;text-shadow:0 0 4px #000;font-size:14px;pointer-events:none;z-index:5}
+    #healthBar{widt:150px;height:10px;background:#555;border-radius:5px;overflow:hidden;margin-top:4px}
+    #healthInner{height:100%;background:linear-gradient(90deg,#f00 50%,#ff0 100%);width:100%;transition:width .2s}
+    #stickArea{position:fixed;left:20px;bottom:20px;width:120px;height:120px;background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.3);border-radius:50%;z-index:10}
+    #stick{position:absolute;width:40px;height:40px;background:rgba(255,255,255,.6);border-radius:50%;left:50%;top:50%;transform:translate(-50%,-50%);transition:transform .1s}
+    .btn{position:fixed;user-select:none;-webkit-user-select:none;border:none;color:#fff;font-size:15px;padding:10px 18px;border-radius:8px;backdrop-filter:blur(4px);z-index:10}
+    #btnFire{right:20px;bottom:20px;width:80px;height:80px;border-radius:50%;background:rgba(255,0,0,.5)}
+    #btnGrenade{right:20px;bottom:110px;background:rgba(255,165,0,.7)}
+    #btnReload{right:110px;bottom:110px;background:rgba(255,255,255,.2)}
+    #btnJump{right:110px;bottom:20px;background:rgba(255,255,255,.2)}
+    #crosshair{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:40px;height:40px;pointer-events:none;z-index:6}
+    .crossLine{position:absolute;background:rgba(255,255,0,.8)}
+    .crossLine.h{width:20px;height:2px;left:10px;top:19px}
+    .crossLine.v{width:2px;height:20px;left:19px;top:10px}
+    #hitRed{position:fixed;left:50%;top:50%;width:30px;height:30px;background:radial-gradient(circle,rgba(255,0,0,.6) 0%,transparent 70%);border-radius:50%;transform:translate(-50%,-50%) scale(0);pointer-events:none;z-index:7}
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="hud">
+  <div>生命：<b id="hpText">100</b></div>
+  <div id="healthBar"><div id="healthInner"></div></div>
+  <div>得分：<b id="score">0</b></div>
+  <div>弹药：<b id="ammo">30/120</b></div>
+  <div>手雷：<b id="grenade">3</b></div>
+</div>
+<div id="crosshair"><div class="crossLine h"></div><div class="crossLine v"></div></div>
+<div id="hitRed"></div>
+<div id="stickArea"><div id="stick"></div></div>
+<button class="btn" id="btnFire">射击</button>
+<button class="btn" id="btnGrenade">手雷</button>
+<button class="btn" id="btnReload">换弹</button>
+<button class="btn" id="btnJump">跳跃</button>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.min.js"></script>
+<script>
+/* ============================================================
+ *  场景 & 渲染器
+ * ============================================================ */
+const canvas = document.getElementById('canvas');
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x202020, 10, 500);
+
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 1.6, 5);
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+
+const ambi = new THREE.AmbientLight(0x404040);
+const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+dirLight.position.set(10, 30, 10);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.width = 1024;
+dirLight.shadow.mapSize.height = 1024;
+scene.add(ambi, dirLight);
+
+/* 地面 */
+const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(1000, 1000),
+    new THREE.MeshLambertMaterial({ color: 0x3a3a3a })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+/* ============================================================
+ *  玩家数据
+ * ============================================================ */
+const player = {
+    hp: 100,
+    score: 0,
+    ammo: 30,
+    maxAmmo: 30,
+    totalAmmo: 120,
+    grenade: 3,
+    canShoot: true,
+    shooting: false,
+    velocity: new THREE.Vector3()
+};
+
+/* ============================================================
+ *  无限地图管理
+ * ============================================================ */
+const WALL_DIST = 200;      // 视野外多少米开始拆/建
+const ENEMY_DIST = 80;      // 敌人刷新/删除半径
+const WALL_SIZE = 40;       // 单块围墙尺寸
+const ENEMY_COUNT = 7;      // 同时存在的敌人数
+
+const walls = new Set();    // 保存当前 chunk 的围墙
+const enemies = [];         // 保存当前活跃的敌人
+
+/* 根据玩家位置刷新围墙 */
+function updateInfiniteWalls() {
+    const cx = Math.floor(camera.position.x / WALL_SIZE) * WALL_SIZE;
+    const cz = Math.floor(camera.position.z / WALL_SIZE) * WALL_SIZE;
+
+    /* 需要存在的 chunk 中心列表 */
+    const needed = new Set();
+    for (let dx = -WALL_DIST; dx <= WALL_DIST; dx += WALL_SIZE) {
+        for (let dz = -WALL_DIST; dz <= WALL_DIST; dz += WALL_SIZE) {
+            needed.add(`${cx + dx},${cz + dz}`);
+        }
+    }
+
+    /* 删除远处围墙 */
+    walls.forEach(key => {
+        if (!needed.has(key)) {
+            const [x, z] = key.split(',').map(Number);
+            const mesh = wallPool.get(key);
+            if (mesh) {
+                scene.remove(mesh);
+                wallPool.delete(key);
+            }
+            walls.delete(key);
+        }
+    });
+
+    /* 新建近处围墙 */
+    needed.forEach(key => {
+        if (!walls.has(key)) {
+            const [x, z] = key.split(',').map(Number);
+            const mesh = createWallChunk(x, z);
+            wallPool.set(key, mesh);
+            walls.add(key);
+        }
+    });
+}
+
+/* 围墙对象池，避免重复创建销毁 */
+const wallPool = new Map();
+function createWallChunk(cx, cz) {
+    const material = new THREE.MeshLambertMaterial({ color: 0x666666 });
+    const group = new THREE.Group();
+
+    /* 简单十字围墙 */
+    const hWall = new THREE.Mesh(new THREE.BoxGeometry(WALL_SIZE, 5, 2), material);
+    hWall.position.set(0, 2.5, 0);
+    hWall.castShadow = true;
+    group.add(hWall);
+
+    const vWall = new THREE.Mesh(new THREE.BoxGeometry(2, 5, WALL_SIZE), material);
+    vWall.position.set(0, 2.5, 0);
+    vWall.castShadow = true;
+    group.add(vWall);
+
+    group.position.set(cx, 0, cz);
+    scene.add(group);
+    return group;
+}
+
+/* 无限敌人管理 */
+function updateInfiniteEnemies() {
+    /* 删除远处敌人 */
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        const dist = camera.position.distanceTo(e.position);
+        if (dist > ENEMY_DIST) {
+            scene.remove(e);
+            enemies.splice(i, 1);
+        }
+    }
+
+    /* 补充到固定数量 */
+    while (enemies.length < ENEMY_COUNT) {
+        spawnEnemyNearby();
+    }
+}
+
+/* 在玩家周围随机刷新敌人 */
+function spawnEnemyNearby() {
+    const angle = Math.random() * Math.PI * 2;
+    const r = 30 + Math.random() * (ENEMY_DIST - 30);
+    const x = camera.position.x + Math.cos(angle) * r;
+    const z = camera.position.z + Math.sin(angle) * r;
+
+    const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(1, 2, 1),
+        new THREE.MeshLambertMaterial({ color: 0xff0000 })
+    );
+    mesh.position.set(x, 1, z);
+    mesh.castShadow = true;
+    mesh.hp = 60;
+    scene.add(mesh);
+    enemies.push(mesh);
+}
+
+/* ============================================================
+ *  子弹系统
+ * ============================================================ */
+const bullets = [];
+let lastShoot = 0;
+
+function createBullet() {
+    if (player.ammo <= 0) return;
+    player.ammo--;
+    updateHUD();
+
+    const bullet = new THREE.Mesh(
+        new THREE.SphereGeometry(0.06, 6, 6),
+        new THREE.MeshBasicMaterial({ color: 0xffff00 })
+    );
+    bullet.position.copy(camera.position);
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    bullet.velocity = dir.multiplyScalar(1.4);
+    scene.add(bullet);
+    bullets.push(bullet);
+
+    const ray = new THREE.Raycaster(camera.position, dir);
+    const hit = ray.intersectObjects(enemies);
+    if (hit.length) {
+        const e = hit[0].object;
+        e.hp -= 34;
+        if (e.hp <= 0) {
+            scene.remove(e);
+            enemies.splice(enemies.indexOf(e), 1);
+            player.score += 100;
+            updateHUD();
+        }
+        scene.remove(bullet);
+        bullets.splice(bullets.indexOf(bullet), 1);
+    }
+}
+
+/* ============================================================
+ *  手雷系统（力=4 + 半径=3000 + 伤害=30000）
+ * ============================================================ */
+const grenades = [];
+
+function throwGrenade() {
+    if (player.grenade <= 0) return;
+    player.grenade--;
+    updateHUD();
+
+    const grenadeMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.15, 12, 12),
+        new THREE.MeshLambertMaterial({ color: 0x555500 })
+    );
+    grenadeMesh.position.copy(camera.position);
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    const vel = dir.multiplyScalar(4);
+    vel.y = 0.8;
+    grenadeMesh.velocity = vel;
+    grenadeMesh.life = 4.0;
+    scene.add(grenadeMesh);
+    grenades.push(grenadeMesh);
+}
+
+function updateGrenades(delta) {
+    grenades.forEach((g, idx) => {
+        g.velocity.y -= 0.015;
+        g.position.add(g.velocity.clone().multiplyScalar(delta));
+        g.life -= delta;
+        if (g.life <= 0) {
+            explode(g.position);
+            scene.remove(g);
+            grenades.splice(idx, 1);
+        }
+    });
+}
+
+function explode(pos) {
+    /* 屏幕微震 */
+    camera.position.add(new THREE.Vector3((Math.random() - 0.5) * 0.08, 0, (Math.random() - 0.5) * 0.08));
+    /* 粒子火球 */
+    const particle = new THREE.Mesh(
+        new THREE.SphereGeometry(0.3, 8, 8),
+        new THREE.MeshBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.8 })
+    );
+    particle.position.copy(pos);
+    scene.add(particle);
+    let s = 1;
+    const grow = setInterval(() => {
+        s += 0.15;
+        particle.scale.set(s, s, s);
+        particle.material.opacity -= 0.05;
+        if (particle.material.opacity <= 0) {
+            scene.remove(particle);
+            clearInterval(grow);
+        }
+    }, 20);
+
+    /* 范围伤害（半径3000米 + 伤害30000） */
+    enemies.forEach(e => {
+        const d = e.position.distanceTo(pos);
+        if (d < 3000) {
+            const dmg = Math.floor(30000 * (1 - d / 3000));
+            e.hp -= dmg;
+            e.position.y += 0.5;
+            const hitRedDiv = document.getElementById('hitRed');
+            hitRedDiv.style.transform = 'translate(-50%,-50%) scale(1)';
+            hitRedDiv.style.opacity = '1';
+            setTimeout(() => {
+                hitRedDiv.style.transform = 'translate(-50%,-50%) scale(0)';
+                hitRedDiv.style.opacity = '0';
+            }, 120);
+            if (e.hp <= 0) {
+                scene.remove(e);
+                enemies.splice(enemies.indexOf(e), 1);
+                player.score += 100;
+                updateHUD();
+            }
+        }
+    });
+}
+
+/* ============================================================
+ *  滑动转视角（单指）
+ * ============================================================ */
+let touchId = null;
+let startX = 0, startY = 0;
+let yaw = 0, pitch = 0;
+let velX = 0, velY = 0;
+const rotSpeed = 0.4;
+const inertia = 0.92;
+
+canvas.addEventListener('touchstart', e => {
+    if (touchId != null) return;
+    const t = e.changedTouches[0];
+    touchId = t.identifier;
+    startX = t.clientX;
+    startY = t.clientY;
+    velX = velY = 0;
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+    const t = [...e.changedTouches].find(tt => tt.identifier === touchId);
+    if (!t) return;
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    startX = t.clientX;
+    startY = t.clientY;
+    velX += dx * rotSpeed;
+    velY += dy * rotSpeed;
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+    const t = [...e.changedTouches].find(tt => tt.identifier === touchId);
+    if (t) touchId = null;
+}, { passive: false });
+
+/* ============================================================
+ *  左侧摇杆（走路）
+ * ============================================================ */
+const stickArea = document.getElementById('stickArea');
+const stick = document.getElementById('stick');
+const stickRect = stickArea.getBoundingClientRect();
+const stickRadius = stickRect.width / 2;
+const innerRadius = 30;
+
+let stickActive = false;
+let stickId = null;
+let stickVector = new THREE.Vector3();
+
+function startStick(e) {
+    if (stickActive) return;
+    const t = e.changedTouches[0];
+    stickId = t.identifier;
+    stickActive = true;
+    moveStick(t.clientX, t.clientY);
+}
+function moveStick(clientX, clientY) {
+    if (!stickActive) return;
+    const cx = stickRect.left + stickRadius;
+    const cy = stickRect.top + stickRadius;
+    let dx = clientX - cx;
+    let dy = clientY - cy;
+    const dist = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+    const clamp = Math.min(dist, innerRadius);
+    dx = Math.cos(angle) * clamp;
+    dy = Math.sin(angle) * clamp;
+    stick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    stickVector.set(Math.cos(angle), 0, Math.sin(angle));
+    if (dist < innerRadius) stickVector.multiplyScalar(dist / innerRadius);
+}
+function endStick() {
+    stickActive = false;
+    stickId = null;
+    stick.style.transform = 'translate(-50%,-50%)';
+    stickVector.set(0, 0, 0);
+}
+stickArea.addEventListener('touchstart', startStick, { passive: false });
+stickArea.addEventListener('touchmove', e => {
+    const t = [...e.changedTouches].find(tt => tt.identifier === stickId);
+    if (t) moveStick(t.clientX, t.clientY);
+}, { passive: false });
+stickArea.addEventListener('touchend', endStick);
+stickArea.addEventListener('touchcancel', endStick);
+
+/* ============================================================
+ *  右侧按钮
+ * ============================================================ */
+const btnFire = document.getElementById('btnFire');
+const btnGrenade = document.getElementById('btnGrenade');
+const btnReload = document.getElementById('btnReload');
+const btnJump = document.getElementById('btnJump');
+
+btnFire.addEventListener('touchstart', e => { player.shooting = true; e.preventDefault(); });
+btnFire.addEventListener('touchend', e => { player.shooting = false; e.preventDefault(); });
+
+btnGrenade.addEventListener('click', throwGrenade);
+
+btnReload.addEventListener('click', () => {
+    if (player.totalAmmo <= 0) return;
+    const need = player.maxAmmo - player.ammo;
+    const get = Math.min(need, player.totalAmmo);
+    player.ammo += get; player.totalAmmo -= get;
+    updateHUD();
+});
+btnJump.addEventListener('click', () => {
+    if (camera.position.y <= 1.7) player.velocity.y = 0.18;
+});
+
+/* ============================================================
+ *  PC 端保留键盘
+ * ============================================================ */
+const keys = {};
+window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+window.addEventListener('mousedown', e => { if (e.button === 0) player.shooting = true; });
+window.addEventListener('mouseup', e => { if (e.button === 0) player.shooting = false; });
+
+/* ============================================================
+ *  主循环
+ * ============================================================ */
+let lastTime = performance.now();
+function animate() {
+    const now = performance.now();
+    const delta = (now - lastTime) / 1000;
+    lastTime = now;
+    requestAnimationFrame(animate);
+
+    /* 视角惯性 */
+    yaw += velX * 0.003;
+    pitch += velY * 0.003;
+    pitch = Math.max(-1.2, Math.min(1.2, pitch));
+    camera.rotation.order = 'YXZ';
+    camera.rotation.y = -yaw;
+    camera.rotation.x = -pitch;
+    velX *= inertia;
+    velY *= inertia;
+
+    /* 射击 */
+    if (player.shooting && Date.now() - lastShoot > 110) {
+        createBullet();
+        lastShoot = Date.now();
+    }
+
+    /* 移动：摇杆 + WASD */
+    const moveSpeed = 0.18;
+    const moveDir = new THREE.Vector3();
+    if (keys['w']) moveDir.z -= 1;
+    if (keys['s']) moveDir.z += 1;
+    if (keys['a']) moveDir.x -= 1;
+    if (keys['d']) moveDir.x += 1;
+    moveDir.add(stickVector);
+    if (moveDir.length() > 0) {
+        moveDir.normalize().applyQuaternion(camera.quaternion);
+        camera.position.x += moveDir.x * moveSpeed;
+        camera.position.z += moveDir.z * moveSpeed;
+    }
+
+    /* 重力 */
+    player.velocity.y -= 0.015;
+    camera.position.y += player.velocity.y;
+    if (camera.position.y < 1.6) {
+        camera.position.y = 1.6;
+        player.velocity.y = 0;
+    }
+
+    /* 无限地图更新 */
+    updateInfiniteWalls();
+    updateInfiniteEnemies();
+
+    /* 手雷更新 */
+    updateGrenades(delta);
+
+    /* 敌人 AI */
+    enemies.forEach(e => {
+        const dir = new THREE.Vector3();
+        dir.subVectors(camera.position, e.position);
+        dir.y = 0; dir.normalize();
+        e.position.add(dir.multiplyScalar(0.045));
+        e.lookAt(camera.position);
+    });
+
+    /* 子弹更新 */
+    bullets.forEach((b, i) => {
+        b.position.add(b.velocity);
+        if (b.position.length() > 200) {
+            scene.remove(b);
+            bullets.splice(i, 1);
+        }
+    });
+
+    renderer.render(scene, camera);
+}
+animate();
+
+/* ============================================================
+ *  窗口 & HUD
+ * ============================================================ */
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+function updateHUD() {
+    document.getElementById('hpText').textContent = player.hp;
+    document.getElementById('healthInner').style.width = player.hp + '%';
+    document.getElementById('score').textContent = player.score;
+    document.getElementById('ammo').textContent = `${player.ammo}/${player.totalAmmo}`;
+    document.getElementById('grenade').textContent = player.grenade;
+}
+updateHUD();
+</script>
+</body>
+</html>
