@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kerry的游戏中心</title>
+    <style>
+        /* --- 全局与动态背景 --- */
+        :root {
+            --glow-color: hsl(186, 100%, 50%);
+        }
+
+        /* 【新增】更标准的盒子模型，让内外边距计算更可控 */
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            background: #121212;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            
+            /* --- 核心修改 --- */
+            /* 【修改】从 'center' 改为 'flex-start'，让内容从顶部开始，以便滚动 */
+            justify-content: flex-start; 
+            /* 【修改】添加内边距，让内容不会紧贴屏幕边缘，尤其在手机上 */
+            padding: 3rem 1rem; 
+            /* 【修改】确保body至少有屏幕那么高 */
+            min-height: 100vh; 
+            /* 【移除】移除这个属性，恢复页面的滚动能力 */
+            /* overflow: hidden; */ 
+            
+            position: relative;
+        }
+
+        /* 动态背景的伪元素 (保持不变) */
+        body::before {
+            content: '';
+            position: fixed; /* 【修改】从 absolute 改为 fixed，这样背景在滚动时不会移动 */
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #1a2a6c);
+            background-size: 400% 400%;
+            animation: gradientAnimation 15s ease infinite;
+            z-index: -1;
+        }
+
+        @keyframes gradientAnimation {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* --- 容器与入场动画 (保持不变) --- */
+        .game-hub-container {
+            text-align: center;
+            width: 100%; /* 让容器占满可用宽度 */
+            max-width: 1200px; /* 给一个最大宽度，在大屏幕上更好看 */
+            animation: fadeInUp 0.8s ease-out forwards;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* --- 酷炫的流光标题 (保持不变) --- */
+        h1 {
+            font-size: 3.5em;
+            margin-top: 0; /* 【修改】移除顶部外边距，因为body已有内边距 */
+            margin-bottom: 40px;
+            font-weight: 900;
+            background: linear-gradient(90deg, #ffeb3b, #ffffff, #ffeb3b);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradientAnimation 5s linear infinite, textGlow 1.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes textGlow {
+            from {
+                text-shadow: 0 0 10px #fff, 0 0 20px #fff, 0 0 30px #ffeb3b;
+            }
+            to {
+                text-shadow: 0 0 20px #fff, 0 0 30px #ffeb3b, 0 0 40px #ffeb3b;
+            }
+        }
+
+        /* --- 游戏列表与卡片 (保持不变) --- */
+        .game-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 30px;
+            list-style: none;
+            padding: 0;
+            perspective: 1000px;
+        }
+
+        .game-list li {
+            position: relative;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 30px 20px;
+            transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
+                        box-shadow 0.4s ease;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            transform-style: preserve-3d;
+            opacity: 0;
+            animation: fadeInUp 0.5s ease-out forwards;
+            overflow: hidden;
+        }
+
+        .game-list li:nth-child(1) { animation-delay: 0.2s; }
+        .game-list li:nth-child(2) { animation-delay: 0.3s; }
+        .game-list li:nth-child(3) { animation-delay: 0.4s; }
+        .game-list li:nth-child(4) { animation-delay: 0.5s; }
+        .game-list li:nth-child(5) { animation-delay: 0.6s; }
+
+        .game-list li::before {
+            content: "";
+            position: absolute;
+            top: var(--y, 0);
+            left: var(--x, 0);
+            transform: translate(-50%, -50%);
+            width: 250px;
+            height: 250px;
+            background: radial-gradient(circle, var(--glow-color) 0%, transparent 50%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            pointer-events: none;
+        }
+
+        .game-list li:hover {
+            transform: scale(1.05) rotateX(10deg) rotateY(5deg);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .game-list li:hover::before {
+            opacity: 0.1;
+        }
+
+        .game-list a {
+            color: #fff;
+            text-decoration: none;
+            font-size: 1.6em;
+            font-weight: bold;
+            text-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+            transition: color 0.3s ease;
+        }
+
+        .game-list li:hover a {
+            color: var(--glow-color);
+        }
+
+        .game-icon {
+            font-size: 3.5em;
+            margin-bottom: 15px;
+            transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .game-list li:hover .game-icon {
+            transform: scale(1.2) rotate(15deg);
+        }
+
+        /* --- 响应式设计 (保持不变) --- */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.5em;
+            }
+            .game-list {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-hub-container">
+        <h1>🎮 Kenny的游戏中心 🎮</h1>
+        <ul class="game-list">
+            <li>
+                <span class="game-icon">🔫</span>
+                <a href="wuxian.html">无限射击</a>
+            </li>
+            <li>
+                <span class="game-icon">🎾</span>
+                <a href="pong.html">pong</a>
+            </li>
+            <li>
+                <span class="game-icon">🔢</span>
+                <a href="2048.html">愤怒的2048</a>
+            </li>
+            <li>
+                <span class="game-icon">💣</span>
+                <a href="caidilei.html">踩地雷</a>
+            </li>
+            <li>
+                <span class="game-icon">💥</span>
+                <a href="dishanren.html">第三人称射击</a>
+            </li>
+            <li>
+                <span class="game-icon">✈️</span>
+                <a href="flying.html">3D飞机俯视</a>
+            </li>
+                        <li>
+                <span class="game-icon">☄️</span>
+                <a href="shoot.html">三消射击</a>
+            </li>
+            <li>
+                <span class="game-icon">☄️</span>
+                <a href="test.html">3d射击</a>
+            </li>
+            <li>
+                <span class="game-icon">🧱</span>
+                <a href="brick.html">打砖块</a>
+            </li>
+            <li>
+                <span class="game-icon">🗡️</span>
+                <a href="feidao.html">飞刀</a>
+            </li>
+            <li>
+                <span class="game-icon">🏀</span>
+                <a href="basketball.html">篮球</a>
+            </li>
+                        <li>
+                <span class="game-icon">🥷🏼</span>
+                <a href="demon.html">恶魔轮赌</a>
+            </li>
+                        <li>
+                <span class="game-icon">🏀</span>
+                <a href="tanchishe.html">贪吃蛇</a>
+            </li>
+                                    <li>
+                <span class="game-icon">👦</span>
+                <a href="man.html">男人100</a>
+            </li>
+                        <li>
+                <span class="game-icon">🐋</span>
+                <a href="flyingisland.html">飞岛</a>
+            </li>
+                        <li>
+                <span class="game-icon">🐋</span>
+                <a href="waixingren.html">外星人</a>
+            </li>
+        </ul>
+    </div>
+
+    <script>
+        // 这段脚本用于实现光泽追随鼠标的效果 (保持不变)
+        document.querySelectorAll('.game-list li').forEach(card => {
+            card.addEventListener('mousemove', e => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                card.style.setProperty('--x', `${x}px`);
+                card.style.setProperty('--y', `${y}px`);
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Buckshot Roulette 完整道具版</title>
+<style>
+  body{background:#111;color:#eee;font-family:Arial;text-align:center;margin-top:20px}
+  #gun{display:inline-block;background:#333;border:4px solid #555;border-radius:50%;width:120px;height:120px;line-height:120px;font-size:40px;margin:10px}
+  #log{width:400px;height:180px;margin:10px auto;text-align:left;background:#222;border:1px solid #444;padding:8px;overflow-y:auto;font-size:14px}
+  button{margin:4px;padding:6px 12px;font-size:14px;cursor:pointer}
+  .item{display:inline-block;margin:4px;padding:4px 8px;background:#444;border:1px solid #666;border-radius:4px;cursor:pointer;font-size:18px}
+  .disabled{opacity:.4;cursor:not-allowed}
+  .red{color:#ff4d4d}.cyan{color:#4dffff}.yellow{color:#ffcc00}
+</style>
+</head>
+<body>
+
+<h2>恶魔轮盘 · 完整道具版</h2>
+
+<div id="gun">🔫</div>
+<br>
+
+<div id="items"></div>
+<br>
+<button onclick="endItemPhase()">结束道具阶段</button>
+<button onclick="shoot('player')">对自己开枪</button>
+<button onclick="shoot('enemy')">对恶魔开枪</button>
+<button onclick="newRound()">下一局</button>
+
+<div id="log"></div>
+
+<script>
+/* ************  全局状态  ************ */
+const TOTAL = 10;
+const BLANK_PROB = 0.7;
+
+let chamber = [];
+let current = 0;
+let hpPlayer = 2, hpEnemy = 2;
+let gameOver = false;
+let playerExtraTurn = false;
+let skipNextEnemy = false;   // 手铐效果
+let nextShotDmg = 1;         // 手锯+1
+
+// 道具持有
+let itemsPlayer = { magnifier:0, saw:0, inverter:0, cig:0, beer:0, cuffs:0 };
+let itemsEnemy  = { magnifier:0, saw:0, inverter:0, cig:0, beer:0, cuffs:0 };
+
+const ITEM_ICONS = {
+  magnifier:'🔍', saw:'🪓', inverter:'🔄', cig:'🚬', beer:'🥤', cuffs:'🔗'
+};
+
+/* ************  工具函数  ************ */
+function rand(n){ return Math.floor(Math.random()*n) }
+function log(msg){
+  const box = document.getElementById('log');
+  box.innerHTML += msg + '<br>';
+  box.scrollTop = box.scrollHeight;
+}
+function updateGun(){
+  document.getElementById('gun').textContent = (chamber[current]?'🔴':'⚪') + '  🔫';
+}
+function remainReport(){
+  const rest = chamber.slice(current);
+  const live = rest.filter(Boolean).length;
+  const blank= rest.length - live;
+  log(`剩余：实弹 ${live} 发，空包弹 ${blank} 发`);
+}
+function hpReport(){
+  log(`【血量】你：${hpPlayer}  恶魔：${hpEnemy}`);
+}
+
+/* ************  道具发放  ************ */
+function giveItems(){
+  // 清空
+  Object.keys(itemsPlayer).forEach(k=> itemsPlayer[k]=0);
+  Object.keys(itemsEnemy ).forEach(k=> itemsEnemy[k]=0);
+  // 原版分布：每回合双方各随机拿 2~4 个道具
+  const pool = ['magnifier','saw','inverter','cig','beer','cuffs'];
+  const pick = ()=> pool[rand(pool.length)];
+  for(let i=0;i<rand(3)+2;i++) itemsPlayer[pick()]++;
+  for(let i=0;i<rand(3)+2;i++) itemsEnemy [pick()]++;
+  renderItems();
+}
+function renderItems(){
+  const div = document.getElementById('items');
+  div.innerHTML = '';
+  Object.entries(itemsPlayer).forEach(([name,n])=>{
+    if(n<=0) return;
+    const btn = document.createElement('span');
+    btn.className = 'item';
+    btn.textContent = ITEM_ICONS[name] + '×' + n;
+    btn.onclick = ()=> useItem(name);
+    div.appendChild(btn);
+  });
+}
+
+/* ************  使用道具  ************ */
+function useItem(name){
+  if(gameOver) return;
+  if(itemsPlayer[name]<=0) return;
+  itemsPlayer[name]--;
+  log('<span class="yellow">使用道具：'+ITEM_ICONS[name]+' '+name+'</span>');
+  switch(name){
+    case 'magnifier':
+      if(current<chamber.length) log('下一发是：'+(chamber[current]?'🔴实弹':'⚪空包弹'));
+      else log('弹巢已空');
+      break;
+    case 'saw':
+      nextShotDmg = 2;
+      log('手锯启动：下一发实弹伤害+1（仅一次）');
+      break;
+    case 'inverter':
+      if(current<chamber.length){
+        chamber[current] = !chamber[current];
+        log('逆转器：下一发已翻转');
+      }else log('弹巢已空');
+      break;
+    case 'cig':
+      if(hpPlayer<2){ hpPlayer++; log('香烟：回复1血'); hpReport();}
+      else log('香烟：血量已满');
+      break;
+    case 'beer':
+      if(current<chamber.length){
+        const popped = chamber[current];
+        current++;
+        log('啤酒：退弹——弹出'+ (popped?'🔴实弹':'⚪空包弹'));
+        updateGun(); remainReport();
+      }else log('弹巢已空');
+      break;
+    case 'cuffs':
+      skipNextEnemy = true;
+      log('手铐：恶魔下回合被跳过');
+      break;
+  }
+  renderItems();
+}
+
+/* ************  结束道具阶段  ************ */
+function endItemPhase(){
+  if(gameOver) return;
+  log('<span class="yellow">道具阶段结束，进入开枪环节</span>');
+  // 恶魔简单AI：优先用能直接受益的道具
+  aiUseItems();
+}
+
+function aiUseItems(){
+  // 简单策略：随机用掉手里道具
+  const pool = Object.keys(itemsEnemy).filter(k=> itemsEnemy[k]>0);
+  while(pool.length){
+    const name = pool.splice(rand(pool.length),1)[0];
+    itemsEnemy[name]--;
+    // 放大镜、逆转器、啤酒：只对下一发有效
+    if(name==='magnifier' && current<chamber.length) log('恶魔用🔍查看下一发');
+    if(name==='inverter' && current<chamber.length){ chamber[current]=!chamber[current]; log('恶魔用🔄翻转下一发');}
+    if(name==='beer' && current<chamber.length){ const p=chamber[current++]; log('恶魔用🥤退掉'+ (p?'🔴实弹':'⚪空包弹')); updateGun(); remainReport();}
+    if(name==='cig'){ if(hpEnemy<2){hpEnemy++; log('恶魔用🚬回复1血'); hpReport();}}
+    if(name==='saw'){ nextShotDmg=2; log('恶魔用🪓给下一发+1伤害');}
+    if(name==='cuffs'){ skipNextEnemy=true; log('恶魔用🔗试图铐你（但只影响玩家回合，无效果）');}
+  }
+}
+
+/* ************  开枪逻辑  ************ */
+function shoot(target){
+  if(gameOver) return;
+  if(current>=chamber.length){ log('弹巢已空，请进入下一局'); return; }
+
+  const live = chamber[current++];
+  const hitSelf = target==='player';
+  log(`你扣动扳机，指向${hitSelf?'自己':'恶魔'}…`);
+
+  if(live){
+    const dmg = nextShotDmg;
+    log('<span class="red">砰！实弹！伤害 '+dmg+'</span>');
+    if(hitSelf){ hpPlayer-=dmg; log('你受到 '+dmg+' 点伤害'); }
+    else       { hpEnemy-=dmg;  log('恶魔受到 '+dmg+' 点伤害'); }
+    nextShotDmg=1; playerExtraTurn=false;
+  }else{
+    log('<span class="cyan">咔…空包弹</span>');
+    if(hitSelf){
+      log('空包弹！你获得额外一枪！');
+      playerExtraTurn=true;
+    }else{
+      playerExtraTurn=false;
+    }
+  }
+
+  updateGun(); remainReport(); hpReport(); checkWin();
+  if(!gameOver && current>=chamber.length) playerExtraTurn=false;
+
+  // 是否进入恶魔回合
+  if(!gameOver){
+    if(playerExtraTurn && current<chamber.length){
+      playerExtraTurn=false;
+    }else{
+      if(hpPlayer>0 && hpEnemy>0 && current<chamber.length){
+        if(skipNextEnemy){
+          skipNextEnemy=false;
+          log('<span class="yellow">恶魔被手铐束缚，回合跳过</span>');
+        }else{
+          setTimeout(()=>{
+            const aiTarget = chamber[current] ? 'player' : 'enemy';
+            aiShoot(aiTarget);
+          },600);
+        }
+      }
+    }
+  }
+}
+
+function aiShoot(target){
+  const live = chamber[current++];
+  const hitSelf = target==='enemy';
+  log(`恶魔开枪，指向${hitSelf?'自己':'你'}…`);
+  if(live){
+    const dmg = nextShotDmg;
+    log('<span class="red">砰！实弹！伤害 '+dmg+'</span>');
+    if(hitSelf) hpEnemy-=dmg; else hpPlayer-=dmg;
+    nextShotDmg=1;
+  }else{
+    log('<span class="cyan">咔…空包弹</span>');
+  }
+  updateGun(); remainReport(); hpReport(); checkWin();
+}
+
+/* ************  胜负判定  ************ */
+function checkWin(){
+  if(hpPlayer<=0){ log('<span class="red">你输了！</span>'); gameOver=true; }
+  if(hpEnemy <=0){ log('<span class="cyan">你赢了！</span>'); gameOver=true; }
+}
+
+/* ************  新局  ************ */
+function newRound(){
+  if(!gameOver && (hpPlayer<=0 || hpEnemy<=0)) return;
+  hpPlayer=2; hpEnemy=2;
+  chamber = Array.from({length:TOTAL},()=> Math.random()<BLANK_PROB ? false : true);
+  for(let i=chamber.length-1;i>0;i--){ const j=rand(i+1); [chamber[i],chamber[j]]=[chamber[j],chamber[i]]; }
+  current=0; gameOver=false; nextShotDmg=1; skipNextEnemy=false; playerExtraTurn=false;
+  log('<span class="yellow">=== 新局开始 ===</span>');
+  const live = chamber.filter(Boolean).length;
+  log(`本局 ${TOTAL} 发：实弹 ${live} 发，空包弹 ${TOTAL-live} 发`);
+  hpReport(); updateGun(); giveItems();
+}
+
+/* ************  启动  ************ */
+newRound();
+</script>
+</body>
+</html>
+

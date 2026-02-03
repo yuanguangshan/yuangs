@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>愤怒的2048 (优化版)</title>
+    <style>
+        :root {
+            --grid-size: 10;
+            --block-size: 50px;
+            --gap: 5px;
+            /* 根据移动设备屏幕宽度动态调整方块大小 */
+            @media (max-width: 600px) {
+                --block-size: calc((100vw - 60px) / var(--grid-size));
+                --gap: calc(var(--block-size) * 0.1);
+            }
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #faf8ef;
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #776e65;
+            -webkit-tap-highlight-color: transparent; /* 移除移动端点击高亮 */
+        }
+
+        #game-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .header {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 0 10px;
+        }
+
+        #score-container {
+            background: #bbada0;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+            text-align: center;
+        }
+        #score-container span {
+            display: block;
+            font-size: 14px;
+            color: #eee4da;
+        }
+
+        #restart-btn {
+            background: #8f7a66;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #restart-btn:hover {
+            background: #9f8b77;
+        }
+
+        #game-container {
+            width: calc(var(--grid-size) * (var(--block-size) + var(--gap)) + var(--gap));
+            height: calc(var(--grid-size) * (var(--block-size) + var(--gap)) + var(--gap));
+            background: #bbada0;
+            display: grid;
+            grid-template-columns: repeat(var(--grid-size), var(--block-size));
+            grid-template-rows: repeat(var(--grid-size), var(--block-size));
+            gap: var(--gap);
+            padding: var(--gap);
+            border-radius: 6px;
+            position: relative;
+        }
+
+        .block {
+            width: var(--block-size);
+            height: var(--block-size);
+            color: #776e65;
+            font-size: calc(var(--block-size) * 0.45);
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            position: absolute; /* 使用绝对定位以实现平滑过渡 */
+            transition: transform 0.15s ease-in-out, background-color 0.2s, color 0.2s;
+            animation: spawn 0.2s ease;
+        }
+        
+        @keyframes spawn {
+            from { transform: scale(0); }
+            to { transform: scale(1); }
+        }
+        
+        .merged {
+            animation: merge-pop 0.2s ease;
+        }
+
+        @keyframes merge-pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        /* 不同数值的方块颜色 */
+        .block[data-value="2"] { background: #eee4da; }
+        .block[data-value="4"] { background: #ede0c8; }
+        .block[data-value="8"] { background: #f2b179; color: #f9f6f2; }
+        .block[data-value="16"] { background: #f59563; color: #f9f6f2; }
+        .block[data-value="32"] { background: #f67c5f; color: #f9f6f2; }
+        .block[data-value="64"] { background: #f65e3b; color: #f9f6f2; }
+        /* 64以上的可以继续添加 */
+
+        #game-over-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(238, 228, 218, 0.73);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 100;
+            animation: fade-in 0.5s ease;
+            display: none; /* 默认隐藏 */
+        }
+        #game-over-overlay h2 {
+            font-size: 60px;
+            color: #776e65;
+        }
+        #game-over-overlay p {
+            font-size: 24px;
+            margin-top: 20px;
+            color: #776e65;
+        }
+
+        @keyframes fade-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-wrapper">
+        <div class="header">
+            <div id="score-container">0<span>分数</span></div>
+            <button id="restart-btn">重新开始</button>
+        </div>
+        <div id="game-container">
+            <div id="game-over-overlay">
+                <h2>游戏结束</h2>
+                <p>点击“重新开始”再来一局！</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class Game {
+            constructor() {
+                // DOM 元素
+                this.container = document.getElementById('game-container');
+                this.scoreElement = document.getElementById('score-container');
+                this.restartBtn = document.getElementById('restart-btn');
+                this.gameOverOverlay = document.getElementById('game-over-overlay');
+                
+                // 游戏配置
+                this.GRID_SIZE = 10;
+                this.BLOCK_SIZE = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--block-size'));
+                this.GAP = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap'));
+
+                // 事件绑定
+                this.container.addEventListener('mousedown', this.handleMousedown.bind(this));
+                this.restartBtn.addEventListener('click', this.restart.bind(this));
+                
+                this.restart();
+            }
+
+            // 重置或开始游戏
+            restart() {
+                this.container.innerHTML = ''; // 清空旧方块
+                this.gameOverOverlay.style.display = 'none'; // 隐藏结束画面
+                this.blocks = []; // 存储所有方块对象
+                this.grid = Array(this.GRID_SIZE).fill(null).map(() => Array(this.GRID_SIZE).fill(null));
+                this.score = 0;
+                this.isProcessing = false; // 防止在动画/逻辑处理期间重复操作
+                this.updateScore(0);
+                 // 重新附加游戏结束遮罩层，因为它在清空时被移除了
+                this.container.appendChild(this.gameOverOverlay);
+            }
+            
+            // 更新分数显示
+            updateScore(value) {
+                this.score += value;
+                this.scoreElement.innerHTML = `${Math.floor(this.score)}<span>分数</span>`;
+            }
+
+            // 睡眠函数，用于动画之间的暂停
+            sleep(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+
+            // 处理鼠标点击
+            async handleMousedown(e) {
+                if (e.button !== 0 || this.isProcessing) return; // 只处理左键，且不在处理中
+
+                const rect = this.container.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                
+                // 更精确地计算目标列
+                const targetX = Math.floor(mouseX / (this.BLOCK_SIZE + this.GAP));
+                const x = Math.max(0, Math.min(targetX, this.GRID_SIZE - 1));
+
+                // 如果该列顶部已满，则无法生成
+                if (this.grid[x][0]) {
+                    console.log("此列已满!");
+                    return;
+                }
+                
+                this.isProcessing = true;
+                this.createBlock(x, 0, 2);
+                await this.gameLoop();
+                
+                if (this.checkGameOver()) {
+                    this.showGameOver();
+                }
+                
+                this.isProcessing = false;
+            }
+
+            // 创建新方块
+            createBlock(x, y, value) {
+                const blockElement = document.createElement('div');
+                blockElement.className = 'block';
+                
+                const block = { x, y, value, element: blockElement, merged: false };
+                
+                this.blocks.push(block);
+                this.grid[x][y] = block;
+                
+                this.updateBlockAppearance(block);
+                this.container.appendChild(blockElement);
+                return block;
+            }
+
+            // 更新方块的DOM元素外观（位置和样式）
+            updateBlockAppearance(block) {
+                block.element.textContent = block.value;
+                block.element.dataset.value = block.value; // 用于CSS选择器
+                const xPos = block.x * (this.BLOCK_SIZE + this.GAP);
+                const yPos = block.y * (this.BLOCK_SIZE + this.GAP);
+                block.element.style.transform = `translate(${xPos}px, ${yPos}px)`;
+            }
+
+            // 核心游戏循环
+            async gameLoop() {
+                let moved, merged, cleared;
+                do {
+                    // 重置每一轮的状态
+                    moved = false;
+                    merged = false;
+                    cleared = false;
+
+                    // 1. 重力下落
+                    const gravityMoved = await this.applyGravity();
+                    if (gravityMoved) await this.sleep(150);
+
+                    // 2. 处理合并
+                    const mergeHappened = await this.handleMerges();
+                    if (mergeHappened) await this.sleep(150);
+
+                    // 3. 清除64方块
+                    const cleared64 = await this.clear64s();
+                    if (cleared64) await this.sleep(150);
+
+                    // 如果有任何变化，就继续循环
+                    moved = gravityMoved;
+                    merged = mergeHappened;
+                    cleared = cleared64;
+
+                } while (moved || merged || cleared);
+            }
+
+            // 应用重力，使方块下落
+            applyGravity() {
+                let hasMoved = false;
+                // 从下往上，从左到右遍历，确保方块能正确堆叠
+                for (let y = this.GRID_SIZE - 2; y >= 0; y--) {
+                    for (let x = 0; x < this.GRID_SIZE; x++) {
+                        const block = this.grid[x][y];
+                        if (block) {
+                            let newY = y;
+                            while (newY + 1 < this.GRID_SIZE && !this.grid[x][newY + 1]) {
+                                newY++;
+                            }
+                            if (newY !== y) {
+                                this.grid[x][y] = null;
+                                this.grid[x][newY] = block;
+                                block.y = newY;
+                                this.updateBlockAppearance(block);
+                                hasMoved = true;
+                            }
+                        }
+                    }
+                }
+                return hasMoved;
+            }
+
+            // 处理合并
+            handleMerges() {
+                let hasMerged = false;
+                // 从下往上遍历，优先合并下方的方块
+                for (let y = this.GRID_SIZE - 2; y >= 0; y--) {
+                    for (let x = 0; x < this.GRID_SIZE; x++) {
+                        const block = this.grid[x][y];
+                        const belowBlock = this.grid[x][y + 1];
+
+                        if (block && belowBlock && block.value === belowBlock.value && block.value < 64) {
+                            // 合并
+                            this.grid[x][y] = null;
+                            this.blocks = this.blocks.filter(b => b !== block);
+                            block.element.remove();
+
+                            belowBlock.value *= 2;
+                            this.updateScore(Math.log2(belowBlock.value) - 1);
+                            this.updateBlockAppearance(belowBlock);
+                            
+                            // 添加合并动画
+                            belowBlock.element.classList.add('merged');
+                            belowBlock.element.addEventListener('animationend', () => {
+                                belowBlock.element.classList.remove('merged');
+                            }, { once: true });
+
+                            hasMerged = true;
+                        }
+                    }
+                }
+                return hasMerged;
+            }
+
+            // 清除3个或以上的64方块
+            clear64s() {
+                const six4Blocks = this.blocks.filter(b => b.value === 64);
+                if (six4Blocks.length < 3) return false;
+
+                this.updateScore(six4Blocks.length * 10);
+                
+                // 移除这些方块
+                for (const block of six4Blocks) {
+                    this.grid[block.x][block.y] = null;
+                    block.element.remove();
+                }
+                this.blocks = this.blocks.filter(b => b.value !== 64);
+                
+                return true;
+            }
+
+            // 检查游戏是否结束
+            checkGameOver() {
+                // 如果顶部任何一列有方块，就认为游戏可能结束
+                // 一个更严格的检查是所有列的顶部都满了
+                for (let x = 0; x < this.GRID_SIZE; x++) {
+                    if (!this.grid[x][0]) {
+                        return false; // 只要有一列顶部是空的，游戏就没结束
+                    }
+                }
+                return true; // 所有列顶部都满了
+            }
+            
+            // 显示游戏结束画面
+            showGameOver() {
+                this.gameOverOverlay.style.display = 'flex';
+            }
+        }
+
+        // 启动游戏
+        document.addEventListener('DOMContentLoaded', () => {
+            new Game();
+        });
+    </script>
+</body>
+</html>

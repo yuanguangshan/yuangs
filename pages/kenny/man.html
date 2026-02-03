@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>是男人就下100层（完整修复版）</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    html,body{height:100%;background:#000}
+    #c{display:block;margin:0 auto;background:#111}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+/* ===== 配置 ===== */
+var GRAVITY=0.6,MAX_FALL=12,MOVE_SPEED=4,ROW_H=30,CAMERA_SPEED=1;
+var MAX_HP=3,INVINCIBLE_TIME=180,MAGNET_TIME=180;
+var W,H,cvs,ctx,cam,player,platforms,items,score,dead,touches,hp,invincibleLeft,magnetLeft;
+
+/* ===== 工具 ===== */
+function rand(min,max){return Math.floor(Math.random()*(max-min+1))+min;}
+function randItem(){var r=rand(0,2);return r===0?'heal':(r===1?'shield':'magnet');}
+
+/* ===== 初始化 ===== */
+function init(){
+    cvs=document.getElementById('c');
+    ctx=cvs.getContext('2d');
+    resize();window.addEventListener('resize',resize);
+    touches={};bindTouch();
+    startGame();
+}
+function resize(){
+    W=cvs.width=window.innerWidth;
+    H=cvs.height=window.innerHeight;
+}
+function bindTouch(){
+    ['start','move','end'].forEach(evt=>{
+        cvs.addEventListener('touch'+evt,function(e){
+            e.preventDefault();
+            [].forEach.call(e.changedTouches,function(t){
+                if(evt==='end')delete touches[t.identifier];
+                else touches[t.identifier]={x:t.clientX,y:t.clientY};
+            });
+        });
+    });
+}
+
+/* ===== 游戏主体 ===== */
+function startGame(){
+    cam={y:0};
+    var startY=H*0.25;
+    platforms=[{x:W/2-50,y:startY,w:100,type:'normal',item:randItem(),itemDropped:false}];
+    items=[];
+    player={x:W/2-10,y:startY-W/24,vx:0,vy:0,w:W/20,h:W/12};
+    hp=MAX_HP;invincibleLeft=0;magnetLeft=0;
+    score=0;dead=false;
+    while(platforms[platforms.length-1].y<H*1.5){
+        spawnRow(platforms[platforms.length-1].y+ROW_H);
+    }
+    loop();
+}
+function spawnRow(y){
+    if(rand(0,100)<60)return;        // 60% 空行
+    var r=rand(0,100);
+    var p;
+    if(r<10)      p={x:rand(0,W-40),y:y,w:40,type:'spike'};
+    else if(r<20) p={x:rand(0,W-80),y:y,w:80,type:'push',dir:rand(0,1)?-1:1};
+    else if(r<30) p={x:rand(0,W-80),y:y,w:80,type:'trampoline'};
+    else          p={x:rand(0,W-100),y:y,w:rand(70,100),type:'normal'};
+    p.item=randItem();
+    p.itemDropped=false;
+    platforms.push(p);
+}
+function loop(){
+    if(dead)return;
+    update();render();requestAnimationFrame(loop);
+}
+function update(){
+    cam.y+=CAMERA_SPEED;
+    if(invincibleLeft>0)invincibleLeft--;
+    if(magnetLeft>0)magnetLeft--;
+
+    var left=false,right=false;
+    for(var id in touches){
+        if(touches[id].x<W/2)left=true;else right=true;
+    }
+    player.vx=left?-MOVE_SPEED:(right?MOVE_SPEED:0);
+
+    player.vy+=GRAVITY;
+    if(player.vy>MAX_FALL)player.vy=MAX_FALL;
+    player.x+=player.vx;
+    player.y+=player.vy;
+
+    if(player.x<0)player.x=0;
+    if(player.x+player.w>W)player.x=W-player.w;
+
+    /* 提前 1.5 屏生成新行（防止后面空白） */
+    while(platforms[platforms.length-1].y-cam.y<H*1.5){
+        spawnRow(platforms[platforms.length-1].y+ROW_H);
+    }
+
+    /* 平台逻辑 & 道具掉落 */
+    for(var i=0;i<platforms.length;i++){
+        var p=platforms[i];
+        var sy=p.y-cam.y;
+        if(sy<-H||sy>H+ROW_H)continue;   // 放宽裁剪边界
+
+        /* 尖刺 */
+        if(p.type==='spike'&&
+           player.x+player.w>p.x&&player.x<p.x+p.w&&
+           player.y+player.h>p.y&&player.y<p.y+ROW_H){
+            if(invincibleLeft<=0){hurt();return;}
+        }
+        /* 撞人平台 */
+        if(p.type==='push'&&
+           player.x+player.w>p.x&&player.x<p.x+p.w&&
+           player.y+player.h>=p.y&&player.y+player.h<=p.y+15){
+            player.x+=p.dir*MOVE_SPEED*1.5;
+        }
+        /* 普通 & 弹簧 */
+        if((p.type==='normal'||p.type==='trampoline')&&
+           player.y+player.h<=p.y+5&&player.y+player.h+player.vy>=p.y-5&&
+           player.x+player.w>p.x&&player.x<p.x+p.w){
+            player.y=p.y-player.h;
+            player.vy=p.type==='trampoline'?-10:0;
+        }
+
+        /* 道具掉落 */
+        if(p.item&&!p.itemDropped&&p.y-cam.y<H){
+            items.push({
+                x:p.x+p.w/2-10,y:p.y-10,w:20,h:20,type:p.item
+            });
+            p.itemDropped=true;
+        }
+    }
+
+    /* 道具更新 & 磁铁 & 拾取 */
+    for(var j=items.length-1;j>=0;j--){
+        var it=items[j];
+        it.y+=CAMERA_SPEED;
+        if(magnetLeft>0){
+            var dx=player.x+player.w/2-(it.x+it.w/2);
+            var dy=player.y+player.h/2-(it.y+it.h/2);
+            var len=Math.sqrt(dx*dx+dy*dy);
+            if(len>5){
+                it.x+=dx/len*6;
+                it.y+=dy/len*6;
+            }
+        }
+        /* 实时拾取 */
+        if(player.x+player.w>it.x&&player.x<it.x+it.w&&
+           player.y+player.h>it.y&&player.y<it.y+it.h){
+            pickItem(it.type);items.splice(j,1);
+        }
+        if(it.y-cam.y>H+ROW_H)items.splice(j,1);
+    }
+
+    /* 顶部/底部死亡 */
+    if(player.y-cam.y<0||player.y-cam.y>H){
+        if(invincibleLeft<=0)hurt();
+    }
+    score=Math.floor(cam.y/ROW_H);
+}
+function pickItem(type){
+    switch(type){
+        case 'heal':   hp=Math.min(hp+1,MAX_HP);break;
+        case 'shield': invincibleLeft=INVINCIBLE_TIME;break;
+        case 'magnet': magnetLeft=MAGNET_TIME;break;
+    }
+}
+function hurt(){
+    hp--;
+    if(hp<=0){die();return;}
+    player.y=cam.y+50;
+    player.vy=0;
+}
+function die(){
+    dead=true;
+    setTimeout(function(){
+        alert('游戏结束！你下了 '+score+' 层！');startGame();
+    },100);
+}
+function render(){
+    ctx.clearRect(0,0,W,H);
+    /* 绘制平台 */
+    platforms.forEach(function(p){
+        var sy=p.y-cam.y;
+        if(sy<-H||sy>H+ROW_H)return;   // 放宽上边界
+        if(p.type==='normal'){ctx.fillStyle='#0f0';ctx.fillRect(p.x,sy,p.w,10);}
+        else if(p.type==='trampoline'){ctx.fillStyle='#0af';ctx.fillRect(p.x,sy,p.w,10);}
+        else if(p.type==='spike'){
+            ctx.fillStyle='#f00';
+            ctx.beginPath();
+            for(var i=0;i<p.w/10;i++){
+                ctx.lineTo(p.x+i*10,sy+ROW_H);
+                ctx.lineTo(p.x+i*10+5,sy);
+            }
+            ctx.closePath();ctx.fill();
+        }
+        else if(p.type==='push'){ctx.fillStyle='#fa0';ctx.fillRect(p.x,sy,p.w,10);}
+    });
+
+    /* 绘制道具 */
+    items.forEach(function(it){
+        var sy=it.y-cam.y;
+        if(sy<-H||sy>H+ROW_H)return;   // 同样放宽
+        if(it.type==='heal'){
+            ctx.fillStyle='#0f0';ctx.fillRect(it.x,it.y,it.w,it.h);
+            ctx.strokeStyle='#fff';ctx.lineWidth=2;
+            ctx.beginPath();
+            ctx.moveTo(it.x+it.w/2,it.y+2);ctx.lineTo(it.x+it.w/2,it.y+it.h-2);
+            ctx.moveTo(it.x+2,it.y+it.h/2);ctx.lineTo(it.x+it.w-2,it.y+it.h/2);
+            ctx.stroke();
+        }else if(it.type==='shield'){
+            ctx.fillStyle='#0af';
+            ctx.beginPath();ctx.arc(it.x+it.w/2,it.y+it.h/2,it.w/2,0,Math.PI*2);ctx.fill();
+        }else if(it.type==='magnet'){
+            ctx.fillStyle='#fd0';
+            ctx.fillRect(it.x,it.y,it.w,it.h);
+        }
+    });
+
+    /* 玩家（无敌闪烁） */
+    if(invincibleLeft>0&&(Math.floor(invincibleLeft/6)%2))ctx.globalAlpha=0.5;
+    ctx.fillStyle='#fff';
+    ctx.fillRect(player.x,player.y-cam.y,player.w,player.h);
+    ctx.globalAlpha=1;
+
+    /* UI */
+    ctx.fillStyle='#fff';ctx.font='20px monospace';
+    ctx.fillText('层数：'+score,10,30);
+    for(var i=0;i<MAX_HP;i++){
+        ctx.fillStyle=i<hp?'#f00':'#555';
+        ctx.fillRect(10+25*i,40,20,10);
+    }
+    if(invincibleLeft>0){
+        ctx.fillStyle='#0af';
+        ctx.fillText('无敌 '+Math.ceil(invincibleLeft/60)+'s',10,70);
+    }
+    if(magnetLeft>0){
+        ctx.fillStyle='#fd0';
+        ctx.fillText('磁铁 '+Math.ceil(magnetLeft/60)+'s',10,90);
+    }
+}
+window.onload=init;
+</script>
+</body>
+</html>
+
+
