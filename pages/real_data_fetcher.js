@@ -20,10 +20,6 @@ class RealDataFetcher {
                 headers: {
                     'accept': 'application/json, text/plain, */*',
                     'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
-                    'cache-control': 'no-cache',
-                    'pragma': 'no-cache',
-                    'origin': 'https://i.want.biz',
-                    'referer': 'https://i.want.biz/',
                     ...options.headers
                 }
             });
