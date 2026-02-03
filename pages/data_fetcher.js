@@ -13,24 +13,42 @@ class RealDataFetcher {
     }
 
     // 通用请求方法
-    async fetch(url, options = {}) {
+    async fetch(url, options = {}, timeout = 10000) {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), timeout);
+        
         try {
             const response = await fetch(url, {
                 ...options,
+                signal: controller.signal,
                 headers: {
                     'accept': 'application/json, text/plain, */*',
                     'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
                     ...options.headers
                 }
             });
+            clearTimeout(id);
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            
-            return await response.json();
+            const text = await response.text();
+            try {
+                let jsonStr = text.trim();
+                // 处理可能的 JSONP 包装 (如: ({"list":[]}) 或 callback({"list":[]}))
+                if (jsonStr.startsWith('(') && jsonStr.endsWith(')')) {
+                    jsonStr = jsonStr.substring(1, jsonStr.length - 1);
+                } else if (jsonStr.includes('(') && jsonStr.endsWith(')')) {
+                    jsonStr = jsonStr.substring(jsonStr.indexOf('(') + 1, jsonStr.length - 1);
+                }
+                return JSON.parse(jsonStr);
+            } catch (e) {
+                console.error('JSON Parse Error:', e, url);
+                return null;
+            }
         } catch (error) {
-            console.error('Fetch error:', error);
+            clearTimeout(id);
+            console.error('Fetch error:', error, url);
             return null;
         }
     }
@@ -81,6 +99,20 @@ class RealDataFetcher {
      */
     async getMarketUpDown() {
         return this.fetchWithCache('market_updown', `${this.baseURL}/overview`);
+    }
+
+    /**
+     * 获取全市场合约列表 (白盘数据)
+     */
+    async getVarietyList() {
+        return this.fetchWithCache('variety_list', `${this.washDataURL}/`);
+    }
+
+    /**
+     * 获取全市场合约列表 (夜盘数据)
+     */
+    async getNightVarietyList() {
+        return this.fetchWithCache('night_variety_list', `${this.washDataURL}/night`);
     }
 
     // ============ 资金流向数据 ============
@@ -221,11 +253,36 @@ class RealDataFetcher {
     }
 
     /**
+     * 获取股票市场投资者情绪指数历史 (0.5为分界线)
+     */
+    async getEmotionHistory() {
+        return this.fetchWithCache('emotion_history', `https://q.want.biz/emotion`);
+    }
+
+    /**
      * 获取东方财富国际商品行情
      */
     async getInternationalCommodities() {
         const url = `${this.ddcURL}/market/rank?market_type=forexdata&stk_type=commodity&order_by=none&sort_field=px_change_rate&limit=300&fields=prod_name%2Cprod_en_name%2Cprod_code%2Csymbol%2Clast_px%2Cpx_change%2Cpx_change_rate%2Chigh_px%2Clow_px%2Cweek_52_high%2Cweek_52_low%2Cprice_precision%2Cupdate_time`;
         return this.fetchWithCache('international_commodities', url);
+    }
+    /**
+     * 获取指定品种的合约列表
+     * @param {string} msgid 品种标识 (例如: 113_cu, 114_c)
+     */
+    async getVarietyContracts(msgid) {
+        return this.fetchWithCache(`contracts_${msgid}`, `${this.baseURL}/redis?msgid=${encodeURIComponent(msgid)}`);
+    }
+
+    /**
+     * 获取多个合约的实时价格及详细信息
+     * @param {Array<string>} codes 合约代码列表 (例如: ['113_cu2405', '113_cu2406'])
+     */
+    async getContractPrices(codes) {
+        if (!codes || codes.length === 0) return null;
+        const codesStr = Array.isArray(codes) ? codes.join(',') : codes;
+        const url = `${this.baseURL}/custom/${codesStr}?orderBy=code&sort=asc&pageSize=200&pageIndex=0&callbackName=`;
+        return this.fetchWithCache(`prices_${codesStr}`, url);
     }
 
     // ============ 批量获取方法 ============

@@ -1,0 +1,1999 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>期货投资综合Dashboard（真实数据）</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+    <script src="real_data_fetcher.js?v=20260203"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --bg-card: #1c2128;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --color-primary: #58a6ff;
+            --color-success: #3fb950;
+            --color-warning: #d29922;
+            --color-danger: #f85149;
+            --chart-up: #f85149;
+            --chart-down: #3fb950;
+            --border-color: #30363d;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --transition-normal: 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background-color: rgba(22, 27, 34, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 12px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        /* 状态指示器 */
+        .status-info {
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            color: var(--text-secondary);
+            background: var(--bg-secondary);
+            padding: 6px 12px;
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-active {
+            background-color: var(--color-success);
+            box-shadow: 0 0 8px var(--color-success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease;
+        }
+
+        .card:hover {
+            border-color: var(--color-primary);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .grid-6 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        @media (min-width: 768px) { .grid-6 { grid-template-columns: repeat(3, 1fr); } }
+        @media (min-width: 1200px) { .grid-6 { grid-template-columns: repeat(6, 1fr); } }
+
+        .stat-card {
+            background-color: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            padding: 12px;
+            text-align: center;
+            border: 1px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .stat-card:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--border-color);
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        /* 增仓箭头 */
+        .change-arrow {
+            width: 0; height: 0;
+            display: inline-block;
+            margin-right: 6px;
+        }
+        .change-arrow.up { border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 8px solid var(--color-danger); }
+        .change-arrow.down { border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 8px solid var(--color-success); }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        @media (min-width: 992px) {
+            .grid-2 {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .chart-container {
+            height: 350px;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .text-up { color: var(--color-danger) !important; font-weight: 600; }
+        .text-down { color: var(--color-success) !important; font-weight: 600; }
+
+        .stat-up { color: var(--color-danger); }
+        .stat-down { color: var(--color-success); }
+
+        .loading {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(13, 17, 23, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border-color);
+            border-top: 4px solid var(--color-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge-success { background: rgba(63, 185, 80, 0.15); color: #3fb950; border: 1px solid rgba(63, 185, 80, 0.3); }
+        .badge-warning { background: rgba(210, 153, 34, 0.15); color: #d29922; border: 1px solid rgba(210, 153, 34, 0.3); }
+
+        .header-nav { display: flex; gap: 4px; }
+        .header-nav a {
+            padding: 8px 16px;
+            border-radius: 6px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .header-nav a:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+        .header-nav a.active { background: var(--color-primary); color: white; }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .table th {
+            text-align: left;
+            padding: 12px 10px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 500;
+        }
+        .table td {
+            padding: 12px 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .variety-list::-webkit-scrollbar, .table-container::-webkit-scrollbar {
+            width: 4px;
+        }
+        .variety-list::-webkit-scrollbar-thumb, .table-container::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 2px;
+        }
+
+        /* 布局增强 */
+        .market-main-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+        @media (min-width: 1200px) {
+            .market-main-grid {
+                grid-template-columns: 2fr 1fr;
+            }
+        }
+        .heatmaps-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .variety-list {
+            max-height: 850px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        /* 优化品种行 */
+        .variety-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            margin-bottom: 4px;
+            background: var(--bg-secondary);
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+        .table-dragon-tiger th {
+            font-size: 12px;
+            padding: 8px 4px;
+        }
+        .table-dragon-tiger td {
+            font-size: 12px;
+            padding: 10px 4px;
+        }
+        .table-dragon-tiger tr:nth-child(even) {
+            background: rgba(139, 148, 158, 0.03);
+        }
+        .change-up { color: #f85149; }
+        .change-down { color: #3fb950; }
+        .variety-row:hover { 
+            background-color: var(--bg-secondary);
+            cursor: pointer;
+            border-color: var(--color-primary);
+        }
+        .v-info { display: flex; align-items: center; gap: 8px; flex: 1; }
+        .v-name { font-weight: 600; min-width: 65px; white-space: nowrap; }
+        .v-change { width: 70px; text-align: right; }
+        .v-oi { width: 90px; text-align: right; color: var(--text-secondary); font-size: 11px; }
+        .mini-progress { width: 40px; height: 3px; background: var(--border-color); border-radius: 2px; overflow: hidden; }
+        .mini-fill { height: 100%; transition: width 0.3s; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>📊 Futures Insights</h1>
+        <div style="display: flex; align-items: center; gap: 20px;">
+            <div class="status-info" id="trading-status">
+                <span class="status-indicator"></span>
+                <span id="status-text">数据更新中...</span>
+            </div>
+            <nav class="header-nav">
+            <nav class="header-nav">
+                <a href="#" class="active" onclick="switchTab('realtime', event)">实时行情</a>
+                <a href="#" onclick="switchTab('news', event)">资讯中心</a>
+                <a href="#" onclick="switchTab('dragon', event)">龙虎动态</a>
+                <a href="#" onclick="switchTab('analysis', event)">进阶分析</a>
+            </nav>
+            </nav>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- 加载状态 -->
+        <div id="loading" class="loading">
+            <div class="loading-spinner"></div>
+            <p>正在加载真实数据...</p>
+        </div>
+
+        <!-- 实时行情Tab -->
+        <div id="tab-realtime" class="tab-content active">
+            <!-- 市场关键概览 -->
+            <div class="grid-6" style="margin-bottom: 24px;">
+                <div class="card stat-card">
+                    <div class="stat-label">上涨品种</div>
+                    <div class="stat-value text-up" id="upCount">-</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-label">下跌品种</div>
+                    <div class="stat-value text-down" id="downCount">-</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-label">平均涨跌</div>
+                    <div id="marketAvgChange" class="stat-value">-%</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-label">平均基差</div>
+                    <div class="stat-value text-primary" id="basisValue">-</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-label">合约总数</div>
+                    <div class="stat-value" id="totalCount">-</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-label">市场情绪</div>
+                    <div class="stat-value" id="emotionValueMini">-</div>
+                    <div id="emotionLabelMini" style="font-size: 11px; opacity: 0.8;">加载中...</div>
+                </div>
+            </div>
+
+            <!-- 核心指数与情绪 (并列显示) -->
+            <div class="grid-2" style="margin-bottom: 24px;">
+                <!-- 市场综合指数趋势 -->
+                <div class="card" style="margin-bottom: 0;">
+                    <div class="card-header">
+                        <h2 class="card-title"><i class="fas fa-chart-line"></i> 市场综合指数趋势</h2>
+                        <button class="btn btn-sm" onclick="loadAllData()">刷新</button>
+                    </div>
+                    <div id="marketIndexTrend" style="height: 300px; width: 100%;"></div>
+                </div>
+                
+                <!-- 投资者情绪趋势图 -->
+                <div class="card" style="margin-bottom: 0;">
+                    <div class="card-header">
+                        <h2 class="card-title"><i class="fas fa-heartbeat"></i> 投资者多空情绪观察 (实时波动)</h2>
+                        <div id="emotionUpdateInfo" style="font-size: 12px; color: var(--text-secondary);">更新于: --:--</div>
+                    </div>
+                    <div id="emotionTrendChart" style="height: 300px; width: 100%;"></div>
+                </div>
+            </div>
+
+            <div class="market-main-grid">
+                <!-- 左侧热力图堆叠 -->
+                <div class="heatmaps-stack">
+                    <!-- 行业热力图 -->
+                    <div class="card" style="margin-bottom: 0;">
+                        <div class="card-header">
+                            <h2 class="card-title"><i class="fas fa-layer-group"></i> 行业资金热图</h2>
+                            <span class="badge badge-success">实时</span>
+                        </div>
+                        <div id="industryHeatmap" class="chart-container"></div>
+                    </div>
+                    <!-- 品种热力图 -->
+                    <div class="card" style="margin-bottom: 0;">
+                        <div class="card-header">
+                            <h2 class="card-title"><i class="fas fa-fire"></i> 品种资金流向</h2>
+                            <span class="badge badge-success">实时</span>
+                        </div>
+                        <div id="varietyHeatmap" class="chart-container"></div>
+                    </div>
+                </div>
+
+                <!-- 右侧品种行情列表 -->
+                <div class="card" style="margin-bottom: 0; display: flex; flex-direction: column;">
+                    <div class="card-header">
+                        <h2 class="card-title"><i class="fas fa-list-ul"></i> 行情异动 (增仓率)</h2>
+                        <div style="display: flex; gap: 4px;">
+                            <button id="toggleVarietyListBtn" class="btn btn-sm" onclick="toggleVarietyDisplay()">全部</button>
+                            <button class="btn btn-sm" onclick="loadAllData()"><i class="fas fa-sync-alt"></i></button>
+                        </div>
+                    </div>
+                    <div id="varietyList" class="variety-list">
+                        <!-- 动态生成 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 二级数据行：主力合约 与 品种对比 -->
+            <div class="grid-2">
+                <div class="card" style="margin-bottom: 0;">
+                    <div class="card-header">
+                        <h2 class="card-title"><i class="fas fa-crown"></i> 活跃主力合约 (成交量Top)</h2>
+                        <button class="btn btn-sm" onclick="loadMainContracts()">刷新</button>
+                    </div>
+                    <div class="table-container" style="max-height: 550px; overflow-y: auto;">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>代码</th>
+                                    <th>名称</th>
+                                    <th>价格</th>
+                                    <th>涨跌</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mainContractsTable">
+                                <tr><td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 40px;">数据加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom: 0;">
+                    <div class="card-header">
+                        <h2 class="card-title"><i class="fas fa-balance-scale"></i> 主力多空力量对比 (TOP 15)</h2>
+                    </div>
+                    <div id="varietyPositionDiffChart" class="chart-container" style="height: 550px; padding: 10px;"></div>
+                </div>
+            </div>
+
+            <!-- 原有的品种深度分析 -->
+            <div class="card" id="variety-analysis-section" style="margin-top: 20px;">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fas fa-chart-line"></i> 品种深度结构分析</h2>
+                    <div style="display: flex; gap: 12px;">
+                        <select id="variety-select-analysis" class="select-variety" onchange="handleVarietyAnalysisChange()">
+                            <option value="">选择品种进行深度分析...</option>
+                        </select>
+                        <button class="btn btn-sm" onclick="fetchVarietyAnalysis()">分析</button>
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div id="premiumStructureChart" class="chart-container"></div>
+                    <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>合约</th>
+                                    <th>最新</th>
+                                    <th>涨幅</th>
+                                    <th>成交</th>
+                                    <th>持仓</th>
+                                </tr>
+                            </thead>
+                            <tbody id="varietyContractsBody">
+                                <tr><td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 40px;">请选择品种查看合约结构</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 资讯中心 -->
+            <div id="tab-news" class="tab-content">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title"><i class="far fa-newspaper"></i> 同花顺新闻</h2>
+                            <button class="btn btn-sm" onclick="loadNews()">刷新</button>
+                        </div>
+                        <div id="thsNewsList" class="news-list" style="max-height: 500px; overflow-y: auto;"></div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title"><i class="far fa-newspaper"></i> 华尔街见闻</h2>
+                            <button class="btn btn-sm" onclick="loadNews()">刷新</button>
+                        </div>
+                        <div id="wallStreetNewsList" class="news-list" style="max-height: 500px; overflow-y: auto;"></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title"><i class="far fa-newspaper"></i> 东方财富资讯 (暂时不可用)</h2>
+                        <button class="btn btn-sm" onclick="loadNews()">刷新</button>
+                    </div>
+                    <div id="emNewsList" class="news-list" style="max-height: 300px; overflow-y: auto;"></div>
+                </div>
+            </div>
+
+        <!-- 进阶分析Tab -->
+        <div id="tab-analysis" class="tab-content">
+            <div class="grid-2">
+                <!-- 涨跌幅与增仓比关系图 -->
+                <div class="card" style="grid-column: span 2;">
+                    <div class="card-header">
+                        <h2 class="card-title"><i class="fas fa-chart-scatter"></i> 涨跌幅与增仓比关系图</h2>
+                        <div style="display: flex; gap: 12px; align-items: center; font-size: 13px;">
+                            <span style="color: var(--text-secondary);">气泡大小代表:</span>
+                            <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                <input type="radio" name="bubbleMetric" value="cdzj" checked onchange="updateAnalysisCharts()"> 资金
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                <input type="radio" name="bubbleMetric" value="cje" onchange="updateAnalysisCharts()"> 成交额
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                <input type="radio" name="bubbleMetric" value="vol" onchange="updateAnalysisCharts()"> 成交量
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                <input type="radio" name="bubbleMetric" value="ccl" onchange="updateAnalysisCharts()"> 持仓量
+                            </label>
+                        </div>
+                    </div>
+                    <div id="bubbleChartAnalysis" style="height: 500px; width: 100%;"></div>
+                </div>
+
+                <!-- 品种走势对比 (相对K线) -->
+                <div class="card" style="grid-column: span 2;">
+                    <div class="card-header">
+                        <h2 class="card-title"><i class="fas fa-align-left"></i> 全品种相对强弱走势对比</h2>
+                    </div>
+                    <div id="trendComparisonChart" style="height: 550px; width: 100%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 龙虎榜Tab -->
+        <div id="tab-dragon" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fas fa-dragon"></i> 机构龙虎榜动态</h2>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <input type="date" id="dragonDate" class="btn btn-sm" style="background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); height: 32px; padding: 0 8px;">
+                        <select id="dragon-variety-select" class="select-variety" style="width: 150px; height: 32px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px;" onchange="loadDragonTiger()">
+                            <option value="113_cu">沪铜 (cu)</option>
+                        </select>
+                        <button class="btn btn-sm" onclick="loadDragonTiger()"><i class="fas fa-search"></i> 查询</button>
+                    </div>
+                </div>
+                <div style="margin-bottom: 12px; font-weight: 500; font-size: 14px; color: var(--text-secondary); border-left: 3px solid var(--color-primary); padding-left: 10px;">
+                    选中品种持仓榜单: <span id="currentVarietyName" style="color: var(--text-primary);">加载中...</span>
+                </div>
+                <div class="table-container">
+                    <table class="table table-dragon-tiger">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;">排名</th>
+                                <th colspan="3" style="text-align: center; color: #f85149; background: rgba(248, 81, 73, 0.05);">多头持仓</th>
+                                <th colspan="3" style="text-align: center; color: #3fb950; background: rgba(63, 185, 80, 0.05);">空头持仓</th>
+                            </tr>
+                            <tr>
+                                <th>#</th>
+                                <th>席位名称</th>
+                                <th>持仓量</th>
+                                <th>增减</th>
+                                <th>席位名称</th>
+                                <th>持仓量</th>
+                                <th>增减</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dragonTigerTable">
+                            <tr><td colspan="7" style="text-align:center">数据加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        </div>
+
+    </div>
+
+    <script>
+        // 全局变量
+        let charts = {};
+        let currentDate = new Date();
+        let showAllVarieties = false;
+        let lastRawVarietyList = [];
+        
+        // 格式化日期为YYYYMMDD
+        function formatDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}${month}${day}`;
+        }
+
+        // Tab切换
+        function switchTab(tabId, event) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.header-nav a').forEach(link => {
+                link.classList.remove('active');
+            });
+            
+            const targetTab = document.getElementById('tab-' + tabId);
+            if (targetTab) targetTab.classList.add('active');
+            
+            if (tabId === 'analysis') {
+                updateAnalysisCharts();
+            }
+
+            if (event && event.currentTarget) {
+                event.currentTarget.classList.add('active');
+            } else {
+                // 如果没传event，尝试根据tabId手动高亮
+                document.querySelectorAll('.header-nav a').forEach(link => {
+                    if (link.getAttribute('onclick')?.includes(tabId)) {
+                        link.classList.add('active');
+                    }
+                });
+            }
+            
+            // 切换Tab后重绘所有图表以防容器大小变动
+            setTimeout(() => {
+                Object.values(charts).forEach(chart => chart && chart.resize());
+            }, 100);
+        }
+
+        // 常量定义
+        const DIRECT_VARIETY_MAP = {
+            'cu': '113_cu', 'al': '113_al', 'zn': '113_zn', 'pb': '113_pb', 'ni': '113_ni', 
+            'sn': '113_sn', 'au': '113_au', 'ag': '113_ag', 'rb': '113_rb', 'wr': '113_wr', 
+            'hc': '113_hc', 'ss': '113_ss', 'bu': '113_bu', 'ru': '113_ru', 'sp': '113_sp',
+            'fu': '113_fu','ad': '113_ad','ao': '113_ao', 'br': '113_br',
+            'c': '114_c', 'cs': '114_cs', 'a': '114_a', 'b': '114_b', 'm': '114_m', 
+            'y': '114_y', 'p': '114_p', 'jd': '114_jd', 'rr': '114_rr', 'l': '114_l', 
+            'v': '114_v', 'pp': '114_pp', 'j': '114_j', 'jm': '114_jm', 'i': '114_i', 
+            'eg': '114_eg', 'eb': '114_eb', 'pg': '114_pg', 'lh': '114_lh',
+            'oi': '115_oi', 'rm': '115_rm', 'cf': '115_cf', 'sr': '115_sr', 'ta': '115_ta', 
+            'ma': '115_ma', 'fg': '115_fg', 'ap': '115_ap', 'ur': '115_ur', 'sa': '115_sa'
+        };
+
+        // 加载并更新交易状态
+        function updateTradingStatus() {
+            const now = new Date();
+            const hour = now.getHours();
+            const min = now.getMinutes();
+            const day = now.getDay();
+            
+            let isActive = false;
+            let statusText = "非交易时段";
+            
+            if (day >= 1 && day <= 5) { // 周一到周五
+                // 日盘: 9:00-10:15, 10:30-11:30, 13:30-15:00
+                if ((hour === 9) || (hour === 10 && min <= 15) || (hour === 10 && min >= 30) || (hour === 11 && min <= 30) || (hour >= 13 && hour < 15)) {
+                    isActive = true;
+                    statusText = "日盘交易中";
+                } 
+                // 夜盘: 21:00-02:30 (不同品种结束时间不同，统一到02:30)
+                else if (hour >= 21 || hour < 3) {
+                    isActive = true;
+                    statusText = "夜盘交易中";
+                }
+            }
+            
+            const indicator = document.querySelector('.status-indicator');
+            const statusTextEl = document.getElementById('status-text');
+            if (indicator && statusTextEl) {
+                indicator.className = `status-indicator ${isActive ? 'status-active' : ''}`;
+                statusTextEl.textContent = `市场状态: ${statusText} (${now.toLocaleTimeString()})`;
+            }
+        }
+
+        // 加载所有数据
+        async function loadAllData() {
+            try {
+                updateTradingStatus();
+                
+                const safeExecute = async (name, fn) => {
+                    try {
+                        await fn();
+                    } catch (e) {
+                        console.error(`Failed to load ${name}:`, e);
+                    }
+                };
+
+                // 并行加载非依赖项
+                await Promise.all([
+                    safeExecute('Industry Heatmap', async () => {
+                        const data = await realDataFetcher.getIndustryHeatmap();
+                        if (data) renderIndustryHeatmap(data);
+                    }),
+                    safeExecute('Variety Heatmap', async () => {
+                        const data = await realDataFetcher.getVarietyHeatmap();
+                        if (data) renderVarietyHeatmap(data);
+                    }),
+                    safeExecute('Main Contracts', loadMainContracts),
+                    safeExecute('Market Data', async () => {
+                        const marketData = await realDataFetcher.getMarketOverview();
+                        const upDownData = await realDataFetcher.getMarketUpDown();
+                        if (marketData && marketData.list) {
+                            renderVarietyList(marketData.list);
+                            populateVarietySelect(marketData.list, 'variety-select-analysis');
+                            populateVarietySelect(marketData.list, 'dragon-variety-select');
+                        }
+                        if (upDownData && upDownData.result) {
+                            renderMarketUpDown(upDownData, marketData.list);
+                        }
+                    }),
+                    safeExecute('Basis', async () => {
+                        const basisData = await realDataFetcher.getBasis();
+                        if (basisData) renderBasis(basisData);
+                    }),
+                    safeExecute('Index Trend', async () => {
+                        const indexTrend = await realDataFetcher.getMarketIndexTrend();
+                        if (indexTrend) renderMarketIndexTrend(indexTrend);
+                    }),
+                    safeExecute('Emotion', async () => {
+                        const [emotion, history] = await Promise.all([
+                            realDataFetcher.getEmotionIndex(),
+                            realDataFetcher.getEmotionHistory()
+                        ]);
+                        if (emotion) renderEmotionIndex(emotion);
+                        if (history) renderEmotionTrendChart(history);
+                    })
+                ]);
+
+                // 资讯和龙虎榜
+                await safeExecute('News & Dragon Tiger', async () => {
+                    await Promise.all([loadNews(), loadDragonTiger()]);
+                });
+
+                // 预加载一个品种的深度分析 (默认铜 cu)
+                setTimeout(() => {
+                    const defaultVariety = '113_cu';
+                    const analysisSelect = document.getElementById('variety-select-analysis');
+                    if (analysisSelect && (!analysisSelect.value || analysisSelect.value === "")) {
+                        analysisSelect.value = defaultVariety;
+                        fetchVarietyAnalysis(defaultVariety);
+                    }
+                }, 500);
+
+            } catch (error) {
+                console.error('加载系统发生严重错误:', error);
+            } finally {
+                // 确保无论如何都隐藏加载状态
+                const loading = document.getElementById('loading');
+                if (loading) loading.style.display = 'none';
+            }
+        }
+
+        function populateVarietySelect(list, selectId = 'variety-select-analysis') {
+            const select = document.getElementById(selectId);
+            if (!select) return;
+            
+            // 防止重复填充
+            if (select.options.length > 1) return;
+
+            const sortedList = [...list].sort((a,b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
+            sortedList.forEach(item => {
+                const code = item.uid.split('|')[1]?.toLowerCase();
+                const msgid = DIRECT_VARIETY_MAP[code];
+                if (msgid) {
+                    const opt = document.createElement('option');
+                    opt.value = msgid;
+                    opt.textContent = `${item.name} (${code.toUpperCase()})`;
+                    select.appendChild(opt);
+                }
+            });
+        }
+
+        async function handleVarietyAnalysisChange() {
+            const varietyId = document.getElementById('variety-select-analysis').value;
+            if (!varietyId) return;
+            await fetchVarietyAnalysis(varietyId);
+        }
+
+        async function fetchVarietyAnalysis(varietyId) {
+            const container = document.getElementById('varietyContractsBody');
+            container.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 40px;">数据解析中...</td></tr>';
+            
+            try {
+                // 1. 获取合约列表
+                const redisData = await realDataFetcher.getVarietyContracts(varietyId);
+                if (!redisData || !Array.isArray(redisData)) throw new Error("无法读取合约列表");
+                
+                const codes = redisData
+                    .filter(i => i.code && /\d/.test(i.code))
+                    .map(i => `${i.mktid}_${i.code}`);
+                
+                if (codes.length === 0) throw new Error("未找到有效合约");
+
+                // 2. 获取价格详情
+                const pricesData = await realDataFetcher.getContractPrices(codes.slice(0, 20).join(','));
+                if (!pricesData || !pricesData.list) throw new Error("价格解析失败");
+                
+                const contracts = pricesData.list.map(item => ({
+                    code: item.name,
+                    price: parseFloat(item.p) || 0,
+                    change: parseFloat(item.zdf) || 0,
+                    volume: parseInt(item.cj) || 0,
+                    position: parseInt(item.ccl) || 0
+                })).sort((a,b) => {
+                    const monthA = a.code.match(/\d+/) ? parseInt(a.code.match(/\d+/)[0]) : 0;
+                    const monthB = b.code.match(/\d+/) ? parseInt(b.code.match(/\d+/)[0]) : 0;
+                    return monthA - monthB;
+                });
+
+                renderVarietyContractsTable(contracts);
+                renderVarietyStructureChart(contracts);
+            } catch (e) {
+                container.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--color-danger); padding: 40px;">分析失败: ${e.message}</td></tr>`;
+            }
+        }
+
+        function renderVarietyContractsTable(contracts) {
+            const tbody = document.getElementById('varietyContractsBody');
+            tbody.innerHTML = contracts.map(c => `
+                <tr>
+                    <td><strong>${c.code}</strong></td>
+                    <td>${c.price}</td>
+                    <td class="${c.change >= 0 ? 'text-up' : 'text-down'}">${c.change >= 0 ? '+' : ''}${c.change.toFixed(2)}%</td>
+                    <td>${(c.volume / 10000).toFixed(1)}w</td>
+                    <td>${(c.position / 10000).toFixed(1)}w</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderVarietyStructureChart(contracts) {
+            const chartDom = document.getElementById('premiumStructureChart');
+            if (!chartDom) return;
+            const chart = echarts.init(chartDom);
+            
+            const xData = contracts.map(c => c.code.match(/\d+/)?.[0] || c.code);
+            const priceData = contracts.map(c => c.price);
+            const volData = contracts.map(c => c.volume);
+            const posData = contracts.map(c => c.position);
+
+            const option = {
+                title: { text: '月间合约对比 (期限结构)', textStyle: { color: '#8b949e', fontSize: 13 }, left: 'center', top: 5 },
+                tooltip: { 
+                    trigger: 'axis',
+                    axisPointer: { type: 'cross' }
+                },
+                legend: { data: ['价格', '成交量', '持仓量'], bottom: 0, textStyle: { color: '#8b949e' } },
+                grid: { left: '3%', right: '8%', bottom: '15%', top: '15%', containLabel: true },
+                xAxis: { type: 'category', data: xData, axisLabel: { color: '#8b949e' } },
+                yAxis: [
+                    { 
+                        type: 'value', 
+                        name: '价格', 
+                        position: 'left',
+                        scale: true,
+                        nameTextStyle: { color: '#58a6ff' }, 
+                        axisLabel: { color: '#58a6ff' }, 
+                        splitLine: { lineStyle: { color: '#30363d' } } 
+                    },
+                    { 
+                        type: 'value', 
+                        name: '成交/持仓', 
+                        position: 'right',
+                        nameTextStyle: { color: '#8b949e' }, 
+                        axisLabel: { color: '#8b949e' }, 
+                        splitLine: { show: false } 
+                    }
+                ],
+                dataZoom: [{ type: 'inside', start: 0, end: 100 }, { type: 'slider', height: 20, bottom: 25 }],
+                series: [
+                    {
+                        name: '价格', type: 'line', smooth: true, symbol: 'circle', symbolSize: 8,
+                        lineStyle: { color: '#58a6ff', width: 3 },
+                        itemStyle: { color: '#58a6ff' },
+                        data: priceData
+                    },
+                    {
+                        name: '成交量', type: 'bar', yAxisIndex: 1,
+                        itemStyle: { color: '#3fb950', opacity: 0.7 },
+                        data: volData
+                    },
+                    {
+                        name: '持仓量', type: 'bar', yAxisIndex: 1,
+                        itemStyle: { color: '#d29922', opacity: 0.7 },
+                        data: posData
+                    }
+                ]
+            };
+            chart.setOption(option, true);
+            charts.premiumStructure = chart;
+            setTimeout(() => chart.resize(), 100);
+        }
+
+        // 渲染行业热力图 (Treemap)
+        function renderIndustryHeatmap(data) {
+            const chart = echarts.init(document.getElementById('industryHeatmap'));
+            
+            // 处理API数据
+            // API返回格式: { msg: "...", result: { list: [ { name, cdzj, zdf, ... } ] } }
+            // 如果fetcher已经返回了json，我们需要根据结构取数据
+            // realDataFetcher.getIndustryHeatmap() 直接返回 response.json()
+            
+            let list = [];
+            if (data && data.result && data.result.list) {
+                list = data.result.list;
+            } else if (data && data.list) {
+                list = data.list;
+            } else if (Array.isArray(data)) {
+                list = data;
+            }
+
+            if (list.length === 0) {
+                console.warn('Industry heatmap data is empty');
+                document.getElementById('industryHeatmap').innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:var(--text-secondary);">热力图数据加载中...</div>';
+                return;
+            }
+
+            const treemapData = list.filter(item => {
+                const amount = parseFloat(item.cdzj);
+                const change = parseFloat(item.zdf);
+                return !isNaN(amount) && !isNaN(change) && amount > 0;
+            }).map(item => {
+                const amount = parseFloat(item.cdzj);
+                const change = parseFloat(item.zdf);
+                return {
+                    name: item.name.replace(/(板块|产业)/, ''), 
+                    value: [amount, change],
+                    itemStyle: {
+                        color: change >= 0 ? '#f85149' : '#3fb950'
+                    }
+                };
+            });
+
+            if (treemapData.length === 0) {
+                console.warn('No valid data for Industry heatmap');
+                document.getElementById('industryHeatmap').innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:var(--text-secondary);">暂无有效行业资金数据</div>';
+                return;
+            }
+
+            const option = {
+                tooltip: {
+                    formatter: function (info) {
+                        var value = info.value;
+                        var amount = value[0];
+                        var change = value[1];
+                        return [
+                            '<div style="font-size:14px;font-weight:bold">' + echarts.format.encodeHTML(info.name) + '</div>',
+                            '沉淀资金: ' + (amount / 100000000).toFixed(2) + '亿',
+                            '涨跌幅: ' + change.toFixed(2) + '%'
+                        ].join('<br>');
+                    }
+                },
+                series: [{
+                    type: 'treemap',
+                    width: '100%',
+                    height: '100%',
+                    roam: false,
+                    nodeClick: false,
+                    breadcrumb: { show: false },
+                    label: {
+                        show: true,
+                        formatter: '{b}\n{@[1]}%',
+                        fontSize: 14
+                    },
+                    itemStyle: {
+                        borderColor: '#1c2128',
+                        borderWidth: 2
+                    },
+                    data: treemapData
+                }]
+            };
+
+            chart.setOption(option);
+            charts.industryHeatmap = chart;
+        }
+
+        // 渲染品种热力图 (Treemap)
+        function renderVarietyHeatmap(data) {
+            const chart = echarts.init(document.getElementById('varietyHeatmap'));
+            
+            let list = [];
+            if (data && data.result && data.result.list) {
+                list = data.result.list;
+            } else if (data && data.list) {
+                list = data.list;
+            } else if (Array.isArray(data)) {
+                list = data;
+            }
+
+            if (list.length === 0) {
+                console.warn('Variety heatmap data is empty');
+                document.getElementById('varietyHeatmap').innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:var(--text-secondary);">热力图数据加载中...</div>';
+                return;
+            }
+
+            const treemapData = list.filter(item => {
+                const amount = parseFloat(item.cdzj);
+                const change = parseFloat(item.zdf);
+                return !isNaN(amount) && !isNaN(change) && amount > 0;
+            }).map(item => {
+                const amount = parseFloat(item.cdzj);
+                const change = parseFloat(item.zdf);
+                return {
+                    name: item.name.replace('加权', ''), 
+                    value: [amount, change],
+                    itemStyle: {
+                        color: change >= 0 ? '#f85149' : '#3fb950'
+                    }
+                };
+            });
+
+            if (treemapData.length === 0) {
+                console.warn('No valid data for Variety heatmap');
+                document.getElementById('varietyHeatmap').innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:var(--text-secondary);">暂无有效品种资金数据</div>';
+                return;
+            }
+
+            const option = {
+                tooltip: {
+                    formatter: function (info) {
+                        var value = info.value;
+                        var amount = value[0];
+                        var change = value[1];
+                        return [
+                            '<div style="font-size:14px;font-weight:bold">' + echarts.format.encodeHTML(info.name) + '</div>',
+                            '沉淀资金: ' + (amount / 100000000).toFixed(2) + '亿',
+                            '涨跌幅: ' + change.toFixed(2) + '%'
+                        ].join('<br>');
+                    }
+                },
+                series: [{
+                    type: 'treemap',
+                    width: '100%',
+                    height: '100%',
+                    roam: false,
+                    nodeClick: false,
+                    breadcrumb: { show: false },
+                    label: {
+                        show: true,
+                        formatter: '{b}\n{@[1]}%',
+                        fontSize: 12
+                    },
+                    itemStyle: {
+                        borderColor: '#1c2128',
+                        borderWidth: 1
+                    },
+                    data: treemapData
+                }]
+            };
+
+            chart.setOption(option);
+            charts.varietyHeatmap = chart;
+        }
+
+        // 加载主力合约
+        async function loadMainContracts() {
+            const data = await realDataFetcher.getMainContracts();
+            if (data) {
+                renderMainContracts(data);
+            }
+        }
+
+        // 渲染主力合约
+        function renderMainContracts(data) {
+            const tbody = document.getElementById('mainContractsTable');
+            
+            let list = [];
+            if (data && data.list) {
+                list = data.list.slice(0, 15); // 只显示前15个
+            } else if (Array.isArray(data)) {
+                list = data.slice(0, 15);
+            }
+
+            if (list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center">暂无合约数据</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = list.map(c => {
+                const price = parseFloat(c.p) || 0;
+                const changePercent = parseFloat(c.zdf) || 0;
+                const time = c.utime ? new Date(c.utime * 1000).toLocaleTimeString() : new Date().toLocaleTimeString();
+                const dm = c.dm;
+                const market = c.market || (dm.startsWith('au') || dm.startsWith('ag') || dm.startsWith('cu') || dm.startsWith('rb') ? '113' : '114');
+                
+                return `
+                <tr style="cursor: pointer;" onclick="renderTop20Holdings('${dm}', '${market}')">
+                    <td><strong>${dm}</strong></td>
+                    <td>${c.name}</td>
+                    <td>${price.toFixed(price < 10 ? 3 : 2)}</td>
+                    <td class="${changePercent >= 0 ? 'text-up' : 'text-down'}">
+                        ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%
+                    </td>
+                    <td>${time}</td>
+                </tr>
+            `}).join('');
+        }
+
+        // 渲染市场涨跌
+        function renderMarketUpDown(data, list = []) {
+            if (data && data.result) {
+                const res = data.result;
+                document.getElementById('upCount').textContent = res.z || '0';
+                document.getElementById('downCount').textContent = res.d || '0';
+                document.getElementById('totalCount').textContent = res.total || '0';
+                
+                if (list && list.length > 0) {
+                    const changes = list.map(i => parseFloat(i.zdf) || 0);
+                    const avgChange = (changes.reduce((a,b) => a+b, 0) / changes.length).toFixed(2);
+                    const avgElem = document.getElementById('marketAvgChange');
+                    if (avgElem) {
+                        avgElem.textContent = (avgChange >= 0 ? '+' : '') + avgChange + '%';
+                        avgElem.className = 'stat-value ' + (avgChange >= 0 ? 'text-up' : 'text-down');
+                    }
+                }
+            }
+        }
+
+        // 渲染品种列表 (涨跌幅及增仓率)
+        function renderVarietyList(list) {
+            if (list) lastRawVarietyList = list;
+            const dataToRender = list || lastRawVarietyList;
+
+            const container = document.getElementById('varietyList');
+            if (!dataToRender || dataToRender.length === 0) {
+                container.innerHTML = '<div style="text-align:center; padding:20px;">暂无数据</div>';
+                return;
+            }
+
+            // 按涨跌幅绝对值降序排列
+            const sortedList = [...dataToRender].sort((a, b) => {
+                const absA = Math.abs(parseFloat(a.zdf) || 0);
+                const absB = Math.abs(parseFloat(b.zdf) || 0);
+                return absB - absA;
+            });
+
+            // 如果不是“显示全部”，则只显示前40个
+            const displayList = showAllVarieties ? sortedList : sortedList.slice(0, 40);
+
+            container.innerHTML = displayList.map(item => {
+                const change = parseFloat(item.zdf) || 0;
+                const oiChangeRate = item.zccl ? (((item.ccl - item.zccl) / item.zccl) * 100).toFixed(2) : '0.00';
+                const isUp = change >= 0;
+                const oiIsUp = parseFloat(oiChangeRate) >= 0;
+                
+                return `
+                <div class="variety-row" onclick="scrollToAnalysis('${item.uid.split('|')[1]?.toLowerCase()}')">
+                    <div class="v-info">
+                        <span class="v-name">${item.name}</span>
+                        <div class="mini-progress">
+                            <div class="mini-fill" style="width: ${Math.min(Math.abs(change) * 5, 100)}%; background: ${isUp ? 'var(--color-danger)' : 'var(--color-success)'}"></div>
+                        </div>
+                    </div>
+                    <div class="v-change ${isUp ? 'text-up' : 'text-down'}">
+                        ${isUp ? '+' : ''}${change.toFixed(2)}%
+                    </div>
+                    <div class="v-oi" style="color: ${oiIsUp ? 'var(--color-danger)' : 'var(--color-success)'}">
+                        ${oiIsUp ? '增' : '减'}${Math.abs(oiChangeRate)}%
+                    </div>
+                </div>
+            `;
+            }).join('');
+        }
+
+        function toggleVarietyDisplay() {
+            showAllVarieties = !showAllVarieties;
+            const btn = document.getElementById('toggleVarietyListBtn');
+            if (btn) btn.textContent = showAllVarieties ? '收起列表' : '显示全部';
+            renderVarietyList(lastRawVarietyList);
+        }
+
+        function scrollToAnalysis(code) {
+            const select = document.getElementById('variety-select-analysis');
+            const msgid = DIRECT_VARIETY_MAP[code];
+            if (msgid) {
+                select.value = msgid;
+                switchTab('realtime'); 
+                handleVarietyAnalysisChange();
+                setTimeout(() => {
+                    const section = document.getElementById('variety-analysis-section');
+                    if (section) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+            } else {
+                // 如果在DIRECT_VARIETY_MAP没找到，尝试模糊匹配
+                const opt = Array.from(select.options).find(o => o.textContent.toLowerCase().includes(code.toLowerCase()));
+                if (opt) {
+                    select.value = opt.value;
+                    switchTab('realtime');
+                    handleVarietyAnalysisChange();
+                    setTimeout(() => {
+                        const section = document.getElementById('variety-analysis-section');
+                        if (section) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 100);
+                }
+            }
+        }
+
+        // 渲染基差
+        function renderBasis(data) {
+            if (data && data.data && Array.isArray(data.data)) {
+                let totalBasis = 0;
+                let count = 0;
+                data.data.forEach(item => {
+                    if (item.basisContractList) {
+                        const defaultBasis = item.basisContractList.find(b => b.defaultValue === 'Y');
+                        if (defaultBasis && defaultBasis.closeBasisValue) {
+                            totalBasis += parseFloat(defaultBasis.closeBasisValue);
+                            count++;
+                        }
+                    }
+                });
+                const avgBasis = count > 0 ? (totalBasis / count).toFixed(2) : '-';
+                const basisElem = document.getElementById('basisValue');
+                if (basisElem) {
+                    basisElem.textContent = avgBasis;
+                    basisElem.className = 'stat-value ' + (parseFloat(avgBasis) >= 0 ? 'text-up' : 'text-down');
+                }
+            }
+        }
+
+        // 加载资讯
+        async function loadNews() {
+            const [thsNews, emNews, wallStreetNews] = await Promise.all([
+                realDataFetcher.getTHSNews(),
+                realDataFetcher.getEMNews(),
+                realDataFetcher.getWallStreetNews()
+            ]);
+
+            if (thsNews) {
+                renderNewsList(thsNews, 'thsNewsList', '同花顺');
+            }
+            if (emNews) {
+                renderNewsList(emNews, 'emNewsList', '东方财富');
+            }
+            if (wallStreetNews) {
+                renderNewsList(wallStreetNews, 'wallStreetNewsList', '华尔街');
+            }
+        }
+
+        // 渲染资讯列表
+        function renderNewsList(data, containerId, source) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            
+            let list = [];
+            // 处理不同新闻来源的数据结构
+            if (data && Array.isArray(data.data)) { // THS
+                list = data.data;
+            } else if (data && data.result && Array.isArray(data.result.list)) { // EM
+                list = data.result.list;
+            } else if (data && data.data && Array.isArray(data.data.items)) { // WallStreet
+                list = data.data.items;
+            } else if (Array.isArray(data)) {
+                list = data;
+            }
+
+            if (!Array.isArray(list) || list.length === 0) {
+                container.innerHTML = '<div class="news-item">暂无相关资讯</div>';
+                return;
+            }
+
+            container.innerHTML = list.slice(0, 8).map(n => {
+                const title = n.title || n.content_text || n.show_name || '无标题';
+                const timeStr = n.time || n.display_time || (n.utime ? new Date(n.utime * 1000).toLocaleTimeString() : '');
+                const url = n.url || '#';
+                
+                return `
+                <div class="news-item">
+                    <div class="news-title"><a href="${url}" target="_blank" style="color: inherit; text-decoration: none;">${title}</a></div>
+                    <div class="news-meta">
+                        <span class="badge badge-warning">${source}</span>
+                        <span>• ${timeStr}</span>
+                    </div>
+                </div>
+            `}).join('');
+        }
+
+        // 加载龙虎榜
+        async function loadDragonTiger() {
+            const dateInput = document.getElementById('dragonDate');
+            const date = dateInput && dateInput.value ? dateInput.value.replace(/-/g, '') : formatDate(new Date());
+            
+            const varietySelect = document.getElementById('dragon-variety-select');
+            const varietyUid = (varietySelect && varietySelect.value) ? varietySelect.value : '113_cu'; 
+            const varietyCode = varietyUid.includes('_') ? varietyUid.split('_')[1] : varietyUid;
+            const marketCode = varietyUid.includes('_') ? varietyUid.split('_')[0] : '113';
+
+            const varietyNameDisplay = document.getElementById('currentVarietyName');
+            if (varietyNameDisplay && varietySelect && varietySelect.selectedIndex >= 0) {
+                varietyNameDisplay.textContent = varietySelect.options[varietySelect.selectedIndex].text + ' (' + varietyCode + ')';
+            }
+            
+            // 使用品种汇总龙虎榜
+            const [dragonTiger, varietyPositionDiff] = await Promise.all([
+                realDataFetcher.getDragonTigerVarietySummary(date, marketCode, varietyCode),
+                realDataFetcher.getVarietyPositionDiff()
+            ]);
+
+            if (dragonTiger) {
+                renderDragonTiger(dragonTiger);
+                // 渲染前20持仓详情
+                renderTop20Holdings(varietyCode, marketCode, dragonTiger);
+            }
+            if (varietyPositionDiff) {
+                renderVarietyPositionDiff(varietyPositionDiff);
+            }
+        }
+
+        // 渲染龙虎榜
+        function renderDragonTiger(data) {
+            const tbody = document.getElementById('dragonTigerTable');
+            
+            if (!data || !data.data) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center">暂无榜单数据</td></tr>';
+                return;
+            }
+
+            const d = data.data;
+            const longList = d.longInfoList || [];
+            const shortList = d.shortInfoList || [];
+            
+            const maxLength = Math.max(longList.length, shortList.length, 20);
+            let rowsHtml = '';
+            
+            for (let i = 0; i < 20; i++) {
+                const long = longList[i] || {};
+                const short = shortList[i] || {};
+                
+                rowsHtml += `
+                    <tr>
+                        <td style="color: var(--text-secondary);">${i + 1}</td>
+                        <td style="font-weight: 500;">${long.futureCompanyName ? long.futureCompanyName.replace('(代客)','') : '-'}</td>
+                        <td style="text-align: right;">${long.longNum || '-'}</td>
+                        <td class="${(long.longNumChange || 0) >= 0 ? 'change-up' : 'change-down'}" style="text-align: right;">
+                            ${long.longNumChange ? (long.longNumChange > 0 ? '+' : '') + long.longNumChange : '-'}
+                        </td>
+                        <td style="font-weight: 500;">${short.futureCompanyName ? short.futureCompanyName.replace('(代客)','') : '-'}</td>
+                        <td style="text-align: right;">${short.shortNum || '-'}</td>
+                        <td class="${(short.shortNumChange || 0) <= 0 ? 'change-up' : 'change-down'}" style="text-align: right;">
+                            ${short.shortNumChange ? (short.shortNumChange > 0 ? '+' : '') + short.shortNumChange : '-'}
+                        </td>
+                    </tr>
+                `;
+            }
+
+            tbody.innerHTML = rowsHtml;
+        }
+
+        // 渲染品种多空分歧 (图表化)
+        function renderVarietyPositionDiff(data) {
+            const containerHtml = document.getElementById('varietyPositionDiff');
+            const containerChartHome = document.getElementById('varietyPositionDiffChart');
+            const containerChartDragon = document.getElementById('varietyPositionDiffChartDragon');
+            
+            let list = [];
+            if (data && data.data && data.data.quoteGenralVarietyPositions) {
+                list = data.data.quoteGenralVarietyPositions.slice(0, 15);
+            }
+            
+            // 旧的 HTML 渲染 (为龙虎榜详情页保留)
+            if (containerHtml) {
+                if (list.length === 0) {
+                    containerHtml.innerHTML = '暂无多空数据';
+                } else {
+                    containerHtml.innerHTML = list.map(v => {
+                        const longRate = (v.totalLongRate * 100).toFixed(1);
+                        const shortRate = (v.totalShortRate * 100).toFixed(1);
+                        return `
+                        <div style="margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">
+                                <span>${v.varietyName}</span>
+                                <span>多 ${longRate}% / 空 ${shortRate}%</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${longRate}%; background: ${v.totalLongRate > v.totalShortRate ? '#f85149' : '#3fb950'}"></div>
+                            </div>
+                        </div>
+                    `}).join('');
+                }
+            }
+
+            // 图表渲染通用函数
+            const drawDiffChart = (container) => {
+                if (!container) return;
+                const chart = echarts.init(container);
+                const categories = list.map(v => v.varietyName).reverse();
+                const longData = list.map(v => (v.totalLongRate * 100).toFixed(1)).reverse();
+                const shortData = list.map(v => (v.totalShortRate * 100).toFixed(1)).reverse();
+
+                const option = {
+                    backgroundColor: 'transparent',
+                    tooltip: { 
+                        trigger: 'axis', 
+                        axisPointer: { type: 'shadow' },
+                        backgroundColor: '#1c2128',
+                        borderColor: '#30363d',
+                        textStyle: { color: '#adbac7' },
+                        formatter: function(params) {
+                            let res = '<strong>' + params[0].name + '</strong><br/>';
+                            params.forEach(p => {
+                                res += p.marker + p.seriesName + ': ' + p.value + '%<br/>';
+                            });
+                            return res;
+                        }
+                    },
+                    grid: { left: '15%', right: '5%', bottom: '2%', top: '2%', containLabel: false },
+                    xAxis: { show: false },
+                    yAxis: { 
+                        type: 'category', 
+                        data: categories, 
+                        axisLine: { show: false },
+                        axisTick: { show: false },
+                        axisLabel: { 
+                            color: '#adbac7',
+                            fontSize: 12,
+                            margin: 12
+                        }
+                    },
+                    series: [
+                        { 
+                            name: '多头占比', 
+                            type: 'bar', 
+                            stack: 'total', 
+                            barWidth: 20,
+                            label: { show: true, position: 'inside', formatter: '{c}%', color: '#fff', fontSize: 11, fontWeight: 'bold' }, 
+                            itemStyle: { 
+                                color: '#f85149',
+                                borderRadius: [4, 0, 0, 4]
+                            }, 
+                            data: longData 
+                        },
+                        { 
+                            name: '空头占比', 
+                            type: 'bar', 
+                            stack: 'total', 
+                            label: { show: true, position: 'inside', formatter: '{c}%', color: '#fff', fontSize: 11, fontWeight: 'bold' }, 
+                            itemStyle: { 
+                                color: '#3fb950',
+                                borderRadius: [0, 4, 4, 0]
+                            }, 
+                            data: shortData 
+                        }
+                    ]
+                };
+                chart.setOption(option);
+            };
+
+            if (containerChartHome) drawDiffChart(containerChartHome);
+            if (containerChartDragon) drawDiffChart(containerChartDragon);
+        }
+
+        // 渲染前20持仓 (Clustered Bar Chart)
+        async function renderTop20Holdings(contract, market = '113', data = null) {
+            if (!contract) return;
+            const container = document.getElementById('top20Holdings');
+            
+            try {
+                let d = null;
+                if (data && data.data && data.data.contract === contract) {
+                    d = data.data;
+                } else {
+                    container.innerHTML = '<div style="padding: 20px; text-align: center;"><i class="fas fa-spinner fa-spin"></i> 加载中...</div>';
+                    const date = document.getElementById('dragonDate')?.value.replace(/-/g, '') || formatDate(new Date());
+                    const response = await realDataFetcher.getDragonTigerList(date, market, contract);
+                    if (response && response.data) {
+                        d = response.data;
+                    }
+                }
+                
+                if (d) {
+                    const longList = (d.longInfoList || []).slice(0, 10);
+                    const shortList = (d.shortInfoList || []).slice(0, 10);
+                    
+                    // 合并席位以进行对比
+                    const brokers = Array.from(new Set([...longList.map(l => l.futureCompanyName), ...shortList.map(s => s.futureCompanyName)])).slice(0, 12);
+                    
+                    const chart = echarts.init(container);
+                    const option = {
+                        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                        legend: { data: ['多头持仓', '空头持仓'], textStyle: { color: '#adbac7' }, bottom: 0 },
+                        grid: { left: '3%', right: '4%', bottom: '10%', top: '10%', containLabel: true },
+                        xAxis: { 
+                            type: 'category', 
+                            data: brokers.map(b => b.replace('(代客)', '')),
+                            axisLabel: { color: '#adbac7', rotate: 30, fontSize: 10 }
+                        },
+                        yAxis: { 
+                            type: 'value',
+                            axisLabel: { color: '#adbac7' },
+                            splitLine: { lineStyle: { color: '#30363d' } }
+                        },
+                        series: [
+                            {
+                                name: '多头持仓',
+                                type: 'bar',
+                                data: brokers.map(b => {
+                                    const broker = longList.find(l => l.futureCompanyName === b);
+                                    return broker ? broker.longNum : 0;
+                                }),
+                                itemStyle: { color: '#f85149' }
+                            },
+                            {
+                                name: '空头持仓',
+                                type: 'bar',
+                                data: brokers.map(b => {
+                                    const broker = shortList.find(s => s.futureCompanyName === b);
+                                    return broker ? broker.shortNum : 0;
+                                }),
+                                itemStyle: { color: '#3fb950' }
+                            }
+                        ]
+                    };
+                    chart.setOption(option);
+                    charts.top20Holdings = chart;
+                } else {
+                    container.innerHTML = '<div style="padding: 20px; text-align: center; color: #8b949e;">暂无持仓详情</div>';
+                }
+            } catch (e) {
+                console.error('Error rendering top 20:', e);
+                container.innerHTML = '<div style="padding: 20px; text-align: center; color: #f85149;">加载出错</div>';
+            }
+        }
+
+        // 渲染市场指数趋势
+        function renderMarketIndexTrend(data) {
+            const chart = echarts.init(document.getElementById('marketIndexTrend'));
+            
+            // 如果只有单点数据，显示日内分时模拟(基于OHLC)
+            let qt = null;
+            if (data && data.qt) {
+                qt = data.qt;
+            }
+
+            if (!qt) {
+                console.warn('Market index data is empty');
+                return;
+            }
+
+            const dates = ['昨日收盘', '今日开盘', '今日最低', '今日最高', '当前价'];
+            const indexValues = [qt.qrspj, qt.o, qt.l, qt.h, qt.p].map(v => parseFloat(v));
+
+            const option = {
+                tooltip: { trigger: 'axis' },
+                xAxis: {
+                    type: 'category',
+                    data: dates,
+                    axisLabel: { color: '#8b949e' }
+                },
+                yAxis: {
+                    type: 'value',
+                    min: 'dataMin',
+                    max: 'dataMax',
+                    axisLabel: { color: '#8b949e' },
+                    splitLine: { lineStyle: { color: '#30363d' } }
+                },
+                series: [{
+                    name: qt.name || '综合指数',
+                    type: 'line',
+                    data: indexValues,
+                    smooth: true,
+                    lineStyle: { color: '#58a6ff', width: 3 },
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(88, 166, 255, 0.3)' },
+                            { offset: 1, color: 'rgba(88, 166, 255, 0)' }
+                        ])
+                    },
+                    markLine: {
+                        data: [{ type: 'average', name: '平均值' }]
+                    }
+                }]
+            };
+
+            chart.setOption(option);
+            charts.marketIndexTrend = chart;
+        }
+
+        // 渲染情绪指数
+        function renderEmotionIndex(data) {
+            const emotionValueMini = document.getElementById('emotionValueMini');
+            const emotionLabelMini = document.getElementById('emotionLabelMini');
+            
+            let value = 50;
+            if (data && data.data && data.data.emotion_index) {
+                value = parseFloat(data.data.emotion_index);
+            } else if (data && data.re && data.re.length > 0) {
+                value = parseFloat(data.re[0].value) * 100;
+            } else if (typeof data === 'number') {
+                value = data;
+            }
+
+            const valStr = value.toFixed(1);
+            
+            // 语义标签映射
+            let label = "中性";
+            let colorClass = "text-secondary";
+            if (value >= 80) { label = "极度亢奋"; colorClass = "text-up"; }
+            else if (value >= 60) { label = "偏向多头"; colorClass = "text-up"; }
+            else if (value <= 20) { label = "极度悲观"; colorClass = "text-down"; }
+            else if (value <= 40) { label = "偏向空头"; colorClass = "text-down"; }
+
+            if (emotionValueMini) {
+                emotionValueMini.textContent = valStr;
+                emotionValueMini.className = 'stat-value ' + colorClass;
+            }
+            if (emotionLabelMini) {
+                emotionLabelMini.textContent = label;
+                emotionLabelMini.style.color = (value > 50 ? 'var(--color-danger)' : (value < 50 ? 'var(--color-success)' : 'var(--text-secondary)'));
+            }
+        }
+
+        // 渲染情绪趋势图 (对齐 GubaInvestorEmotion 设计)
+        function renderEmotionTrendChart(data) {
+            const container = document.getElementById('emotionTrendChart');
+            if (!container) return;
+            const chart = echarts.init(container);
+            
+            let list = [];
+            if (data && data.re) {
+                list = data.re;
+            } else if (Array.isArray(data)) {
+                list = data;
+            }
+            
+            if (list.length === 0) return;
+
+            const xData = list.map(item => {
+                const d = new Date(item.time);
+                return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+            });
+            const yData = list.map(item => (parseFloat(item.value) * 100).toFixed(2));
+            const latestValue = yData[yData.length - 1];
+            const latestLabel = latestValue >= 60 ? '偏多' : (latestValue <= 40 ? '偏空' : '中性');
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: '{b} 情绪值: {c}',
+                    axisPointer: { type: 'cross', lineStyle: { color: '#30363d' } }
+                },
+                grid: { left: '40', right: '40', top: '30', bottom: '30' },
+                xAxis: {
+                    type: 'category',
+                    data: xData,
+                    axisLabel: { color: '#8b949e', fontSize: 10 },
+                    axisLine: { lineStyle: { color: '#30363d' } }
+                },
+                yAxis: {
+                    type: 'value',
+                    min: 0,
+                    max: 100,
+                    splitLine: { lineStyle: { color: '#30363d', type: 'dashed' } },
+                    axisLabel: { color: '#8b949e' }
+                },
+                visualMap: {
+                    show: false,
+                    pieces: [
+                        { gt: 0, lte: 30, color: '#3fb950' },
+                        { gt: 30, lte: 70, color: '#8b949e' },
+                        { gt: 70, lte: 100, color: '#f85149' }
+                    ]
+                },
+                series: [{
+                    name: '情绪指数',
+                    type: 'line',
+                    data: yData,
+                    smooth: true,
+                    showSymbol: false,
+                    lineStyle: { width: 3, color: '#DAA520' },
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(218, 165, 32, 0.2)' },
+                            { offset: 1, color: 'rgba(218, 165, 32, 0)' }
+                        ])
+                    },
+                    markLine: {
+                        silent: true,
+                        symbol: ['none', 'arrow'],
+                        symbolSize: 8,
+                        data: [{
+                            yAxis: latestValue,
+                            label: {
+                                position: 'end',
+                                formatter: latestValue + ' (' + latestLabel + ')',
+                                color: '#f85149',
+                                fontWeight: 'bold'
+                            },
+                            lineStyle: { type: 'dashed', color: '#f85149', width: 2 }
+                        }]
+                    }
+                }]
+            };
+
+            chart.setOption(option);
+            charts.emotionTrend = chart;
+            
+        }
+
+        // --- 进阶分析模块图表渲染 ---
+
+        /**
+         * 加载并更新进阶分析图表
+         */
+        async function updateAnalysisCharts() {
+            console.log('Updating analysis charts...');
+            try {
+                // 同时获取白盘和夜盘数据，进行混合合并
+                const [dayData, nightData] = await Promise.all([
+                    realDataFetcher.getVarietyList(),
+                    realDataFetcher.getNightVarietyList()
+                ]);
+
+                // 合并逻辑：以白盘全集为基准，用夜盘活跃数据进行热更新
+                let combinedMap = new Map();
+                
+                if (dayData && dayData.list) {
+                    dayData.list.forEach(item => combinedMap.set(item.dm, {...item, source: 'day'}));
+                }
+                
+                if (nightData && nightData.list) {
+                    nightData.list.forEach(item => {
+                        const existing = combinedMap.get(item.dm);
+                        // 如果夜盘数据更“活”（价格不是'-'），则覆盖
+                        if (item.p !== '-' || !existing) {
+                            combinedMap.set(item.dm, {...(existing || {}), ...item, source: 'night'});
+                        }
+                    });
+                }
+
+                const combinedList = Array.from(combinedMap.values());
+                console.log(`Combined analysis data: ${combinedList.length} items`);
+
+                // 更加宽松的过滤：只要有基本的参考价和涨跌幅即可
+                const validList = combinedList.filter(item => {
+                    const price = safeParse(item.p, -1);
+                    const base = safeParse(item.zjsj, safeParse(item.qrspj, -1));
+                    return base > 0 && (price > 0 || item.zdf !== '-');
+                });
+                
+                console.log(`Valid items for charts: ${validList.length}`);
+                
+                if (validList.length > 0) {
+                    renderChangePositionBubbleChart(validList);
+                    renderVarietyTrendChart(validList);
+                } else {
+                    console.warn('No valid items found after merging day and night data.');
+                }
+            } catch (err) {
+                console.error('Failed to update analysis charts:', err);
+            }
+        }
+
+        // 安全解析数值，处理 "-"
+        function safeParse(val, defaultVal = 0) {
+            if (val === '-' || val === undefined || val === null) return defaultVal;
+            const parsed = parseFloat(val);
+            return isNaN(parsed) ? defaultVal : parsed;
+        }
+
+        /**
+         * 渲染涨跌幅与增仓比关系图 (Bubble)
+         */
+        function renderChangePositionBubbleChart(list) {
+            const container = document.getElementById('bubbleChartAnalysis');
+            if (!container) return;
+            const chart = echarts.init(container);
+            
+            const metric = document.querySelector('input[name="bubbleMetric"]:checked')?.value || 'cdzj';
+            
+            const processedData = list.filter(item => safeParse(item.ccl) > 0).map(item => {
+                const zdf = safeParse(item.zdf);
+                const rz = safeParse(item.rz);
+                const ccl = safeParse(item.ccl, 1);
+                // 计算增仓比: 增仓量 / (当前持仓 - 增仓量)
+                const rzRatio = ((rz / (ccl - rz || 1)) * 100);
+                
+                return [
+                    zdf,        // x
+                    rzRatio,    // y
+                    safeParse(item[metric]), // size metric
+                    item.name,  // label
+                    zdf >= 0 ? (rz >= 0 ? '多头强势' : '多头获利') : (rz >= 0 ? '空头强势' : '空头平仓'), // quadrant
+                    item // raw
+                ];
+            });
+
+            const option = {
+                backgroundColor: 'transparent',
+                grid: { left: '80', right: '40', top: '40', bottom: '60' },
+                tooltip: {
+                    formatter: function(params) {
+                        const d = params.data[5];
+                        return `<div style="padding:10px;">
+                            <strong style="font-size:14px;color:#58a6ff;">${d.name} (${d.dm})</strong><br/>
+                            涨跌幅: <span style="color:${d.zdf >= 0 ? '#f85149' : '#3fb950'}">${d.zdf}%</span><br/>
+                            增仓比: ${params.data[1].toFixed(2)}%<br/>
+                            沉淀资金: ${(d.cdzj / 100000000).toFixed(2)} 亿<br/>
+                            成交额: ${(d.cje / 100000000).toFixed(2)} 亿
+                        </div>`;
+                    }
+                },
+                xAxis: {
+                    name: '涨跌幅 (%)',
+                    nameLocation: 'center',
+                    nameGap: 30,
+                    splitLine: { lineStyle: { color: '#30363d', type: 'dashed' } },
+                    axisLine: { lineStyle: { color: '#8b949e' } },
+                    scale: true,
+                    axisLabel: { color: '#8b949e' }
+                },
+                yAxis: {
+                    name: '增仓比 (%)',
+                    splitLine: { lineStyle: { color: '#30363d', type: 'dashed' } },
+                    axisLine: { lineStyle: { color: '#8b949e' } },
+                    scale: true,
+                    axisLabel: { color: '#8b949e' }
+                },
+                series: [{
+                    type: 'scatter',
+                    data: processedData,
+                    itemStyle: {
+                        color: function(params) {
+                            const x = params.data[0];
+                            const y = params.data[1];
+                            if (x >= 0) return y >= 0 ? '#f85149' : '#f39c12';
+                            return y >= 0 ? '#0073b7' : '#3fb950';
+                        },
+                        opacity: 0.7,
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.2)'
+                    },
+                    label: {
+                        show: true,
+                        formatter: '{@[3]}',
+                        color: '#fff',
+                        fontSize: 10,
+                        position: 'inside',
+                        textShadowBlur: 2,
+                        textShadowColor: '#000'
+                    },
+                    markLine: {
+                        lineStyle: { type: 'solid', color: '#58a6ff', opacity: 0.5 },
+                        data: [{ xAxis: 0 }, { yAxis: 0 }]
+                    }
+                }]
+            };
+
+            // 动态调整气泡大小映射
+            const values = processedData.map(d => d[2]);
+            const maxVal = Math.max(...values, 1000000); // 避免分母过小
+            option.series[0].symbolSize = function(data) {
+                const val = data[2];
+                // 使用开方缩放使大小分布更均匀
+                const ratio = Math.sqrt(val / maxVal);
+                return ratio * 70 + 12;
+            };
+
+            chart.setOption(option);
+            charts.bubbleAnalysis = chart;
+        }
+
+        /**
+         * 渲染全品种相对强弱走势对比 (相对Candlestick)
+         */
+        function renderVarietyTrendChart(list) {
+            const container = document.getElementById('trendComparisonChart');
+            if (!container) return;
+            const chart = echarts.init(container);
+
+            // 排序: 按涨跌幅，并再次过滤确保 K 线四个核心值有效
+            const sorted = [...list]
+                .filter(item => item.o !== '-' && item.h !== '-' && item.l !== '-')
+                .sort((a, b) => safeParse(b.zdf) - safeParse(a.zdf))
+                .slice(0, 50);
+
+            const xData = sorted.map(item => item.name);
+            const yData = sorted.map(item => {
+                const base = safeParse(item.zjsj, 1);
+                return [
+                    ((safeParse(item.o) - base) / base * 100).toFixed(2), // 开盘%
+                    ((safeParse(item.p) - base) / base * 100).toFixed(2), // 收盘%
+                    ((safeParse(item.l) - base) / base * 100).toFixed(2), // 最低%
+                    ((safeParse(item.h) - base) / base * 100).toFixed(2)  // 最高%
+                ];
+            });
+
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    formatter: function(params) {
+                        const p = params[0];
+                        const d = sorted[p.dataIndex];
+                        return `<div style="padding:10px;">
+                            <strong>${d.name} 相对走势</strong><br/>
+                            开盘: ${p.data[0]}%<br/>
+                            收盘: ${p.data[1]}%<br/>
+                            最高: ${p.data[3]}%<br/>
+                            最低: ${p.data[2]}%
+                        </div>`;
+                    }
+                },
+                grid: { left: '80', right: '30', top: '40', bottom: '80' },
+                xAxis: {
+                    type: 'category',
+                    data: xData,
+                    axisLabel: { 
+                        color: '#8b949e', 
+                        rotate: 45,
+                        fontSize: 10
+                    },
+                    axisLine: { lineStyle: { color: '#30363d' } }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '相对涨跌幅 (%)',
+                    splitLine: { lineStyle: { color: '#30363d', type: 'dashed' } },
+                    axisLabel: { color: '#8b949e' }
+                },
+                dataZoom: [{ type: 'inside', start: 0, end: 100 }, { type: 'slider', height: 20, bottom: 10 }],
+                series: [{
+                    type: 'candlestick',
+                    data: yData,
+                    itemStyle: {
+                        color: '#f85149',
+                        color0: '#3fb950',
+                        borderColor: '#f85149',
+                        borderColor0: '#3fb950'
+                    },
+                    markPoint: {
+                        data: [
+                            { type: 'max', name: '最大涨幅', itemStyle: { color: '#f85149' } },
+                            { type: 'min', name: '最大跌幅', itemStyle: { color: '#3fb950' } }
+                        ],
+                        label: { formatter: '{c}%', fontSize: 10 }
+                    }
+                }]
+            };
+
+            chart.setOption(option);
+            charts.trendComparison = chart;
+        }
+
+        // 响应式
+        window.addEventListener('resize', function() {
+            Object.values(charts).forEach(chart => chart && chart.resize());
+        });
+
+        // 页面加载时初始化
+        window.onload = function() {
+            // 设置日期选择器默认值
+            const today = new Date();
+            const dateStr = today.toISOString().split('T')[0];
+            const dateInput = document.getElementById('dragonDate');
+            if (dateInput) {
+                dateInput.value = dateStr;
+            }
+            
+            // 加载所有数据
+            loadAllData();
+        };
+    </script>
+</body>
+</html>
