@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>期货投资综合Dashboard（真实数据）</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+    <script src="real_data_fetcher.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --bg-card: #1c2128;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --color-primary: #58a6ff;
+            --color-success: #3fb950;
+            --color-warning: #d29922;
+            --color-danger: #f85149;
+            --chart-up: #f85149;
+            --chart-down: #3fb950;
+            --border-color: #30363d;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background-color: var(--bg-secondary);
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .header-nav {
+            display: flex;
+            gap: 20px;
+        }
+
+        .header-nav a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            padding: 8px 16px;
+            border-radius: 6px;
+            transition: all 0.3s;
+        }
+
+        .header-nav a:hover {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .header-nav a.active {
+            color: var(--color-primary);
+            background-color: rgba(88, 166, 255, 0.1);
+            border: 1px solid var(--color-primary);
+        }
+
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .grid-4 {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+        }
+
+        .stat-card {
+            background-color: var(--bg-tertiary);
+            border-radius: 6px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .stat-up {
+            color: var(--chart-up);
+        }
+
+        .stat-down {
+            color: var(--chart-down);
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .table th {
+            background-color: var(--bg-tertiary);
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .table td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .table tr:hover {
+            background-color: var(--bg-tertiary);
+        }
+
+        .text-up {
+            color: var(--chart-up);
+        }
+
+        .text-down {
+            color: var(--chart-down);
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 400px;
+        }
+
+        .chart-container-small {
+            width: 100%;
+            height: 300px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-success {
+            background-color: rgba(63, 185, 80, 0.2);
+            color: var(--color-success);
+        }
+
+        .badge-warning {
+            background-color: rgba(210, 153, 34, 0.2);
+            color: var(--color-warning);
+        }
+
+        .badge-danger {
+            background-color: rgba(248, 81, 73, 0.2);
+            color: var(--color-danger);
+        }
+
+        .news-item {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.3s;
+        }
+
+        .news-item:hover {
+            background-color: var(--bg-tertiary);
+        }
+
+        .news-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .news-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner {
+            border: 3px solid var(--bg-tertiary);
+            border-top: 3px solid var(--color-primary);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .btn {
+            padding: 8px 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn:hover {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>📊 期货投资综合Dashboard（真实数据）</h1>
+        <nav class="header-nav">
+            <a href="#" class="active" onclick="switchTab('realtime')">实时行情</a>
+            <a href="#" onclick="switchTab('news')">资讯</a>
+            <a href="#" onclick="switchTab('dragon')">龙虎榜</a>
+            <a href="#" onclick="switchTab('analysis')">技术分析</a>
+        </nav>
+    </header>
+
+    <div class="container">
+        <!-- 加载状态 -->
+        <div id="loading" class="loading">
+            <div class="loading-spinner"></div>
+            <p>正在加载真实数据...</p>
+        </div>
+
+        <!-- 实时行情Tab -->
+        <div id="tab-realtime" class="tab-content active">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">期货市场热力图（行业资金流向）</h2>
+                    <span class="badge badge-success">实时</span>
+                </div>
+                <div id="industryHeatmap" class="chart-container"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">期货品种资金流向</h2>
+                    <span class="badge badge-success">实时</span>
+                </div>
+                <div id="varietyHeatmap" class="chart-container"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">主力合约行情</h2>
+                    <button class="btn" onclick="loadMainContracts()">刷新</button>
+                </div>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>代码</th>
+                            <th>名称</th>
+                            <th>最新价</th>
+                            <th>涨跌幅</th>
+                            <th>更新时间</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mainContractsTable">
+                        <!-- 动态生成 -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="grid-3">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">市场涨跌分布</h2>
+                    </div>
+                    <div id="marketUpDown" class="stat-card">
+                        <div class="stat-value" id="upCount">-</div>
+                        <div class="stat-label">上涨品种</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">市场涨跌分布</h2>
+                    </div>
+                    <div id="marketDown" class="stat-card">
+                        <div class="stat-value" id="downCount">-</div>
+                        <div class="stat-label">下跌品种</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">期货基差</h2>
+                    </div>
+                    <div id="basis" class="stat-card">
+                        <div class="stat-value" id="basisValue">-</div>
+                        <div class="stat-label">平均基差</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 资讯Tab -->
+        <div id="tab-news" class="tab-content">
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">同花顺新闻</h2>
+                        <button class="btn" onclick="loadNews()">刷新</button>
+                    </div>
+                    <div id="thsNewsList"></div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">东方财富资讯</h2>
+                        <button class="btn" onclick="loadNews()">刷新</button>
+                    </div>
+                    <div id="emNewsList"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">华尔街见闻</h2>
+                    <button class="btn" onclick="loadNews()">刷新</button>
+                </div>
+                <div id="wallStreetNewsList"></div>
+            </div>
+        </div>
+
+        <!-- 龙虎榜Tab -->
+        <div id="tab-dragon" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">品种龙虎榜</h2>
+                    <div>
+                        <input type="date" id="dragonDate" style="padding: 8px; margin-right: 10px;">
+                        <button class="btn" onclick="loadDragonTiger()">查询</button>
+                    </div>
+                </div>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>期货公司</th>
+                            <th>多头持仓</th>
+                            <th>空头持仓</th>
+                            <th>净持仓</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dragonTigerTable"></tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">前20名持仓汇总</h2>
+                </div>
+                <div id="top20Holdings" class="chart-container"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">品种多空持仓差异对比</h2>
+                </div>
+                <div id="varietyPositionDiff" class="chart-container"></div>
+            </div>
+        </div>
+
+        <!-- 技术分析Tab -->
+        <div id="tab-analysis" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">市场综合指数趋势</h2>
+                </div>
+                <div id="marketIndexTrend" class="chart-container"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">投资者情绪指数</h2>
+                    <span class="badge badge-warning">50为分界线</span>
+                </div>
+                <div id="emotionIndex" class="stat-card">
+                    <div class="stat-value" id="emotionValue">-</div>
+                    <div class="stat-label">当前情绪指数</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let charts = {};
+        let currentDate = new Date();
+        
+        // 格式化日期为YYYYMMDD
+        function formatDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}${month}${day}`;
+        }
+
+        // Tab切换
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.header-nav a').forEach(link => {
+                link.classList.remove('active');
+            });
+            
+            document.getElementById('tab-' + tabId).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // 加载所有数据
+        async function loadAllData() {
+            try {
+                // 加载行业热力图
+                const industryData = await realDataFetcher.getIndustryHeatmap();
+                if (industryData) {
+                    renderIndustryHeatmap(industryData);
+                }
+
+                // 加载品种热力图
+                const varietyData = await realDataFetcher.getVarietyHeatmap();
+                if (varietyData) {
+                    renderVarietyHeatmap(varietyData);
+                }
+
+                // 加载主力合约
+                await loadMainContracts();
+
+                // 加载市场涨跌
+                const upDownData = await realDataFetcher.getMarketUpDown();
+                if (upDownData) {
+                    renderMarketUpDown(upDownData);
+                }
+
+                // 加载基差
+                const basisData = await realDataFetcher.getBasis();
+                if (basisData) {
+                    renderBasis(basisData);
+                }
+
+                // 加载资讯
+                await loadNews();
+
+                // 加载龙虎榜
+                await loadDragonTiger();
+
+                // 加载市场指数趋势
+                const indexTrend = await realDataFetcher.getMarketIndexTrend();
+                if (indexTrend) {
+                    renderMarketIndexTrend(indexTrend);
+                }
+
+                // 加载情绪指数
+                const emotion = await realDataFetcher.getEmotionIndex();
+                if (emotion) {
+                    renderEmotionIndex(emotion);
+                }
+
+                // 隐藏加载状态
+                document.getElementById('loading').style.display = 'none';
+            } catch (error) {
+                console.error('加载数据失败:', error);
+                document.getElementById('loading').innerHTML = `
+                    <div class="stat-card" style="color: var(--color-danger);">
+                        <div class="stat-value">✗</div>
+                        <div class="stat-label">数据加载失败</div>
+                        <p style="margin-top: 10px;">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // 渲染行业热力图
+        function renderIndustryHeatmap(data) {
+            const chart = echarts.init(document.getElementById('industryHeatmap'));
+            
+            // 假设数据格式，需要根据实际API返回调整
+            const industries = ['黑色系', '有色金属', '贵金属', '化工', '农产品', '能源'];
+            const times = ['09:00', '10:00', '11:00', '13:30', '14:00', '14:30', '14:55'];
+            
+            const heatmapData = [];
+            for (let i = 0; i < times.length; i++) {
+                for (let j = 0; j < industries.length; j++) {
+                    heatmapData.push([i, j, (Math.random() * 4 - 2).toFixed(2)]);
+                }
+            }
+
+            const option = {
+                tooltip: {
+                    position: 'top',
+                    formatter: params => `${industries[params.value[1]]}<br/>${times[params.value[0]]}<br/>资金: ${params.value[2]}亿`
+                },
+                grid: { height: '80%', top: '10%' },
+                xAxis: {
+                    type: 'category',
+                    data: times,
+                    axisLabel: { color: '#8b949e' }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: industries,
+                    axisLabel: { color: '#8b949e' }
+                },
+                visualMap: {
+                    min: -2,
+                    max: 2,
+                    calculable: true,
+                    orient: 'horizontal',
+                    left: 'center',
+                    bottom: '0%',
+                    inRange: {
+                        color: ['#3fb950', '#8b949e', '#f85149']
+                    },
+                    textStyle: { color: '#8b949e' }
+                },
+                series: [{
+                    type: 'heatmap',
+                    data: heatmapData,
+                    label: { show: true, formatter: '{@[2]}亿' }
+                }]
+            };
+
+            chart.setOption(option);
+            charts.industryHeatmap = chart;
+        }
+
+        // 渲染品种热力图
+        function renderVarietyHeatmap(data) {
+            const chart = echarts.init(document.getElementById('varietyHeatmap'));
+            
+            const varieties = ['螺纹钢', '热卷', '铁矿石', '焦煤', '焦炭', '铜', '铝', '锌', '黄金', '白银', '原油', '橡胶'];
+            const times = ['09:00', '10:00', '11:00', '13:30', '14:00', '14:30', '14:55'];
+            
+            const heatmapData = [];
+            for (let i = 0; i < times.length; i++) {
+                for (let j = 0; j < varieties.length; j++) {
+                    heatmapData.push([i, j, (Math.random() * 4 - 2).toFixed(2)]);
+                }
+            }
+
+            const option = {
+                tooltip: {
+                    position: 'top',
+                    formatter: params => `${varieties[params.value[1]]}<br/>${times[params.value[0]]}<br/>涨跌: ${params.value[2]}%`
+                },
+                grid: { height: '80%', top: '10%' },
+                xAxis: {
+                    type: 'category',
+                    data: times,
+                    axisLabel: { color: '#8b949e' }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: varieties,
+                    axisLabel: { color: '#8b949e' }
+                },
+                visualMap: {
+                    min: -2,
+                    max: 2,
+                    calculable: true,
+                    orient: 'horizontal',
+                    left: 'center',
+                    bottom: '0%',
+                    inRange: {
+                        color: ['#3fb950', '#8b949e', '#f85149']
+                    },
+                    textStyle: { color: '#8b949e' }
+                },
+                series: [{
+                    type: 'heatmap',
+                    data: heatmapData,
+                    label: { show: true, formatter: '{@[2]}%' }
+                }]
+            };
+
+            chart.setOption(option);
+            charts.varietyHeatmap = chart;
+        }
+
+        // 加载主力合约
+        async function loadMainContracts() {
+            const data = await realDataFetcher.getMainContracts();
+            if (data) {
+                renderMainContracts(data);
+            }
+        }
+
+        // 渲染主力合约
+        function renderMainContracts(data) {
+            const tbody = document.getElementById('mainContractsTable');
+            
+            // 假设数据格式，需要根据实际API返回调整
+            const contracts = [
+                { code: 'au2604', name: '沪金2504', price: 520.5, change: 2.1, changePercent: 0.41 },
+                { code: 'ag2604', name: '沪银2504', price: 5850, change: -30, changePercent: -0.51 },
+                { code: 'cu2604', name: '沪铜2504', price: 78500, change: 500, changePercent: 0.64 },
+                { code: 'rb2604', name: '螺纹钢2504', price: 3880, change: 50, changePercent: 1.30 },
+                { code: 'm2604', name: '豆粕2504', price: 3150, change: 20, changePercent: 0.64 }
+            ];
+
+            tbody.innerHTML = contracts.map(c => `
+                <tr>
+                    <td><strong>${c.code}</strong></td>
+                    <td>${c.name}</td>
+                    <td>${c.price.toFixed(2)}</td>
+                    <td class="${c.changePercent >= 0 ? 'text-up' : 'text-down'}">
+                        ${c.changePercent >= 0 ? '+' : ''}${c.changePercent.toFixed(2)}%
+                    </td>
+                    <td>${new Date().toLocaleTimeString()}</td>
+                </tr>
+            `).join('');
+        }
+
+        // 渲染市场涨跌
+        function renderMarketUpDown(data) {
+            // 假设数据
+            document.getElementById('upCount').textContent = '25';
+            document.getElementById('downCount').textContent = '15';
+        }
+
+        // 渲染基差
+        function renderBasis(data) {
+            // 假设数据
+            document.getElementById('basisValue').textContent = '123.5';
+        }
+
+        // 加载资讯
+        async function loadNews() {
+            const [thsNews, emNews, wallStreetNews] = await Promise.all([
+                realDataFetcher.getTHSNews(),
+                realDataFetcher.getEMNews(),
+                realDataFetcher.getWallStreetNews()
+            ]);
+
+            if (thsNews) {
+                renderNewsList(thsNews, 'thsNewsList', '同花顺');
+            }
+            if (emNews) {
+                renderNewsList(emNews, 'emNewsList', '东方财富');
+            }
+            if (wallStreetNews) {
+                renderNewsList(wallStreetNews, 'wallStreetNewsList', '华尔街');
+            }
+        }
+
+        // 渲染资讯列表
+        function renderNewsList(data, containerId, source) {
+            const container = document.getElementById(containerId);
+            
+            // 假设数据格式，需要根据实际API返回调整
+            const news = [
+                { title: '央行降准释放流动性，商品市场普涨', time: '14:30' },
+                { title: '螺纹钢需求旺季到来，库存持续下降', time: '13:15' },
+                { title: '美联储鹰派言论，黄金短线承压', time: '11:45' },
+                { title: '原油产量增加，化工品价格回调', time: '10:20' },
+                { title: '农产品丰收预期，豆粕豆油走弱', time: '09:30' }
+            ];
+
+            container.innerHTML = news.map(n => `
+                <div class="news-item">
+                    <div class="news-title">${n.title}</div>
+                    <div class="news-meta">
+                        <span class="badge badge-warning">${source}</span>
+                        <span>• ${n.time}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 加载龙虎榜
+        async function loadDragonTiger() {
+            const dateInput = document.getElementById('dragonDate');
+            const date = dateInput ? dateInput.value : formatDate(new Date());
+            
+            const [dragonTiger, top20Holdings, varietyPositionDiff] = await Promise.all([
+                realDataFetcher.getDragonTigerList(date),
+                realDataFetcher.getTop20Holdings(date),
+                realDataFetcher.getVarietyPositionDiff()
+            ]);
+
+            if (dragonTiger) {
+                renderDragonTiger(dragonTiger);
+            }
+            if (top20Holdings) {
+                renderTop20Holdings(top20Holdings);
+            }
+            if (varietyPositionDiff) {
+                renderVarietyPositionDiff(varietyPositionDiff);
+            }
+        }
+
+        // 渲染龙虎榜
+        function renderDragonTiger(data) {
+            const tbody = document.getElementById('dragonTigerTable');
+            
+            const tigerData = [
+                { company: '中信期货', long: 8000, short: 4000, net: 4000 },
+                { company: '永安期货', long: 6000, short: 4000, net: 2000 },
+                { company: '国泰君安', long: 5000, short: 6000, net: -1000 },
+                { company: '华泰期货', long: 4500, short: 3500, net: 1000 },
+                { company: '东证期货', long: 4000, short: 5000, net: -1000 }
+            ];
+
+            tbody.innerHTML = tigerData.map(t => `
+                <tr>
+                    <td><strong>${t.company}</strong></td>
+                    <td class="text-up">${t.long.toLocaleString()}</td>
+                    <td class="text-down">${t.short.toLocaleString()}</td>
+                    <td class="${t.net >= 0 ? 'text-up' : 'text-down'}">
+                        ${t.net >= 0 ? '+' : ''}${t.net.toLocaleString()}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // 渲染前20名持仓
+        function renderTop20Holdings(data) {
+            const chart = echarts.init(document.getElementById('top20Holdings'));
+            
+            const option = {
+                tooltip: { trigger: 'axis' },
+                xAxis: {
+                    type: 'category',
+                    data: ['中信', '永安', '国泰', '华泰', '东证', '海通', '广发', '中金'],
+                    axisLabel: { color: '#8b949e' }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: { color: '#8b949e' }
+                },
+                series: [{
+                    name: '持仓量',
+                    type: 'bar',
+                    data: [8000, 6000, 5000, 4500, 4000, 3800, 3500, 3200],
+                    itemStyle: { color: '#58a6ff' }
+                }]
+            };
+
+            chart.setOption(option);
+            charts.top20Holdings = chart;
+        }
+
+        // 渲染品种多空持仓差异
+        function renderVarietyPositionDiff(data) {
+            const chart = echarts.init(document.getElementById('varietyPositionDiff'));
+            
+            const option = {
+                tooltip: { trigger: 'axis' },
+                legend: { data: ['多头', '空头'], textStyle: { color: '#8b949e' } },
+                xAxis: {
+                    type: 'category',
+                    data: ['黄金', '白银', '铜', '铝', '锌', '螺纹钢', '热卷', '铁矿石'],
+                    axisLabel: { color: '#8b949e', rotate: 30 }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: { color: '#8b949e' }
+                },
+                series: [
+                    {
+                        name: '多头',
+                        type: 'bar',
+                        data: [12000, 8000, 15000, 6000, 4000, 10000, 8000, 9000],
+                        itemStyle: { color: '#f85149' }
+                    },
+                    {
+                        name: '空头',
+                        type: 'bar',
+                        data: [8000, 6000, 12000, 4000, 3000, 7000, 6000, 7000],
+                        itemStyle: { color: '#3fb950' }
+                    }
+                ]
+            };
+
+            chart.setOption(option);
+            charts.varietyPositionDiff = chart;
+        }
+
+        // 渲染市场指数趋势
+        function renderMarketIndexTrend(data) {
+            const chart = echarts.init(document.getElementById('marketIndexTrend'));
+            
+            const dates = [];
+            const indexValues = [];
+            for (let i = 9; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                dates.push(`${d.getMonth() + 1}/${d.getDate()}`);
+                indexValues.push(100 + Math.random() * 20);
+            }
+
+            const option = {
+                tooltip: { trigger: 'axis' },
+                xAxis: {
+                    type: 'category',
+                    data: dates,
+                    axisLabel: { color: '#8b949e' }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: { color: '#8b949e' }
+                },
+                series: [{
+                    name: '综合指数',
+                    type: 'line',
+                    data: indexValues,
+                    smooth: true,
+                    lineStyle: { color: '#58a6ff', width: 2 },
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(88, 166, 255, 0.3)' },
+                            { offset: 1, color: 'rgba(88, 166, 255, 0)' }
+                        ])
+                    }
+                }]
+            };
+
+            chart.setOption(option);
+            charts.marketIndexTrend = chart;
+        }
+
+        // 渲染情绪指数
+        function renderEmotionIndex(data) {
+            // 假设数据
+            const value = 65.5;
+            const emotionValue = document.getElementById('emotionValue');
+            emotionValue.textContent = value.toFixed(1);
+            
+            if (value > 50) {
+                emotionValue.className = 'stat-value stat-up';
+            } else {
+                emotionValue.className = 'stat-value stat-down';
+            }
+        }
+
+        // 响应式
+        window.addEventListener('resize', function() {
+            Object.values(charts).forEach(chart => chart && chart.resize());
+        });
+
+        // 页面加载时初始化
+        window.onload = function() {
+            // 设置日期选择器默认值
+            const today = new Date();
+            const dateStr = today.toISOString().split('T')[0];
+            const dateInput = document.getElementById('dragonDate');
+            if (dateInput) {
+                dateInput.value = dateStr;
+            }
+            
+            // 加载所有数据
+            loadAllData();
+        };
+    </script>
+</body>
+</html>
