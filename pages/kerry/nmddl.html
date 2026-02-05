@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>诺曼底登陆 - D-Day</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+
+        body {
+            overflow: hidden;
+            background: #1a1a2e;
+            font-family: 'Courier New', monospace;
+        }
+
+        #gameCanvas {
+            display: block;
+            background: linear-gradient(to bottom, #2c3e50 0%, #34495e 50%, #5d4037 100%);
+        }
+
+        /* HUD 样式 */
+        #hud {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 15px;
+            display: none;
+            justify-content: space-between;
+            pointer-events: none;
+            z-index: 100;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%);
+        }
+
+        .hud-section {
+            display: flex;
+            gap: 20px;
+            pointer-events: auto;
+        }
+
+        .stat-box {
+            background: rgba(0,0,0,0.7);
+            border: 2px solid #4a4a4a;
+            padding: 8px 15px;
+            border-radius: 5px;
+            color: #fff;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #aaa;
+            text-transform: uppercase;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            color: #fff;
+        }
+
+        .health { color: #e74c3c; }
+        .ammo { color: #f39c12; }
+        .xp { color: #3498db; }
+        .level { color: #2ecc71; }
+        .score { color: #f1c40f; }
+
+        /* 主菜单 */
+        #mainMenu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: 
+                linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)),
+                url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23333" width="100" height="100"/><path fill="%23444" d="M0 0h50v50H0zM50 50h50v50H50z"/></svg>');
+            background-size: cover, 50px 50px;
+            z-index: 200;
+        }
+
+        .game-title {
+            font-size: 60px;
+            color: #c0392b;
+            text-shadow: 
+                0 0 10px #e74c3c,
+                0 0 20px #e74c3c,
+                0 0 40px #e74c3c;
+            margin-bottom: 10px;
+            letter-spacing: 8px;
+            animation: pulse 2s infinite;
+            font-weight: bold;
+        }
+
+        .subtitle {
+            font-size: 20px;
+            color: #95a5a6;
+            margin-bottom: 50px;
+            letter-spacing: 4px;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .menu-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .menu-btn {
+            padding: 20px 60px;
+            font-size: 24px;
+            border: 3px solid #c0392b;
+            background: rgba(192, 57, 43, 0.2);
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            position: relative;
+            overflow: hidden;
+            border-radius: 5px;
+        }
+
+        .menu-btn:hover {
+            background: rgba(192, 57, 43, 0.8);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(231, 76, 60, 0.5);
+        }
+
+        .menu-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            transition: left 0.5s;
+        }
+
+        .menu-btn:hover::before {
+            left: 100%;
+        }
+
+        /* 开火按钮 */
+        #fireButton {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #e74c3c, #c0392b);
+            border: 4px solid #fff;
+            color: #fff;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            display: none;
+            z-index: 100;
+            box-shadow: 
+                0 0 0 10px rgba(231, 76, 60, 0.3),
+                0 10px 30px rgba(0,0,0,0.5);
+            transition: transform 0.1s;
+        }
+
+        #fireButton:active {
+            transform: scale(0.95);
+            background: radial-gradient(circle at 30% 30%, #c0392b, #922b21);
+        }
+
+        #fireButton::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.5);
+            transform: translate(-50%, -50%);
+            animation: ripple 2s infinite;
+        }
+
+        @keyframes ripple {
+            0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+        }
+
+        /* 作弊菜单 */
+        #cheatMenu {
+            position: fixed;
+            top: 80px;
+            left: 15px;
+            background: rgba(0,0,0,0.9);
+            border: 2px solid #f39c12;
+            padding: 15px;
+            border-radius: 10px;
+            display: none;
+            z-index: 150;
+            min-width: 200px;
+        }
+
+        .cheat-title {
+            color: #f39c12;
+            font-size: 14px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border-bottom: 1px solid #f39c12;
+            padding-bottom: 5px;
+        }
+
+        .cheat-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .cheat-checkbox {
+            width: 20px;
+            height: 20px;
+            accent-color: #f39c12;
+        }
+
+        #cheatToggle {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            padding: 8px 15px;
+            background: rgba(243, 156, 18, 0.3);
+            border: 2px solid #f39c12;
+            color: #f39c12;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 12px;
+            z-index: 151;
+            display: none;
+        }
+
+        /* 游戏结束面板 */
+        #gameOver {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 300;
+        }
+
+        .game-over-title {
+            font-size: 80px;
+            color: #c0392b;
+            text-shadow: 0 0 20px #e74c3c;
+            margin-bottom: 20px;
+            animation: shake 0.5s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        .final-score {
+            font-size: 30px;
+            color: #fff;
+            margin-bottom: 40px;
+        }
+
+        .restart-btn {
+            padding: 15px 40px;
+            font-size: 20px;
+            background: #27ae60;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: all 0.3s;
+        }
+
+        .restart-btn:hover {
+            background: #2ecc71;
+            transform: scale(1.05);
+        }
+
+        /* 波次提示 */
+        #waveAlert {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            color: #f39c12;
+            text-shadow: 0 0 20px #f39c12;
+            display: none;
+            z-index: 120;
+            animation: waveIn 2s;
+        }
+
+        @keyframes waveIn {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            .game-title { font-size: 36px; }
+            .menu-btn { padding: 15px 40px; font-size: 18px; }
+            #fireButton { width: 100px; height: 100px; font-size: 20px; }
+            .stat-value { font-size: 16px; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- HUD -->
+    <div id="hud">
+        <div class="hud-section">
+            <div class="stat-box">
+                <div class="stat-label">生命值</div>
+                <div class="stat-value health" id="healthDisplay">100</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">弹药</div>
+                <div class="stat-value ammo" id="ammoDisplay">30/∞</div>
+            </div>
+        </div>
+        <div class="hud-section">
+            <div class="stat-box">
+                <div class="stat-label">等级</div>
+                <div class="stat-value level" id="levelDisplay">1</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">经验值</div>
+                <div class="stat-value xp" id="xpDisplay">0/100</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">得分</div>
+                <div class="stat-value score" id="scoreDisplay">0</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 作弊菜单切换 -->
+    <button id="cheatToggle" onclick="toggleCheatMenu()">⚙️ 作弊菜单</button>
+
+    <!-- 作弊菜单 -->
+    <div id="cheatMenu">
+        <div class="cheat-title">开发者选项</div>
+        <label class="cheat-option">
+            <input type="checkbox" class="cheat-checkbox" id="infiniteAmmo" onchange="toggleCheat('infiniteAmmo')">
+            <span>无限弹药</span>
+        </label>
+        <label class="cheat-option">
+            <input type="checkbox" class="cheat-checkbox" id="infiniteHealth" onchange="toggleCheat('infiniteHealth')">
+            <span>无限生命</span>
+        </label>
+        <label class="cheat-option">
+            <input type="checkbox" class="cheat-checkbox" id="rapidFire" onchange="toggleCheat('rapidFire')">
+            <span>快速射击</span>
+        </label>
+        <label class="cheat-option">
+            <input type="checkbox" class="cheat-checkbox" id="oneShotKill" onchange="toggleCheat('oneShotKill')">
+            <span>一击必杀</span>
+        </label>
+    </div>
+
+    <!-- 主菜单 -->
+    <div id="mainMenu">
+        <h1 class="game-title">诺曼底登陆</h1>
+        <p class="subtitle">D-DAY LANDING OPERATION</p>
+        <div class="menu-buttons">
+            <button class="menu-btn" onclick="startGame('classic')">经典模式</button>
+            <button class="menu-btn" onclick="startGame('endless')">无尽模式</button>
+        </div>
+    </div>
+
+    <!-- 开火按钮 -->
+    <button id="fireButton" onmousedown="startFiring()" onmouseup="stopFiring()" 
+            ontouchstart="startFiring()" ontouchend="stopFiring()">开火</button>
+
+    <!-- 游戏结束 -->
+    <div id="gameOver">
+        <h1 class="game-over-title">任务失败</h1>
+        <div class="final-score">最终得分: <span id="finalScore">0</span></div>
+        <button class="restart-btn" onclick="returnToMenu()">返回主菜单</button>
+    </div>
+
+    <!-- 波次提示 -->
+    <div id="waveAlert">敌军来袭!</div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 游戏状态
+        let gameState = 'menu'; // menu, playing, gameover
+        let gameMode = 'classic';
+        let lastTime = 0;
+        let wave = 1;
+        
+        // 玩家状态
+        const player = {
+            x: 0,
+            y: 0,
+            width: 40,
+            height: 60,
+            health: 100,
+            maxHealth: 100,
+            ammo: 30,
+            maxAmmo: 30,
+            xp: 0,
+            level: 1,
+            xpToNext: 100,
+            score: 0,
+            angle: 0,
+            isFiring: false,
+            fireCooldown: 0,
+            reloadTime: 0
+        };
+
+        // 作弊状态
+        const cheats = {
+            infiniteAmmo: false,
+            infiniteHealth: false,
+            rapidFire: false,
+            oneShotKill: false
+        };
+
+        // 游戏对象数组
+        let bullets = [];
+        let enemies = [];
+        let particles = [];
+        let obstacles = [];
+        let powerUps = [];
+
+        // 相机偏移
+        let cameraY = 0;
+
+        // 初始化画布
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            player.x = canvas.width / 2;
+            player.y = canvas.height - 150;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // 输入处理
+        const keys = {};
+        const mouse = { x: 0, y: 0, down: false };
+
+        document.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            if (e.key === 'r' || e.key === 'R') reload();
+        });
+
+        document.addEventListener('keyup', (e) => keys[e.key] = false);
+
+        canvas.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+            updatePlayerAngle();
+        });
+
+        canvas.addEventListener('mousedown', () => {
+            mouse.down = true;
+            startFiring();
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            mouse.down = false;
+            stopFiring();
+        });
+
+        // 触摸控制
+        let touchStartX = 0;
+        canvas.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const diffX = touch.clientX - touchStartX;
+            player.x += diffX * 0.5;
+            touchStartX = touch.clientX;
+            
+            // 限制玩家移动范围
+            player.x = Math.max(player.width/2, Math.min(canvas.width - player.width/2, player.x));
+        });
+
+        function updatePlayerAngle() {
+            const dx = mouse.x - player.x;
+            const dy = mouse.y - player.y;
+            player.angle = Math.atan2(dy, dx);
+        }
+
+        // 作弊功能
+        function toggleCheatMenu() {
+            const menu = document.getElementById('cheatMenu');
+            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function toggleCheat(cheatName) {
+            cheats[cheatName] = document.getElementById(cheatName).checked;
+            if (cheatName === 'infiniteAmmo' && cheats.infiniteAmmo) {
+                player.ammo = 999;
+            }
+            if (cheatName === 'infiniteHealth' && cheats.infiniteHealth) {
+                player.health = 999;
+            }
+        }
+
+        // 射击系统
+        function startFiring() {
+            player.isFiring = true;
+        }
+
+        function stopFiring() {
+            player.isFiring = false;
+        }
+
+        function fire() {
+            if (player.fireCooldown > 0 || player.reloadTime > 0) return;
+            if (player.ammo <= 0 && !cheats.infiniteAmmo) {
+                reload();
+                return;
+            }
+
+            const spread = cheats.rapidFire ? 0.3 : 0.1;
+            const bulletCount = cheats.rapidFire ? 3 : 1;
+
+            for (let i = 0; i < bulletCount; i++) {
+                const angle = player.angle + (Math.random() - 0.5) * spread;
+                bullets.push({
+                    x: player.x + Math.cos(angle) * 30,
+                    y: player.y + Math.sin(angle) * 30,
+                    vx: Math.cos(angle) * 15,
+                    vy: Math.sin(angle) * 15,
+                    damage: cheats.oneShotKill ? 999 : 25 + player.level * 5,
+                    isEnemy: false
+                });
+            }
+
+            if (!cheats.infiniteAmmo) player.ammo--;
+            player.fireCooldown = cheats.rapidFire ? 5 : 15;
+            
+            // 后坐力效果
+            player.y += 2;
+            setTimeout(() => player.y -= 2, 50);
+
+            updateHUD();
+        }
+
+        function reload() {
+            if (player.reloadTime > 0 || cheats.infiniteAmmo) return;
+            player.reloadTime = 60;
+            setTimeout(() => {
+                player.ammo = player.maxAmmo;
+                updateHUD();
+            }, 1000);
+        }
+
+        // 生成敌人
+        function spawnEnemy() {
+            const types = ['soldier', 'tank', 'plane'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            
+            const enemy = {
+                x: Math.random() * (canvas.width - 100) + 50,
+                y: -100 - cameraY,
+                type: type,
+                width: type === 'tank' ? 80 : (type === 'plane' ? 100 : 40),
+                height: type === 'tank' ? 60 : (type === 'plane' ? 40 : 60),
+                health: type === 'tank' ? 200 : (type === 'plane' ? 100 : 50),
+                maxHealth: type === 'tank' ? 200 : (type === 'plane' ? 100 : 50),
+                speed: type === 'plane' ? 3 : (type === 'tank' ? 1 : 2),
+                damage: type === 'tank' ? 30 : (type === 'plane' ? 20 : 10),
+                xpValue: type === 'tank' ? 50 : (type === 'plane' ? 30 : 10),
+                lastShot: 0
+            };
+            
+            enemies.push(enemy);
+        }
+
+        // 生成障碍物（掩体）
+        function generateObstacles() {
+            for (let i = 0; i < 10; i++) {
+                obstacles.push({
+                    x: Math.random() * canvas.width,
+                    y: -Math.random() * 2000,
+                    width: 60 + Math.random() * 40,
+                    height: 40 + Math.random() * 30,
+                    health: 100
+                });
+            }
+        }
+
+        // 粒子效果
+        function createExplosion(x, y, color, count = 10) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: (Math.random() - 0.5) * 10,
+                    life: 30,
+                    color: color,
+                    size: Math.random() * 5 + 2
+                });
+            }
+        }
+
+        // 更新游戏逻辑
+        function update(dt) {
+            if (gameState !== 'playing') return;
+
+            // 玩家移动
+            const speed = 5;
+            if (keys['ArrowLeft'] || keys['a']) player.x -= speed;
+            if (keys['ArrowRight'] || keys['d']) player.x += speed;
+            if (keys['ArrowUp'] || keys['w']) player.y -= speed;
+            if (keys['ArrowDown'] || keys['s']) player.y += speed;
+
+            // 限制玩家位置
+            player.x = Math.max(player.width/2, Math.min(canvas.width - player.width/2, player.x));
+            player.y = Math.max(canvas.height/2, Math.min(canvas.height - 100, player.y));
+
+            // 相机跟随
+            cameraY = player.y - canvas.height + 200;
+
+            // 射击
+            if (player.isFiring) fire();
+            if (player.fireCooldown > 0) player.fireCooldown--;
+            if (player.reloadTime > 0) player.reloadTime--;
+
+            // 更新子弹
+            bullets = bullets.filter(bullet => {
+                bullet.x += bullet.vx;
+                bullet.y += bullet.vy;
+                
+                // 检查击中敌人
+                let hit = false;
+                enemies.forEach(enemy => {
+                    if (!bullet.isEnemy && 
+                        bullet.x > enemy.x - enemy.width/2 && 
+                        bullet.x < enemy.x + enemy.width/2 &&
+                        bullet.y > enemy.y - enemy.height/2 && 
+                        bullet.y < enemy.y + enemy.height/2) {
+                        
+                        enemy.health -= bullet.damage;
+                        hit = true;
+                        createExplosion(bullet.x, bullet.y, '#ff6b35', 5);
+                        
+                        if (enemy.health <= 0) {
+                            killEnemy(enemy);
+                        }
+                    }
+                });
+
+                // 检查击中玩家
+                if (bullet.isEnemy &&
+                    bullet.x > player.x - player.width/2 &&
+                    bullet.x < player.x + player.width/2 &&
+                    bullet.y > player.y - player.height/2 &&
+                    bullet.y < player.y + player.height/2) {
+                    
+                    if (!cheats.infiniteHealth) {
+                        player.health -= 10;
+                        createExplosion(player.x, player.y, '#e74c3c', 5);
+                    }
+                    hit = true;
+                }
+
+                return !hit && bullet.y > cameraY - 100 && bullet.y < cameraY + canvas.height + 100;
+            });
+
+            // 更新敌人
+            enemies.forEach(enemy => {
+                // 向玩家移动
+                const dx = player.x - enemy.x;
+                const dy = player.y - enemy.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                
+                enemy.x += (dx / dist) * enemy.speed;
+                enemy.y += (dy / dist) * enemy.speed;
+
+                // 敌人射击
+                if (enemy.lastShot <= 0 && dist < 400) {
+                    const angle = Math.atan2(dy, dx);
+                    bullets.push({
+                        x: enemy.x,
+                        y: enemy.y,
+                        vx: Math.cos(angle) * 8,
+                        vy: Math.sin(angle) * 8,
+                        damage: enemy.damage,
+                        isEnemy: true
+                    });
+                    enemy.lastShot = 60;
+                }
+                enemy.lastShot--;
+            });
+
+            // 移除死亡敌人
+            enemies = enemies.filter(enemy => enemy.health > 0);
+
+            // 碰撞检测
+            enemies.forEach(enemy => {
+                const dx = player.x - enemy.x;
+                const dy = player.y - enemy.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                
+                if (dist < (player.width + enemy.width) / 2) {
+                    if (!cheats.infiniteHealth) player.health -= enemy.damage;
+                    createExplosion(player.x, player.y, '#e74c3c', 10);
+                    enemy.health = 0;
+                }
+            });
+
+            // 生成新敌人
+            if (Math.random() < 0.02 + wave * 0.005) {
+                spawnEnemy();
+            }
+
+            // 波次系统
+            if (player.score > wave * 500) {
+                wave++;
+                showWaveAlert();
+            }
+
+            // 更新粒子
+            particles = particles.filter(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.3; // 重力
+                p.life--;
+                return p.life > 0;
+            });
+
+            // 检查游戏结束
+            if (player.health <= 0 && !cheats.infiniteHealth) {
+                gameOver();
+            }
+
+            // 升级检查
+            if (player.xp >= player.xpToNext) {
+                levelUp();
+            }
+
+            updateHUD();
+        }
+
+        function killEnemy(enemy) {
+            createExplosion(enemy.x, enemy.y, '#f39c12', 20);
+            player.xp += enemy.xpValue;
+            player.score += enemy.xpValue * 10;
+            
+            // 掉落道具
+            if (Math.random() < 0.1) {
+                powerUps.push({
+                    x: enemy.x,
+                    y: enemy.y,
+                    type: Math.random() < 0.5 ? 'health' : 'ammo',
+                    life: 300
+                });
+            }
+        }
+
+        function levelUp() {
+            player.level++;
+            player.xp = 0;
+            player.xpToNext = Math.floor(player.xpToNext * 1.5);
+            player.maxHealth += 20;
+            player.health = player.maxHealth;
+            player.maxAmmo += 5;
+            
+            createExplosion(player.x, player.y, '#2ecc71', 30);
+        }
+
+        function showWaveAlert() {
+            const alert = document.getElementById('waveAlert');
+            alert.style.display = 'block';
+            alert.textContent = `第 ${wave} 波敌军来袭!`;
+            setTimeout(() => alert.style.display = 'none', 2000);
+        }
+
+        // 渲染
+        function draw() {
+            // 清空画布
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制沙滩
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#2c3e50');
+            gradient.addColorStop(0.5, '#34495e');
+            gradient.addColorStop(1, '#d4a574');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制障碍物
+            ctx.fillStyle = '#7f8c8d';
+            obstacles.forEach(obs => {
+                const screenY = obs.y - cameraY;
+                if (screenY > -100 && screenY < canvas.height + 100) {
+                    ctx.fillRect(obs.x - obs.width/2, screenY, obs.width, obs.height);
+                    // 掩体顶部
+                    ctx.fillStyle = '#95a5a6';
+                    ctx.fillRect(obs.x - obs.width/2, screenY, obs.width, 10);
+                    ctx.fillStyle = '#7f8c8d';
+                }
+            });
+
+            // 绘制道具
+            powerUps.forEach(pu => {
+                const screenY = pu.y - cameraY;
+                ctx.fillStyle = pu.type === 'health' ? '#e74c3c' : '#f39c12';
+                ctx.beginPath();
+                ctx.arc(pu.x, screenY, 15, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#fff';
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(pu.type === 'health' ? '+' : 'A', pu.x, screenY + 5);
+            });
+
+            // 绘制敌人
+            enemies.forEach(enemy => {
+                const screenY = enemy.y - cameraY;
+                if (screenY < -100 || screenY > canvas.height + 100) return;
+
+                ctx.save();
+                ctx.translate(enemy.x, screenY);
+                
+                if (enemy.type === 'tank') {
+                    // 绘制坦克
+                    ctx.fillStyle = '#2d3436';
+                    ctx.fillRect(-40, -30, 80, 60);
+                    ctx.fillStyle = '#636e72';
+                    ctx.fillRect(-10, -40, 20, 80);
+                    // 炮管
+                    const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+                    ctx.rotate(angle);
+                    ctx.fillRect(0, -5, 50, 10);
+                } else if (enemy.type === 'plane') {
+                    // 绘制飞机
+                    ctx.fillStyle = '#74b9ff';
+                    ctx.beginPath();
+                    ctx.moveTo(50, 0);
+                    ctx.lineTo(-50, -20);
+                    ctx.lineTo(-50, 20);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    // 绘制士兵
+                    ctx.fillStyle = '#2d3436';
+                    ctx.fillRect(-20, -30, 40, 60);
+                    ctx.fillStyle = '#e17055';
+                    ctx.beginPath();
+                    ctx.arc(0, -40, 15, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                // 血条
+                const barWidth = enemy.width;
+                ctx.fillStyle = '#000';
+                ctx.fillRect(-barWidth/2, -enemy.height/2 - 20, barWidth, 6);
+                ctx.fillStyle = '#e74c3c';
+                ctx.fillRect(-barWidth/2, -enemy.height/2 - 20, barWidth * (enemy.health/enemy.maxHealth), 6);
+                
+                ctx.restore();
+            });
+
+            // 绘制玩家
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            ctx.rotate(player.angle);
+            
+            // 身体
+            ctx.fillStyle = '#27ae60';
+            ctx.fillRect(-20, -30, 40, 60);
+            
+            // 头
+            ctx.fillStyle = '#f1c40f';
+            ctx.beginPath();
+            ctx.arc(0, -40, 15, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 枪
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(0, -5, 40, 10);
+            
+            ctx.restore();
+
+            // 绘制子弹
+            bullets.forEach(bullet => {
+                const screenY = bullet.y - cameraY;
+                ctx.fillStyle = bullet.isEnemy ? '#e74c3c' : '#f1c40f';
+                ctx.beginPath();
+                ctx.arc(bullet.x, screenY, bullet.isEnemy ? 5 : 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // 绘制粒子
+            particles.forEach(p => {
+                const screenY = p.y - cameraY;
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life / 30;
+                ctx.beginPath();
+                ctx.arc(p.x, screenY, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            });
+
+            // 绘制装填条
+            if (player.reloadTime > 0) {
+                ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                ctx.fillRect(player.x - 30, player.y - 80, 60, 10);
+                ctx.fillStyle = '#f39c12';
+                ctx.fillRect(player.x - 30, player.y - 80, 60 * (1 - player.reloadTime/60), 10);
+            }
+        }
+
+        function updateHUD() {
+            document.getElementById('healthDisplay').textContent = Math.floor(player.health);
+            document.getElementById('ammoDisplay').textContent = cheats.infiniteAmmo ? '∞' : `${player.ammo}/${player.maxAmmo}`;
+            document.getElementById('levelDisplay').textContent = player.level;
+            document.getElementById('xpDisplay').textContent = `${player.xp}/${player.xpToNext}`;
+            document.getElementById('scoreDisplay').textContent = player.score;
+        }
+
+        // 游戏控制
+        function startGame(mode) {
+            gameMode = mode;
+            gameState = 'playing';
+            
+            // 重置玩家
+            player.health = 100;
+            player.ammo = 30;
+            player.xp = 0;
+            player.level = 1;
+            player.score = 0;
+            player.x = canvas.width / 2;
+            player.y = canvas.height - 150;
+            
+            // 清空数组
+            bullets = [];
+            enemies = [];
+            particles = [];
+            obstacles = [];
+            powerUps = [];
+            
+            generateObstacles();
+            
+            // 显示UI
+            document.getElementById('mainMenu').style.display = 'none';
+            document.getElementById('hud').style.display = 'flex';
+            document.getElementById('fireButton').style.display = 'block';
+            document.getElementById('cheatToggle').style.display = 'block';
+            
+            // 经典模式有终点
+            if (mode === 'classic') {
+                wave = 1;
+            }
+        }
+
+        function gameOver() {
+            gameState = 'gameover';
+            document.getElementById('finalScore').textContent = player.score;
+            document.getElementById('gameOver').style.display = 'flex';
+            document.getElementById('fireButton').style.display = 'none';
+            document.getElementById('cheatToggle').style.display = 'none';
+            document.getElementById('cheatMenu').style.display = 'none';
+        }
+
+        function returnToMenu() {
+            gameState = 'menu';
+            document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('mainMenu').style.display = 'flex';
+            document.getElementById('hud').style.display = 'none';
+            
+            // 重置作弊
+            Object.keys(cheats).forEach(key => {
+                cheats[key] = false;
+                document.getElementById(key).checked = false;
+            });
+        }
+
+        // 游戏循环
+        function gameLoop(timestamp) {
+            const dt = timestamp - lastTime;
+            lastTime = timestamp;
+            
+            update(dt);
+            draw();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 启动游戏
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>

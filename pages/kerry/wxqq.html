@@ -1,0 +1,549 @@
+躲避球球
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Dodge: Bullet Hell</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Orbitron', sans-serif;
+            touch-action: none; /* Prevent pull-to-refresh on mobile */
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .neon-text {
+            text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 20px #ff00de, 0 0 30px #ff00de, 0 0 40px #ff00de;
+        }
+
+        .neon-box {
+            box-shadow: 0 0 5px #ff0000, 0 0 10px #ff0000, 0 0 20px #ff0000;
+            border: 2px solid #ff0000;
+        }
+
+        .ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .game-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 10;
+            backdrop-filter: blur(5px);
+            transition: opacity 0.3s ease;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .btn-neon {
+            background: transparent;
+            color: #fff;
+            border: 2px solid #fff;
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            font-family: 'Orbitron', sans-serif;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+            pointer-events: auto;
+        }
+
+        .btn-neon:hover {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 20px #fff, 0 0 40px #fff;
+        }
+
+        /* CRT Scanline Effect */
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1));
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 50;
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- CRT Overlay -->
+    <div class="scanlines"></div>
+
+    <!-- HUD -->
+    <div class="ui-overlay">
+        <div class="flex justify-between items-start w-full">
+            <div class="text-yellow-400 text-2xl font-bold tracking-widest drop-shadow-md">
+                TIME: <span id="timerDisplay">30.00</span>
+            </div>
+            <div class="text-red-500 text-sm font-bold tracking-widest animate-pulse">
+                SURVIVE
+            </div>
+        </div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="startScreen" class="game-screen">
+        <h1 class="text-6xl md:text-8xl font-black text-white mb-4 neon-text text-center">NEON<br>DODGE</h1>
+        <p class="text-gray-300 mb-8 text-lg tracking-wider">拖动鼠标或手指移动 • 躲避弹幕</p>
+        <button id="startBtn" class="btn-neon">开始游戏</button>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameOverScreen" class="game-screen hidden">
+        <h2 class="text-5xl md:text-7xl font-bold text-red-500 mb-2 neon-box px-4 py-2 bg-black">时间到!</h2>
+        <p class="text-white text-2xl mb-8 mt-4">存活时间: <span id="finalScore" class="text-yellow-400">0.00</span>s</p>
+        <button id="restartBtn" class="btn-neon">再来</button>
+    </div>
+
+    <script>
+        // --- Game Configuration ---
+        const CONFIG = {
+            playerRadius: 8,
+            playerSpeed: 0.15, // Lerp factor
+            bulletSpeedBase: 3,
+            bulletSpawnRate: 40, // Frames between spawns
+            gameDuration: 30, // Seconds
+            colors: ['#FF0000', '#FF4500', '#FFD700', '#FF1493'] // Red, OrangeRed, Gold, DeepPink
+        };
+
+        // --- Audio System (Tone.js) ---
+        let synth, noiseSynth, bgLoop;
+        let audioInitialized = false;
+
+        async function initAudio() {
+            if (audioInitialized) return;
+            await Tone.start();
+            
+            // Synth for collecting/powerups (not used here, but good for structure)
+            synth = new Tone.PolySynth(Tone.Synth).toDestination();
+            synth.volume.value = -10;
+
+            // Noise for explosions/game over
+            noiseSynth = new Tone.NoiseSynth({
+                noise: { type: 'pink' },
+                envelope: { attack: 0.005, decay: 0.1, sustain: 0 }
+            }).toDestination();
+
+            // Background drone
+            const filter = new Tone.Filter(400, "lowpass").toDestination();
+            const osc = new Tone.Oscillator(60, "sawtooth").connect(filter).start();
+            const lfo = new Tone.LFO(0.1, 200, 600).connect(filter.frequency).start();
+            osc.volume.value = -20;
+            
+            audioInitialized = true;
+        }
+
+        function playSpawnSound() {
+            if(!audioInitialized) return;
+            // Subtle click
+            const click = new Tone.MembraneSynth().toDestination();
+            click.volume.value = -20;
+            click.triggerAttackRelease("C2", "32n");
+        }
+
+        function playGameOverSound() {
+            if(!audioInitialized) return;
+            noiseSynth.triggerAttackRelease("8n");
+            synth.triggerAttackRelease(["C3", "F#3", "A#3"], "4n");
+        }
+
+        // --- Game Engine ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // UI Elements
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        const startBtn = document.getElementById('startBtn');
+        const restartBtn = document.getElementById('restartBtn');
+
+        // State
+        let gameState = 'MENU'; // MENU, PLAYING, GAMEOVER
+        let width, height;
+        let lastTime = 0;
+        let timer = CONFIG.gameDuration;
+        let frameCount = 0;
+        let mouse = { x: 0, y: 0 };
+        let isTouch = false;
+
+        // Entities
+        let player;
+        let bullets = [];
+        let particles = [];
+
+        // --- Classes ---
+
+        class Player {
+            constructor() {
+                this.x = width / 2;
+                this.y = height / 2;
+                this.radius = CONFIG.playerRadius;
+                this.trail = [];
+            }
+
+            update() {
+                // Smooth movement towards mouse/touch
+                this.x += (mouse.x - this.x) * CONFIG.playerSpeed;
+                this.y += (mouse.y - this.y) * CONFIG.playerSpeed;
+
+                // Boundary check
+                this.x = Math.max(this.radius, Math.min(width - this.radius, this.x));
+                this.y = Math.max(this.radius, Math.min(height - this.radius, this.y));
+
+                // Trail effect
+                this.trail.push({ x: this.x, y: this.y, alpha: 1.0 });
+                if (this.trail.length > 10) this.trail.shift();
+                this.trail.forEach(t => t.alpha -= 0.1);
+            }
+
+            draw(ctx) {
+                // Draw Trail
+                this.trail.forEach(t => {
+                    ctx.beginPath();
+                    ctx.arc(t.x, t.y, this.radius * 0.8, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, t.alpha * 0.5)})`;
+                    ctx.fill();
+                });
+
+                // Draw Core
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#FFFFFF';
+                ctx.fill();
+                ctx.shadowBlur = 0; // Reset
+            }
+        }
+
+        class Bullet {
+            constructor() {
+                // Spawn logic: random edge
+                const edge = Math.floor(Math.random() * 4); // 0:top, 1:right, 2:bottom, 3:left
+                this.radius = Math.random() * 5 + 3; // 3 to 8
+                
+                if (edge === 0) { this.x = Math.random() * width; this.y = -this.radius; }
+                else if (edge === 1) { this.x = width + this.radius; this.y = Math.random() * height; }
+                else if (edge === 2) { this.x = Math.random() * width; this.y = height + this.radius; }
+                else { this.x = -this.radius; this.y = Math.random() * height; }
+
+                // Target player direction
+                const angle = Math.atan2(player.y - this.y, player.x - this.x);
+                // Add some randomness so they don't home perfectly
+                const spread = (Math.random() - 0.5) * 0.5; 
+                const speed = CONFIG.bulletSpeedBase + (Math.random() * 2);
+                
+                this.vx = Math.cos(angle + spread) * speed;
+                this.vy = Math.sin(angle + spread) * speed;
+                
+                this.color = CONFIG.colors[Math.floor(Math.random() * CONFIG.colors.length)];
+                this.rotation = 0;
+                this.rotSpeed = (Math.random() - 0.5) * 0.2;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.rotation += this.rotSpeed;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                
+                ctx.beginPath();
+                // Draw a diamond shape
+                ctx.moveTo(0, -this.radius);
+                ctx.lineTo(this.radius, 0);
+                ctx.lineTo(0, this.radius);
+                ctx.lineTo(-this.radius, 0);
+                ctx.closePath();
+                
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+                ctx.fill();
+                
+                ctx.restore();
+            }
+
+            isOffScreen() {
+                return (this.x < -50 || this.x > width + 50 || this.y < -50 || this.y > height + 50);
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 3 + 1;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.life = 1.0;
+                this.decay = Math.random() * 0.03 + 0.02;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life -= this.decay;
+            }
+
+            draw(ctx) {
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        // --- Core Functions ---
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            if (player) {
+                // Keep player in bounds on resize
+                player.x = Math.min(player.x, width);
+                player.y = Math.min(player.y, height);
+            }
+        }
+
+        function initGame() {
+            resize();
+            player = new Player();
+            bullets = [];
+            particles = [];
+            timer = CONFIG.gameDuration;
+            frameCount = 0;
+            mouse.x = width / 2;
+            mouse.y = height / 2;
+            
+            // Center player initially
+            player.x = width / 2;
+            player.y = height / 2;
+        }
+
+        function spawnBullet() {
+            // Difficulty scaling: spawn faster as time decreases
+            let currentSpawnRate = CONFIG.bulletSpawnRate;
+            if (timer < 20) currentSpawnRate = 30;
+            if (timer < 10) currentSpawnRate = 20;
+            if (timer < 5) currentSpawnRate = 10;
+
+            if (frameCount % currentSpawnRate === 0) {
+                bullets.push(new Bullet());
+                // Play subtle sound occasionally
+                if (frameCount % (currentSpawnRate * 2) === 0) playSpawnSound();
+            }
+        }
+
+        function checkCollisions() {
+            for (let b of bullets) {
+                const dx = player.x - b.x;
+                const dy = player.y - b.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                
+                // Simple circle collision
+                if (dist < player.radius + b.radius) {
+                    endGame();
+                    return;
+                }
+            }
+        }
+
+        function createExplosion(x, y, color) {
+            for(let i=0; i<15; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        function endGame() {
+            gameState = 'GAMEOVER';
+            playGameOverSound();
+            finalScoreDisplay.innerText = (CONFIG.gameDuration - timer).toFixed(2);
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        function gameOverWin() {
+            gameState = 'GAMEOVER';
+            // Success sound
+            if(audioInitialized) {
+                const now = Tone.now();
+                synth.triggerAttackRelease("C4", "8n", now);
+                synth.triggerAttackRelease("E4", "8n", now + 0.1);
+                synth.triggerAttackRelease("G4", "8n", now + 0.2);
+                synth.triggerAttackRelease("C5", "4n", now + 0.3);
+            }
+            finalScoreDisplay.innerText = "WIN! " + CONFIG.gameDuration.toFixed(2);
+            gameOverScreen.classList.remove('hidden');
+            document.querySelector('#gameOverScreen h2').innerText = "胜利!";
+            document.querySelector('#gameOverScreen h2').classList.remove('text-red-500');
+            document.querySelector('#gameOverScreen h2').classList.add('text-green-400');
+        }
+
+        function loop(timestamp) {
+            const dt = timestamp - lastTime;
+            lastTime = timestamp;
+
+            // Clear Canvas with trail effect
+            ctx.fillStyle = 'rgba(5, 5, 5, 0.3)'; // Semi-transparent black for trails
+            ctx.fillRect(0, 0, width, height);
+
+            if (gameState === 'PLAYING') {
+                // Timer Logic
+                timer -= dt / 1000;
+                if (timer <= 0) {
+                    timer = 0;
+                    gameOverWin();
+                }
+                timerDisplay.innerText = timer.toFixed(2);
+
+                // Update Player
+                player.update();
+                
+                // Spawn Bullets
+                spawnBullet();
+
+                // Update Bullets
+                for (let i = bullets.length - 1; i >= 0; i--) {
+                    bullets[i].update();
+                    bullets[i].draw(ctx);
+                    if (bullets[i].isOffScreen()) {
+                        bullets.splice(i, 1);
+                    }
+                }
+
+                // Check Collisions
+                checkCollisions();
+
+                // Draw Player
+                player.draw(ctx);
+
+                // Update Particles (if any from previous explosions)
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    particles[i].update();
+                    particles[i].draw(ctx);
+                    if (particles[i].life <= 0) particles.splice(i, 1);
+                }
+
+                frameCount++;
+            } else if (gameState === 'MENU' || gameState === 'GAMEOVER') {
+                // Background animation for menus
+                if (Math.random() < 0.05) {
+                    // Random floating particles in background
+                    const x = Math.random() * width;
+                    const y = Math.random() * height;
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                    ctx.beginPath();
+                    ctx.arc(x, y, Math.random() * 2, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            }
+
+            requestAnimationFrame(loop);
+        }
+
+        // --- Input Handling ---
+
+        function handleInput(x, y) {
+            mouse.x = x;
+            mouse.y = y;
+        }
+
+        window.addEventListener('mousemove', e => {
+            if (gameState === 'PLAYING') handleInput(e.clientX, e.clientY);
+        });
+
+        window.addEventListener('touchmove', e => {
+            if (gameState === 'PLAYING') {
+                e.preventDefault(); // Stop scrolling
+                handleInput(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        }, { passive: false });
+
+        window.addEventListener('touchstart', e => {
+             if (gameState === 'PLAYING') {
+                handleInput(e.touches[0].clientX, e.touches[0].clientY);
+             }
+        }, { passive: false });
+
+        window.addEventListener('resize', resize);
+
+        // --- Button Listeners ---
+
+        startBtn.addEventListener('click', async () => {
+            await initAudio();
+            startScreen.classList.add('hidden');
+            initGame();
+            gameState = 'PLAYING';
+        });
+
+        restartBtn.addEventListener('click', () => {
+            gameOverScreen.classList.add('hidden');
+            // Reset text style if it was changed by win
+            const h2 = document.querySelector('#gameOverScreen h2');
+            h2.innerText = "时间到!";
+            h2.classList.add('text-red-500');
+            h2.classList.remove('text-green-400');
+            
+            initGame();
+            gameState = 'PLAYING';
+        });
+
+        // --- Initialization ---
+        resize();
+        requestAnimationFrame(loop);
+
+    </script>
+</body>
+</html>
