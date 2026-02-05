@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>元素对决 - 卡牌战斗</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%);
+            min-height: 100vh;
+            color: #fff;
+            overflow-x: hidden;
+        }
+
+        .game-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* 战斗场地 */
+        .battlefield {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            position: relative;
+        }
+
+        /* 玩家区域 */
+        .player-area {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 20px;
+            padding: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s;
+        }
+
+        .player-area.active {
+            border-color: #fbbf24;
+            box-shadow: 0 0 30px rgba(251, 191, 36, 0.3);
+        }
+
+        .enemy-area {
+            transform: rotate(180deg);
+        }
+
+        .enemy-area .card {
+            transform: rotate(180deg);
+        }
+
+        /* 状态栏 */
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .hp-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .hp-icon {
+            width: 30px;
+            height: 30px;
+            background: #ef4444;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .hp-text {
+            color: #fca5a5;
+            font-size: 24px;
+            text-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+        }
+
+        .shield-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #60a5fa;
+            font-size: 16px;
+        }
+
+        .shield-icon {
+            width: 25px;
+            height: 25px;
+            background: #3b82f6;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+        }
+
+        .energy-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .energy-crystals {
+            display: flex;
+            gap: 3px;
+        }
+
+        .crystal {
+            width: 12px;
+            height: 20px;
+            background: #4b5563;
+            border-radius: 2px;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .crystal.filled {
+            background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+            box-shadow: 0 0 10px rgba(251, 191, 36, 0.6);
+            animation: glow 1.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { box-shadow: 0 0 5px #fbbf24; }
+            to { box-shadow: 0 0 15px #fbbf24, 0 0 25px #f59e0b; }
+        }
+
+        .crystal.overload {
+            background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
+            animation: shake 0.5s infinite;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-2px); }
+            75% { transform: translateX(2px); }
+        }
+
+        .deck-info {
+            display: flex;
+            gap: 20px;
+            font-size: 14px;
+            color: #9ca3af;
+        }
+
+        /* 手牌区域 */
+        .hand {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            min-height: 160px;
+            perspective: 1000px;
+            flex-wrap: wrap;
+        }
+
+        /* 卡牌样式 */
+        .card {
+            width: 120px;
+            height: 160px;
+            background: linear-gradient(145deg, #374151 0%, #1f2937 100%);
+            border-radius: 12px;
+            border: 2px solid #4b5563;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-style: preserve-3d;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .card:hover {
+            transform: translateY(-20px) rotateX(10deg) scale(1.05);
+            z-index: 10;
+        }
+
+        .card.attack {
+            border-color: #ef4444;
+            background: linear-gradient(145deg, #7f1d1d 0%, #450a0a 100%);
+        }
+
+        .card.defense {
+            border-color: #3b82f6;
+            background: linear-gradient(145deg, #1e3a8a 0%, #172554 100%);
+        }
+
+        .card.skill {
+            border-color: #a855f7;
+            background: linear-gradient(145deg, #581c87 0%, #3b0764 100%);
+        }
+
+        .card.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            filter: grayscale(0.8);
+        }
+
+        .card-cost {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            width: 30px;
+            height: 30px;
+            background: #fbbf24;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #000;
+            font-size: 16px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-rarity {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .rarity-common { background: #9ca3af; color: #000; }
+        .rarity-rare { background: #3b82f6; color: #fff; }
+        .rarity-legendary { background: #fbbf24; color: #000; }
+
+        .card-image {
+            height: 60px;
+            margin: 35px 10px 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+        }
+
+        .card-name {
+            text-align: center;
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 5px;
+            padding: 0 5px;
+        }
+
+        .card-desc {
+            text-align: center;
+            font-size: 11px;
+            color: #d1d5db;
+            padding: 0 8px;
+            line-height: 1.3;
+        }
+
+        /* 战斗信息 */
+        .battle-log {
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 15px;
+            padding: 15px;
+            height: 150px;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 3px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .log-damage { color: #fca5a5; }
+        .log-heal { color: #86efac; }
+        .log-shield { color: #93c5fd; }
+        .log-skill { color: #d8b4fe; }
+        .log-system { color: #fbbf24; }
+
+        /* 控制按钮 */
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-endturn {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+        }
+
+        .btn-endturn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(245, 158, 11, 0.6);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        /* 技能选择界面 */
+        .skill-select {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .skill-title {
+            font-size: 36px;
+            margin-bottom: 40px;
+            text-align: center;
+            background: linear-gradient(90deg, #fbbf24, #f59e0b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .skill-options {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .skill-card {
+            width: 280px;
+            background: linear-gradient(145deg, #374151 0%, #1f2937 100%);
+            border: 3px solid #4b5563;
+            border-radius: 20px;
+            padding: 30px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .skill-card:hover {
+            transform: translateY(-10px) scale(1.05);
+            border-color: #fbbf24;
+            box-shadow: 0 20px 40px rgba(251, 191, 36, 0.3);
+        }
+
+        .skill-card.selected {
+            border-color: #10b981;
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.5);
+        }
+
+        .skill-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+        }
+
+        .skill-name {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #fbbf24;
+        }
+
+        .skill-desc {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #d1d5db;
+        }
+
+        .start-btn {
+            margin-top: 40px;
+            padding: 15px 50px;
+            font-size: 20px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .start-btn:hover:not(:disabled) {
+            transform: scale(1.05);
+            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4);
+        }
+
+        .start-btn:disabled {
+            background: #4b5563;
+            cursor: not-allowed;
+        }
+
+        /* 特效动画 */
+        .damage-popup {
+            position: absolute;
+            font-size: 36px;
+            font-weight: bold;
+            color: #ef4444;
+            text-shadow: 0 0 20px rgba(239, 68, 68, 0.8);
+            animation: floatUp 1s ease-out forwards;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-100px) scale(1.5); }
+        }
+
+        .shield-popup {
+            color: #3b82f6;
+            text-shadow: 0 0 20px rgba(59, 130, 246, 0.8);
+        }
+
+        .combo-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            font-weight: bold;
+            color: #fbbf24;
+            text-shadow: 0 0 30px rgba(251, 191, 36, 0.8);
+            animation: comboPop 1s ease-out forwards;
+            z-index: 200;
+            pointer-events: none;
+        }
+
+        @keyframes comboPop {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1) translateY(-50px); }
+        }
+
+        /* 游戏结束画面 */
+        .game-over {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .game-over h1 {
+            font-size: 64px;
+            margin-bottom: 30px;
+        }
+
+        .win { color: #10b981; text-shadow: 0 0 30px rgba(16, 185, 129, 0.5); }
+        .lose { color: #ef4444; text-shadow: 0 0 30px rgba(239, 68, 68, 0.5); }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .card {
+                width: 90px;
+                height: 120px;
+            }
+            .card-image { font-size: 30px; height: 40px; margin-top: 30px; }
+            .card-name { font-size: 12px; }
+            .card-desc { font-size: 10px; }
+            .skill-card { width: 90%; max-width: 300px; }
+        }
+
+        /* 共鸣指示器 */
+        .resonance-indicator {
+            display: flex;
+            gap: 5px;
+            margin-top: 5px;
+        }
+
+        .resonance-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4b5563;
+            transition: all 0.3s;
+        }
+
+        .resonance-dot.active {
+            background: #fbbf24;
+            box-shadow: 0 0 10px #fbbf24;
+        }
+
+        /* 超载债务显示 */
+        .debt-display {
+            color: #ef4444;
+            font-size: 14px;
+            margin-left: 10px;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- 技能选择界面 -->
+        <div id="skillSelect" class="skill-select">
+            <h1 class="skill-title">选择你的战斗风格</h1>
+            <div class="skill-options">
+                <div class="skill-card" onclick="selectSkill('combo')" id="skill-combo">
+                    <div class="skill-icon">⚔️</div>
+                    <div class="skill-name">连击大师</div>
+                    <div class="skill-desc">
+                        一回合内打出3张攻击卡，第3张攻击卡伤害翻倍<br><br>
+                        <small>适合：激进快攻流</small>
+                    </div>
+                </div>
+                <div class="skill-card" onclick="selectSkill('overload')" id="skill-overload">
+                    <div class="skill-icon">⚡</div>
+                    <div class="skill-name">能量超载</div>
+                    <div class="skill-desc">
+                        能量可以透支使用，下回合开始时需偿还等量能量<br><br>
+                        <small>适合：爆发控制流</small>
+                    </div>
+                </div>
+                <div class="skill-card" onclick="selectSkill('resonance')" id="skill-resonance">
+                    <div class="skill-icon">🌟</div>
+                    <div class="skill-name">元素共鸣</div>
+                    <div class="skill-desc">
+                        连续使用同类型卡牌，效果叠加（每次+50%效果）<br><br>
+                        <small>适合：连携策略流</small>
+                    </div>
+                </div>
+            </div>
+            <button class="start-btn" id="startBtn" onclick="startGame()" disabled>开始战斗</button>
+        </div>
+
+        <!-- 游戏结束界面 -->
+        <div id="gameOver" class="game-over" style="display: none;">
+            <h1 id="gameOverText" class="win">胜利！</h1>
+            <button class="btn" onclick="location.reload()" style="background: #3b82f6; color: white;">再来一局</button>
+        </div>
+
+        <!-- 战斗场地 -->
+        <div class="battlefield" id="battlefield" style="display: none;">
+            <!-- 敌人区域 -->
+            <div class="player-area enemy-area" id="enemyArea">
+                <div class="status-bar">
+                    <div class="hp-bar">
+                        <div class="hp-icon">❤️</div>
+                        <span class="hp-text" id="enemyHp">30/30</span>
+                    </div>
+                    <div class="shield-bar" id="enemyShieldBar" style="opacity: 0;">
+                        <div class="shield-icon">🛡️</div>
+                        <span id="enemyShield">0</span>
+                    </div>
+                    <div class="energy-bar">
+                        <span>能量:</span>
+                        <div class="energy-crystals" id="enemyEnergy"></div>
+                    </div>
+                    <div class="deck-info">
+                        <span>牌库: <span id="enemyDeck">20</span></span>
+                        <span>手牌: <span id="enemyHand">5</span></span>
+                    </div>
+                </div>
+                <div class="hand" id="enemyHandCards">
+                    <!-- 敌人手牌（背面） -->
+                </div>
+            </div>
+
+            <!-- 战斗日志 -->
+            <div class="battle-log" id="battleLog">
+                <div class="log-entry log-system">战斗开始！选择你的技能...</div>
+            </div>
+
+            <!-- 玩家区域 -->
+            <div class="player-area active" id="playerArea">
+                <div class="status-bar">
+                    <div style="display: flex; align-items: center; gap: 20px;">
+                        <div class="hp-bar">
+                            <div class="hp-icon">❤️</div>
+                            <span class="hp-text" id="playerHp">30/30</span>
+                        </div>
+                        <div class="shield-bar" id="playerShieldBar" style="opacity: 0;">
+                            <div class="shield-icon">🛡️</div>
+                            <span id="playerShield">0</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center;">
+                        <div class="energy-bar">
+                            <span>能量:</span>
+                            <div class="energy-crystals" id="playerEnergy"></div>
+                            <span id="energyText">2/10</span>
+                        </div>
+                        <span id="debtDisplay" class="debt-display" style="display: none;">负债: <span id="debtAmount">0</span></span>
+                        <div class="resonance-indicator" id="resonanceIndicator" style="display: none; margin-left: 15px;">
+                            <div class="resonance-dot" id="res1"></div>
+                            <div class="resonance-dot" id="res2"></div>
+                            <div class="resonance-dot" id="res3"></div>
+                        </div>
+                    </div>
+                    <div class="deck-info">
+                        <span>牌库: <span id="playerDeck">20</span></span>
+                        <span>疲劳: <span id="fatigue">0</span></span>
+                    </div>
+                </div>
+                <div class="hand" id="playerHand">
+                    <!-- 玩家手牌 -->
+                </div>
+            </div>
+
+            <div class="controls">
+                <button class="btn btn-endturn" id="endTurnBtn" onclick="endTurn()">结束回合</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 游戏配置
+        const CONFIG = {
+            maxHp: 30,
+            maxEnergy: 10,
+            maxHand: 5,
+            energyPerTurn: 2,
+            fatigueDamage: 1
+        };
+
+        // 卡牌数据库
+        const CARD_DB = [
+            // 攻击卡
+            { name: "普通攻击", type: "attack", cost: 1, rarity: "common", value: 5, icon: "⚔️", desc: "造成5点伤害" },
+            { name: "强力斩击", type: "attack", cost: 2, rarity: "common", value: 8, icon: "🗡️", desc: "造成8点伤害" },
+            { name: "火焰冲击", type: "attack", cost: 3, rarity: "rare", value: 12, icon: "🔥", desc: "造成12点伤害" },
+            { name: "雷霆一击", type: "attack", cost: 4, rarity: "rare", value: 16, icon: "⚡", desc: "造成16点伤害" },
+            { name: "毁灭打击", type: "attack", cost: 6, rarity: "legendary", value: 25, icon: "💀", desc: "造成25点伤害" },
+            { name: "双重打击", type: "attack", cost: 3, rarity: "rare", value: 6, icon: "👥", desc: "造成6点伤害两次" },
+            
+            // 防御卡
+            { name: "基础护盾", type: "defense", cost: 1, rarity: "common", value: 4, icon: "🛡️", desc: "获得4点护盾" },
+            { name: "铁壁防御", type: "defense", cost: 2, rarity: "common", value: 7, icon: "🏰", desc: "获得7点护盾" },
+            { name: "魔法屏障", type: "defense", cost: 3, rarity: "rare", value: 12, icon: "✨", desc: "获得12点护盾" },
+            { name: "绝对防御", type: "defense", cost: 5, rarity: "legendary", value: 20, icon: "💎", desc: "获得20点护盾" },
+            { name: "反击姿态", type: "defense", cost: 3, rarity: "rare", value: 5, icon: "🔄", desc: "获得5点护盾，下回合攻击+3" },
+            
+            // 技能卡
+            { name: "能量恢复", type: "skill", cost: 1, rarity: "common", value: 2, icon: "🔋", desc: "恢复2点能量" },
+            { name: "生命汲取", type: "skill", cost: 2, rarity: "common", value: 4, icon: "🩸", desc: "造成4点伤害，恢复4点生命" },
+            { name: "抽卡术", type: "skill", cost: 2, rarity: "common", value: 2, icon: "🎴", desc: "抽2张牌" },
+            { name: "时间加速", type: "skill", cost: 3, rarity: "rare", value: 0, icon: "⏰", desc: "本回合能量上限+3" },
+            { name: "元素爆发", type: "skill", cost: 4, rarity: "rare", value: 10, icon: "💥", desc: "造成10点伤害，获得10点护盾" },
+            { name: "神之恩赐", type: "skill", cost: 5, rarity: "legendary", value: 15, icon: "👼", desc: "恢复15点生命，抽3张牌" }
+        ];
+
+        // 游戏状态
+        let gameState = {
+            player: {
+                hp: CONFIG.maxHp,
+                maxHp: CONFIG.maxHp,
+                energy: 0,
+                maxEnergy: CONFIG.maxEnergy,
+                shield: 0,
+                deck: [],
+                hand: [],
+                discard: [],
+                fatigue: 0,
+                skill: null,
+                // 连击计数
+                comboCount: 0,
+                // 超载债务
+                debt: 0,
+                // 共鸣状态
+                lastType: null,
+                resonanceCount: 0,
+                // 临时buff
+                nextAttackBonus: 0
+            },
+            enemy: {
+                hp: CONFIG.maxHp,
+                maxHp: CONFIG.maxHp,
+                energy: 0,
+                maxEnergy: CONFIG.maxEnergy,
+                shield: 0,
+                deck: [],
+                hand: [],
+                discard: [],
+                fatigue: 0,
+                aiLevel: 1
+            },
+            turn: 1,
+            isPlayerTurn: true,
+            selectedSkill: null
+        };
+
+        // 选择技能
+        function selectSkill(skill) {
+            gameState.selectedSkill = skill;
+            document.querySelectorAll('.skill-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            document.getElementById(`skill-${skill}`).classList.add('selected');
+            document.getElementById('startBtn').disabled = false;
+        }
+
+        // 初始化牌库
+        function initDeck() {
+            const deck = [];
+            // 基础牌
+            for (let i = 0; i < 4; i++) deck.push({...CARD_DB[0]}); // 普通攻击
+            for (let i = 0; i < 3; i++) deck.push({...CARD_DB[1]}); // 强力斩击
+            for (let i = 0; i < 4; i++) deck.push({...CARD_DB[6]}); // 基础护盾
+            for (let i = 0; i < 2; i++) deck.push({...CARD_DB[7]}); // 铁壁防御
+            for (let i = 0; i < 2; i++) deck.push({...CARD_DB[11]}); // 能量恢复
+            for (let i = 0; i < 2; i++) deck.push({...CARD_DB[13]}); // 抽卡术
+            
+            // 稀有牌
+            deck.push({...CARD_DB[2]}); // 火焰冲击
+            deck.push({...CARD_DB[3]}); // 雷霆一击
+            deck.push({...CARD_DB[8]}); // 魔法屏障
+            deck.push({...CARD_DB[12]}); // 生命汲取
+            
+            // 传说牌（各一张）
+            deck.push({...CARD_DB[4]}); // 毁灭打击
+            deck.push({...CARD_DB[9]}); // 绝对防御
+            deck.push({...CARD_DB[15]}); // 神之恩赐
+            
+            // 洗牌
+            return shuffle(deck);
+        }
+
+        function shuffle(array) {
+            const newArray = [...array];
+            for (let i = newArray.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+            }
+            return newArray;
+        }
+
+        // 开始游戏
+        function startGame() {
+            gameState.player.skill = gameState.selectedSkill;
+            gameState.player.deck = initDeck();
+            gameState.enemy.deck = initDeck();
+            
+            // 初始抽牌
+            for (let i = 0; i < 3; i++) drawCard(gameState.player);
+            for (let i = 0; i < 3; i++) drawCard(gameState.enemy);
+            
+            document.getElementById('skillSelect').style.display = 'none';
+            document.getElementById('battlefield').style.display = 'flex';
+            
+            // 显示技能UI
+            if (gameState.selectedSkill === 'resonance') {
+                document.getElementById('resonanceIndicator').style.display = 'flex';
+            }
+            
+            log(`战斗开始！你选择了${getSkillName(gameState.selectedSkill)}`, 'system');
+            startTurn();
+        }
+
+        function getSkillName(skill) {
+            const names = { combo: '连击大师', overload: '能量超载', resonance: '元素共鸣' };
+            return names[skill];
+        }
+
+        // 抽牌
+        function drawCard(target) {
+            if (target.hand.length >= CONFIG.maxHand) {
+                if (target === gameState.player) log("手牌已满！", "system");
+                return false;
+            }
+            
+            if (target.deck.length === 0) {
+                target.fatigue++;
+                const damage = target.fatigue * CONFIG.fatigueDamage;
+                target.hp -= damage;
+                if (target === gameState.player) {
+                    log(`牌库抽空！受到${damage}点疲劳伤害`, "damage");
+                    showDamage(document.getElementById('playerArea'), damage, true);
+                }
+                checkWinCondition();
+                return false;
+            }
+            
+            const card = target.deck.pop();
+            target.hand.push(card);
+            return true;
+        }
+
+        // 开始回合
+        function startTurn() {
+            gameState.isPlayerTurn = true;
+            gameState.player.energy = Math.min(CONFIG.energyPerTurn + gameState.turn, CONFIG.maxEnergy);
+            
+            // 处理超载债务
+            if (gameState.player.skill === 'overload' && gameState.player.debt > 0) {
+                gameState.player.energy -= gameState.player.debt;
+                log(`偿还超载债务${gameState.player.debt}点能量`, "system");
+                gameState.player.debt = 0;
+                document.getElementById('debtDisplay').style.display = 'none';
+            }
+            
+            // 重置连击
+            gameState.player.comboCount = 0;
+            
+            // 抽牌
+            drawCard(gameState.player);
+            
+            updateUI();
+            document.getElementById('playerArea').classList.add('active');
+            document.getElementById('enemyArea').classList.remove('active');
+            document.getElementById('endTurnBtn').disabled = false;
+            
+            log(`第${gameState.turn}回合开始 - 获得${Math.min(CONFIG.energyPerTurn + gameState.turn, CONFIG.maxEnergy)}点能量`, "system");
+        }
+
+        // 使用卡牌
+        function playCard(index) {
+            if (!gameState.isPlayerTurn) return;
+            
+            const card = gameState.player.hand[index];
+            let cost = card.cost;
+            
+            // 检查能量（考虑超载）
+            if (gameState.player.energy < cost) {
+                if (gameState.player.skill === 'overload') {
+                    const debt = cost - gameState.player.energy;
+                    gameState.player.debt += debt;
+                    gameState.player.energy = 0;
+                    document.getElementById('debtDisplay').style.display = 'inline';
+                    document.getElementById('debtAmount').textContent = gameState.player.debt;
+                    log(`超载！下回合需偿还${gameState.player.debt}点能量`, "skill");
+                } else {
+                    log("能量不足！", "system");
+                    return;
+                }
+            } else {
+                gameState.player.energy -= cost;
+            }
+            
+            // 移除手牌
+            gameState.player.hand.splice(index, 1);
+            gameState.player.discard.push(card);
+            
+            // 处理共鸣
+            let multiplier = 1;
+            if (gameState.player.skill === 'resonance') {
+                if (gameState.player.lastType === card.type) {
+                    gameState.player.resonanceCount++;
+                    multiplier = 1 + (gameState.player.resonanceCount * 0.5);
+                    log(`共鸣激活！效果提升${(multiplier - 1) * 100}%`, "skill");
+                } else {
+                    gameState.player.resonanceCount = 0;
+                }
+                gameState.player.lastType = card.type;
+                updateResonanceUI();
+            }
+            
+            // 处理连击
+            if (gameState.player.skill === 'combo' && card.type === 'attack') {
+                gameState.player.comboCount++;
+                if (gameState.player.comboCount === 3) {
+                    multiplier *= 2;
+                    showComboIndicator();
+                    log("连击触发！伤害翻倍！", "skill");
+                }
+            }
+            
+            // 执行效果
+            executeCardEffect(card, gameState.player, gameState.enemy, multiplier);
+            
+            updateUI();
+            checkWinCondition();
+        }
+
+        // 执行卡牌效果
+        function executeCardEffect(card, user, target, multiplier = 1) {
+            let value = Math.floor(card.value * multiplier);
+            
+            switch(card.type) {
+                case 'attack':
+                    // 处理双重打击
+                    if (card.name === "双重打击") {
+                        dealDamage(target, value);
+                        setTimeout(() => dealDamage(target, value), 300);
+                    } else {
+                        // 添加临时攻击加成
+                        if (user.nextAttackBonus > 0) {
+                            value += user.nextAttackBonus;
+                            user.nextAttackBonus = 0;
+                        }
+                        dealDamage(target, value);
+                    }
+                    log(`${user === gameState.player ? '你' : '敌人'}使用${card.name}造成${value}点伤害`, "damage");
+                    break;
+                    
+                case 'defense':
+                    user.shield += value;
+                    if (card.name === "反击姿态") {
+                        user.nextAttackBonus = 3;
+                    }
+                    log(`${user === gameState.player ? '你' : '敌人'}获得${value}点护盾`, "shield");
+                    showShield(user === gameState.player ? document.getElementById('playerArea') : document.getElementById('enemyArea'), value);
+                    break;
+                    
+                case 'skill':
+                    if (card.name === "生命汲取") {
+                        dealDamage(target, value);
+                        heal(user, value);
+                    } else if (card.name === "抽卡术" || card.name === "神之恩赐") {
+                        const drawCount = card.name === "神之恩赐" ? 3 : 2;
+                        for (let i = 0; i < drawCount; i++) drawCard(user);
+                        if (card.name === "神之恩赐") heal(user, value);
+                    } else if (card.name === "能量恢复") {
+                        user.energy = Math.min(user.energy + value, user.maxEnergy);
+                        log(`恢复${value}点能量`, "skill");
+                    } else if (card.name === "时间加速") {
+                        user.maxEnergy += 3;
+                        user.energy += 3;
+                        log(`能量上限+3，当前能量+3`, "skill");
+                    } else if (card.name === "元素爆发") {
+                        dealDamage(target, 10);
+                        user.shield += 10;
+                        showShield(user === gameState.player ? document.getElementById('playerArea') : document.getElementById('enemyArea'), 10);
+                    }
+                    break;
+            }
+        }
+
+        // 造成伤害
+        function dealDamage(target, amount) {
+            let actualDamage = amount;
+            
+            // 先扣护盾
+            if (target.shield > 0) {
+                if (target.shield >= actualDamage) {
+                    target.shield -= actualDamage;
+                    actualDamage = 0;
+                } else {
+                    actualDamage -= target.shield;
+                    target.shield = 0;
+                }
+            }
+            
+            target.hp -= actualDamage;
+            
+            const element = target === gameState.player ? document.getElementById('playerArea') : document.getElementById('enemyArea');
+            showDamage(element, amount, target === gameState.player);
+        }
+
+        // 治疗
+        function heal(target, amount) {
+            target.hp = Math.min(target.hp + amount, target.maxHp);
+            log(`恢复${amount}点生命值`, "heal");
+        }
+
+        // 显示伤害数字
+        function showDamage(element, amount, isPlayer) {
+            const popup = document.createElement('div');
+            popup.className = 'damage-popup';
+            popup.textContent = `-${amount}`;
+            popup.style.left = '50%';
+            popup.style.top = '50%';
+            element.appendChild(popup);
+            setTimeout(() => popup.remove(), 1000);
+        }
+
+        // 显示护盾
+        function showShield(element, amount) {
+            const popup = document.createElement('div');
+            popup.className = 'damage-popup shield-popup';
+            popup.textContent = `+${amount}🛡️`;
+            popup.style.left = '60%';
+            popup.style.top = '40%';
+            element.appendChild(popup);
+            setTimeout(() => popup.remove(), 1000);
+        }
+
+        // 显示连击提示
+        function showComboIndicator() {
+            const indicator = document.createElement('div');
+            indicator.className = 'combo-indicator';
+            indicator.textContent = '⚔️ 连击 x2 ⚔️';
+            document.body.appendChild(indicator);
+            setTimeout(() => indicator.remove(), 1000);
+        }
+
+        // 更新共鸣UI
+        function updateResonanceUI() {
+            for (let i = 1; i <= 3; i++) {
+                document.getElementById(`res${i}`).classList.toggle('active', i <= gameState.player.resonanceCount + 1);
+            }
+        }
+
+        // 结束回合
+        function endTurn() {
+            if (!gameState.isPlayerTurn) return;
+            
+            gameState.isPlayerTurn = false;
+            document.getElementById('endTurnBtn').disabled = true;
+            document.getElementById('playerArea').classList.remove('active');
+            
+            setTimeout(enemyTurn, 1000);
+        }
+
+        // AI回合
+        function enemyTurn() {
+            document.getElementById('enemyArea').classList.add('active');
+            log("敌人回合开始...", "system");
+            
+            // AI逻辑
+            gameState.enemy.energy = Math.min(CONFIG.energyPerTurn + gameState.turn, CONFIG.maxEnergy);
+            drawCard(gameState.enemy);
+            
+            // 简单AI：优先使用能用的最强牌
+            let playableCards = gameState.enemy.hand.filter(c => c.cost <= gameState.enemy.energy);
+            
+            // 如果血少，优先防御
+            if (gameState.enemy.hp < 10) {
+                playableCards.sort((a, b) => (b.type === 'defense') - (a.type === 'defense'));
+            } else {
+                // 否则优先攻击
+                playableCards.sort((a, b) => (b.type === 'attack') - (a.type === 'attack'));
+            }
+            
+            let actions = 0;
+            while (playableCards.length > 0 && actions < 3) {
+                const card = playableCards[0];
+                const index = gameState.enemy.hand.indexOf(card);
+                
+                gameState.enemy.hand.splice(index, 1);
+                gameState.enemy.discard.push(card);
+                gameState.enemy.energy -= card.cost;
+                
+                executeCardEffect(card, gameState.enemy, gameState.player);
+                actions++;
+                
+                playableCards = gameState.enemy.hand.filter(c => c.cost <= gameState.enemy.energy);
+            }
+            
+            updateUI();
+            checkWinCondition();
+            
+            if (gameState.player.hp > 0 && gameState.enemy.hp > 0) {
+                setTimeout(() => {
+                    gameState.turn++;
+                    document.getElementById('enemyArea').classList.remove('active');
+                    startTurn();
+                }, 1500);
+            }
+        }
+
+        // 检查胜利条件
+        function checkWinCondition() {
+            if (gameState.player.hp <= 0) {
+                gameOver(false);
+            } else if (gameState.enemy.hp <= 0) {
+                gameOver(true);
+            }
+        }
+
+        // 游戏结束
+        function gameOver(playerWon) {
+            document.getElementById('gameOver').style.display = 'flex';
+            document.getElementById('gameOverText').textContent = playerWon ? '胜利！' : '失败...';
+            document.getElementById('gameOverText').className = playerWon ? 'win' : 'lose';
+        }
+
+        // 更新UI
+        function updateUI() {
+            // 玩家状态
+            document.getElementById('playerHp').textContent = `${Math.max(0, gameState.player.hp)}/${gameState.player.maxHp}`;
+            document.getElementById('playerShield').textContent = gameState.player.shield;
+            document.getElementById('playerShieldBar').style.opacity = gameState.player.shield > 0 ? 1 : 0;
+            document.getElementById('playerDeck').textContent = gameState.player.deck.length;
+            document.getElementById('fatigue').textContent = gameState.player.fatigue;
+            document.getElementById('energyText').textContent = `${gameState.player.energy}/${gameState.player.maxEnergy}`;
+            
+            // 能量水晶
+            const playerCrystals = document.getElementById('playerEnergy');
+            playerCrystals.innerHTML = '';
+            for (let i = 0; i < gameState.player.maxEnergy; i++) {
+                const crystal = document.createElement('div');
+                crystal.className = 'crystal';
+                if (i < gameState.player.energy) crystal.classList.add('filled');
+                else if (gameState.player.skill === 'overload' && i < gameState.player.energy + gameState.player.debt) crystal.classList.add('overload');
+                playerCrystals.appendChild(crystal);
+            }
+            
+            // 敌人状态
+            document.getElementById('enemyHp').textContent = `${Math.max(0, gameState.enemy.hp)}/${gameState.enemy.maxHp}`;
+            document.getElementById('enemyShield').textContent = gameState.enemy.shield;
+            document.getElementById('enemyShieldBar').style.opacity = gameState.enemy.shield > 0 ? 1 : 0;
+            document.getElementById('enemyDeck').textContent = gameState.enemy.deck.length;
+            document.getElementById('enemyHand').textContent = gameState.enemy.hand.length;
+            
+            const enemyCrystals = document.getElementById('enemyEnergy');
+            enemyCrystals.innerHTML = '';
+            for (let i = 0; i < gameState.enemy.maxEnergy; i++) {
+                const crystal = document.createElement('div');
+                crystal.className = 'crystal';
+                if (i < gameState.enemy.energy) crystal.classList.add('filled');
+                enemyCrystals.appendChild(crystal);
+            }
+            
+            // 手牌
+            const handContainer = document.getElementById('playerHand');
+            handContainer.innerHTML = '';
+            gameState.player.hand.forEach((card, index) => {
+                const cardEl = createCardElement(card, index);
+                handContainer.appendChild(cardEl);
+            });
+            
+            // 敌人手牌（背面）
+            const enemyHandContainer = document.getElementById('enemyHandCards');
+            enemyHandContainer.innerHTML = '';
+            for (let i = 0; i < gameState.enemy.hand.length; i++) {
+                const back = document.createElement('div');
+                back.className = 'card';
+                back.style.background = 'linear-gradient(145deg, #1f2937 0%, #111827 100%)';
+                back.style.borderColor = '#374151';
+                enemyHandContainer.appendChild(back);
+            }
+        }
+
+        // 创建卡牌元素
+        function createCardElement(card, index) {
+            const div = document.createElement('div');
+            div.className = `card ${card.type}`;
+            if (card.cost > gameState.player.energy && !(gameState.player.skill === 'overload')) {
+                div.classList.add('disabled');
+            }
+            
+            const rarityClass = `rarity-${card.rarity}`;
+            
+            div.innerHTML = `
+                <div class="card-cost">${card.cost}</div>
+                <div class="card-rarity ${rarityClass}">${card.rarity === 'legendary' ? '传说' : card.rarity === 'rare' ? '稀有' : '普通'}</div>
+                <div class="card-image">${card.icon}</div>
+                <div class="card-name">${card.name}</div>
+                <div class="card-desc">${card.desc}</div>
+            `;
+            
+            div.onclick = () => playCard(index);
+            return div;
+        }
+
+        // 日志
+        function log(message, type) {
+            const logContainer = document.getElementById('battleLog');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `> ${message}`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+    </script>
+</body>
+</html>
