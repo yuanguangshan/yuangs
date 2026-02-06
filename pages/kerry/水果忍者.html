@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>水果忍者 - Fruit Ninja Style</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Zcool+KuaiLe&family=Roboto:wght@700;900&display=swap');
+        
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: radial-gradient(circle at center, #1a2a1a 0%, #0f1f0f 100%);
+            font-family: 'Roboto', sans-serif;
+            touch-action: none;
+        }
+
+        .game-font {
+            font-family: 'Zcool KuaiLe', cursive, sans-serif;
+        }
+
+        /* 玻璃拟态效果 */
+        .glass-panel {
+            background: rgba(20, 30, 20, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 215, 0, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+
+        .gold-text {
+            color: #FFD700;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+
+        .green-text {
+            color: #4ade80;
+            text-shadow: 0 0 10px rgba(74, 222, 128, 0.4);
+        }
+
+        /* 商店物品悬停效果 */
+        .shop-item {
+            transition: all 0.3s ease;
+        }
+        .shop-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(255, 215, 0, 0.2);
+        }
+        .shop-item.locked {
+            opacity: 0.6;
+            filter: grayscale(0.8);
+        }
+        .shop-item.selected {
+            border-color: #FFD700;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+        }
+
+        /* 动画 */
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .animate-float {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse-gold {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        .animate-pulse-gold {
+            animation: pulse-gold 2s ease-in-out infinite;
+        }
+
+        /* 按钮光效 */
+        .btn-glow {
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-glow::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+            transform: rotate(45deg);
+            transition: all 0.5s;
+        }
+        .btn-glow:hover::after {
+            left: 100%;
+        }
+    </style>
+</head>
+<body class="text-white select-none">
+
+    <!-- 游戏画布 -->
+    <canvas id="gameCanvas" class="absolute top-0 left-0 w-full h-full z-0"></canvas>
+
+    <!-- HUD 界面 -->
+    <div class="absolute top-0 left-0 w-full p-6 z-10 pointer-events-none flex justify-between items-start">
+        <!-- 左侧：得分信息 -->
+        <div class="flex flex-col gap-3 pointer-events-auto">
+            <div class="glass-panel rounded-2xl px-6 py-3 flex items-center gap-3 animate-float">
+                <span class="text-3xl">🪙</span>
+                <div>
+                    <div class="text-xs text-gray-400 uppercase tracking-wider">金币</div>
+                    <div id="coinDisplay" class="text-2xl font-bold gold-text game-font">0</div>
+                </div>
+            </div>
+            
+            <div class="glass-panel rounded-2xl px-6 py-3 flex items-center gap-3">
+                <span class="text-3xl">🏆</span>
+                <div>
+                    <div class="text-xs text-gray-400 uppercase tracking-wider">得分</div>
+                    <div id="scoreDisplay" class="text-2xl font-bold text-white game-font">0</div>
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-2xl px-6 py-3 flex items-center gap-3" id="comboContainer" style="opacity: 0; transition: opacity 0.3s;">
+                <span class="text-3xl">🔥</span>
+                <div>
+                    <div class="text-xs text-gray-400 uppercase tracking-wider">连击</div>
+                    <div id="comboDisplay" class="text-2xl font-bold green-text game-font">x0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧：商店按钮 -->
+        <button onclick="toggleShop()" class="pointer-events-auto glass-panel rounded-full p-4 hover:scale-110 transition-transform btn-glow group">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-yellow-400 group-hover:rotate-12 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+            </svg>
+        </button>
+    </div>
+
+    <!-- 开始屏幕 -->
+    <div id="startScreen" class="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div class="text-center">
+            <h1 class="text-6xl md:text-8xl font-black mb-4 game-font gold-text animate-pulse-gold" style="text-shadow: 0 0 30px rgba(255,215,0,0.5);">
+                水果忍者
+            </h1>
+            <p class="text-xl text-gray-300 mb-8">滑动屏幕切开水果，避开炸弹！</p>
+            <button onclick="startGame()" class="glass-panel px-12 py-4 rounded-full text-2xl font-bold gold-text hover:bg-white/10 transition-all btn-glow transform hover:scale-105">
+                开始游戏
+            </button>
+        </div>
+    </div>
+
+    <!-- 游戏结束屏幕 -->
+    <div id="gameOverScreen" class="hidden absolute inset-0 z-30 flex items-center justify-center bg-black/80 backdrop-blur-md">
+        <div class="glass-panel rounded-3xl p-10 text-center max-w-md w-full mx-4 border-2 border-red-500/30">
+            <div class="text-6xl mb-4">💥</div>
+            <h2 class="text-4xl font-bold mb-2 text-red-400 game-font">游戏结束</h2>
+            <p class="text-gray-400 mb-6">你切到了炸弹！</p>
+            
+            <div class="grid grid-cols-2 gap-4 mb-8">
+                <div class="bg-white/5 rounded-xl p-4">
+                    <div class="text-sm text-gray-400">最终得分</div>
+                    <div id="finalScore" class="text-3xl font-bold text-white">0</div>
+                </div>
+                <div class="bg-white/5 rounded-xl p-4">
+                    <div class="text-sm text-gray-400">获得金币</div>
+                    <div id="finalCoins" class="text-3xl font-bold gold-text">0</div>
+                </div>
+            </div>
+            
+            <button onclick="resetGame()" class="w-full glass-panel py-4 rounded-xl text-xl font-bold green-text hover:bg-white/10 transition-all btn-glow">
+                再玩一次
+            </button>
+        </div>
+    </div>
+
+    <!-- 商店面板 -->
+    <div id="shopPanel" class="hidden absolute inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-md">
+        <div class="glass-panel rounded-3xl p-8 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto border border-yellow-500/20">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-3xl font-bold gold-text game-font">刀刃商店</h2>
+                <button onclick="toggleShop()" class="text-gray-400 hover:text-white transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="mb-6 flex items-center gap-2 text-lg">
+                <span>当前金币:</span>
+                <span id="shopCoinDisplay" class="gold-text font-bold text-2xl">0</span>
+                <span>🪙</span>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4" id="shopGrid">
+                <!-- 商店物品将通过JS生成 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 游戏配置
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let gameState = 'start'; // start, playing, gameover
+        let score = 0;
+        let coins = 0;
+        let combo = 0;
+        let comboTimer = null;
+        let lastCutTime = 0;
+        
+        // 游戏对象数组
+        let fruits = [];
+        let particles = [];
+        let floatingTexts = [];
+        let bladePath = [];
+        let bladeActive = false;
+        
+        // 刀刃配置
+        const blades = [
+            { id: 'default', name: '普通刀刃', color: '#ffffff', glow: '#ffffff', price: 0, owned: true },
+            { id: 'fire', name: '烈焰之刃', color: '#ff6b35', glow: '#ff4500', price: 100, owned: false },
+            { id: 'ice', name: '寒冰之刃', color: '#00d9ff', glow: '#00bfff', price: 200, owned: false },
+            { id: 'gold', name: '黄金刀刃', color: '#ffd700', glow: '#ffa500', price: 500, owned: false },
+            { id: 'neon', name: '霓虹光刃', color: '#ff00ff', glow: '#ff00ff', price: 800, owned: false },
+            { id: 'shadow', name: '暗影之刃', color: '#9400d3', glow: '#4b0082', price: 1000, owned: false }
+        ];
+        
+        let currentBlade = blades[0];
+        
+        // 水果类型
+        const fruitTypes = [
+            { emoji: '🍉', color: '#ff6b6b', points: 10, type: 'fruit' },
+            { emoji: '🍊', color: '#ffa502', points: 15, type: 'fruit' },
+            { emoji: '🍋', color: '#ffeaa7', points: 15, type: 'fruit' },
+            { emoji: '🍎', color: '#ff7675', points: 20, type: 'fruit' },
+            { emoji: '🥝', color: '#55efc4', points: 25, type: 'fruit' },
+            { emoji: '🍇', color: '#a29bfe', points: 20, type: 'fruit' },
+            { emoji: '🥥', color: '#dfe6e9', points: 30, type: 'fruit' },
+            { emoji: '💣', color: '#2d3436', points: 0, type: 'bomb' }
+        ];
+        
+        // 初始化画布大小
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+        
+        // 游戏类定义
+        class Fruit {
+            constructor() {
+                this.reset();
+            }
+            
+            reset() {
+                const typeData = fruitTypes[Math.floor(Math.random() * fruitTypes.length)];
+                this.type = typeData.type;
+                this.emoji = typeData.emoji;
+                this.color = typeData.color;
+                this.points = typeData.points;
+                this.radius = 30 + Math.random() * 20;
+                
+                // 从底部随机位置发射
+                this.x = Math.random() * (canvas.width - 100) + 50;
+                this.y = canvas.height + this.radius;
+                
+                // 物理属性
+                const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.8; // 向上角度
+                const speed = 12 + Math.random() * 6;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.gravity = 0.4;
+                this.rotation = 0;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.2;
+                
+                this.active = true;
+                this.sliced = false;
+            }
+            
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += this.gravity;
+                this.rotation += this.rotationSpeed;
+                
+                // 如果掉出屏幕底部
+                if (this.y > canvas.height + 50 && this.vy > 0) {
+                    this.active = false;
+                    if (this.type === 'fruit' && !this.sliced) {
+                        resetCombo(); // 漏掉水果重置连击
+                    }
+                }
+            }
+            
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                ctx.font = `${this.radius * 2}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.emoji, 0, 5);
+                ctx.restore();
+            }
+        }
+        
+        class Particle {
+            constructor(x, y, color, type = 'juice') {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.type = type;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 8 + 2;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.life = 1;
+                this.decay = 0.02 + Math.random() * 0.02;
+                this.size = Math.random() * 5 + 2;
+            }
+            
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.2; // 重力
+                this.life -= this.decay;
+                this.size *= 0.95;
+            }
+            
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                if (this.type === 'sparkle') {
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                } else {
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                }
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+        
+        class FloatingText {
+            constructor(x, y, text, color, size = 30) {
+                this.x = x;
+                this.y = y;
+                this.text = text;
+                this.color = color;
+                this.size = size;
+                this.life = 1;
+                this.vy = -3;
+            }
+            
+            update() {
+                this.y += this.vy;
+                this.life -= 0.02;
+                this.size *= 0.99;
+            }
+            
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.font = `bold ${this.size}px 'Roboto'`;
+                ctx.textAlign = 'center';
+                ctx.shadowColor = this.color;
+                ctx.shadowBlur = 10;
+                ctx.fillText(this.text, this.x, this.y);
+                ctx.restore();
+            }
+        }
+        
+        // 游戏逻辑
+        function startGame() {
+            document.getElementById('startScreen').classList.add('hidden');
+            gameState = 'playing';
+            score = 0;
+            coins = 0;
+            combo = 0;
+            fruits = [];
+            particles = [];
+            floatingTexts = [];
+            updateUI();
+            gameLoop();
+            spawnFruits();
+        }
+        
+        function resetGame() {
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            startGame();
+        }
+        
+        function gameOver() {
+            gameState = 'gameover';
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('finalCoins').textContent = coins;
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+        }
+        
+        function spawnFruits() {
+            if (gameState !== 'playing') return;
+            
+            const count = Math.min(1 + Math.floor(score / 500), 5); // 随着分数增加，水果数量增加
+            for (let i = 0; i < count; i++) {
+                setTimeout(() => {
+                    if (gameState === 'playing') {
+                        fruits.push(new Fruit());
+                    }
+                }, i * 300);
+            }
+            
+            setTimeout(spawnFruits, 2000 - Math.min(score / 10, 1000)); // 随着分数增加，生成速度加快
+        }
+        
+        function createExplosion(x, y, color, count = 15) {
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+            // 添加闪光效果
+            for (let i = 0; i < 5; i++) {
+                particles.push(new Particle(x, y, '#ffffff', 'sparkle'));
+            }
+        }
+        
+        function addCombo() {
+            combo++;
+            const now = Date.now();
+            
+            // 显示连击
+            const comboContainer = document.getElementById('comboContainer');
+            const comboDisplay = document.getElementById('comboDisplay');
+            comboContainer.style.opacity = '1';
+            comboDisplay.textContent = `x${combo}`;
+            
+            // 连击文字效果
+            if (combo > 1) {
+                const text = combo >= 5 ? `${combo} 连击!` : `${combo} Combo!`;
+                const color = combo >= 5 ? '#FFD700' : '#4ade80';
+                floatingTexts.push(new FloatingText(canvas.width / 2, canvas.height / 2, text, color, 40 + combo * 2));
+            }
+            
+            // 重置连击计时器
+            if (comboTimer) clearTimeout(comboTimer);
+            comboTimer = setTimeout(resetCombo, 2000);
+            
+            updateUI();
+        }
+        
+        function resetCombo() {
+            combo = 0;
+            document.getElementById('comboContainer').style.opacity = '0';
+            updateUI();
+        }
+        
+        function updateUI() {
+            document.getElementById('scoreDisplay').textContent = score;
+            document.getElementById('coinDisplay').textContent = coins;
+            document.getElementById('shopCoinDisplay').textContent = coins;
+        }
+        
+        // 切割检测
+        function checkCut(x, y) {
+            if (gameState !== 'playing') return;
+            
+            let hit = false;
+            fruits.forEach(fruit => {
+                if (!fruit.active || fruit.sliced) return;
+                
+                const dist = Math.hypot(fruit.x - x, fruit.y - y);
+                if (dist < fruit.radius + 20) { // 增加切割判定范围
+                    fruit.sliced = true;
+                    fruit.active = false;
+                    hit = true;
+                    
+                    if (fruit.type === 'bomb') {
+                        createExplosion(fruit.x, fruit.y, '#ff0000', 30);
+                        gameOver();
+                    } else {
+                        // 计算得分（带连击加成）
+                        const points = fruit.points * (1 + Math.floor(combo / 3) * 0.5);
+                        const earnedCoins = Math.floor(points / 10);
+                        
+                        score += Math.floor(points);
+                        coins += earnedCoins;
+                        
+                        createExplosion(fruit.x, fruit.y, fruit.color);
+                        floatingTexts.push(new FloatingText(fruit.x, fruit.y, `+${Math.floor(points)}`, '#ffffff'));
+                        floatingTexts.push(new FloatingText(fruit.x, fruit.y - 30, `+${earnedCoins}🪙`, '#FFD700', 20));
+                        
+                        addCombo();
+                        updateUI();
+                    }
+                }
+            });
+            
+            return hit;
+        }
+        
+        // 输入处理
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        
+        function handleStart(e) {
+            isDrawing = true;
+            bladeActive = true;
+            const pos = getPos(e);
+            lastX = pos.x;
+            lastY = pos.y;
+            bladePath = [{x: pos.x, y: pos.y}];
+        }
+        
+        function handleMove(e) {
+            if (!isDrawing) return;
+            const pos = getPos(e);
+            
+            // 在路径中插入点以实现平滑切割检测
+            const dist = Math.hypot(pos.x - lastX, pos.y - lastY);
+            const steps = Math.ceil(dist / 10);
+            
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                const x = lastX + (pos.x - lastX) * t;
+                const y = lastY + (pos.y - lastY) * t;
+                bladePath.push({x, y});
+                checkCut(x, y);
+            }
+            
+            lastX = pos.x;
+            lastY = pos.y;
+            
+            // 限制路径长度
+            if (bladePath.length > 20) {
+                bladePath.shift();
+            }
+        }
+        
+        function handleEnd() {
+            isDrawing = false;
+            bladeActive = false;
+            bladePath = [];
+        }
+        
+        function getPos(e) {
+            if (e.touches) {
+                return {
+                    x: e.touches[0].clientX,
+                    y: e.touches[0].clientY
+                };
+            }
+            return {
+                x: e.clientX,
+                y: e.clientY
+            };
+        }
+        
+        canvas.addEventListener('mousedown', handleStart);
+        canvas.addEventListener('mousemove', handleMove);
+        canvas.addEventListener('mouseup', handleEnd);
+        canvas.addEventListener('touchstart', handleStart, {passive: false});
+        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); handleMove(e); }, {passive: false});
+        canvas.addEventListener('touchend', handleEnd);
+        
+        // 游戏循环
+        function gameLoop() {
+            if (gameState !== 'playing') {
+                if (gameState === 'gameover') return;
+            }
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制背景装饰（淡淡的网格）
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+            ctx.lineWidth = 1;
+            const gridSize = 50;
+            for (let x = 0; x < canvas.width; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y < canvas.height; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+            
+            // 更新和绘制水果
+            fruits = fruits.filter(f => f.active);
+            fruits.forEach(fruit => {
+                fruit.update();
+                fruit.draw();
+            });
+            
+            // 更新和绘制粒子
+            particles = particles.filter(p => p.life > 0);
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+            
+            // 更新和绘制浮动文字
+            floatingTexts = floatingTexts.filter(t => t.life > 0);
+            floatingTexts.forEach(t => {
+                t.update();
+                t.draw();
+            });
+            
+            // 绘制刀刃轨迹
+            if (bladePath.length > 1) {
+                ctx.save();
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
+                // 外发光
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = currentBlade.glow;
+                ctx.strokeStyle = currentBlade.color;
+                ctx.lineWidth = 8;
+                
+                ctx.beginPath();
+                ctx.moveTo(bladePath[0].x, bladePath[0].y);
+                for (let i = 1; i < bladePath.length; i++) {
+                    ctx.lineTo(bladePath[i].x, bladePath[i].y);
+                }
+                ctx.stroke();
+                
+                // 内核
+                ctx.shadowBlur = 0;
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                
+                ctx.restore();
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // 商店系统
+        function initShop() {
+            const grid = document.getElementById('shopGrid');
+            grid.innerHTML = '';
+            
+            blades.forEach(blade => {
+                const item = document.createElement('div');
+                item.className = `shop-item glass-panel rounded-xl p-4 cursor-pointer border-2 ${blade.id === currentBlade.id ? 'selected border-yellow-400' : 'border-transparent'} ${!blade.owned ? 'locked' : ''}`;
+                
+                item.innerHTML = `
+                    <div class="h-20 flex items-center justify-center mb-2">
+                        <div class="w-16 h-1 rounded-full" style="background: ${blade.color}; box-shadow: 0 0 20px ${blade.glow}"></div>
+                    </div>
+                    <div class="text-center">
+                        <div class="font-bold mb-1 ${blade.id === currentBlade.id ? 'text-yellow-400' : 'text-white'}">${blade.name}</div>
+                        <div class="text-sm ${blade.owned ? 'text-green-400' : 'text-yellow-400'}">
+                            ${blade.owned ? (blade.id === currentBlade.id ? '已装备' : '已拥有') : `🪙 ${blade.price}`}
+                        </div>
+                    </div>
+                `;
+                
+                item.onclick = () => buyOrEquip(blade);
+                grid.appendChild(item);
+            });
+        }
+        
+        function buyOrEquip(blade) {
+            if (blade.owned) {
+                currentBlade = blade;
+                initShop(); // 刷新UI
+            } else {
+                if (coins >= blade.price) {
+                    coins -= blade.price;
+                    blade.owned = true;
+                    currentBlade = blade;
+                    updateUI();
+                    initShop();
+                    
+                    // 购买特效
+                    floatingTexts.push(new FloatingText(canvas.width/2, canvas.height/2, '购买成功!', '#4ade80', 40));
+                } else {
+                    // 金币不足提示
+                    floatingTexts.push(new FloatingText(canvas.width/2, canvas.height/2, '金币不足!', '#ff6b6b', 40));
+                }
+            }
+        }
+        
+        function toggleShop() {
+            const panel = document.getElementById('shopPanel');
+            if (panel.classList.contains('hidden')) {
+                initShop();
+                panel.classList.remove('hidden');
+            } else {
+                panel.classList.add('hidden');
+            }
+        }
+        
+        // 初始化
+        updateUI();
+    </script>
+</body>
+</html>
