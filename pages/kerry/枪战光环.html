@@ -1,0 +1,1532 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>枪战光环</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background: #000;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+        }
+
+        #gameCanvas {
+            display: block;
+            background: radial-gradient(ellipse at center, #1a1a2e 0%, #000 100%);
+        }
+
+        /* HUD 样式 */
+        #hud {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 70px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            background: linear-gradient(180deg, rgba(0,0,0,0.9) 0%, transparent 100%);
+            color: #0ff;
+            font-size: 16px;
+            font-weight: bold;
+            text-shadow: 0 0 10px #0ff;
+            z-index: 10;
+            pointer-events: none;
+            flex-wrap: wrap;
+        }
+
+        .hud-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            flex-direction: column;
+        }
+
+        .hud-label {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .hud-value {
+            font-size: 18px;
+        }
+
+        .health-bar {
+            width: 80px;
+            height: 8px;
+            background: #333;
+            border: 1px solid #0ff;
+            position: relative;
+            overflow: hidden;
+            border-radius: 4px;
+        }
+
+        .health-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #f00, #ff0, #0f0);
+            transition: width 0.3s;
+            border-radius: 4px;
+        }
+
+        .wave-indicator {
+            color: #f0f;
+            text-shadow: 0 0 15px #f0f;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        /* 控制区域 */
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            height: 150px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #joystick-zone {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 150px;
+            height: 150px;
+            pointer-events: auto;
+        }
+
+        #joystick-base {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            border: 3px solid rgba(0, 255, 255, 0.3);
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0,255,255,0.1) 0%, transparent 70%);
+        }
+
+        #joystick-knob {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: radial-gradient(circle, #0ff 0%, #0088aa 100%);
+            border-radius: 50%;
+            box-shadow: 0 0 20px #0ff;
+            transform: translate(-50%, -50%);
+            left: 50%;
+            top: 50%;
+        }
+
+        #fire-btn {
+            position: absolute;
+            right: 0;
+            bottom: 25px;
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,0,0,0.8) 0%, rgba(139,0,0,0.8) 100%);
+            border: 3px solid #f00;
+            box-shadow: 0 0 30px rgba(255,0,0,0.5), inset 0 0 20px rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: #fff;
+            font-weight: bold;
+            pointer-events: auto;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        #fire-btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 0 40px rgba(255,0,0,0.8), inset 0 0 30px rgba(0,0,0,0.3);
+        }
+
+        #fire-btn::before {
+            content: 'FIRE';
+            letter-spacing: 2px;
+        }
+
+        /* 菜单按钮 */
+        #menu-btn {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            background: rgba(255,255,255,0.1);
+            border: 2px solid #0ff;
+            border-radius: 10px;
+            color: #0ff;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 20;
+            backdrop-filter: blur(5px);
+            transition: all 0.3s;
+        }
+
+        #menu-btn:hover {
+            background: rgba(0,255,255,0.2);
+            box-shadow: 0 0 20px #0ff;
+        }
+
+        /* 作弊菜单 - 修复滚动 */
+        #cheat-menu {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 320px;
+            height: 80vh;
+            max-height: 600px;
+            background: rgba(0,0,0,0.95);
+            border: 2px solid #0ff;
+            border-radius: 15px;
+            padding: 0;
+            display: none;
+            z-index: 100;
+            box-shadow: 0 0 50px rgba(0,255,255,0.3);
+            overflow: hidden;
+            flex-direction: column;
+        }
+
+        #cheat-menu.active {
+            display: flex;
+            animation: menuPop 0.3s ease-out;
+        }
+
+        @keyframes menuPop {
+            0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+
+        #cheat-menu h2 {
+            color: #0ff;
+            text-align: center;
+            margin: 0;
+            font-size: 24px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            text-shadow: 0 0 20px #0ff;
+            background: rgba(0,0,0,0.95);
+            padding: 20px;
+            border-bottom: 1px solid rgba(0,255,255,0.3);
+            flex-shrink: 0;
+        }
+
+        #cheat-content {
+            overflow-y: auto;
+            overflow-x: hidden;
+            flex: 1;
+            padding: 15px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* 自定义滚动条 */
+        #cheat-content::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #cheat-content::-webkit-scrollbar-track {
+            background: rgba(0,255,255,0.1);
+            border-radius: 4px;
+        }
+
+        #cheat-content::-webkit-scrollbar-thumb {
+            background: rgba(0,255,255,0.5);
+            border-radius: 4px;
+        }
+
+        #cheat-content::-webkit-scrollbar-thumb:hover {
+            background: rgba(0,255,255,0.8);
+        }
+
+        .cheat-category {
+            color: #f0f;
+            font-size: 14px;
+            margin: 15px 0 10px 0;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border-bottom: 1px solid rgba(255,0,255,0.3);
+            padding-bottom: 5px;
+        }
+
+        .cheat-category:first-child {
+            margin-top: 0;
+        }
+
+        .cheat-option {
+            margin: 10px 0;
+            padding: 12px;
+            background: rgba(0,255,255,0.05);
+            border: 1px solid rgba(0,255,255,0.3);
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            touch-action: manipulation;
+        }
+
+        .cheat-option:hover {
+            background: rgba(0,255,255,0.1);
+            border-color: #0ff;
+        }
+
+        .cheat-option.active {
+            background: rgba(0,255,0,0.1);
+            border-color: #0f0;
+            box-shadow: 0 0 15px rgba(0,255,0,0.3);
+        }
+
+        .cheat-name {
+            color: #fff;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cheat-toggle {
+            width: 44px;
+            height: 24px;
+            background: #333;
+            border-radius: 12px;
+            position: relative;
+            transition: background 0.3s;
+            flex-shrink: 0;
+        }
+
+        .cheat-option.active .cheat-toggle {
+            background: #0f0;
+        }
+
+        .cheat-toggle::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: #fff;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.3s;
+        }
+
+        .cheat-option.active .cheat-toggle::after {
+            transform: translateX(20px);
+        }
+
+        #close-menu {
+            margin: 15px;
+            padding: 12px;
+            background: transparent;
+            border: 2px solid #f00;
+            color: #f00;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            flex-shrink: 0;
+        }
+
+        #close-menu:hover {
+            background: rgba(255,0,0,0.2);
+            box-shadow: 0 0 20px rgba(255,0,0,0.5);
+        }
+
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            z-index: 90;
+            backdrop-filter: blur(3px);
+        }
+
+        #overlay.active {
+            display: block;
+        }
+
+        .damage-indicator {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle, transparent 30%, rgba(255,0,0,0.3) 100%);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 5;
+        }
+
+        .damage-indicator.show {
+            opacity: 1;
+        }
+
+        #wave-announcement {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            color: #f0f;
+            text-shadow: 0 0 30px #f0f;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 50;
+            text-align: center;
+        }
+
+        #wave-announcement.show {
+            animation: waveShow 2s ease-out;
+        }
+
+        @keyframes waveShow {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+            40% { transform: translate(-50%, -50%) scale(1); }
+            80% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        /* 进度条 */
+        .progress-bar {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            overflow: hidden;
+            z-index: 10;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #f0f, #0ff);
+            transition: width 0.3s;
+            box-shadow: 0 0 10px #f0f;
+        }
+
+        .progress-text {
+            position: fixed;
+            top: 78px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-size: 12px;
+            z-index: 10;
+            text-shadow: 0 0 5px #000;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <!-- HUD -->
+    <div id="hud">
+        <div class="hud-item">
+            <span class="hud-label">WAVE</span>
+            <span class="hud-value wave-indicator" id="wave">1</span>
+        </div>
+        <div class="hud-item">
+            <span class="hud-label">KILLS</span>
+            <span class="hud-value" id="kills">0/100</span>
+        </div>
+        <div class="hud-item">
+            <span class="hud-label">HEALTH</span>
+            <div style="display: flex; align-items: center; gap: 5px;">
+                <div class="health-bar">
+                    <div class="health-fill" id="health-fill" style="width: 100%"></div>
+                </div>
+                <span class="hud-value" id="health-text">100</span>
+            </div>
+        </div>
+        <div class="hud-item">
+            <span class="hud-label">SCORE</span>
+            <span class="hud-value" id="score">0</span>
+        </div>
+        <div class="hud-item">
+            <span class="hud-label">AMMO</span>
+            <span class="hud-value" id="ammo">30</span>
+        </div>
+        <div class="hud-item">
+            <span class="hud-label">KNIVES</span>
+            <span class="hud-value" id="knives" style="color: #0f0;">0</span>
+        </div>
+    </div>
+
+    <!-- 波次进度条 -->
+    <div class="progress-bar">
+        <div class="progress-fill" id="wave-progress" style="width: 0%"></div>
+    </div>
+    <div class="progress-text" id="progress-text">0/100</div>
+
+    <div id="wave-announcement">
+        <div>WAVE <span id="wave-num">1</span></div>
+        <div style="font-size: 24px; margin-top: 10px;">COMPLETE!</div>
+    </div>
+
+    <!-- 菜单按钮 -->
+    <div id="menu-btn">☰</div>
+
+    <!-- 控制区域 -->
+    <div id="controls">
+        <div id="joystick-zone">
+            <div id="joystick-base"></div>
+            <div id="joystick-knob"></div>
+        </div>
+        <div id="fire-btn"></div>
+    </div>
+
+    <!-- 作弊菜单 - 可滚动 -->
+    <div id="overlay"></div>
+    <div id="cheat-menu">
+        <h2>⚡ 作弊菜单 ⚡</h2>
+        <div id="cheat-content">
+            <div class="cheat-category">🔥 战斗作弊</div>
+            <div class="cheat-option" data-cheat="godmode">
+                <span class="cheat-name">🛡️ 无敌模式</span>
+                <div class="cheat-toggle"></div>
+            </div>
+            <div class="cheat-option" data-cheat="infiniteammo">
+                <span class="cheat-name">∞ 无限弹药</span>
+                <div class="cheat-toggle"></div>
+            </div>
+            <div class="cheat-option" data-cheat="rapidfire">
+                <span class="cheat-name">⚡ 快速射击</span>
+                <div class="cheat-toggle"></div>
+            </div>
+            <div class="cheat-option" data-cheat="oneshot">
+                <span class="cheat-name">💀 一击必杀</span>
+                <div class="cheat-toggle"></div>
+            </div>
+            <div class="cheat-option" data-cheat="maxknives">
+                <span class="cheat-name">🗡️ 无限飞刀</span>
+                <div class="cheat-toggle"></div>
+            </div>
+
+            <div class="cheat-category">⚙️ 游戏修改</div>
+            <div class="cheat-option" data-cheat="slowmotion">
+                <span class="cheat-name">⏱️ 子弹时间</span>
+                <div class="cheat-toggle"></div>
+            </div>
+            <div class="cheat-option" data-cheat="noclip">
+                <span class="cheat-name">👻 穿墙模式</span>
+                <div class="cheat-toggle"></div>
+            </div>
+            <div class="cheat-option" data-cheat="autofire">
+                <span class="cheat-name">🤖 自动射击</span>
+                <div class="cheat-toggle"></div>
+            </div>
+            <div class="cheat-option" data-cheat="magnet">
+                <span class="cheat-name">🧲 敌人磁铁</span>
+                <div class="cheat-toggle"></div>
+            </div>
+
+            <div class="cheat-category">💎 资源作弊</div>
+            <div class="cheat-option" data-cheat="maxscore">
+                <span class="cheat-name">💰 无限分数</span>
+                <div class="cheat-toggle"></div>
+            </div>
+            <div class="cheat-option" data-cheat="skipwave">
+                <span class="cheat-name">⏭️ 跳过波次</span>
+                <div class="cheat-toggle"></div>
+            </div>
+        </div>
+        <button id="close-menu">关闭菜单</button>
+    </div>
+
+    <div class="damage-indicator" id="damage-indicator"></div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // 游戏配置
+        const game = {
+            score: 0,
+            wave: 1,
+            killsInWave: 0,
+            killsPerWave: 100, // 100个敌人一波
+            totalKills: 0,
+            waveInProgress: true,
+            waveCooldown: false,
+            timeScale: 1,
+            cheats: {
+                godmode: false,
+                infiniteammo: false,
+                rapidfire: false,
+                oneshot: false,
+                maxknives: false,
+                slowmotion: false,
+                noclip: false,
+                autofire: false,
+                magnet: false,
+                maxscore: false,
+                skipwave: false
+            }
+        };
+
+        // 玩家对象
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 20,
+            speed: 5,
+            health: 100,
+            maxHealth: 100,
+            ammo: 30,
+            maxAmmo: 30,
+            angle: 0,
+            vx: 0,
+            vy: 0,
+            lastShot: 0,
+            fireRate: 200,
+            invulnerable: false,
+            knives: [],
+            maxKnives: 0,
+            killCount: 0
+        };
+
+        const input = {
+            joystick: { x: 0, y: 0, active: false },
+            fire: false,
+            mouseX: 0,
+            mouseY: 0
+        };
+
+        const bullets = [];
+        const enemies = [];
+        const particles = [];
+        const floatingTexts = [];
+
+        // 敌人类型配置
+        const enemyTypes = {
+            basic: {
+                name: '普通',
+                radius: 15,
+                speed: 2,
+                health: 30,
+                damage: 10,
+                color: '#ff4444',
+                score: 10
+            },
+            fast: {
+                name: '迅捷',
+                radius: 12,
+                speed: 4,
+                health: 20,
+                damage: 5,
+                color: '#ffaa00',
+                score: 15
+            },
+            tank: {
+                name: '重装',
+                radius: 25,
+                speed: 1,
+                health: 100,
+                damage: 20,
+                color: '#ff00ff',
+                score: 30
+            },
+            shooter: {
+                name: '射手',
+                radius: 14,
+                speed: 1.5,
+                health: 40,
+                damage: 15,
+                color: '#00ffff',
+                score: 25,
+                canShoot: true
+            },
+            explosive: {
+                name: '自爆',
+                radius: 18,
+                speed: 3,
+                health: 25,
+                damage: 30,
+                color: '#88ff00',
+                score: 20,
+                explodeOnDeath: true
+            },
+            boss: {
+                name: 'BOSS',
+                radius: 40,
+                speed: 0.8,
+                health: 500,
+                damage: 40,
+                color: '#ff0000',
+                score: 200,
+                isBoss: true
+            }
+        };
+
+        class Particle {
+            constructor(x, y, color, speed, life) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.vx = (Math.random() - 0.5) * speed;
+                this.vy = (Math.random() - 0.5) * speed;
+                this.life = life;
+                this.maxLife = life;
+                this.size = Math.random() * 3 + 1;
+                this.decay = 0.95;
+            }
+
+            update() {
+                this.x += this.vx * game.timeScale;
+                this.y += this.vy * game.timeScale;
+                this.life--;
+                this.size *= this.decay;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life / this.maxLife;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        class FloatingText {
+            constructor(x, y, text, color) {
+                this.x = x;
+                this.y = y;
+                this.text = text;
+                this.color = color;
+                this.life = 60;
+                this.vy = -1;
+            }
+
+            update() {
+                this.y += this.vy;
+                this.life--;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life / 60;
+                ctx.fillStyle = this.color;
+                ctx.font = 'bold 20px Courier New';
+                ctx.textAlign = 'center';
+                ctx.fillText(this.text, this.x, this.y);
+                ctx.restore();
+            }
+        }
+
+        class Knife {
+            constructor(index, total) {
+                this.index = index;
+                this.total = total;
+                this.angle = (Math.PI * 2 / total) * index;
+                this.distance = 60;
+                this.size = 15;
+                this.damage = 50;
+                this.speed = 0.05;
+            }
+
+            update() {
+                this.angle += this.speed;
+                this.x = player.x + Math.cos(this.angle) * this.distance;
+                this.y = player.y + Math.sin(this.angle) * this.distance;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle + Math.PI / 2);
+                
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#0f0';
+                
+                ctx.fillStyle = '#0f0';
+                ctx.beginPath();
+                ctx.moveTo(0, -this.size);
+                ctx.lineTo(this.size/2, this.size/2);
+                ctx.lineTo(0, this.size/3);
+                ctx.lineTo(-this.size/2, this.size/2);
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.moveTo(0, -this.size + 3);
+                ctx.lineTo(2, 0);
+                ctx.lineTo(0, 3);
+                ctx.lineTo(-2, 0);
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.restore();
+            }
+        }
+
+        class Bullet {
+            constructor(x, y, angle, isEnemy = false) {
+                this.x = x;
+                this.y = y;
+                this.vx = Math.cos(angle) * (isEnemy ? 8 : 15);
+                this.vy = Math.sin(angle) * (isEnemy ? 8 : 15);
+                this.radius = isEnemy ? 6 : 4;
+                this.damage = isEnemy ? 10 : (game.cheats.oneshot ? 999 : 25);
+                this.color = isEnemy ? '#f00' : (game.cheats.oneshot ? '#f0f' : '#ff0');
+                this.isEnemy = isEnemy;
+            }
+
+            update() {
+                this.x += this.vx * game.timeScale;
+                this.y += this.vy * game.timeScale;
+                
+                if (!this.isEnemy && Math.random() > 0.3) {
+                    particles.push(new Particle(
+                        this.x, 
+                        this.y, 
+                        this.color, 
+                        2, 
+                        10
+                    ));
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            isOffScreen() {
+                return this.x < 0 || this.x > canvas.width || 
+                       this.y < 0 || this.y > canvas.height;
+            }
+        }
+
+        class Enemy {
+            constructor(type = 'basic') {
+                const config = enemyTypes[type];
+                this.type = type;
+                this.config = config;
+                
+                const side = Math.floor(Math.random() * 4);
+                switch(side) {
+                    case 0: this.x = Math.random() * canvas.width; this.y = -50; break;
+                    case 1: this.x = canvas.width + 50; this.y = Math.random() * canvas.height; break;
+                    case 2: this.x = Math.random() * canvas.width; this.y = canvas.height + 50; break;
+                    case 3: this.x = -50; this.y = Math.random() * canvas.height; break;
+                }
+                
+                this.radius = config.radius;
+                this.speed = config.speed * (1 + game.wave * 0.05);
+                this.health = config.health * (1 + game.wave * 0.15);
+                this.maxHealth = this.health;
+                this.damage = config.damage;
+                this.color = config.color;
+                this.angle = 0;
+                this.shootTimer = 0;
+            }
+
+            update() {
+                if (game.cheats.magnet) {
+                    const dx = player.x - this.x;
+                    const dy = player.y - this.y;
+                    this.x += dx * 0.02;
+                    this.y += dy * 0.02;
+                }
+                
+                const dx = player.x - this.x;
+                const dy = player.y - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                this.vx = (dx / dist) * this.speed;
+                this.vy = (dy / dist) * this.speed;
+                this.angle = Math.atan2(dy, dx);
+                
+                this.x += this.vx * game.timeScale;
+                this.y += this.vy * game.timeScale;
+                
+                if (this.config.canShoot) {
+                    this.shootTimer++;
+                    if (this.shootTimer > 120) {
+                        this.shootTimer = 0;
+                        bullets.push(new Bullet(
+                            this.x + Math.cos(this.angle) * 20,
+                            this.y + Math.sin(this.angle) * 20,
+                            this.angle,
+                            true
+                        ));
+                    }
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+                ctx.fillStyle = this.color;
+                
+                if (this.config.isBoss) {
+                    ctx.beginPath();
+                    ctx.moveTo(this.radius, 0);
+                    for (let i = 0; i < 5; i++) {
+                        const angle = (i * 4 * Math.PI) / 5;
+                        ctx.lineTo(
+                            Math.cos(angle) * this.radius,
+                            Math.sin(angle) * this.radius
+                        );
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    ctx.fillStyle = '#fff';
+                    ctx.beginPath();
+                    ctx.arc(this.radius * 0.3, -10, 8, 0, Math.PI * 2);
+                    ctx.arc(this.radius * 0.3, 10, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (this.type === 'tank') {
+                    ctx.fillRect(-this.radius, -this.radius, this.radius*2, this.radius*2);
+                } else if (this.type === 'shooter') {
+                    ctx.beginPath();
+                    ctx.moveTo(this.radius, 0);
+                    ctx.lineTo(0, -this.radius);
+                    ctx.lineTo(-this.radius, 0);
+                    ctx.lineTo(0, this.radius);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    ctx.beginPath();
+                    ctx.moveTo(this.radius, 0);
+                    ctx.lineTo(-this.radius, -this.radius * 0.8);
+                    ctx.lineTo(-this.radius * 0.5, 0);
+                    ctx.lineTo(-this.radius, this.radius * 0.8);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+                
+                ctx.rotate(-this.angle);
+                const barWidth = this.radius * 2;
+                ctx.fillStyle = '#333';
+                ctx.fillRect(-barWidth/2, -this.radius - 15, barWidth, 6);
+                ctx.fillStyle = this.health > this.maxHealth * 0.5 ? '#0f0' : '#f00';
+                ctx.fillRect(-barWidth/2, -this.radius - 15, barWidth * (this.health / this.maxHealth), 6);
+                
+                ctx.fillStyle = '#fff';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(this.config.name, 0, -this.radius - 20);
+                
+                ctx.restore();
+            }
+        }
+
+        // 波次管理 - 100个敌人
+        function checkWaveProgress() {
+            // 更新进度条
+            const progress = (game.killsInWave / game.killsPerWave) * 100;
+            document.getElementById('wave-progress').style.width = progress + '%';
+            document.getElementById('progress-text').textContent = 
+                `${game.killsInWave}/${game.killsPerWave}`;
+            
+            // 检查是否完成波次
+            if (game.killsInWave >= game.killsPerWave && !game.waveCooldown) {
+                completeWave();
+            }
+        }
+
+        function completeWave() {
+            game.waveCooldown = true;
+            
+            // 显示完成提示
+            const announcement = document.getElementById('wave-announcement');
+            document.getElementById('wave-num').textContent = game.wave;
+            announcement.classList.remove('show');
+            void announcement.offsetWidth;
+            announcement.classList.add('show');
+            
+            // 波次奖励
+            player.health = Math.min(player.health + 50, player.maxHealth);
+            player.ammo = player.maxAmmo;
+            
+            // 清空剩余敌人
+            enemies.length = 0;
+            bullets.length = 0;
+            
+            setTimeout(() => {
+                game.wave++;
+                game.killsInWave = 0;
+                game.waveCooldown = false;
+                
+                if (game.cheats.skipwave) {
+                    game.wave += 2;
+                }
+                
+                updateHUD();
+            }, 3000);
+        }
+
+        function spawnEnemies() {
+            if (game.waveCooldown) return;
+            if (game.killsInWave >= game.killsPerWave) return;
+            
+            // 根据波次决定敌人类型
+            const types = ['basic'];
+            if (game.wave >= 2) types.push('fast');
+            if (game.wave >= 3) types.push('tank');
+            if (game.wave >= 4) types.push('shooter');
+            if (game.wave >= 5) types.push('explosive');
+            
+            // BOSS - 每10波
+            if (game.wave % 10 === 0 && enemies.length === 0 && game.killsInWave === 0) {
+                enemies.push(new Enemy('boss'));
+                return;
+            }
+            
+            // 限制同屏敌人数量
+            const maxEnemies = 15 + game.wave * 2;
+            if (enemies.length >= maxEnemies) return;
+            
+            const type = types[Math.floor(Math.random() * types.length)];
+            enemies.push(new Enemy(type));
+        }
+
+        // 虚拟摇杆
+        const joystickZone = document.getElementById('joystick-zone');
+        const joystickKnob = document.getElementById('joystick-knob');
+        let joystickCenter = { x: 0, y: 0 };
+
+        function updateJoystickCenter() {
+            const rect = joystickZone.getBoundingClientRect();
+            joystickCenter = {
+                x: rect.left + rect.width / 2,
+                y: rect.top + rect.height / 2
+            };
+        }
+
+        joystickZone.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            updateJoystickCenter();
+            input.joystick.active = true;
+            updateJoystick(e.touches[0]);
+        });
+
+        joystickZone.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (input.joystick.active) {
+                updateJoystick(e.touches[0]);
+            }
+        });
+
+        joystickZone.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            input.joystick.active = false;
+            input.joystick.x = 0;
+            input.joystick.y = 0;
+            joystickKnob.style.left = '50%';
+            joystickKnob.style.top = '50%';
+        });
+
+        function updateJoystick(touch) {
+            const dx = touch.clientX - joystickCenter.x;
+            const dy = touch.clientY - joystickCenter.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const maxDistance = 35;
+            
+            let normalizedX = dx;
+            let normalizedY = dy;
+            
+            if (distance > maxDistance) {
+                normalizedX = (dx / distance) * maxDistance;
+                normalizedY = (dy / distance) * maxDistance;
+            }
+            
+            input.joystick.x = normalizedX / maxDistance;
+            input.joystick.y = normalizedY / maxDistance;
+            
+            joystickKnob.style.left = `calc(50% + ${normalizedX}px)`;
+            joystickKnob.style.top = `calc(50% + ${normalizedY}px)`;
+        }
+
+        // 开火按钮
+        const fireBtn = document.getElementById('fire-btn');
+        fireBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            input.fire = true;
+        });
+        
+        fireBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            input.fire = false;
+        });
+
+        fireBtn.addEventListener('mousedown', () => input.fire = true);
+        fireBtn.addEventListener('mouseup', () => input.fire = false);
+        fireBtn.addEventListener('mouseleave', () => input.fire = false);
+
+        canvas.addEventListener('mousemove', (e) => {
+            input.mouseX = e.clientX;
+            input.mouseY = e.clientY;
+        });
+
+        // 作弊菜单
+        const menuBtn = document.getElementById('menu-btn');
+        const cheatMenu = document.getElementById('cheat-menu');
+        const overlay = document.getElementById('overlay');
+        const closeMenuBtn = document.getElementById('close-menu');
+
+        function toggleMenu() {
+            cheatMenu.classList.toggle('active');
+            overlay.classList.toggle('active');
+        }
+
+        menuBtn.addEventListener('click', toggleMenu);
+        closeMenuBtn.addEventListener('click', toggleMenu);
+        overlay.addEventListener('click', toggleMenu);
+
+        // 阻止作弊菜单内容区域的点击事件冒泡（防止关闭菜单）
+        document.getElementById('cheat-content').addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
+        document.querySelectorAll('.cheat-option').forEach(option => {
+            option.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const cheat = option.dataset.cheat;
+                game.cheats[cheat] = !game.cheats[cheat];
+                option.classList.toggle('active');
+                
+                if (cheat === 'godmode' && game.cheats.godmode) {
+                    player.health = player.maxHealth;
+                }
+                if (cheat === 'infiniteammo' && game.cheats.infiniteammo) {
+                    player.ammo = 999;
+                }
+                if (cheat === 'maxknives' && game.cheats.maxknives) {
+                    updateKnives();
+                }
+                if (cheat === 'slowmotion') {
+                    game.timeScale = game.cheats.slowmotion ? 0.3 : 1;
+                }
+                if (cheat === 'maxscore' && game.cheats.maxscore) {
+                    game.score = 999999;
+                }
+                
+                updateHUD();
+            });
+        });
+
+        function updateKnives() {
+            const targetCount = game.cheats.maxknives ? 12 : Math.floor(player.killCount / 10);
+            player.maxKnives = targetCount;
+            
+            while (player.knives.length < targetCount) {
+                player.knives.push(new Knife(player.knives.length, targetCount));
+            }
+            while (player.knives.length > targetCount) {
+                player.knives.pop();
+            }
+            
+            player.knives.forEach((knife, index) => {
+                knife.index = index;
+                knife.total = targetCount;
+            });
+        }
+
+        function updateHUD() {
+            document.getElementById('wave').textContent = game.wave;
+            document.getElementById('kills').textContent = 
+                `${game.killsInWave}/${game.killsPerWave}`;
+            document.getElementById('health-fill').style.width = 
+                (player.health / player.maxHealth * 100) + '%';
+            document.getElementById('health-text').textContent = Math.ceil(player.health);
+            document.getElementById('score').textContent = game.score;
+            document.getElementById('ammo').textContent = Math.floor(player.ammo);
+            document.getElementById('knives').textContent = player.maxKnives;
+            
+            // 更新进度条
+            const progress = (game.killsInWave / game.killsPerWave) * 100;
+            document.getElementById('wave-progress').style.width = progress + '%';
+            document.getElementById('progress-text').textContent = 
+                `${game.killsInWave}/${game.killsPerWave}`;
+        }
+
+        function shoot() {
+            const now = Date.now();
+            const fireRate = game.cheats.rapidfire ? 50 : player.fireRate;
+            
+            if (now - player.lastShot > fireRate && (player.ammo > 0 || game.cheats.infiniteammo)) {
+                let angle;
+                if (input.mouseX !== 0 || input.mouseY !== 0) {
+                    angle = Math.atan2(input.mouseY - player.y, input.mouseX - player.x);
+                } else {
+                    angle = player.angle;
+                }
+                
+                bullets.push(new Bullet(
+                    player.x + Math.cos(angle) * 30,
+                    player.y + Math.sin(angle) * 30,
+                    angle
+                ));
+                
+                player.x -= Math.cos(angle) * 2;
+                player.y -= Math.sin(angle) * 2;
+                
+                for (let i = 0; i < 5; i++) {
+                    particles.push(new Particle(
+                        player.x + Math.cos(angle) * 25,
+                        player.y + Math.sin(angle) * 25,
+                        '#ff0',
+                        5,
+                        5
+                    ));
+                }
+                
+                if (!game.cheats.infiniteammo) {
+                    player.ammo--;
+                }
+                
+                player.lastShot = now;
+                updateHUD();
+            }
+        }
+
+        function checkCollisions() {
+            // 子弹击中敌人
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                if (bullets[i].isEnemy) {
+                    const b = bullets[i];
+                    const dx = b.x - player.x;
+                    const dy = b.y - player.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < b.radius + player.radius && !game.cheats.godmode && !player.invulnerable) {
+                        player.health -= b.damage;
+                        player.invulnerable = true;
+                        document.getElementById('damage-indicator').classList.add('show');
+                        setTimeout(() => {
+                            document.getElementById('damage-indicator').classList.remove('show');
+                        }, 300);
+                        setTimeout(() => player.invulnerable = false, 1000);
+                        
+                        bullets.splice(i, 1);
+                        updateHUD();
+                    }
+                    continue;
+                }
+                
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    const b = bullets[i];
+                    const e = enemies[j];
+                    const dx = b.x - e.x;
+                    const dy = b.y - e.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < b.radius + e.radius) {
+                        e.health -= b.damage;
+                        
+                        for (let k = 0; k < 8; k++) {
+                            particles.push(new Particle(
+                                b.x, b.y, e.color, 8, 20
+                            ));
+                        }
+                        
+                        bullets.splice(i, 1);
+                        
+                        if (e.health <= 0) {
+                            killEnemy(e, j);
+                        }
+                        break;
+                    }
+                }
+            }
+            
+            // 飞刀碰撞
+            for (let knife of player.knives) {
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    const e = enemies[j];
+                    const dx = knife.x - e.x;
+                    const dy = knife.y - e.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < knife.size + e.radius) {
+                        e.health -= knife.damage;
+                        
+                        for (let k = 0; k < 5; k++) {
+                            particles.push(new Particle(
+                                knife.x, knife.y, '#0f0', 5, 15
+                            ));
+                        }
+                        
+                        if (e.health <= 0) {
+                            killEnemy(e, j);
+                        }
+                    }
+                }
+            }
+            
+            // 敌人撞击玩家
+            if (!game.cheats.godmode && !player.invulnerable && !game.cheats.noclip) {
+                for (let e of enemies) {
+                    const dx = player.x - e.x;
+                    const dy = player.y - e.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < player.radius + e.radius) {
+                        player.health -= e.damage;
+                        player.invulnerable = true;
+                        
+                        document.getElementById('damage-indicator').classList.add('show');
+                        setTimeout(() => {
+                            document.getElementById('damage-indicator').classList.remove('show');
+                        }, 300);
+                        
+                        const angle = Math.atan2(dy, dx);
+                        player.x += Math.cos(angle) * 50;
+                        player.y += Math.sin(angle) * 50;
+                        
+                        setTimeout(() => player.invulnerable = false, 1000);
+                        
+                        if (e.config.explodeOnDeath) {
+                            for (let k = 0; k < 20; k++) {
+                                particles.push(new Particle(
+                                    e.x, e.y, '#88ff00', 10, 40
+                                ));
+                            }
+                            enemies.splice(enemies.indexOf(e), 1);
+                        }
+                        
+                        if (player.health <= 0) {
+                            player.health = 0;
+                            setTimeout(() => {
+                                player.health = player.maxHealth;
+                                player.ammo = player.maxAmmo;
+                                game.score = Math.floor(game.score * 0.8);
+                                enemies.length = 0;
+                                bullets.length = 0;
+                            }, 2000);
+                        }
+                        
+                        updateHUD();
+                    }
+                }
+            }
+        }
+
+        function killEnemy(e, index) {
+            if (e.config.explodeOnDeath) {
+                for (let k = 0; k < 20; k++) {
+                    particles.push(new Particle(
+                        e.x, e.y, '#88ff00', 10, 40
+                    ));
+                }
+                for (let other of enemies) {
+                    if (other !== e) {
+                        const dx = other.x - e.x;
+                        const dy = other.y - e.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < 100) {
+                            other.health -= 50;
+                        }
+                    }
+                }
+            }
+            
+            const points = e.config.score * (game.cheats.maxscore ? 100 : 1);
+            game.score += points;
+            floatingTexts.push(new FloatingText(e.x, e.y, `+${points}`, '#ff0'));
+            
+            player.killCount++;
+            game.killsInWave++;
+            game.totalKills++;
+            
+            updateKnives();
+            
+            for (let k = 0; k < 15; k++) {
+                particles.push(new Particle(
+                    e.x, e.y, e.color, 10, 30
+                ));
+            }
+            
+            enemies.splice(index, 1);
+            updateHUD();
+            checkWaveProgress();
+        }
+
+        function gameLoop() {
+            if (game.cheats.slowmotion) {
+                game.timeScale = 0.3;
+            } else {
+                game.timeScale = 1;
+            }
+            
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 网格背景
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+            const gridSize = 50;
+            const time = Date.now() / 50 * game.timeScale;
+            const offsetX = time % gridSize;
+            const offsetY = time % gridSize;
+            
+            for (let x = -gridSize; x < canvas.width + gridSize; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x + offsetX, 0);
+                ctx.lineTo(x + offsetX, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = -gridSize; y < canvas.height + gridSize; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y + offsetY);
+                ctx.lineTo(canvas.width, y + offsetY);
+                ctx.stroke();
+            }
+            
+            // 更新玩家
+            if (input.joystick.active) {
+                player.vx = input.joystick.x * player.speed;
+                player.vy = input.joystick.y * player.speed;
+                player.angle = Math.atan2(input.joystick.y, input.joystick.x);
+            } else {
+                player.vx *= 0.9;
+                player.vy *= 0.9;
+            }
+            
+            player.x += player.vx * game.timeScale;
+            player.y += player.vy * game.timeScale;
+            
+            if (!game.cheats.noclip) {
+                player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
+                player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
+            }
+            
+            if (game.cheats.autofire || input.fire) {
+                shoot();
+            }
+            
+            // 更新飞刀
+            for (let knife of player.knives) {
+                knife.update();
+                knife.draw();
+            }
+            
+            // 更新子弹
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                bullets[i].update();
+                bullets[i].draw();
+                if (bullets[i].isOffScreen()) {
+                    bullets.splice(i, 1);
+                }
+            }
+            
+            // 生成和更新敌人
+            spawnEnemies();
+            for (let e of enemies) {
+                e.update();
+                e.draw();
+            }
+            
+            // 更新粒子
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+            
+            // 更新浮动文字
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                floatingTexts[i].update();
+                floatingTexts[i].draw();
+                if (floatingTexts[i].life <= 0) {
+                    floatingTexts.splice(i, 1);
+                }
+            }
+            
+            // 绘制玩家
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            ctx.rotate(player.angle);
+            
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = game.cheats.godmode ? '#0f0' : '#0ff';
+            
+            ctx.fillStyle = game.cheats.godmode ? '#0f0' : '#0ff';
+            ctx.beginPath();
+            ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.moveTo(player.radius + 5, 0);
+            ctx.lineTo(player.radius - 5, -8);
+            ctx.lineTo(player.radius - 5, 8);
+            ctx.closePath();
+            ctx.fill();
+            
+            if (player.invulnerable && Math.floor(Date.now() / 100) % 2 === 0) {
+                ctx.globalAlpha = 0.5;
+            }
+            
+            ctx.restore();
+            
+            checkCollisions();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        updateHUD();
+        gameLoop();
+
+        document.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, { passive: false });
+    </script>
+</body>
+</html>

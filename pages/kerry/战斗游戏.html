@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>战斗游戏·地狱版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Noto+Sans+SC:wght@400;700;900&display=swap');
+
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background: #0a0a0a;
+            overflow-x: hidden;
+        }
+
+        .font-battle {
+            font-family: 'Black Ops One', cursive;
+        }
+
+        /* 地狱火焰背景动画 */
+        .hell-bg {
+            background: linear-gradient(180deg, #1a0000 0%, #0a0a0a 50%, #000000 100%);
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+        }
+
+        .fire-particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.3;
+            background-image: 
+                radial-gradient(circle at 20% 80%, rgba(255, 0, 0, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 69, 0, 0.2) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(220, 20, 60, 0.2) 0%, transparent 40%);
+            animation: fireMove 8s ease-in-out infinite;
+        }
+
+        @keyframes fireMove {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-20px) scale(1.1); }
+        }
+
+        /* 生命值条动画 */
+        .health-bar-fill {
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        .health-bar-fill.player-hp {
+            background: linear-gradient(90deg, #0066ff, #00ccff);
+            color: #00ccff;
+        }
+
+        .health-bar-fill.ai-hp {
+            background: linear-gradient(90deg, #ff0000, #ff4444);
+            color: #ff4444;
+        }
+
+        /* 攻击按钮特效 */
+        .attack-btn {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .attack-btn:hover:not(:disabled) {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .attack-btn:active:not(:disabled) {
+            transform: translateY(-2px);
+        }
+
+        .attack-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .attack-btn:hover::before {
+            left: 100%;
+        }
+
+        .attack-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            filter: grayscale(100%);
+        }
+
+        /* 伤害数字动画 */
+        .damage-text {
+            position: absolute;
+            font-weight: 900;
+            font-size: 2rem;
+            pointer-events: none;
+            animation: damageFloat 1s ease-out forwards;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 50;
+        }
+
+        @keyframes damageFloat {
+            0% {
+                opacity: 1;
+                transform: translateY(0) scale(0.5);
+            }
+            50% {
+                transform: translateY(-30px) scale(1.2);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-60px) scale(1);
+            }
+        }
+
+        /* 震动效果 */
+        .shake {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        /* 战斗记录滚动 */
+        .battle-log {
+            scrollbar-width: thin;
+            scrollbar-color: #444 #1a1a1a;
+        }
+
+        .battle-log::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .battle-log::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+
+        .battle-log::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 4px;
+        }
+
+        /* 闪烁效果 */
+        .flash {
+            animation: flash 0.3s ease-out;
+        }
+
+        @keyframes flash {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; filter: brightness(2); }
+        }
+
+        /* 角色头像脉冲 */
+        .avatar-pulse {
+            animation: avatarPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes avatarPulse {
+            0%, 100% { box-shadow: 0 0 20px currentColor; }
+            50% { box-shadow: 0 0 40px currentColor, 0 0 60px currentColor; }
+        }
+
+        /* 游戏结束遮罩 */
+        .game-over-overlay {
+            backdrop-filter: blur(10px);
+            background: rgba(0, 0, 0, 0.85);
+        }
+
+        /* 粒子效果容器 */
+        .particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            animation: particleFloat 3s infinite;
+        }
+
+        @keyframes particleFloat {
+            0%, 100% { transform: translateY(0) translateX(0); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateY(-100px) translateX(50px); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="text-white min-h-screen flex flex-col">
+
+    <!-- 背景 -->
+    <div class="hell-bg"></div>
+    <div class="fire-particles"></div>
+
+    <!-- 标题 -->
+    <header class="text-center py-6 relative z-10">
+        <h1 class="font-battle text-5xl md:text-7xl bg-clip-text text-transparent bg-gradient-to-b from-red-500 via-orange-500 to-yellow-500 drop-shadow-[0_0_15px_rgba(255,0,0,0.5)]">
+            战斗游戏·地狱版
+        </h1>
+        <p class="text-gray-400 mt-2 text-sm tracking-widest uppercase">Battle Game: Hell Edition</p>
+    </header>
+
+    <!-- 主游戏区域 -->
+    <main class="flex-1 container mx-auto px-4 max-w-6xl relative z-10">
+        
+        <!-- 战斗场地 -->
+        <div class="grid md:grid-cols-2 gap-8 mb-8">
+            
+            <!-- 玩家1 -->
+            <div id="player1-card" class="bg-gradient-to-b from-blue-900/20 to-black/40 border-2 border-blue-500/30 rounded-2xl p-6 relative overflow-hidden backdrop-blur-sm">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent"></div>
+                
+                <!-- 角色信息 -->
+                <div class="flex items-center gap-4 mb-4">
+                    <div class="w-20 h-20 rounded-full bg-gradient-to-br from-blue-600 to-blue-900 flex items-center justify-center text-4xl shadow-[0_0_30px_rgba(0,100,255,0.5)] avatar-pulse text-blue-400">
+                        ⚔️
+                    </div>
+                    <div>
+                        <h2 class="text-2xl font-bold text-blue-400">玩家1</h2>
+                        <p class="text-blue-300/60 text-sm">人类战士</p>
+                    </div>
+                </div>
+
+                <!-- 生命值 -->
+                <div class="mb-2 flex justify-between text-sm">
+                    <span class="text-blue-300">生命值</span>
+                    <span id="player1-hp-text" class="font-bold text-blue-400">100/100</span>
+                </div>
+                <div class="h-6 bg-black/50 rounded-full overflow-hidden border border-blue-500/30 relative">
+                    <div id="player1-hp-bar" class="health-bar-fill player-hp h-full rounded-full" style="width: 100%"></div>
+                    <div class="absolute inset-0 bg-gradient-to-b from-transparent to-black/20"></div>
+                </div>
+
+                <!-- 攻击按钮 -->
+                <div class="grid grid-cols-2 gap-3 mt-6">
+                    <button onclick="game.playerAttack('quick')" class="attack-btn bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white py-3 px-4 rounded-lg font-bold border border-blue-400/30 group">
+                        <div class="text-sm">⚡ 快速斩击</div>
+                        <div class="text-xs text-blue-200/70 mt-1">伤害 8-12 | 命中率高</div>
+                    </button>
+                    <button onclick="game.playerAttack('heavy')" class="attack-btn bg-gradient-to-r from-blue-800 to-indigo-700 hover:from-blue-700 hover:to-indigo-600 text-white py-3 px-4 rounded-lg font-bold border border-blue-400/30 group">
+                        <div class="text-sm">🗡️ 重击</div>
+                        <div class="text-xs text-blue-200/70 mt-1">伤害 15-25 | 可能miss</div>
+                    </button>
+                    <button onclick="game.playerAttack('fire')" class="attack-btn bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white py-3 px-4 rounded-lg font-bold border border-orange-400/30 group">
+                        <div class="text-sm">🔥 地狱火</div>
+                        <div class="text-xs text-orange-200/70 mt-1">伤害 20-30 | 消耗生命</div>
+                    </button>
+                    <button onclick="game.playerAttack('heal')" class="attack-btn bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-500 hover:to-teal-500 text-white py-3 px-4 rounded-lg font-bold border border-green-400/30 group">
+                        <div class="text-sm">💚 生命汲取</div>
+                        <div class="text-xs text-green-200/70 mt-1">恢复 10-15 | 伤害5-8</div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 地狱AI -->
+            <div id="ai-card" class="bg-gradient-to-b from-red-900/20 to-black/40 border-2 border-red-500/30 rounded-2xl p-6 relative overflow-hidden backdrop-blur-sm">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
+                
+                <!-- AI信息 -->
+                <div class="flex items-center gap-4 mb-4 flex-row-reverse text-right">
+                    <div class="w-20 h-20 rounded-full bg-gradient-to-br from-red-600 to-red-900 flex items-center justify-center text-4xl shadow-[0_0_30px_rgba(255,0,0,0.5)] avatar-pulse text-red-400">
+                        👹
+                    </div>
+                    <div>
+                        <h2 class="text-2xl font-bold text-red-400">地狱AI</h2>
+                        <p class="text-red-300/60 text-sm">深渊领主</p>
+                    </div>
+                </div>
+
+                <!-- 生命值 -->
+                <div class="mb-2 flex justify-between text-sm flex-row-reverse">
+                    <span class="text-red-300">生命值</span>
+                    <span id="ai-hp-text" class="font-bold text-red-400">100/100</span>
+                </div>
+                <div class="h-6 bg-black/50 rounded-full overflow-hidden border border-red-500/30 relative">
+                    <div id="ai-hp-bar" class="health-bar-fill ai-hp h-full rounded-full" style="width: 100%"></div>
+                    <div class="absolute inset-0 bg-gradient-to-b from-transparent to-black/20"></div>
+                </div>
+
+                <!-- AI状态显示 -->
+                <div class="mt-6 p-4 bg-black/30 rounded-lg border border-red-500/20 min-h-[140px] flex items-center justify-center">
+                    <div id="ai-thinking" class="text-center hidden">
+                        <div class="inline-block animate-spin text-3xl mb-2">🔥</div>
+                        <p class="text-red-400 animate-pulse">地狱AI正在思考...</p>
+                    </div>
+                    <div id="ai-action" class="text-center">
+                        <p class="text-gray-400 text-sm italic">等待玩家行动...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 战斗记录 -->
+        <div class="bg-black/40 border border-gray-700 rounded-xl p-4 backdrop-blur-sm">
+            <h3 class="text-lg font-bold mb-3 flex items-center gap-2 text-gray-300">
+                <span>📜</span>
+                <span>战斗记录</span>
+                <span class="text-xs text-gray-500 font-normal ml-auto">最新记录在上</span>
+            </h3>
+            <div id="battle-log" class="battle-log h-48 overflow-y-auto space-y-2 pr-2">
+                <div class="text-gray-500 text-center italic py-8">战斗开始！选择你的攻击方式...</div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- 游戏结束弹窗 -->
+    <div id="game-over" class="fixed inset-0 game-over-overlay z-50 hidden flex items-center justify-center">
+        <div class="bg-gradient-to-b from-gray-900 to-black border-2 border-gray-600 rounded-2xl p-8 max-w-md w-full mx-4 text-center transform scale-100 transition-transform">
+            <div id="game-over-icon" class="text-6xl mb-4">🏆</div>
+            <h2 id="game-over-title" class="text-4xl font-battle mb-2 text-white">胜利！</h2>
+            <p id="game-over-message" class="text-gray-400 mb-6">你战胜了地狱AI！</p>
+            
+            <div class="grid grid-cols-2 gap-4 mb-6 text-sm">
+                <div class="bg-black/40 p-3 rounded-lg border border-gray-700">
+                    <div class="text-gray-500">剩余生命</div>
+                    <div id="final-hp" class="text-2xl font-bold text-blue-400">45</div>
+                </div>
+                <div class="bg-black/40 p-3 rounded-lg border border-gray-700">
+                    <div class="text-gray-500">战斗回合</div>
+                    <div id="final-rounds" class="text-2xl font-bold text-yellow-400">12</div>
+                </div>
+            </div>
+
+            <button onclick="game.restart()" class="w-full bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white py-4 rounded-lg font-bold text-lg transition-all transform hover:scale-105 shadow-[0_0_20px_rgba(255,0,0,0.3)]">
+                🔥 再次挑战地狱 🔥
+            </button>
+        </div>
+    </div>
+
+    <!-- 伤害数字容器 -->
+    <div id="damage-container" class="fixed inset-0 pointer-events-none z-40"></div>
+
+    <script>
+        class BattleGame {
+            constructor() {
+                this.playerHP = 100;
+                this.playerMaxHP = 100;
+                this.aiHP = 100;
+                this.aiMaxHP = 100;
+                this.round = 0;
+                this.isPlayerTurn = true;
+                this.gameOver = false;
+                this.logEntries = [];
+                
+                this.attackTypes = {
+                    quick: { name: '快速斩击', minDmg: 8, maxDmg: 12, accuracy: 95, selfDamage: 0, color: '#3b82f6' },
+                    heavy: { name: '重击', minDmg: 15, maxDmg: 25, accuracy: 75, selfDamage: 0, color: '#1e40af' },
+                    fire: { name: '地狱火', minDmg: 20, maxDmg: 30, accuracy: 85, selfDamage: 5, color: '#ea580c' },
+                    heal: { name: '生命汲取', minDmg: 5, maxDmg: 8, accuracy: 100, selfDamage: -15, color: '#059669' }
+                };
+
+                this.aiAttacks = [
+                    { name: '暗影爪', minDmg: 10, maxDmg: 15, accuracy: 90 },
+                    { name: '深渊烈焰', minDmg: 18, maxDmg: 25, accuracy: 80 },
+                    { name: '灵魂撕裂', minDmg: 25, maxDmg: 35, accuracy: 60 },
+                    { name: '黑暗治愈', minDmg: 0, maxDmg: 0, heal: 15, accuracy: 100 }
+                ];
+            }
+
+            getRandomDamage(min, max) {
+                return Math.floor(Math.random() * (max - min + 1)) + min;
+            }
+
+            checkHit(accuracy) {
+                return Math.random() * 100 <= accuracy;
+            }
+
+            async playerAttack(type) {
+                if (!this.isPlayerTurn || this.gameOver) return;
+
+                const attack = this.attackTypes[type];
+                this.setButtonsDisabled(true);
+                
+                // 播放按钮动画
+                this.animateButton(type);
+                
+                await this.wait(300);
+
+                // 计算伤害
+                let damage = 0;
+                let isHit = this.checkHit(attack.accuracy);
+                let message = '';
+                let isCrit = Math.random() < 0.1; // 10%暴击
+
+                if (isHit) {
+                    damage = this.getRandomDamage(attack.minDmg, attack.maxDmg);
+                    if (isCrit) damage = Math.floor(damage * 1.5);
+                    
+                    // 处理自伤/治疗
+                    if (attack.selfDamage > 0) {
+                        this.playerHP = Math.max(0, this.playerHP - attack.selfDamage);
+                        this.showDamageNumber(attack.selfDamage, 'player1-card', '#ef4444');
+                        this.flashElement('player1-card');
+                    } else if (attack.selfDamage < 0) {
+                        const heal = Math.abs(attack.selfDamage);
+                        this.playerHP = Math.min(this.playerMaxHP, this.playerHP + heal);
+                        this.showDamageNumber(heal, 'player1-card', '#22c55e', true);
+                    }
+
+                    // 造成伤害
+                    if (damage > 0) {
+                        this.aiHP = Math.max(0, this.aiHP - damage);
+                        this.showDamageNumber(damage, 'ai-card', attack.color, false, isCrit);
+                        this.shakeElement('ai-card');
+                        this.flashElement('ai-card');
+                    }
+
+                    message = `使用 ${attack.name}`;
+                    if (isCrit) message += ' [暴击!]';
+                    if (attack.selfDamage > 0) message += ` (自损${attack.selfDamage}生命)`;
+                    if (attack.selfDamage < 0) message += ` (恢复${Math.abs(attack.selfDamage)}生命)`;
+                } else {
+                    message = `${attack.name} 被躲开了！`;
+                }
+
+                this.addLog('player', message, isHit ? damage : 0);
+                this.updateUI();
+
+                if (this.checkGameOver()) return;
+
+                this.isPlayerTurn = false;
+                await this.wait(1000);
+                this.aiTurn();
+            }
+
+            async aiTurn() {
+                if (this.gameOver) return;
+
+                // 显示AI思考
+                document.getElementById('ai-thinking').classList.remove('hidden');
+                document.getElementById('ai-action').classList.add('hidden');
+
+                await this.wait(1500);
+
+                // AI策略：生命值低时更倾向于治疗
+                let availableAttacks = [...this.aiAttacks];
+                if (this.aiHP < 30 && Math.random() < 0.6) {
+                    availableAttacks = availableAttacks.filter(a => a.heal);
+                    if (availableAttacks.length === 0) availableAttacks = [...this.aiAttacks];
+                }
+
+                const attack = availableAttacks[Math.floor(Math.random() * availableAttacks.length)];
+                
+                document.getElementById('ai-thinking').classList.add('hidden');
+                document.getElementById('ai-action').classList.remove('hidden');
+
+                let damage = 0;
+                let isHit = this.checkHit(attack.accuracy);
+                let message = '';
+                let isCrit = Math.random() < 0.15; // AI 15%暴击
+
+                if (attack.heal) {
+                    const heal = attack.heal;
+                    this.aiHP = Math.min(this.aiMaxHP, this.aiHP + heal);
+                    this.showDamageNumber(heal, 'ai-card', '#22c55e', true);
+                    message = `使用 ${attack.name} 恢复了 ${heal} 生命`;
+                } else if (isHit) {
+                    damage = this.getRandomDamage(attack.minDmg, attack.maxDmg);
+                    if (isCrit) damage = Math.floor(damage * 1.5);
+                    
+                    this.playerHP = Math.max(0, this.playerHP - damage);
+                    this.showDamageNumber(damage, 'player1-card', '#ef4444', false, isCrit);
+                    this.shakeElement('player1-card');
+                    this.flashElement('player1-card');
+                    
+                    message = `使用 ${attack.name}`;
+                    if (isCrit) message += ' [暴击!]';
+                } else {
+                    message = `${attack.name} 被躲开了！`;
+                }
+
+                this.addLog('ai', message, damage);
+                this.updateUI();
+
+                if (this.checkGameOver()) return;
+
+                await this.wait(1000);
+                this.isPlayerTurn = true;
+                this.setButtonsDisabled(false);
+                this.round++;
+            }
+
+            checkGameOver() {
+                if (this.playerHP <= 0 || this.aiHP <= 0) {
+                    this.gameOver = true;
+                    const playerWon = this.aiHP <= 0;
+                    
+                    setTimeout(() => {
+                        this.showGameOver(playerWon);
+                    }, 1000);
+                    return true;
+                }
+                return false;
+            }
+
+            showGameOver(playerWon) {
+                const overlay = document.getElementById('game-over');
+                const icon = document.getElementById('game-over-icon');
+                const title = document.getElementById('game-over-title');
+                const message = document.getElementById('game-over-message');
+                const finalHp = document.getElementById('final-hp');
+                const finalRounds = document.getElementById('final-rounds');
+
+                overlay.classList.remove('hidden');
+                
+                if (playerWon) {
+                    icon.textContent = '👑';
+                    title.textContent = '胜利！';
+                    title.className = 'text-4xl font-battle mb-2 text-yellow-400';
+                    message.textContent = '你战胜了地狱AI，证明了你的实力！';
+                    finalHp.textContent = this.playerHP;
+                    finalHp.className = 'text-2xl font-bold text-blue-400';
+                } else {
+                    icon.textContent = '💀';
+                    title.textContent = '战败...';
+                    title.className = 'text-4xl font-battle mb-2 text-red-500';
+                    message.textContent = '你的灵魂已被地狱AI吞噬...';
+                    finalHp.textContent = 0;
+                    finalHp.className = 'text-2xl font-bold text-red-400';
+                }
+                
+                finalRounds.textContent = this.round;
+            }
+
+            restart() {
+                this.playerHP = 100;
+                this.aiHP = 100;
+                this.round = 0;
+                this.isPlayerTurn = true;
+                this.gameOver = false;
+                this.logEntries = [];
+                
+                document.getElementById('game-over').classList.add('hidden');
+                document.getElementById('battle-log').innerHTML = '<div class="text-gray-500 text-center italic py-8">新的战斗开始！选择你的攻击方式...</div>';
+                document.getElementById('ai-action').innerHTML = '<p class="text-gray-400 text-sm italic">等待玩家行动...</p>';
+                
+                this.updateUI();
+                this.setButtonsDisabled(false);
+            }
+
+            updateUI() {
+                // 更新生命值条
+                const playerPercent = (this.playerHP / this.playerMaxHP) * 100;
+                const aiPercent = (this.aiHP / this.aiMaxHP) * 100;
+                
+                document.getElementById('player1-hp-bar').style.width = `${playerPercent}%`;
+                document.getElementById('player1-hp-text').textContent = `${this.playerHP}/${this.playerMaxHP}`;
+                
+                document.getElementById('ai-hp-bar').style.width = `${aiPercent}%`;
+                document.getElementById('ai-hp-text').textContent = `${this.aiHP}/${this.aiMaxHP}`;
+
+                // 低生命值警告
+                if (this.playerHP <= 30) {
+                    document.getElementById('player1-hp-bar').classList.add('animate-pulse');
+                } else {
+                    document.getElementById('player1-hp-bar').classList.remove('animate-pulse');
+                }
+            }
+
+            addLog(who, action, damage) {
+                const log = document.getElementById('battle-log');
+                const entry = document.createElement('div');
+                const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+                
+                let colorClass = who === 'player' ? 'text-blue-400' : 'text-red-400';
+                let name = who === 'player' ? '玩家1' : '地狱AI';
+                let damageText = damage > 0 ? `<span class="text-yellow-400 font-bold">-${damage}</span>` : '';
+                
+                entry.className = 'flex items-center gap-3 p-3 bg-white/5 rounded-lg border-l-4 ' + 
+                    (who === 'player' ? 'border-blue-500' : 'border-red-500') + ' animate-[fadeIn_0.3s_ease-out]';
+                
+                entry.innerHTML = `
+                    <span class="text-xs text-gray-500 font-mono">${time}</span>
+                    <span class="font-bold ${colorClass}">${name}</span>
+                    <span class="text-gray-300 flex-1">${action}</span>
+                    ${damageText}
+                `;
+                
+                // 插入到顶部
+                if (log.children.length === 1 && log.children[0].classList.contains('text-center')) {
+                    log.innerHTML = '';
+                }
+                
+                log.insertBefore(entry, log.firstChild);
+                
+                // 限制记录数量
+                while (log.children.length > 20) {
+                    log.removeChild(log.lastChild);
+                }
+            }
+
+            showDamageNumber(damage, targetId, color, isHeal = false, isCrit = false) {
+                const target = document.getElementById(targetId);
+                const rect = target.getBoundingClientRect();
+                const container = document.getElementById('damage-container');
+                
+                const num = document.createElement('div');
+                num.className = 'damage-text';
+                num.style.color = color;
+                num.style.left = `${rect.left + rect.width / 2 + (Math.random() * 40 - 20)}px`;
+                num.style.top = `${rect.top + rect.height / 3}px`;
+                
+                if (isCrit) {
+                    num.style.fontSize = '3rem';
+                    num.textContent = isHeal ? `+${damage}★` : `${damage}★`;
+                    num.style.textShadow = '0 0 20px currentColor';
+                } else {
+                    num.textContent = isHeal ? `+${damage}` : damage;
+                }
+                
+                container.appendChild(num);
+                setTimeout(() => num.remove(), 1000);
+            }
+
+            shakeElement(id) {
+                const el = document.getElementById(id);
+                el.classList.remove('shake');
+                void el.offsetWidth; // 触发重排
+                el.classList.add('shake');
+            }
+
+            flashElement(id) {
+                const el = document.getElementById(id);
+                el.classList.add('flash');
+                setTimeout(() => el.classList.remove('flash'), 300);
+            }
+
+            animateButton(type) {
+                // 按钮已经在CSS中处理了hover效果，这里可以添加额外逻辑
+            }
+
+            setButtonsDisabled(disabled) {
+                const buttons = document.querySelectorAll('.attack-btn');
+                buttons.forEach(btn => btn.disabled = disabled);
+            }
+
+            wait(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+        }
+
+        // 初始化游戏
+        const game = new BattleGame();
+
+        // 添加键盘支持
+        document.addEventListener('keydown', (e) => {
+            if (!game.isPlayerTurn || game.gameOver) return;
+            
+            switch(e.key) {
+                case '1': game.playerAttack('quick'); break;
+                case '2': game.playerAttack('heavy'); break;
+                case '3': game.playerAttack('fire'); break;
+                case '4': game.playerAttack('heal'); break;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>国家领土模拟器 - 完整版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap');
+        
+        * {
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+        
+        .resource-card {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(147, 51, 234, 0.2) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .resource-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3);
+        }
+        
+        .game-btn {
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .game-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: left 0.5s;
+        }
+        
+        .game-btn:hover::before {
+            left: 100%;
+        }
+        
+        .game-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.5);
+        }
+        
+        .game-btn:active {
+            transform: translateY(0);
+        }
+        
+        .game-btn.danger {
+            background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+        }
+        
+        .game-btn.success {
+            background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
+        }
+        
+        .game-btn.warning {
+            background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+        }
+        
+        .territory-cell {
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .territory-cell:hover {
+            transform: scale(1.05);
+            z-index: 10;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+        }
+        
+        .territory-cell.owned {
+            border: 2px solid rgba(255, 255, 255, 0.5);
+        }
+        
+        .territory-cell.city::after {
+            content: '★';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 20px;
+            color: #fbbf24;
+            text-shadow: 0 0 10px rgba(251, 191, 36, 0.8);
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+        
+        .modal.active {
+            display: flex;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .modal-content {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            animation: slideUp 0.3s ease;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+        }
+        
+        @keyframes slideUp {
+            from { transform: translateY(50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        .log-entry {
+            animation: slideIn 0.3s ease;
+            border-left: 3px solid transparent;
+        }
+        
+        .log-entry:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(-20px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        .progress-bar {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 9999px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            border-radius: 9999px;
+            transition: width 0.5s ease;
+        }
+        
+        .diplomacy-card {
+            transition: all 0.3s ease;
+        }
+        
+        .diplomacy-card:hover {
+            transform: translateX(5px);
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .shake {
+            animation: shake 0.5s ease;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        
+        /* 网格地图样式 */
+        .game-map {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 4px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 100;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: none;
+        }
+        
+        .hidden-menu {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 50;
+        }
+        
+        .dev-btn {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            color: #fca5a5;
+            font-size: 10px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            opacity: 0.3;
+            transition: opacity 0.3s;
+        }
+        
+        .dev-btn:hover {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="text-white">
+
+    <!-- 游戏标题 -->
+    <header class="p-6 text-center relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-r from-blue-600/20 via-purple-600/20 to-pink-600/20 blur-3xl"></div>
+        <h1 class="text-4xl md:text-5xl font-black relative z-10 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400">
+            国家领土模拟器
+        </h1>
+        <p class="text-gray-400 mt-2 text-sm">完整版 v2.0</p>
+    </header>
+
+    <!-- 资源栏 -->
+    <div class="max-w-7xl mx-auto px-4 mb-6">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="resource-card rounded-xl p-4 flex items-center space-x-3">
+                <div class="w-12 h-12 rounded-full bg-yellow-500/20 flex items-center justify-center text-2xl">🪙</div>
+                <div>
+                    <p class="text-xs text-gray-400">金币</p>
+                    <p class="text-xl font-bold text-yellow-400" id="gold">1000</p>
+                </div>
+            </div>
+            <div class="resource-card rounded-xl p-4 flex items-center space-x-3">
+                <div class="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center text-2xl">👥</div>
+                <div>
+                    <p class="text-xs text-gray-400">人口</p>
+                    <p class="text-xl font-bold text-blue-400" id="population">100</p>
+                </div>
+            </div>
+            <div class="resource-card rounded-xl p-4 flex items-center space-x-3">
+                <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center text-2xl">⚔️</div>
+                <div>
+                    <p class="text-xs text-gray-400">军队</p>
+                    <p class="text-xl font-bold text-red-400" id="army">50</p>
+                </div>
+            </div>
+            <div class="resource-card rounded-xl p-4 flex items-center space-x-3">
+                <div class="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center text-2xl">😊</div>
+                <div>
+                    <p class="text-xs text-gray-400">幸福度</p>
+                    <div class="w-24 progress-bar h-2 mt-1">
+                        <div class="progress-fill bg-green-500" id="happiness-bar" style="width: 80%"></div>
+                    </div>
+                    <p class="text-sm font-bold text-green-400 mt-1" id="happiness">80%</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主游戏区域 -->
+    <div class="max-w-7xl mx-auto px-4 flex flex-col lg:flex-row gap-6">
+        
+        <!-- 左侧控制面板 -->
+        <aside class="lg:w-64 space-y-4">
+            <div class="glass-panel rounded-xl p-6">
+                <h2 class="text-lg font-bold mb-4 text-purple-400 flex items-center">
+                    <span class="mr-2">🎮</span> 控制面板
+                </h2>
+                
+                <div class="space-y-3">
+                    <button onclick="game.buildCity()" class="game-btn w-full py-3 px-4 rounded-lg font-medium text-sm flex items-center justify-between group">
+                        <span>🏛️ 建造城市</span>
+                        <span class="text-xs opacity-70">-500🪙</span>
+                    </button>
+                    
+                    <button onclick="game.recruitArmy()" class="game-btn success w-full py-3 px-4 rounded-lg font-medium text-sm flex items-center justify-between">
+                        <span>⚔️ 招募军队</span>
+                        <span class="text-xs opacity-70">-100🪙</span>
+                    </button>
+                    
+                    <button onclick="game.openDiplomacy()" class="game-btn warning w-full py-3 px-4 rounded-lg font-medium text-sm flex items-center justify-between">
+                        <span>🤝 外交</span>
+                        <span class="text-xs opacity-70">查看</span>
+                    </button>
+                    
+                    <button onclick="game.buyTerritory()" class="game-btn w-full py-3 px-4 rounded-lg font-medium text-sm flex items-center justify-between">
+                        <span>🗺️ 购买领土</span>
+                        <span class="text-xs opacity-70">-300🪙</span>
+                    </button>
+                    
+                    <button onclick="game.nextTurn()" class="game-btn danger w-full py-3 px-4 rounded-lg font-medium text-sm mt-4 pulse">
+                        <span>⏭️ 结束回合</span>
+                    </button>
+                </div>
+                
+                <div class="mt-6 pt-6 border-t border-gray-700">
+                    <h3 class="text-sm font-bold text-gray-400 mb-2">国家信息</h3>
+                    <p class="text-sm text-gray-300">国家: <span id="nation-name" class="text-white font-bold">未命名</span></p>
+                    <p class="text-sm text-gray-300">首都: <span id="capital-name" class="text-white">未设定</span></p>
+                    <p class="text-sm text-gray-300">回合: <span id="turn-count" class="text-blue-400 font-bold">1</span></p>
+                </div>
+            </div>
+            
+            <!-- 统计信息 -->
+            <div class="glass-panel rounded-xl p-4">
+                <h3 class="text-sm font-bold text-gray-400 mb-3">📊 统计数据</h3>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">领土面积</span>
+                        <span class="text-white" id="territory-count">1</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">城市数量</span>
+                        <span class="text-white" id="city-count">1</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">每回合收入</span>
+                        <span class="text-green-400" id="income">+100🪙</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 中央游戏画面 -->
+        <main class="flex-1">
+            <div class="glass-panel rounded-xl p-6 h-full">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-bold text-gray-300">🗺️ 领土地图</h2>
+                    <div class="flex space-x-2 text-xs">
+                        <span class="flex items-center"><span class="w-3 h-3 bg-gray-600 rounded mr-1"></span> 空地</span>
+                        <span class="flex items-center"><span class="w-3 h-3 bg-blue-600 rounded mr-1"></span> 你的领土</span>
+                        <span class="flex items-center"><span class="w-3 h-3 bg-red-600 rounded mr-1"></span> 敌对</span>
+                    </div>
+                </div>
+                
+                <div id="game-map" class="game-map">
+                    <!-- 地图格子由JS生成 -->
+                </div>
+                
+                <div class="mt-4 flex justify-between items-center text-sm text-gray-400">
+                    <span>点击空地购买领土 (300🪙)</span>
+                    <span id="selected-terrain">未选择</span>
+                </div>
+            </div>
+        </main>
+
+        <!-- 右侧事件日志 -->
+        <aside class="lg:w-80">
+            <div class="glass-panel rounded-xl p-6 h-full max-h-[600px] flex flex-col">
+                <h2 class="text-lg font-bold mb-4 text-orange-400 flex items-center">
+                    <span class="mr-2">📜</span> 事件日志
+                </h2>
+                <div id="event-log" class="flex-1 overflow-y-auto space-y-2 pr-2 text-sm">
+                    <div class="log-entry p-3 rounded bg-blue-500/10 border-l-4 border-blue-500">
+                        <p class="text-blue-300 font-bold text-xs mb-1">游戏开始</p>
+                        <p class="text-gray-300">欢迎来到国家领土模拟器！请先设置你的国家信息。</p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- 初始设置模态窗口 -->
+    <div id="setup-modal" class="modal active">
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold mb-6 text-center bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">
+                🏛️ 建立你的国家
+            </h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-2">国家名称</label>
+                    <input type="text" id="input-nation" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition" placeholder="例如：华夏帝国">
+                </div>
+                
+                <div>
+                    <label class="block text-sm text-gray-400 mb-2">首都名称</label>
+                    <input type="text" id="input-capital" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition" placeholder="例如：长安">
+                </div>
+                
+                <div>
+                    <label class="block text-sm text-gray-400 mb-2">国家颜色</label>
+                    <div class="flex space-x-3">
+                        <button onclick="selectColor('#3b82f6')" class="w-10 h-10 rounded-full bg-blue-500 ring-2 ring-offset-2 ring-offset-gray-800 ring-blue-500 color-btn"></button>
+                        <button onclick="selectColor('#ef4444')" class="w-10 h-10 rounded-full bg-red-500 ring-offset-2 ring-offset-gray-800 color-btn"></button>
+                        <button onclick="selectColor('#10b981')" class="w-10 h-10 rounded-full bg-green-500 ring-offset-2 ring-offset-gray-800 color-btn"></button>
+                        <button onclick="selectColor('#f59e0b')" class="w-10 h-10 rounded-full bg-yellow-500 ring-offset-2 ring-offset-gray-800 color-btn"></button>
+                        <button onclick="selectColor('#8b5cf6')" class="w-10 h-10 rounded-full bg-purple-500 ring-offset-2 ring-offset-gray-800 color-btn"></button>
+                    </div>
+                </div>
+            </div>
+            
+            <button onclick="game.init()" class="game-btn w-full mt-6 py-3 rounded-lg font-bold text-lg">
+                开始统治
+            </button>
+        </div>
+    </div>
+
+    <!-- 外交模态窗口 -->
+    <div id="diplomacy-modal" class="modal">
+        <div class="modal-content max-w-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-purple-400">🌍 外交关系</h2>
+                <button onclick="closeModal('diplomacy-modal')" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+            </div>
+            
+            <div class="space-y-4 max-h-[400px] overflow-y-auto" id="diplomacy-list">
+                <!-- 动态生成外交关系 -->
+            </div>
+            
+            <div class="mt-6 pt-4 border-t border-gray-700">
+                <h3 class="text-sm font-bold text-gray-400 mb-3">外交操作</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="game.diplomacyAction('trade')" class="game-btn py-2 rounded text-sm">
+                        💰 贸易协定 (-200🪙, +关系)
+                    </button>
+                    <button onclick="game.diplomacyAction('alliance')" class="game-btn success py-2 rounded text-sm">
+                        🤝 结盟 (-500🪙, 军事互助)
+                    </button>
+                    <button onclick="game.diplomacyAction('insult')" class="game-btn warning py-2 rounded text-sm">
+                        😠 侮辱 (免费, -关系)
+                    </button>
+                    <button onclick="game.diplomacyAction('war')" class="game-btn danger py-2 rounded text-sm">
+                        ⚔️ 宣战 (消耗军队)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 破解/开发者菜单 -->
+    <div class="hidden-menu">
+        <button onclick="toggleDevMenu()" class="dev-btn">DEV</button>
+        <div id="dev-menu" class="hidden mt-2 space-y-2 bg-gray-900 p-3 rounded border border-red-500/30">
+            <button onclick="game.cheat('gold')" class="block w-full text-left text-xs text-red-400 hover:text-red-300">+1000 金币</button>
+            <button onclick="game.cheat('army')" class="block w-full text-left text-xs text-red-400 hover:text-red-300">+100 军队</button>
+            <button onclick="game.cheat('happy')" class="block w-full text-left text-xs text-red-400 hover:text-red-300">+20 幸福度</button>
+            <button onclick="game.cheat('territory')" class="block w-full text-left text-xs text-red-400 hover:text-red-300">占领所有领土</button>
+        </div>
+    </div>
+
+    <!-- 提示框 -->
+    <div id="tooltip" class="tooltip"></div>
+
+    <script>
+        // 游戏状态
+        const game = {
+            nation: '',
+            capital: '',
+            color: '#3b82f6',
+            gold: 1000,
+            population: 100,
+            army: 50,
+            happiness: 80,
+            turn: 1,
+            cities: 1,
+            ownedTerritories: new Set([60]), // 初始中心位置
+            mapSize: 144, // 12x12
+            selectedColor: '#3b82f6',
+            otherNations: [
+                { name: '北方王国', relation: 50, color: '#ef4444', strength: 80 },
+                { name: '东方联盟', relation: 30, color: '#10b981', strength: 120 },
+                { name: '西方部落', relation: 70, color: '#f59e0b', strength: 60 },
+                { name: '南方帝国', relation: 20, color: '#8b5cf6', strength: 150 }
+            ],
+            
+            init() {
+                const nationInput = document.getElementById('input-nation').value || '神秘国度';
+                const capitalInput = document.getElementById('input-capital').value || '王城';
+                
+                this.nation = nationInput;
+                this.capital = capitalInput;
+                this.color = this.selectedColor;
+                
+                document.getElementById('nation-name').textContent = this.nation;
+                document.getElementById('capital-name').textContent = this.capital;
+                
+                closeModal('setup-modal');
+                this.generateMap();
+                this.addLog('国家建立', `${this.nation}在${this.capital}正式成立！`, 'green');
+                this.updateUI();
+            },
+            
+            generateMap() {
+                const mapEl = document.getElementById('game-map');
+                mapEl.innerHTML = '';
+                
+                for (let i = 0; i < this.mapSize; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'territory-cell aspect-square rounded-lg bg-gray-800 border border-gray-700';
+                    cell.dataset.index = i;
+                    
+                    // 初始中心领土
+                    if (this.ownedTerritories.has(i)) {
+                        cell.classList.add('owned');
+                        cell.style.backgroundColor = this.color;
+                        if (i === 60) cell.classList.add('city');
+                    } else {
+                        // 随机生成其他国家的领土
+                        const rand = Math.random();
+                        if (rand > 0.85) {
+                            const nation = this.otherNations[Math.floor(Math.random() * this.otherNations.length)];
+                            cell.style.backgroundColor = nation.color;
+                            cell.dataset.owner = nation.name;
+                            cell.classList.add('border-gray-600');
+                        }
+                    }
+                    
+                    cell.addEventListener('click', () => this.clickTerritory(i));
+                    cell.addEventListener('mouseenter', (e) => this.showTooltip(e, i));
+                    cell.addEventListener('mouseleave', () => this.hideTooltip());
+                    
+                    mapEl.appendChild(cell);
+                }
+            },
+            
+            clickTerritory(index) {
+                const cell = document.querySelector(`[data-index="${index}"]`);
+                
+                if (this.ownedTerritories.has(index)) {
+                    if (cell.classList.contains('city')) {
+                        this.addLog('城市信息', `这是${this.capital}，人口${this.population}，防御坚固。`, 'blue');
+                    } else {
+                        this.addLog('领土信息', '这是你的领土，可以建造城市。', 'blue');
+                    }
+                } else if (cell.dataset.owner) {
+                    this.addLog('外交警告', `这是${cell.dataset.owner}的领土，无法直接占领！`, 'red');
+                } else {
+                    this.buyTerritory(index);
+                }
+            },
+            
+            buyTerritory(specificIndex = null) {
+                if (this.gold < 300) {
+                    this.addLog('资金不足', '需要300金币购买领土！', 'red');
+                    this.shakeResource('gold');
+                    return;
+                }
+                
+                let targetIndex;
+                if (specificIndex !== null) {
+                    targetIndex = specificIndex;
+                } else {
+                    // 自动购买相邻领土
+                    const adjacent = this.getAdjacentTerritories();
+                    const available = adjacent.filter(i => !this.ownedTerritories.has(i) && !document.querySelector(`[data-index="${i}"]`).dataset.owner);
+                    if (available.length === 0) {
+                        this.addLog('扩张受限', '没有可购买的相邻领土！', 'red');
+                        return;
+                    }
+                    targetIndex = available[Math.floor(Math.random() * available.length)];
+                }
+                
+                this.gold -= 300;
+                this.ownedTerritories.add(targetIndex);
+                const cell = document.querySelector(`[data-index="${targetIndex}"]`);
+                cell.classList.add('owned');
+                cell.style.backgroundColor = this.color;
+                
+                this.addLog('领土扩张', `成功购买新领土！剩余金币：${this.gold}`, 'green');
+                this.updateUI();
+            },
+            
+            getAdjacentTerritories() {
+                const adjacent = [];
+                const cols = 12;
+                this.ownedTerritories.forEach(index => {
+                    const row = Math.floor(index / cols);
+                    const col = index % cols;
+                    
+                    const neighbors = [
+                        index - 1, index + 1, // 左右
+                        index - cols, index + cols, // 上下
+                        index - cols - 1, index - cols + 1, // 左上右上
+                        index + cols - 1, index + cols + 1 // 左下右下
+                    ];
+                    
+                    neighbors.forEach(n => {
+                        if (n >= 0 && n < this.mapSize && !adjacent.includes(n)) {
+                            const nRow = Math.floor(n / cols);
+                            const nCol = n % cols;
+                            if (Math.abs(nRow - row) <= 1 && Math.abs(nCol - col) <= 1) {
+                                adjacent.push(n);
+                            }
+                        }
+                    });
+                });
+                return adjacent;
+            },
+            
+            buildCity() {
+                if (this.gold < 500) {
+                    this.addLog('资金不足', '需要500金币建造城市！', 'red');
+                    this.shakeResource('gold');
+                    return;
+                }
+                
+                // 找到没有城市的领土
+                const available = Array.from(this.ownedTerritories).filter(i => {
+                    return !document.querySelector(`[data-index="${i}"]`).classList.contains('city');
+                });
+                
+                if (available.length === 0) {
+                    this.addLog('建造失败', '没有空地建造新城市，请先扩张领土！', 'red');
+                    return;
+                }
+                
+                this.gold -= 500;
+                const index = available[Math.floor(Math.random() * available.length)];
+                document.querySelector(`[data-index="${index}"]`).classList.add('city');
+                this.cities++;
+                this.population += 50;
+                
+                this.addLog('城市建设', '新城市建立！人口增加50，每回合收入提升。', 'green');
+                this.updateUI();
+            },
+            
+            recruitArmy() {
+                if (this.gold < 100) {
+                    this.addLog('资金不足', '需要100金币招募军队！', 'red');
+                    this.shakeResource('gold');
+                    return;
+                }
+                
+                if (this.population < 10) {
+                    this.addLog('人口不足', '需要至少10人口才能招募军队！', 'red');
+                    return;
+                }
+                
+                this.gold -= 100;
+                this.army += 20;
+                this.population -= 10;
+                
+                this.addLog('军队招募', '招募了20名士兵！人口减少10。', 'blue');
+                this.updateUI();
+            },
+            
+            openDiplomacy() {
+                const list = document.getElementById('diplomacy-list');
+                list.innerHTML = '';
+                
+                this.otherNations.forEach(nation => {
+                    const relationColor = nation.relation > 50 ? 'green' : nation.relation > 20 ? 'yellow' : 'red';
+                    const card = document.createElement('div');
+                    card.className = 'diplomacy-card p-4 rounded-lg bg-gray-800 border border-gray-700 flex justify-between items-center';
+                    card.innerHTML = `
+                        <div class="flex items-center space-x-3">
+                            <div class="w-4 h-4 rounded-full" style="background-color: ${nation.color}"></div>
+                            <div>
+                                <p class="font-bold text-white">${nation.name}</p>
+                                <p class="text-xs text-gray-400">军事实力: ${nation.strength}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-${relationColor}-400 font-bold">${nation.relation}%</div>
+                            <div class="text-xs text-gray-500">关系值</div>
+                        </div>
+                    `;
+                    list.appendChild(card);
+                });
+                
+                openModal('diplomacy-modal');
+            },
+            
+            diplomacyAction(type) {
+                const target = this.otherNations[Math.floor(Math.random() * this.otherNations.length)];
+                
+                switch(type) {
+                    case 'trade':
+                        if (this.gold < 200) {
+                            this.addLog('资金不足', '需要200金币签订贸易协定！', 'red');
+                            return;
+                        }
+                        this.gold -= 200;
+                        target.relation = Math.min(100, target.relation + 15);
+                        this.addLog('外交成功', `与${target.name}签订贸易协定，关系提升！`, 'green');
+                        break;
+                    case 'alliance':
+                        if (this.gold < 500) {
+                            this.addLog('资金不足', '需要500金币结盟！', 'red');
+                            return;
+                        }
+                        this.gold -= 500;
+                        target.relation = Math.min(100, target.relation + 30);
+                        this.addLog('外交突破', `与${target.name}结成同盟！`, 'green');
+                        break;
+                    case 'insult':
+                        target.relation = Math.max(0, target.relation - 20);
+                        this.happiness = Math.min(100, this.happiness + 5);
+                        this.addLog('外交事件', `侮辱了${target.name}的使者，国内民心高涨但外交关系恶化！`, 'yellow');
+                        break;
+                    case 'war':
+                        if (this.army < 50) {
+                            this.addLog('军力不足', '需要至少50军队才能宣战！', 'red');
+                            return;
+                        }
+                        const losses = Math.floor(Math.random() * 30) + 10;
+                        this.army -= losses;
+                        if (this.army > target.strength * 0.8) {
+                            this.gold += 500;
+                            this.happiness += 10;
+                            this.addLog('战争胜利', `击败${target.name}！获得赔款500金币，损失${losses}士兵。`, 'green');
+                        } else {
+                            this.happiness -= 15;
+                            this.addLog('战争失利', `被${target.name}击退！损失${losses}士兵，民心下降。`, 'red');
+                        }
+                        target.relation = 0;
+                        break;
+                }
+                
+                this.openDiplomacy(); // 刷新
+                this.updateUI();
+            },
+            
+            nextTurn() {
+                this.turn++;
+                
+                // 收入计算
+                const income = this.cities * 100 + 50;
+                this.gold += income;
+                this.population += this.cities * 10;
+                
+                // 随机事件
+                if (Math.random() > 0.7) {
+                    this.randomEvent();
+                }
+                
+                // AI行动
+                this.aiAction();
+                
+                // 幸福度衰减
+                this.happiness = Math.max(0, this.happiness - 2);
+                
+                this.addLog('回合结束', `第${this.turn}回合开始。收入${income}金币。`, 'blue');
+                this.updateUI();
+            },
+            
+            randomEvent() {
+                const events = [
+                    { text: '丰收！粮食产量大增。', effect: () => { this.gold += 200; this.happiness += 5; }, type: 'green' },
+                    { text: '边境冲突！需要增援。', effect: () => { this.army -= 10; this.happiness -= 5; }, type: 'red' },
+                    { text: '商队来访！贸易繁荣。', effect: () => { this.gold += 300; }, type: 'green' },
+                    { text: '瘟疫爆发！人口减少。', effect: () => { this.population -= 20; this.happiness -= 10; }, type: 'red' },
+                    { text: '发现矿藏！资源增加。', effect: () => { this.gold += 400; }, type: 'green' }
+                ];
+                
+                const event = events[Math.floor(Math.random() * events.length)];
+                event.effect();
+                this.addLog('随机事件', event.text, event.type);
+            },
+            
+            aiAction() {
+                this.otherNations.forEach(nation => {
+                    if (Math.random() > 0.8 && nation.relation < 30) {
+                        this.addLog('外交警告', `${nation.name}在边境集结军队！`, 'red');
+                    }
+                });
+            },
+            
+            cheat(type) {
+                switch(type) {
+                    case 'gold':
+                        this.gold += 1000;
+                        this.addLog('作弊', '获得1000金币！', 'purple');
+                        break;
+                    case 'army':
+                        this.army += 100;
+                        this.addLog('作弊', '获得100军队！', 'purple');
+                        break;
+                    case 'happy':
+                        this.happiness = Math.min(100, this.happiness + 20);
+                        this.addLog('作弊', '幸福度提升20！', 'purple');
+                        break;
+                    case 'territory':
+                        for (let i = 0; i < this.mapSize; i++) {
+                            if (!document.querySelector(`[data-index="${i}"]`).dataset.owner) {
+                                this.ownedTerritories.add(i);
+                                const cell = document.querySelector(`[data-index="${i}"]`);
+                                cell.classList.add('owned');
+                                cell.style.backgroundColor = this.color;
+                            }
+                        }
+                        this.addLog('作弊', '占领所有可用领土！', 'purple');
+                        break;
+                }
+                this.updateUI();
+            },
+            
+            addLog(title, content, color = 'gray') {
+                const log = document.getElementById('event-log');
+                const entry = document.createElement('div');
+                entry.className = `log-entry p-3 rounded bg-${color}-500/10 border-l-4 border-${color}-500`;
+                
+                const colors = {
+                    green: 'text-green-300',
+                    red: 'text-red-300',
+                    blue: 'text-blue-300',
+                    yellow: 'text-yellow-300',
+                    purple: 'text-purple-300',
+                    gray: 'text-gray-300'
+                };
+                
+                entry.innerHTML = `
+                    <p class="${colors[color]} font-bold text-xs mb-1">${title}</p>
+                    <p class="text-gray-300 text-xs">${content}</p>
+                `;
+                
+                log.insertBefore(entry, log.firstChild);
+                
+                // 限制日志数量
+                while (log.children.length > 20) {
+                    log.removeChild(log.lastChild);
+                }
+            },
+            
+            updateUI() {
+                document.getElementById('gold').textContent = this.gold;
+                document.getElementById('population').textContent = this.population;
+                document.getElementById('army').textContent = this.army;
+                document.getElementById('happiness').textContent = this.happiness + '%';
+                document.getElementById('happiness-bar').style.width = this.happiness + '%';
+                document.getElementById('turn-count').textContent = this.turn;
+                document.getElementById('territory-count').textContent = this.ownedTerritories.size;
+                document.getElementById('city-count').textContent = this.cities;
+                document.getElementById('income').textContent = `+${this.cities * 100 + 50}🪙`;
+                
+                // 更新幸福度颜色
+                const happyBar = document.getElementById('happiness-bar');
+                if (this.happiness > 60) happyBar.className = 'progress-fill bg-green-500';
+                else if (this.happiness > 30) happyBar.className = 'progress-fill bg-yellow-500';
+                else happyBar.className = 'progress-fill bg-red-500';
+            },
+            
+            shakeResource(type) {
+                const el = document.getElementById(type);
+                el.parentElement.parentElement.classList.add('shake');
+                setTimeout(() => {
+                    el.parentElement.parentElement.classList.remove('shake');
+                }, 500);
+            },
+            
+            showTooltip(e, index) {
+                const tooltip = document.getElementById('tooltip');
+                const cell = document.querySelector(`[data-index="${index}"]`);
+                
+                let text = '';
+                if (this.ownedTerritories.has(index)) {
+                    text = cell.classList.contains('city') ? '你的城市' : '你的领土';
+                } else if (cell.dataset.owner) {
+                    text = `${cell.dataset.owner}的领土`;
+                } else {
+                    text = '无主之地 (300🪙)';
+                }
+                
+                tooltip.textContent = text;
+                tooltip.style.display = 'block';
+                tooltip.style.left = e.pageX + 10 + 'px';
+                tooltip.style.top = e.pageY - 30 + 'px';
+            },
+            
+            hideTooltip() {
+                document.getElementById('tooltip').style.display = 'none';
+            }
+        };
+        
+        // 辅助函数
+        function selectColor(color) {
+            game.selectedColor = color;
+            document.querySelectorAll('.color-btn').forEach(btn => {
+                btn.classList.remove('ring-2');
+            });
+            event.target.classList.add('ring-2');
+        }
+        
+        function openModal(id) {
+            document.getElementById(id).classList.add('active');
+        }
+        
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+        
+        function toggleDevMenu() {
+            const menu = document.getElementById('dev-menu');
+            menu.classList.toggle('hidden');
+        }
+        
+        // 键盘快捷键
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal('diplomacy-modal');
+            }
+            if (e.key === 'd' && e.ctrlKey) {
+                e.preventDefault();
+                toggleDevMenu();
+            }
+        });
+        
+        // 防止空格键滚动页面
+        window.addEventListener('keydown', function(e) {
+            if(e.keyCode === 32 && e.target === document.body) {
+                e.preventDefault();
+            }
+        });
+    </script>
+</body>
+</html>
+领土

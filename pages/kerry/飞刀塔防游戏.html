@@ -1,0 +1,836 @@
+飞刀城堡防御
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>飞刀塔防游戏</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: white;
+        }
+        
+        #gameContainer {
+            position: relative;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        #gameCanvas {
+            background: #2d3436;
+            display: block;
+            cursor: grab;
+        }
+        
+        #gameCanvas:active {
+            cursor: grabbing;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            pointer-events: none;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        #score {
+            font-size: 32px;
+            font-weight: bold;
+            color: #fff;
+        }
+        
+        #health {
+            font-size: 24px;
+            color: #ff6b6b;
+        }
+        
+        #gameOver, #victoryScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            display: none;
+            border: 3px solid #74b9ff;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        
+        #victoryScreen {
+            border: 3px solid #00b894;
+        }
+        
+        #gameOver h2 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #ff6b6b;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        
+        #victoryScreen h2 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #00b894;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        
+        #finalScore, #victoryScore {
+            font-size: 36px;
+            margin-bottom: 30px;
+            color: #74b9ff;
+        }
+        
+        #restartBtn, #playAgainBtn {
+            background: linear-gradient(45deg, #74b9ff, #0984e3);
+            border: none;
+            padding: 15px 40px;
+            font-size: 24px;
+            color: white;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.3s, box-shadow 0.3s;
+            text-transform: uppercase;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+        
+        #playAgainBtn {
+            background: linear-gradient(45deg, #00b894, #00cec9);
+        }
+        
+        #restartBtn:hover, #playAgainBtn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 5px 20px rgba(116, 185, 255, 0.5);
+        }
+        
+        #startScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            border: 3px solid #74b9ff;
+        }
+        
+        #startScreen h1 {
+            font-size: 42px;
+            margin-bottom: 20px;
+            background: linear-gradient(45deg, #74b9ff, #a29bfe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        #startScreen p {
+            font-size: 18px;
+            margin-bottom: 30px;
+            color: #b2bec3;
+            line-height: 1.6;
+        }
+        
+        #startBtn {
+            background: linear-gradient(45deg, #00b894, #00cec9);
+            border: none;
+            padding: 15px 40px;
+            font-size: 24px;
+            color: white;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.3s;
+            font-weight: bold;
+        }
+        
+        #startBtn:hover {
+            transform: scale(1.1);
+        }
+
+        #progressBar {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            height: 20px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid #74b9ff;
+        }
+
+        #progressFill {
+            height: 100%;
+            background: linear-gradient(90deg, #00b894, #00cec9);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        #progressText {
+            position: absolute;
+            bottom: 45px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 16px;
+            color: #fff;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        #knifeCount {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 20px;
+            color: #74b9ff;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div id="ui">
+            <div id="score">击杀: 0 / 100</div>
+            <div id="health">生命: ❤️❤️❤️</div>
+        </div>
+        
+        <div id="knifeCount">🗡️ x 5</div>
+        
+        <div id="progressText">胜利进度</div>
+        <div id="progressBar">
+            <div id="progressFill"></div>
+        </div>
+        
+        <div id="startScreen">
+            <h1>🗡️ 飞刀塔防游戏</h1>
+            <p>拖动蓝色城堡移动位置<br>开局5把飞刀，每杀10个敌人增加1把并加速<br>击杀100个敌人获得胜利！</p>
+            <button id="startBtn">开始游戏</button>
+        </div>
+        
+        <div id="gameOver">
+            <h2>游戏结束</h2>
+            <div id="finalScore">最终击杀: 0</div>
+            <button id="restartBtn">重新开始</button>
+        </div>
+
+        <div id="victoryScreen">
+            <h2>🎉 胜利！</h2>
+            <div id="victoryScore">总击杀: 100</div>
+            <button id="playAgainBtn">再玩一次</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const healthElement = document.getElementById('health');
+        const knifeCountElement = document.getElementById('knifeCount');
+        const progressFill = document.getElementById('progressFill');
+        const gameOverScreen = document.getElementById('gameOver');
+        const victoryScreen = document.getElementById('victoryScreen');
+        const finalScoreElement = document.getElementById('finalScore');
+        const startScreen = document.getElementById('startScreen');
+        const startBtn = document.getElementById('startBtn');
+        const restartBtn = document.getElementById('restartBtn');
+        const playAgainBtn = document.getElementById('playAgainBtn');
+
+        // 游戏状态
+        let gameRunning = false;
+        let score = 0;
+        let health = 3;
+        let animationId;
+        let lastTime = 0;
+        let enemySpawnTimer = 0;
+        let enemySpawnInterval = 2000;
+        let baseRotationSpeed = 0.04;
+        let currentRotationSpeed = 0.04;
+
+        // 城堡对象
+        const castle = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 40,
+            color: '#0984e3',
+            isDragging: false,
+            glow: 0
+        };
+
+        // 飞刀系统 - 动态管理
+        let knives = [];
+        let knifeRadius = 75; // 稍微增大初始半径以容纳5把刀
+        let knifeAngle = 0;
+        const maxKnives = 15; // 最多15把飞刀（从5开始，杀100个敌人最多增加10把）
+        const initialKnifeCount = 5; // 初始5把飞刀
+
+        // 初始化飞刀
+        function initKnives(count) {
+            knives = [];
+            for (let i = 0; i < count; i++) {
+                knives.push({
+                    angle: (Math.PI * 2 / count) * i,
+                    length: 35,
+                    width: 10,
+                    x: 0,
+                    y: 0
+                });
+            }
+        }
+
+        // 敌人数组
+        let enemies = [];
+        let particles = [];
+        let mouseX = 0;
+        let mouseY = 0;
+
+        // 升级效果
+        let upgradeEffect = 0;
+
+        // 敌人类
+        class Enemy {
+            constructor() {
+                const side = Math.floor(Math.random() * 4);
+                switch(side) {
+                    case 0:
+                        this.x = Math.random() * canvas.width;
+                        this.y = -30;
+                        break;
+                    case 1:
+                        this.x = canvas.width + 30;
+                        this.y = Math.random() * canvas.height;
+                        break;
+                    case 2:
+                        this.x = Math.random() * canvas.width;
+                        this.y = canvas.height + 30;
+                        break;
+                    case 3:
+                        this.x = -30;
+                        this.y = Math.random() * canvas.height;
+                        break;
+                }
+                
+                this.radius = 15;
+                this.speed = 1.5 + Math.random() * 1.5 + (score / 300);
+                this.color = '#ff3838';
+                this.pulse = 0;
+            }
+
+            update() {
+                const dx = castle.x - this.x;
+                const dy = castle.y - this.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                this.x += (dx / distance) * this.speed;
+                this.y += (dy / distance) * this.speed;
+                
+                this.pulse += 0.1;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                
+                const glowSize = Math.sin(this.pulse) * 5 + 10;
+                const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.radius + glowSize);
+                gradient.addColorStop(0, 'rgba(255, 56, 56, 0.8)');
+                gradient.addColorStop(1, 'rgba(255, 56, 56, 0)');
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius + glowSize, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(-5, -5, 4, 0, Math.PI * 2);
+                ctx.arc(5, -5, 4, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(-5, -5, 2, 0, Math.PI * 2);
+                ctx.arc(5, -5, 2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+            }
+        }
+
+        // 粒子类
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 8;
+                this.vy = (Math.random() - 0.5) * 8;
+                this.life = 1;
+                this.color = color;
+                this.size = Math.random() * 4 + 2;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vx *= 0.98;
+                this.vy *= 0.98;
+                this.life -= 0.02;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // 升级特效粒子
+        class UpgradeParticle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.angle = Math.random() * Math.PI * 2;
+                this.speed = Math.random() * 5 + 2;
+                this.life = 1;
+                this.color = '#00b894';
+            }
+
+            update() {
+                this.x += Math.cos(this.angle) * this.speed;
+                this.y += Math.sin(this.angle) * this.speed;
+                this.life -= 0.02;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 15; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        function createUpgradeEffect() {
+            upgradeEffect = 30;
+            for (let i = 0; i < 30; i++) {
+                particles.push(new UpgradeParticle(castle.x, castle.y));
+            }
+        }
+
+        // 检查升级 - 从5把刀开始计算
+        function checkUpgrade() {
+            // 已经增加了多少把刀（从5开始）
+            const additionalKnives = knives.length - initialKnifeCount;
+            // 下一级需要的击杀数：每增加一把刀需要10杀
+            const killsForNextKnife = (additionalKnives + 1) * 10;
+            
+            if (score >= killsForNextKnife && knives.length < maxKnives) {
+                addKnife();
+            }
+        }
+
+        // 增加飞刀
+        function addKnife() {
+            const newCount = knives.length + 1;
+            initKnives(newCount);
+            
+            // 增加旋转速度
+            currentRotationSpeed = baseRotationSpeed + (newCount - initialKnifeCount) * 0.012;
+            
+            // 调整半径以适应更多飞刀
+            knifeRadius = Math.min(75 + (newCount - initialKnifeCount) * 4, 110);
+            
+            createUpgradeEffect();
+            updateUI();
+        }
+
+        // 绘制城堡
+        function drawCastle() {
+            ctx.save();
+            ctx.translate(castle.x, castle.y);
+            
+            // 升级特效光环
+            if (upgradeEffect > 0) {
+                ctx.strokeStyle = `rgba(0, 184, 148, ${upgradeEffect / 30})`;
+                ctx.lineWidth = 5;
+                ctx.beginPath();
+                ctx.arc(0, 0, castle.radius + 50 - upgradeEffect, 0, Math.PI * 2);
+                ctx.stroke();
+                upgradeEffect--;
+            }
+            
+            castle.glow += 0.05;
+            const glowRadius = 60 + Math.sin(castle.glow) * 10;
+            const gradient = ctx.createRadialGradient(0, 0, 20, 0, 0, glowRadius);
+            gradient.addColorStop(0, 'rgba(9, 132, 227, 0.6)');
+            gradient.addColorStop(1, 'rgba(9, 132, 227, 0)');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(0, 0, glowRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = castle.color;
+            ctx.beginPath();
+            ctx.arc(0, 0, castle.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.strokeStyle = '#74b9ff';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            
+            ctx.fillStyle = '#74b9ff';
+            ctx.beginPath();
+            ctx.arc(0, 0, 20, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(0, 0, 8, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.restore();
+        }
+
+        // 绘制飞刀
+        function drawKnives() {
+            knifeAngle += currentRotationSpeed;
+            
+            knives.forEach((knife, index) => {
+                const angle = knife.angle + knifeAngle;
+                const x = castle.x + Math.cos(angle) * knifeRadius;
+                const y = castle.y + Math.sin(angle) * knifeRadius;
+                
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(angle + Math.PI / 2);
+                
+                // 飞刀轨迹
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(0, -knife.length - 10);
+                ctx.stroke();
+                
+                // 飞刀主体
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.moveTo(0, -knife.length);
+                ctx.lineTo(-knife.width/2, 0);
+                ctx.lineTo(knife.width/2, 0);
+                ctx.closePath();
+                ctx.fill();
+                
+                // 飞刀高光
+                ctx.fillStyle = '#74b9ff';
+                ctx.beginPath();
+                ctx.moveTo(0, -knife.length);
+                ctx.lineTo(-3, -knife.length/2);
+                ctx.lineTo(3, -knife.length/2);
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.restore();
+                
+                knife.x = x;
+                knife.y = y;
+            });
+        }
+
+        // 绘制背景网格
+        function drawGrid() {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+            
+            for (let x = 0; x < canvas.width; x += 50) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            
+            for (let y = 0; y < canvas.height; y += 50) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+        }
+
+        // 碰撞检测
+        function checkCollisions() {
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                let hit = false;
+                
+                // 检测与飞刀的碰撞
+                knives.forEach(knife => {
+                    const dx = enemy.x - knife.x;
+                    const dy = enemy.y - knife.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < enemy.radius + knife.width) {
+                        hit = true;
+                    }
+                });
+                
+                if (hit) {
+                    createExplosion(enemy.x, enemy.y, '#ff3838');
+                    enemies.splice(i, 1);
+                    score++;
+                    
+                    // 检查胜利条件
+                    if (score >= 100) {
+                        victory();
+                        return;
+                    }
+                    
+                    checkUpgrade();
+                    updateUI();
+                    
+                    // 增加难度
+                    enemySpawnInterval = Math.max(400, 2000 - score * 15);
+                    continue;
+                }
+                
+                // 检测与城堡的碰撞
+                const dx = enemy.x - castle.x;
+                const dy = enemy.y - castle.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < enemy.radius + castle.radius) {
+                    createExplosion(enemy.x, enemy.y, '#ff3838');
+                    enemies.splice(i, 1);
+                    health--;
+                    updateHealth();
+                    
+                    canvas.style.transform = `translate(${Math.random()*10-5}px, ${Math.random()*10-5}px)`;
+                    setTimeout(() => {
+                        canvas.style.transform = 'translate(0, 0)';
+                    }, 100);
+                    
+                    if (health <= 0) {
+                        gameOver();
+                    }
+                }
+            }
+        }
+
+        function updateHealth() {
+            let hearts = '';
+            for (let i = 0; i < health; i++) {
+                hearts += '❤️';
+            }
+            healthElement.textContent = `生命: ${hearts}`;
+        }
+
+        function updateUI() {
+            scoreElement.textContent = `击杀: ${score} / 100`;
+            knifeCountElement.textContent = `🗡️ x ${knives.length}`;
+            progressFill.style.width = `${score}%`;
+        }
+
+        // 游戏主循环
+        function gameLoop(timestamp) {
+            if (!gameRunning) return;
+            
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+            
+            ctx.fillStyle = '#2d3436';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            drawGrid();
+            
+            enemySpawnTimer += deltaTime;
+            if (enemySpawnTimer > enemySpawnInterval) {
+                enemies.push(new Enemy());
+                enemySpawnTimer = 0;
+            }
+            
+            enemies.forEach(enemy => {
+                enemy.update();
+                enemy.draw();
+            });
+            
+            drawCastle();
+            drawKnives();
+            
+            // 更新粒子
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+            
+            checkCollisions();
+            
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            cancelAnimationFrame(animationId);
+            finalScoreElement.textContent = `最终击杀: ${score}`;
+            gameOverScreen.style.display = 'block';
+        }
+
+        function victory() {
+            gameRunning = false;
+            cancelAnimationFrame(animationId);
+            victoryScreen.style.display = 'block';
+            
+            // 胜利特效
+            for (let i = 0; i < 50; i++) {
+                setTimeout(() => {
+                    createExplosion(
+                        Math.random() * canvas.width,
+                        Math.random() * canvas.height,
+                        '#00b894'
+                    );
+                }, i * 50);
+            }
+        }
+
+        function resetGame() {
+            score = 0;
+            health = 3;
+            enemies = [];
+            particles = [];
+            knifeAngle = 0;
+            enemySpawnTimer = 0;
+            enemySpawnInterval = 2000;
+            currentRotationSpeed = baseRotationSpeed;
+            knifeRadius = 75;
+            castle.x = canvas.width / 2;
+            castle.y = canvas.height / 2;
+            
+            initKnives(initialKnifeCount); // 初始5把飞刀
+            updateUI();
+            updateHealth();
+            
+            gameOverScreen.style.display = 'none';
+            victoryScreen.style.display = 'none';
+            startScreen.style.display = 'none';
+            
+            gameRunning = true;
+            lastTime = performance.now();
+            gameLoop(lastTime);
+        }
+
+        // 鼠标事件
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const dx = x - castle.x;
+            const dy = y - castle.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < castle.radius + 20) {
+                castle.isDragging = true;
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+            
+            if (castle.isDragging) {
+                castle.x = Math.max(castle.radius, Math.min(canvas.width - castle.radius, mouseX));
+                castle.y = Math.max(castle.radius, Math.min(canvas.height - castle.radius, mouseY));
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            castle.isDragging = false;
+        });
+
+        // 触摸支持
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+            
+            const dx = x - castle.x;
+            const dy = y - castle.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < castle.radius + 20) {
+                castle.isDragging = true;
+            }
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (castle.isDragging) {
+                const rect = canvas.getBoundingClientRect();
+                const touch = e.touches[0];
+                castle.x = Math.max(castle.radius, Math.min(canvas.width - castle.radius, touch.clientX - rect.left));
+                castle.y = Math.max(castle.radius, Math.min(canvas.height - castle.radius, touch.clientY - rect.top));
+            }
+        });
+
+        canvas.addEventListener('touchend', () => {
+            castle.isDragging = false;
+        });
+
+        startBtn.addEventListener('click', resetGame);
+        restartBtn.addEventListener('click', resetGame);
+        playAgainBtn.addEventListener('click', resetGame);
+        canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+        // 初始化
+        initKnives(initialKnifeCount);
+        updateUI();
+    </script>
+</body>
+</html>

@@ -1,0 +1,559 @@
+2D跑酷
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Runner: Cyberpunk Parkour</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Orbitron', sans-serif;
+            touch-action: none;
+        }
+        canvas {
+            display: block;
+        }
+        .neon-text {
+            text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 20px #0ff, 0 0 30px #0ff, 0 0 40px #0ff;
+        }
+        .neon-box {
+            box-shadow: 0 0 5px #0ff, 0 0 10px #0ff, inset 0 0 5px #0ff;
+            border: 1px solid #0ff;
+            background: rgba(0, 20, 40, 0.8);
+        }
+        .neon-btn {
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .neon-btn:hover {
+            background: #0ff;
+            color: #000;
+            box-shadow: 0 0 20px #0ff;
+        }
+        .neon-btn:active {
+            transform: scale(0.95);
+        }
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.2));
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 50;
+            opacity: 0.3;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .interactive {
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body class="text-white select-none">
+
+    <div class="scanlines"></div>
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="ui-layer" class="flex flex-col justify-between p-4">
+        
+        <div id="hud" class="hidden flex justify-between items-start w-full">
+            <div class="flex flex-col">
+                <div class="text-xs text-cyan-300 opacity-70">SCORE</div>
+                <div id="scoreDisplay" class="text-3xl font-bold text-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.8)]">0</div>
+            </div>
+            <div class="flex flex-col items-end">
+                <div class="text-xs text-pink-300 opacity-70">SPEED</div>
+                <div id="speedDisplay" class="text-xl font-bold text-pink-400">100%</div>
+            </div>
+        </div>
+
+        <div id="mainMenu" class="absolute inset-0 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm interactive z-20">
+            <h1 class="text-5xl md:text-7xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 to-blue-600 neon-text text-center italic transform -skew-x-12">
+                NEON<br>RUNNER
+            </h1>
+            <p class="text-cyan-200 mb-8 tracking-widest text-sm md:text-base opacity-80">CYBERPUNK PARKOUR SIMULATION</p>
+
+            <div class="w-full max-w-xs space-y-3 px-4">
+                <p class="text-center text-xs text-gray-400 mb-2">SELECT DIFFICULTY</p>
+                <button id="btn-easy" class="neon-btn w-full py-3 border border-green-400 text-green-400 rounded hover:bg-green-400 hover:text-black font-bold">
+                    非常简单 (EASY)
+                </button>
+                <button id="btn-normal" class="neon-btn w-full py-3 border border-cyan-400 text-cyan-400 rounded hover:bg-cyan-400 hover:text-black font-bold">
+                    普通 (NORMAL)
+                </button>
+                <button id="btn-hard" class="neon-btn w-full py-3 border border-yellow-400 text-yellow-400 rounded hover:bg-yellow-400 hover:text-black font-bold">
+                    困难 (HARD)
+                </button>
+                <button id="btn-boss" class="neon-btn w-full py-3 border border-red-600 text-red-600 rounded hover:bg-red-600 hover:text-black font-bold shadow-[0_0_15px_rgba(220,38,38,0.5)]">
+                    最终 BOSS (IMPOSSIBLE)
+                </button>
+            </div>
+            
+            <div class="mt-8 text-xs text-gray-500 text-center px-4">
+                TAP SCREEN or PRESS SPACE to JUMP<br>
+                DOUBLE JUMP ENABLED
+            </div>
+        </div>
+
+        <div id="gameOverScreen" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-red-900/90 backdrop-blur-md interactive z-30">
+            <h2 class="text-6xl font-black text-red-500 mb-4 neon-text" style="text-shadow: 0 0 20px red;">GAME OVER</h2>
+            
+            <div class="bg-black/50 p-6 rounded-lg border border-red-500/50 text-center mb-8 w-64 mx-4">
+                <div class="text-gray-400 text-sm mb-1">FINAL SCORE</div>
+                <div id="finalScore" class="text-5xl font-bold text-white mb-4">0</div>
+                <div class="h-px w-full bg-red-500/30 my-2"></div>
+                <div class="text-xs text-red-300" id="deathReason">SYSTEM FAILURE</div>
+            </div>
+
+            <button id="btn-retry" class="neon-btn px-8 py-4 bg-red-600 text-white rounded font-bold text-xl shadow-lg hover:scale-105">
+                重新开始 (RETRY)
+            </button>
+        </div>
+
+        <div id="tutorial" class="hidden absolute bottom-20 w-full text-center pointer-events-none animate-pulse">
+            <span class="bg-black/50 text-cyan-300 px-4 py-2 rounded-full border border-cyan-500/30 text-sm">
+                TAP TO JUMP
+            </span>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * AUDIO SYSTEM (Tone.js)
+         */
+        let synth, noiseSynth;
+        let audioInitialized = false;
+
+        async function initAudio() {
+            if (audioInitialized) return;
+            
+            try {
+                // 关键：必须在用户交互后调用 Tone.start()
+                await Tone.start();
+                console.log('Audio is ready');
+                
+                synth = new Tone.PolySynth(Tone.Synth, {
+                    oscillator: { type: "square" },
+                    envelope: { attack: 0.01, decay: 0.1, sustain: 0.1, release: 0.1 }
+                }).toDestination();
+                synth.volume.value = -10;
+
+                noiseSynth = new Tone.NoiseSynth({
+                    noise: { type: 'white' },
+                    envelope: { attack: 0.005, decay: 0.3, sustain: 0 }
+                }).toDestination();
+
+                audioInitialized = true;
+            } catch (e) {
+                console.error('Audio init failed:', e);
+            }
+        }
+
+        function playJumpSound() {
+            if(audioInitialized && synth) synth.triggerAttackRelease(["C5", "E5"], "16n");
+        }
+
+        function playDoubleJumpSound() {
+            if(audioInitialized && synth) synth.triggerAttackRelease(["G5", "B5"], "16n");
+        }
+
+        function playCrashSound() {
+            if(audioInitialized && noiseSynth) noiseSynth.triggerAttackRelease("8n");
+        }
+
+        /**
+         * GAME ENGINE
+         */
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let gameState = 'MENU';
+        let frames = 0;
+        let score = 0;
+        let gameSpeed = 0;
+        let difficultyMultiplier = 1;
+        let animationId;
+
+        const GRAVITY = 0.6;
+        const JUMP_FORCE = -12;
+        const GROUND_HEIGHT = 100;
+
+        let player;
+        let obstacles = [];
+        let particles = [];
+        let backgroundStars = [];
+
+        const DIFFICULTY = {
+            easy: { speed: 5, spawnRate: 120, color: '#4ade80' },
+            normal: { speed: 8, spawnRate: 90, color: '#22d3ee' },
+            hard: { speed: 12, spawnRate: 60, color: '#facc15' },
+            boss: { speed: 18, spawnRate: 40, color: '#dc2626' }
+        };
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            initStars();
+        }
+        window.addEventListener('resize', resize);
+
+        function handleInput(e) {
+            if (e.type === 'keydown' && e.code !== 'Space') return;
+            if (e.type === 'touchstart') e.preventDefault();
+
+            if (gameState === 'PLAYING') {
+                player.jump();
+            }
+        }
+
+        window.addEventListener('keydown', handleInput);
+        canvas.addEventListener('touchstart', handleInput, {passive: false});
+        canvas.addEventListener('mousedown', handleInput);
+
+        class Player {
+            constructor() {
+                this.width = 40;
+                this.height = 40;
+                this.x = canvas.width * 0.15;
+                this.y = canvas.height - GROUND_HEIGHT - this.height;
+                this.dy = 0;
+                this.jumpCount = 0;
+                this.maxJumps = 2;
+                this.grounded = true;
+                this.color = '#0ff';
+                this.rotation = 0;
+                this.trail = [];
+            }
+
+            jump() {
+                if (this.jumpCount < this.maxJumps) {
+                    this.dy = JUMP_FORCE;
+                    this.jumpCount++;
+                    this.grounded = false;
+                    this.rotation = 0;
+                    
+                    for(let i=0; i<5; i++) {
+                        particles.push(new Particle(this.x + this.width/2, this.y + this.height, '#0ff'));
+                    }
+
+                    if(this.jumpCount === 1) playJumpSound();
+                    else playDoubleJumpSound();
+                }
+            }
+
+            update() {
+                this.dy += GRAVITY;
+                this.y += this.dy;
+
+                if (this.y + this.height > canvas.height - GROUND_HEIGHT) {
+                    this.y = canvas.height - GROUND_HEIGHT - this.height;
+                    this.dy = 0;
+                    this.jumpCount = 0;
+                    this.grounded = true;
+                    this.rotation = 0;
+                } else {
+                    this.rotation += 0.15;
+                }
+
+                if (frames % 3 === 0) {
+                    this.trail.push({x: this.x, y: this.y, alpha: 0.6});
+                }
+                if (this.trail.length > 5) this.trail.shift();
+            }
+
+            draw() {
+                this.trail.forEach(t => {
+                    t.x -= gameSpeed;
+                    t.alpha -= 0.05;
+                    ctx.fillStyle = `rgba(0, 255, 255, ${t.alpha})`;
+                    ctx.fillRect(t.x, t.y, this.width, this.height);
+                });
+
+                ctx.save();
+                ctx.translate(this.x + this.width/2, this.y + this.height/2);
+                ctx.rotate(this.rotation);
+                
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = this.color;
+                
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(-this.width/2, -this.height/2, this.width, this.height);
+                
+                ctx.fillStyle = this.color;
+                ctx.fillRect(-this.width/2 + 5, -this.height/2 + 5, this.width - 10, this.height - 10);
+                
+                ctx.restore();
+            }
+        }
+
+        class Obstacle {
+            constructor() {
+                this.width = Math.random() > 0.5 ? 40 : 60;
+                this.height = Math.random() > 0.5 ? 40 : 70;
+                this.x = canvas.width;
+                this.y = canvas.height - GROUND_HEIGHT - this.height;
+                this.markedForDeletion = false;
+                this.type = Math.random() > 0.8 ? 'FLYING' : 'GROUND';
+                
+                if (this.type === 'FLYING') {
+                    this.y -= (Math.random() * 80 + 40);
+                    this.width = 50;
+                    this.height = 30;
+                }
+                
+                this.color = '#f0f';
+            }
+
+            update() {
+                this.x -= gameSpeed;
+                if (this.x + this.width < 0) this.markedForDeletion = true;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#f0f';
+                ctx.fillStyle = '#fff';
+                
+                if (this.type === 'GROUND') {
+                    ctx.beginPath();
+                    ctx.moveTo(this.x, this.y + this.height);
+                    ctx.lineTo(this.x + this.width/2, this.y);
+                    ctx.lineTo(this.x + this.width, this.y + this.height);
+                    ctx.fill();
+                } else {
+                    ctx.fillRect(this.x, this.y, this.width, this.height);
+                    ctx.fillStyle = '#f00';
+                    ctx.beginPath();
+                    ctx.arc(this.x + this.width/2, this.y + this.height/2, 5, 0, Math.PI*2);
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.size = Math.random() * 5 + 2;
+                this.speedX = Math.random() * 2 - 1;
+                this.speedY = Math.random() * 2 - 1;
+                this.color = color;
+                this.life = 1.0;
+            }
+            update() {
+                this.x += this.speedX - (gameSpeed * 0.5);
+                this.y += this.speedY;
+                this.life -= 0.05;
+            }
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = this.life;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        function initStars() {
+            backgroundStars = [];
+            for(let i=0; i<100; i++) {
+                backgroundStars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.random() * 2,
+                    speed: Math.random() * 0.5 + 0.1
+                });
+            }
+        }
+
+        // 修改：使用异步函数处理游戏开始
+        async function startGame(difficultyKey) {
+            // 先初始化音频（等待用户交互后）
+            await initAudio();
+            
+            const settings = DIFFICULTY[difficultyKey];
+            gameSpeed = settings.speed;
+            difficultyMultiplier = settings.speed / 5;
+            
+            document.getElementById('mainMenu').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            document.getElementById('hud').classList.remove('hidden');
+            document.getElementById('hud').classList.add('flex');
+            document.getElementById('tutorial').classList.remove('hidden');
+            setTimeout(() => document.getElementById('tutorial').classList.add('hidden'), 3000);
+
+            score = 0;
+            frames = 0;
+            obstacles = [];
+            particles = [];
+            player = new Player();
+            gameState = 'PLAYING';
+            
+            if (animationId) cancelAnimationFrame(animationId);
+            animate();
+        }
+
+        function resetGame() {
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            document.getElementById('mainMenu').classList.remove('hidden');
+            document.getElementById('hud').classList.add('hidden');
+            document.getElementById('hud').classList.remove('flex');
+            gameState = 'MENU';
+            
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function gameOver() {
+            gameState = 'GAMEOVER';
+            playCrashSound();
+            
+            document.getElementById('finalScore').innerText = Math.floor(score);
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+            document.getElementById('hud').classList.add('hidden');
+        }
+
+        function checkCollision(rect1, rect2) {
+            return (
+                rect1.x < rect2.x + rect2.width &&
+                rect1.x + rect1.width > rect2.x &&
+                rect1.y < rect2.y + rect2.height &&
+                rect1.y + rect1.height > rect2.y
+            );
+        }
+
+        function animate() {
+            if (gameState !== 'PLAYING') return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#020024');
+            gradient.addColorStop(1, '#090979');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#fff';
+            backgroundStars.forEach(star => {
+                star.x -= star.speed * (gameSpeed * 0.1);
+                if(star.x < 0) star.x = canvas.width;
+                ctx.globalAlpha = Math.random() * 0.5 + 0.3;
+                ctx.fillRect(star.x, star.y, star.size, star.size);
+            });
+            ctx.globalAlpha = 1.0;
+
+            ctx.fillStyle = '#ff00cc';
+            ctx.shadowBlur = 50;
+            ctx.shadowColor = '#ff00cc';
+            ctx.beginPath();
+            ctx.arc(canvas.width * 0.8, canvas.height * 0.3, 60, 0, Math.PI*2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.3)';
+            ctx.lineWidth = 1;
+            
+            let gridOffset = (frames * gameSpeed) % 100;
+            for (let i = 0; i < canvas.width + 100; i += 100) {
+                let x = i - gridOffset;
+                ctx.moveTo(x, canvas.height - GROUND_HEIGHT);
+                ctx.lineTo(x - (canvas.width*0.5), canvas.height);
+            }
+            
+            for (let i = 0; i < GROUND_HEIGHT; i += 20) {
+                let y = canvas.height - GROUND_HEIGHT + i;
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+            }
+            ctx.stroke();
+            
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#0ff';
+            ctx.strokeStyle = '#0ff';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height - GROUND_HEIGHT);
+            ctx.lineTo(canvas.width, canvas.height - GROUND_HEIGHT);
+            ctx.stroke();
+            ctx.restore();
+
+            frames++;
+            score += 0.1 * difficultyMultiplier;
+            
+            document.getElementById('scoreDisplay').innerText = Math.floor(score);
+            document.getElementById('speedDisplay').innerText = Math.floor(gameSpeed * 10) + '%';
+
+            let currentSpawnRate = Math.max(40, 120 - (gameSpeed * 2));
+            if (frames % Math.floor(currentSpawnRate) === 0) {
+                obstacles.push(new Obstacle());
+            }
+
+            player.update();
+            player.draw();
+
+            obstacles.forEach((obs, index) => {
+                obs.update();
+                obs.draw();
+                
+                if (checkCollision(player, obs)) {
+                    gameOver();
+                }
+
+                if (obs.markedForDeletion) {
+                    obstacles.splice(index, 1);
+                    score += 10;
+                }
+            });
+
+            particles.forEach((p, index) => {
+                p.update();
+                p.draw();
+                if (p.life <= 0) particles.splice(index, 1);
+            });
+
+            if (frames % 600 === 0) {
+                gameSpeed += 0.5;
+            }
+
+            animationId = requestAnimationFrame(animate);
+        }
+
+        // 绑定按钮事件
+        document.getElementById('btn-easy').addEventListener('click', () => startGame('easy'));
+        document.getElementById('btn-normal').addEventListener('click', () => startGame('normal'));
+        document.getElementById('btn-hard').addEventListener('click', () => startGame('hard'));
+        document.getElementById('btn-boss').addEventListener('click', () => startGame('boss'));
+        document.getElementById('btn-retry').addEventListener('click', resetGame);
+
+        // 初始化
+        resize();
+        initStars();
+        ctx.fillStyle = '#050505';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    </script>
+</body>
+</html>

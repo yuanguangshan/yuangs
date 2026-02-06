@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>机甲核心：虫族入侵</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap');
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Rajdhani', sans-serif;
+            touch-action: none; /* Prevent pull-to-refresh on mobile */
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* HUD Styling */
+        .hud-text {
+            font-family: 'Orbitron', sans-serif;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+
+        .bar-container {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 15px rgba(0,0,0,0.8);
+            backdrop-filter: blur(4px);
+        }
+
+        /* Virtual Joystick */
+        #joystick-zone {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            width: 150px;
+            height: 150px;
+            z-index: 20;
+        }
+
+        .joystick-base {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .joystick-knob {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #4fd1c5, #234e52);
+            box-shadow: 0 0 20px rgba(79, 209, 197, 0.4);
+            position: absolute;
+            transition: transform 0.05s;
+            pointer-events: none;
+        }
+
+        /* Attack Buttons */
+        .attack-btn {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(5px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            transition: all 0.1s;
+            user-select: none;
+            z-index: 20;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+
+        .attack-btn:active {
+            transform: scale(0.95);
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-cooldown {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            height: 0%;
+            border-radius: 50%;
+            transition: height 0.1s linear;
+        }
+
+        /* Screens */
+        #start-screen, #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.5s;
+        }
+
+        .mech-card {
+            transition: transform 0.3s, border-color 0.3s;
+            cursor: pointer;
+        }
+        .mech-card:hover {
+            transform: translateY(-5px);
+            border-color: #4fd1c5;
+        }
+        .mech-card.selected {
+            border-color: #f6ad55;
+            box-shadow: 0 0 20px rgba(246, 173, 85, 0.3);
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Scanline effect */
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1));
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 100;
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body class="text-white">
+
+    <!-- Background Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- CRT Scanline Overlay -->
+    <div class="scanlines"></div>
+
+    <!-- HUD Layer (Top) -->
+    <div id="ui-layer" class="absolute top-0 left-0 w-full p-4 pointer-events-none hidden z-10 flex justify-between items-start">
+        <!-- Left: Stats -->
+        <div class="flex flex-col gap-2 w-64">
+            <!-- HP Bar -->
+            <div class="bar-container h-6 w-full rounded skew-x-[-10deg] overflow-hidden relative">
+                <div class="absolute top-0 left-0 h-full bg-red-600 transition-all duration-200" id="hp-bar" style="width: 100%;"></div>
+                <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center text-xs font-bold tracking-widest z-10">ARMOR</div>
+            </div>
+            <!-- Shield Bar -->
+            <div class="bar-container h-4 w-full rounded skew-x-[-10deg] overflow-hidden relative">
+                <div class="absolute top-0 left-0 h-full bg-cyan-500 transition-all duration-200" id="shield-bar" style="width: 100%;"></div>
+                <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center text-[10px] font-bold tracking-widest z-10 text-cyan-100">SHIELD</div>
+            </div>
+            <!-- Energy Bar -->
+            <div class="bar-container h-2 w-3/4 rounded skew-x-[-10deg] overflow-hidden relative mt-1">
+                <div class="absolute top-0 left-0 h-full bg-yellow-400 transition-all duration-100" id="energy-bar" style="width: 100%;"></div>
+            </div>
+        </div>
+
+        <!-- Center: Wave Info -->
+        <div class="text-center">
+            <div class="text-xs text-gray-400 tracking-[0.3em]">WAVE</div>
+            <div class="text-5xl font-black hud-text text-white" id="wave-display">01</div>
+            <div class="text-xs text-red-400 mt-1" id="enemy-count">ENEMIES: 0</div>
+        </div>
+
+        <!-- Right: Score/Time -->
+        <div class="text-right">
+            <div class="text-xs text-gray-400 tracking-widest">SCORE</div>
+            <div class="text-2xl font-bold hud-text text-yellow-400" id="score-display">000000</div>
+        </div>
+    </div>
+
+    <!-- Controls Layer (Bottom) -->
+    <div id="controls-layer" class="absolute bottom-0 left-0 w-full h-full pointer-events-none hidden z-20">
+        <!-- Joystick -->
+        <div id="joystick-zone" class="pointer-events-auto">
+            <div class="joystick-base">
+                <div class="joystick-knob" id="joystick-knob"></div>
+            </div>
+        </div>
+
+        <!-- Attack Buttons -->
+        <!-- Attack 1 (Main) -->
+        <div class="attack-btn w-20 h-20 bottom-10 right-28 pointer-events-auto border-blue-400 text-blue-100" id="btn-atk1">
+            <span class="text-xs opacity-70">ATK-1</span>
+            <span class="text-xl">⚔️</span>
+            <div class="btn-cooldown" id="cd-atk1"></div>
+        </div>
+
+        <!-- Attack 2 (Skill) -->
+        <div class="attack-btn w-16 h-16 bottom-32 right-10 pointer-events-auto border-purple-400 text-purple-100" id="btn-atk2">
+            <span class="text-[10px] opacity-70">SKILL</span>
+            <span class="text-lg">💥</span>
+            <div class="btn-cooldown" id="cd-atk2"></div>
+        </div>
+
+        <!-- Attack 3 (Ultimate) -->
+        <div class="attack-btn w-14 h-14 bottom-12 right-2 pointer-events-auto border-red-500 text-red-100" id="btn-atk3">
+            <span class="text-[10px] opacity-70">ULT</span>
+            <span class="text-sm">☢️</span>
+            <div class="btn-cooldown" id="cd-atk3"></div>
+        </div>
+    </div>
+
+    <!-- Start Screen / Mech Select -->
+    <div id="start-screen">
+        <h1 class="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 to-blue-600 mb-2 hud-text tracking-tighter filter drop-shadow-[0_0_10px_rgba(0,255,255,0.5)]">
+            MECH CORE
+        </h1>
+        <p class="text-gray-400 mb-12 tracking-[0.5em] text-sm">TACTICAL DEFENSE SYSTEM</p>
+
+        <div class="flex flex-col md:flex-row gap-6 mb-12 w-full max-w-4xl px-4">
+            <!-- Mech 1: Assault -->
+            <div class="mech-card flex-1 bg-gray-900 border border-gray-700 p-6 rounded-lg flex flex-col items-center relative overflow-hidden group" onclick="selectMech(0)">
+                <div class="absolute inset-0 bg-blue-500 opacity-0 group-hover:opacity-5 transition-opacity"></div>
+                <div class="w-24 h-24 bg-blue-900 rounded-full mb-4 flex items-center justify-center border-2 border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.5)]">
+                    <svg class="w-12 h-12 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                </div>
+                <h3 class="text-xl font-bold text-blue-400 mb-2">VANGUARD</h3>
+                <div class="w-full space-y-2 text-xs text-gray-400">
+                    <div class="flex justify-between"><span>SPEED</span><div class="w-20 h-1 bg-gray-700"><div class="h-full bg-blue-500 w-[80%]"></div></div></div>
+                    <div class="flex justify-between"><span>FIRE RATE</span><div class="w-20 h-1 bg-gray-700"><div class="h-full bg-blue-500 w-[90%]"></div></div></div>
+                    <div class="flex justify-between"><span>ARMOR</span><div class="w-20 h-1 bg-gray-700"><div class="h-full bg-blue-500 w-[40%]"></div></div></div>
+                </div>
+                <p class="mt-4 text-xs text-gray-500 text-center">High mobility rapid-fire mech. Balanced for all combat.</p>
+            </div>
+
+            <!-- Mech 2: Tank -->
+            <div class="mech-card flex-1 bg-gray-900 border border-gray-700 p-6 rounded-lg flex flex-col items-center relative overflow-hidden group" onclick="selectMech(1)">
+                <div class="absolute inset-0 bg-green-500 opacity-0 group-hover:opacity-5 transition-opacity"></div>
+                <div class="w-24 h-24 bg-green-900 rounded-full mb-4 flex items-center justify-center border-2 border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.5)]">
+                    <svg class="w-12 h-12 text-green-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                </div>
+                <h3 class="text-xl font-bold text-green-400 mb-2">JUGGERNAUT</h3>
+                <div class="w-full space-y-2 text-xs text-gray-400">
+                    <div class="flex justify-between"><span>SPEED</span><div class="w-20 h-1 bg-gray-700"><div class="h-full bg-green-500 w-[30%]"></div></div></div>
+                    <div class="flex justify-between"><span>FIRE RATE</span><div class="w-20 h-1 bg-gray-700"><div class="h-full bg-green-500 w-[30%]"></div></div></div>
+                    <div class="flex justify-between"><span>ARMOR</span><div class="w-20 h-1 bg-gray-700"><div class="h-full bg-green-500 w-[100%]"></div></div></div>
+                </div>
+                <p class="mt-4 text-xs text-gray-500 text-center">Heavy plating and shotguns. Excels in holding ground.</p>
+            </div>
+
+            <!-- Mech 3: Sniper -->
+            <div class="mech-card flex-1 bg-gray-900 border border-gray-700 p-6 rounded-lg flex flex-col items-center relative overflow-hidden group" onclick="selectMech(2)">
+                <div class="absolute inset-0 bg-purple-500 opacity-0 group-hover:opacity-5 transition-opacity"></div>
+                <div class="w-24 h-24 bg-purple-900 rounded-full mb-4 flex items-center justify-center border-2 border-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.5)]">
+                    <svg class="w-12 h-12 text-purple-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg>
+                </div>
+                <h3 class="text-xl font-bold text-purple-400 mb-2">PHANTOM</h3>
+                <div class="w-full space-y-2 text-xs text-gray-400">
+                    <div class="flex justify-between"><span>SPEED</span><div class="w-20 h-1 bg-gray-700"><div class="h-full bg-purple-500 w-[60%]"></div></div></div>
+                    <div class="flex justify-between"><span>FIRE RATE</span><div class="w-20 h-1 bg-gray-700"><div class="h-full bg-purple-500 w-[20%]"></div></div></div>
+                    <div class="flex justify-between"><span>DAMAGE</span><div class="w-20 h-1 bg-gray-700"><div class="h-full bg-purple-500 w-[100%]"></div></div></div>
+                </div>
+                <p class="mt-4 text-xs text-gray-500 text-center">Railgun artillery. High damage, requires precision.</p>
+            </div>
+        </div>
+
+        <button id="start-btn" class="px-12 py-4 bg-gradient-to-r from-cyan-600 to-blue-700 rounded text-xl font-bold tracking-widest hover:from-cyan-500 hover:to-blue-600 transition-all shadow-[0_0_30px_rgba(6,182,212,0.4)] disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+            INITIALIZE SYSTEM
+        </button>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="game-over-screen" class="hidden">
+        <h2 class="text-6xl font-black text-red-500 mb-2 hud-text">MISSION FAILED</h2>
+        <p class="text-gray-300 text-xl mb-8">SIGNAL LOST</p>
+        
+        <div class="bg-gray-900 border border-gray-700 p-8 rounded-lg text-center mb-8 min-w-[300px]">
+            <div class="text-sm text-gray-500 mb-1">SURVIVED WAVES</div>
+            <div class="text-5xl font-bold text-white mb-4" id="final-wave">00</div>
+            <div class="text-sm text-gray-500 mb-1">FINAL SCORE</div>
+            <div class="text-3xl font-bold text-yellow-400" id="final-score">000000</div>
+        </div>
+
+        <button onclick="location.reload()" class="px-8 py-3 border border-white text-white hover:bg-white hover:text-black transition-colors font-bold tracking-widest">
+            REBOOT SYSTEM
+        </button>
+    </div>
+
+    <script>
+        // --- Game Configuration & State ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Game State
+        let gameState = 'START'; // START, PLAYING, GAMEOVER
+        let lastTime = 0;
+        let score = 0;
+        let wave = 1;
+        let frameCount = 0;
+        
+        // Input State
+        const keys = {};
+        const mouse = { x: 0, y: 0, down: false };
+        const joystick = { active: false, dx: 0, dy: 0, originX: 0, originY: 0 };
+
+        // Entities
+        let player;
+        let enemies = [];
+        let projectiles = [];
+        let particles = [];
+        let floatingTexts = [];
+
+        // Mech Definitions
+        const MECHS = [
+            { name: 'Vanguard', hp: 100, shield: 50, speed: 5, color: '#3b82f6', weapon: 'rapid' },
+            { name: 'Juggernaut', hp: 250, shield: 100, speed: 3, color: '#22c55e', weapon: 'shotgun' },
+            { name: 'Phantom', hp: 80, shield: 30, speed: 4, color: '#a855f7', weapon: 'sniper' }
+        ];
+        let selectedMechIndex = -1;
+
+        // --- Resize Handling ---
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- Input Handling ---
+        window.addEventListener('keydown', e => keys[e.code] = true);
+        window.addEventListener('keyup', e => keys[e.code] = false);
+        
+        // Mouse/Touch for aiming (Desktop)
+        canvas.addEventListener('mousemove', e => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+        canvas.addEventListener('mousedown', () => mouse.down = true);
+        canvas.addEventListener('mouseup', () => mouse.down = false);
+
+        // --- Joystick Logic ---
+        const joyZone = document.getElementById('joystick-zone');
+        const joyKnob = document.getElementById('joystick-knob');
+        let joyId = null;
+
+        function handleJoyStart(e) {
+            e.preventDefault();
+            const touch = e.changedTouches[0];
+            joyId = touch.identifier;
+            const rect = joyZone.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            joystick.originX = centerX;
+            joystick.originY = centerY;
+            joystick.active = true;
+            updateJoyKnob(touch.clientX, touch.clientY);
+        }
+
+        function handleJoyMove(e) {
+            e.preventDefault();
+            if (!joystick.active) return;
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                if (e.changedTouches[i].identifier === joyId) {
+                    updateJoyKnob(e.changedTouches[i].clientX, e.changedTouches[i].clientY);
+                    break;
+                }
+            }
+        }
+
+        function handleJoyEnd(e) {
+            e.preventDefault();
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                if (e.changedTouches[i].identifier === joyId) {
+                    joystick.active = false;
+                    joystick.dx = 0;
+                    joystick.dy = 0;
+                    joyKnob.style.transform = `translate(0px, 0px)`;
+                    break;
+                }
+            }
+        }
+
+        function updateJoyKnob(x, y) {
+            const maxDist = 35;
+            let dx = x - joystick.originX;
+            let dy = y - joystick.originY;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            
+            if (dist > maxDist) {
+                dx = (dx / dist) * maxDist;
+                dy = (dy / dist) * maxDist;
+            }
+            
+            joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+            
+            // Normalize output -1 to 1
+            joystick.dx = dx / maxDist;
+            joystick.dy = dy / maxDist;
+        }
+
+        joyZone.addEventListener('touchstart', handleJoyStart, {passive: false});
+        joyZone.addEventListener('touchmove', handleJoyMove, {passive: false});
+        joyZone.addEventListener('touchend', handleJoyEnd, {passive: false});
+        joyZone.addEventListener('touchcancel', handleJoyEnd, {passive: false});
+
+        // --- Classes ---
+
+        class Particle {
+            constructor(x, y, color, speed, life) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.angle = Math.random() * Math.PI * 2;
+                this.speed = Math.random() * speed;
+                this.vx = Math.cos(this.angle) * this.speed;
+                this.vy = Math.sin(this.angle) * this.speed;
+                this.life = life;
+                this.maxLife = life;
+                this.alpha = 1;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life--;
+                this.alpha = this.life / this.maxLife;
+            }
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        class FloatingText {
+            constructor(x, y, text, color) {
+                this.x = x;
+                this.y = y;
+                this.text = text;
+                this.color = color;
+                this.life = 60;
+                this.vy = -1;
+            }
+            update() {
+                this.y += this.vy;
+                this.life--;
+            }
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.life / 60);
+                ctx.fillStyle = this.color;
+                ctx.font = "bold 16px Arial";
+                ctx.fillText(this.text, this.x, this.y);
+                ctx.restore();
+            }
+        }
+
+        class Projectile {
+            constructor(x, y, angle, type, owner) {
+                this.x = x;
+                this.y = y;
+                this.type = type; // 'bullet', 'plasma', 'sniper'
+                this.owner = owner; // 'player', 'enemy'
+                this.speed = type === 'sniper' ? 20 : 12;
+                this.vx = Math.cos(angle) * this.speed;
+                this.vy = Math.sin(angle) * this.speed;
+                this.damage = type === 'sniper' ? 50 : (type === 'shotgun' ? 15 : 10);
+                this.radius = type === 'sniper' ? 3 : 2;
+                this.life = 100;
+                this.color = owner === 'player' ? '#ffff00' : '#ff0000';
+                if (type === 'plasma') this.color = '#00ffff';
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life--;
+                
+                // Trail
+                if (frameCount % 2 === 0) {
+                    particles.push(new Particle(this.x, this.y, this.color, 1, 10));
+                }
+            }
+            draw(ctx) {
+                ctx.save();
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        class Enemy {
+            constructor(type) {
+                // Spawn at random edge
+                if (Math.random() < 0.5) {
+                    this.x = Math.random() < 0.5 ? -50 : canvas.width + 50;
+                    this.y = Math.random() * canvas.height;
+                } else {
+                    this.x = Math.random() * canvas.width;
+                    this.y = Math.random() < 0.5 ? -50 : canvas.height + 50;
+                }
+                
+                this.type = type; // 'drone', 'warrior', 'tank'
+                this.hp = type === 'tank' ? 150 : (type === 'warrior' ? 60 : 30);
+                this.maxHp = this.hp;
+                this.speed = type === 'tank' ? 1 : (type === 'warrior' ? 2.5 : 3.5);
+                this.radius = type === 'tank' ? 25 : (type === 'warrior' ? 15 : 10);
+                this.color = type === 'tank' ? '#ef4444' : (type === 'warrior' ? '#f97316' : '#84cc16');
+                this.angle = 0;
+            }
+            update() {
+                // Move towards player
+                const dx = player.x - this.x;
+                const dy = player.y - this.y;
+                this.angle = Math.atan2(dy, dx);
+                
+                this.x += Math.cos(this.angle) * this.speed;
+                this.y += Math.sin(this.angle) * this.speed;
+            }
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                
+                // Glow
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+                
+                // Body
+                ctx.fillStyle = '#1f2937';
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 2;
+                
+                ctx.beginPath();
+                if (this.type === 'drone') {
+                    ctx.moveTo(10, 0);
+                    ctx.lineTo(-5, 5);
+                    ctx.lineTo(-5, -5);
+                } else if (this.type === 'warrior') {
+                    ctx.moveTo(15, 0);
+                    ctx.lineTo(-10, 10);
+                    ctx.lineTo(-5, 0);
+                    ctx.lineTo(-10, -10);
+                } else {
+                    // Tank
+                    ctx.rect(-15, -15, 30, 30);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                
+                // HP Bar
+                ctx.rotate(-this.angle); // Reset rotation for bar
+                ctx.fillStyle = 'red';
+                ctx.fillRect(-15, -this.radius - 10, 30, 4);
+                ctx.fillStyle = '#00ff00';
+                ctx.fillRect(-15, -this.radius - 10, 30 * (this.hp / this.maxHp), 4);
+                
+                ctx.restore();
+            }
+        }
+
+        class Player {
+            constructor(config) {
+                this.x = canvas.width / 2;
+                this.y = canvas.height / 2;
+                this.radius = 20;
+                this.maxHp = config.hp;
+                this.hp = config.hp;
+                this.maxShield = config.shield;
+                this.shield = config.shield;
+                this.speed = config.speed;
+                this.color = config.color;
+                this.weaponType = config.weapon;
+                this.angle = 0;
+                
+                // Cooldowns
+                this.cdAtk1 = 0;
+                this.cdAtk2 = 0;
+                this.cdAtk3 = 0;
+                
+                // Weapon Config
+                if (this.weaponType === 'rapid') {
+                    this.maxCdAtk1 = 8;
+                } else if (this.weaponType === 'shotgun') {
+                    this.maxCdAtk1 = 40;
+                } else {
+                    this.maxCdAtk1 = 60;
+                }
+                this.maxCdAtk2 = 300; // 5 sec
+                this.maxCdAtk3 = 600; // 10 sec
+            }
+            
+            update() {
+                // Movement
+                let dx = 0;
+                let dy = 0;
+                
+                if (joystick.active) {
+                    dx = joystick.dx;
+                    dy = joystick.dy;
+                } else {
+                    if (keys['KeyW'] || keys['ArrowUp']) dy = -1;
+                    if (keys['KeyS'] || keys['ArrowDown']) dy = 1;
+                    if (keys['KeyA'] || keys['ArrowLeft']) dx = -1;
+                    if (keys['KeyD'] || keys['ArrowRight']) dx = 1;
+                }
+                
+                // Normalize vector
+                if (dx !== 0 || dy !== 0) {
+                    const len = Math.sqrt(dx*dx + dy*dy);
+                    if (len > 1) { dx /= len; dy /= len; }
+                    this.x += dx * this.speed;
+                    this.y += dy * this.speed;
+                }
+                
+                // Boundaries
+                this.x = Math.max(this.radius, Math.min(canvas.width - this.radius, this.x));
+                this.y = Math.max(this.radius, Math.min(canvas.height - this.radius, this.y));
+                
+                // Aiming
+                this.angle = Math.atan2(mouse.y - this.y, mouse.x - this.x);
+                
+                // Cooldowns
+                if (this.cdAtk1 > 0) this.cdAtk1--;
+                if (this.cdAtk2 > 0) this.cdAtk2--;
+                if (this.cdAtk3 > 0) this.cdAtk3--;
+                
+                // Auto Fire (Atk 1) if mouse down or using joystick
+                // For mobile simplicity, let's make ATK 1 a manual button or auto-fire if enemies near?
+                // Let's stick to manual button for mobile, auto for desktop mouse.
+                // Actually, let's just use the buttons for mobile and keys for desktop.
+                // Desktop: Mouse click = Atk 1.
+                if (mouse.down && this.cdAtk1 <= 0) this.attack1();
+                
+                // Shield Regen
+                if (frameCount % 60 === 0 && this.shield < this.maxShield) {
+                    this.shield++;
+                }
+            }
+            
+            attack1() {
+                if (this.weaponType === 'rapid') {
+                    projectiles.push(new Projectile(this.x, this.y, this.angle, 'bullet', 'player'));
+                    this.cdAtk1 = this.maxCdAtk1;
+                } else if (this.weaponType === 'shotgun') {
+                    for (let i = -2; i <= 2; i++) {
+                        projectiles.push(new Projectile(this.x, this.y, this.angle + i * 0.15, 'shotgun', 'player'));
+                    }
+                    this.cdAtk1 = this.maxCdAtk1;
+                } else if (this.weaponType === 'sniper') {
+                    projectiles.push(new Projectile(this.x, this.y, this.angle, 'sniper', 'player'));
+                    this.cdAtk1 = this.maxCdAtk1;
+                }
+            }
+            
+            attack2() {
+                // Nova / Shield Bash
+                if (this.cdAtk2 > 0) return;
+                
+                // Visual
+                for(let i=0; i<20; i++) {
+                    particles.push(new Particle(this.x, this.y, '#00ffff', 5, 30));
+                }
+                
+                // Damage nearby
+                enemies.forEach(e => {
+                    const dist = Math.hypot(e.x - this.x, e.y - this.y);
+                    if (dist < 150) {
+                        e.hp -= 50;
+                        createExplosion(e.x, e.y, '#00ffff');
+                    }
+                });
+                
+                this.cdAtk2 = this.maxCdAtk2;
+                updateCooldownUI('cd-atk2', 0);
+            }
+            
+            attack3() {
+                // Ultimate: Barrage
+                if (this.cdAtk3 > 0) return;
+                
+                let count = 0;
+                const interval = setInterval(() => {
+                    const angle = (Math.PI * 2 / 20) * count;
+                    projectiles.push(new Projectile(this.x, this.y, angle, 'plasma', 'player'));
+                    count++;
+                    if (count >= 20) clearInterval(interval);
+                }, 50);
+                
+                this.cdAtk3 = this.maxCdAtk3;
+                updateCooldownUI('cd-atk3', 0);
+            }
+            
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                
+                // Shield Bubble
+                if (this.shield > 0) {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius + 10, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(0, 255, 255, ${this.shield / this.maxShield * 0.5})`;
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+                
+                // Mech Body
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+                ctx.fillStyle = '#000';
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 3;
+                
+                ctx.beginPath();
+                // Draw a cool mech shape
+                ctx.moveTo(20, 0);
+                ctx.lineTo(-10, 15);
+                ctx.lineTo(-5, 0);
+                ctx.lineTo(-10, -15);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                
+                // Engine glow
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(-8, 0, 4, 0, Math.PI*2);
+                ctx.fill();
+                
+                ctx.restore();
+            }
+        }
+
+        // --- UI Logic ---
+        function selectMech(index) {
+            selectedMechIndex = index;
+            document.querySelectorAll('.mech-card').forEach((el, i) => {
+                if (i === index) el.classList.add('selected');
+                else el.classList.remove('selected');
+            });
+            document.getElementById('start-btn').disabled = false;
+        }
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+            if (selectedMechIndex === -1) return;
+            startGame(selectedMechIndex);
+        });
+
+        // Attack Buttons
+        document.getElementById('btn-atk1').addEventListener('touchstart', (e) => { e.preventDefault(); player.attack1(); });
+        document.getElementById('btn-atk1').addEventListener('mousedown', (e) => { e.preventDefault(); player.attack1(); });
+        
+        document.getElementById('btn-atk2').addEventListener('touchstart', (e) => { e.preventDefault(); player.attack2(); });
+        document.getElementById('btn-atk2').addEventListener('mousedown', (e) => { e.preventDefault(); player.attack2(); });
+        
+        document.getElementById('btn-atk3').addEventListener('touchstart', (e) => { e.preventDefault(); player.attack3(); });
+        document.getElementById('btn-atk3').addEventListener('mousedown', (e) => { e.preventDefault(); player.attack3(); });
+
+        function updateCooldownUI(id, percent) {
+            document.getElementById(id).style.height = (100 - percent) + '%';
+        }
+
+        // --- Game Logic ---
+
+        function startGame(mechIndex) {
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('ui-layer').classList.remove('hidden');
+            document.getElementById('controls-layer').classList.remove('hidden');
+            
+            player = new Player(MECHS[mechIndex]);
+            gameState = 'PLAYING';
+            score = 0;
+            wave = 1;
+            enemies = [];
+            projectiles = [];
+            particles = [];
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 10; i++) {
+                particles.push(new Particle(x, y, color, 3, 20 + Math.random() * 20));
+            }
+        }
+
+        function spawnWave() {
+            const count = 3 + Math.floor(wave * 1.5);
+            for (let i = 0; i < count; i++) {
+                setTimeout(() => {
+                    const r = Math.random();
+                    let type = 'drone';
+                    if (wave > 2 && r > 0.7) type = 'warrior';
+                    if (wave > 5 && r > 0.9) type = 'tank';
+                    enemies.push(new Enemy(type));
+                }, i * 500);
+            }
+            document.getElementById('wave-display').innerText = wave.toString().padStart(2, '0');
+        }
+
+        function gameOver() {
+            gameState = 'GAMEOVER';
+            document.getElementById('game-over-screen').classList.remove('hidden');
+            document.getElementById('ui-layer').classList.add('hidden');
+            document.getElementById('controls-layer').classList.add('hidden');
+            document.getElementById('final-wave').innerText = wave.toString().padStart(2, '0');
+            document.getElementById('final-score').innerText = score.toString().padStart(6, '0');
+        }
+
+        function gameLoop(timestamp) {
+            if (gameState !== 'PLAYING') return;
+            
+            const dt = timestamp - lastTime;
+            lastTime = timestamp;
+            frameCount++;
+
+            // Clear
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Grid Background
+            ctx.strokeStyle = '#111';
+            ctx.lineWidth = 1;
+            const gridSize = 50;
+            const offset = (frameCount * 0.5) % gridSize;
+            
+            ctx.beginPath();
+            for (let x = 0; x < canvas.width; x += gridSize) {
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+            }
+            for (let y = offset; y < canvas.height; y += gridSize) {
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+            }
+            ctx.stroke();
+
+            // Update Player
+            player.update();
+            player.draw(ctx);
+
+            // Update Projectiles
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                p.update();
+                p.draw(ctx);
+                
+                // Remove if out of bounds or dead
+                if (p.life <= 0 || p.x < 0 || p.x > canvas.width || p.y < 0 || p.y > canvas.height) {
+                    projectiles.splice(i, 1);
+                    continue;
+                }
+                
+                // Collision
+                if (p.owner === 'player') {
+                    for (let j = enemies.length - 1; j >= 0; j--) {
+                        const e = enemies[j];
+                        const dist = Math.hypot(p.x - e.x, p.y - e.y);
+                        if (dist < e.radius + p.radius) {
+                            e.hp -= p.damage;
+                            createExplosion(p.x, p.y, '#fff');
+                            projectiles.splice(i, 1);
+                            
+                            if (e.hp <= 0) {
+                                createExplosion(e.x, e.y, e.color);
+                                score += (e.type === 'tank' ? 100 : 50);
+                                enemies.splice(j, 1);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Update Enemies
+            let waveClear = true;
+            enemies.forEach((e, index) => {
+                e.update();
+                e.draw(ctx);
+                
+                // Collision with player
+                const dist = Math.hypot(e.x - player.x, e.y - player.y);
+                if (dist < e.radius + player.radius) {
+                    // Damage player
+                    if (player.shield > 0) {
+                        player.shield -= 1;
+                    } else {
+                        player.hp -= 1;
+                    }
+                    createExplosion((player.x+e.x)/2, (player.y+e.y)/2, '#ff0000');
+                    
+                    // Bounce enemy back slightly
+                    e.x -= Math.cos(e.angle) * 10;
+                    e.y -= Math.sin(e.angle) * 10;
+                }
+            });
+            
+            // Wave Logic
+            if (enemies.length === 0) {
+                wave++;
+                spawnWave();
+            }
+
+            // Update Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw(ctx);
+                if (particles[i].life <= 0) particles.splice(i, 1);
+            }
+
+            // UI Updates
+            document.getElementById('hp-bar').style.width = (player.hp / player.maxHp * 100) + '%';
+            document.getElementById('shield-bar').style.width = (player.shield / player.maxShield * 100) + '%';
+            document.getElementById('score-display').innerText = score.toString().padStart(6, '0');
+            document.getElementById('enemy-count').innerText = `ENEMIES: ${enemies.length}`;
+            
+            // Cooldown UI
+            updateCooldownUI('cd-atk1', (1 - player.cdAtk1 / player.maxCdAtk1) * 100);
+            updateCooldownUI('cd-atk2', (1 - player.cdAtk2 / player.maxCdAtk2) * 100);
+            updateCooldownUI('cd-atk3', (1 - player.cdAtk3 / player.maxCdAtk3) * 100);
+
+            // Check Death
+            if (player.hp <= 0) {
+                gameOver();
+            } else {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // Initial Render
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    </script>
+</body>
+</html>

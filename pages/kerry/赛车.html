@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Velocity: Cyber Pursuit</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Orbitron', sans-serif;
+            background-color: #050505;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+        }
+
+        /* 霓虹文字效果 */
+        .neon-text {
+            text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 20px #0ff, 0 0 30px #0ff, 0 0 40px #0ff;
+        }
+        .neon-text-pink {
+            text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 20px #f0f, 0 0 30px #f0f, 0 0 40px #f0f;
+        }
+
+        /* 按钮样式 */
+        .cyber-btn {
+            background: rgba(0, 255, 255, 0.1);
+            border: 2px solid #0ff;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+            transition: all 0.2s ease;
+            clip-path: polygon(10% 0, 100% 0, 100% 70%, 90% 100%, 0 100%, 0 30%);
+        }
+        .cyber-btn:hover {
+            background: rgba(0, 255, 255, 0.3);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.6);
+            transform: translateY(-2px);
+        }
+        .cyber-btn:active {
+            transform: translateY(2px);
+            box-shadow: 0 0 5px rgba(0, 255, 255, 0.3);
+        }
+
+        .cyber-btn-pink {
+            border-color: #f0f;
+            background: rgba(255, 0, 255, 0.1);
+            box-shadow: 0 0 10px rgba(255, 0, 255, 0.3);
+        }
+        .cyber-btn-pink:hover {
+            background: rgba(255, 0, 255, 0.3);
+            box-shadow: 0 0 20px rgba(255, 0, 255, 0.6);
+        }
+
+        /* 游戏画布 */
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #000000 100%);
+        }
+
+        /* UI 覆盖层 */
+        .ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .interactive-layer {
+            pointer-events: auto;
+        }
+
+        /* 屏幕震动动画 */
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+        .shake-screen {
+            animation: shake 0.5s;
+        }
+
+        /* 生命值条 */
+        .health-bar-container {
+            width: 200px;
+            height: 20px;
+            background: #333;
+            border: 2px solid #0ff;
+            transform: skewX(-20deg);
+            overflow: hidden;
+        }
+        .health-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0ff, #00f);
+            width: 100%;
+            transition: width 0.3s ease-out;
+            box-shadow: 0 0 10px #0ff;
+        }
+
+        /* 控制按钮触控区域 */
+        .control-btn {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            backdrop-filter: blur(4px);
+            transition: all 0.1s;
+        }
+        .control-btn:active {
+            background: rgba(0, 255, 255, 0.3);
+            border-color: #0ff;
+            transform: scale(0.95);
+        }
+
+        /* 隐藏滚动条 */
+        ::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="text-white h-screen w-screen overflow-hidden">
+
+    <!-- 游戏画布 -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- 主菜单 (初始界面) -->
+    <div id="mainMenu" class="absolute inset-0 flex flex-col items-center justify-center z-50 bg-black/80 backdrop-blur-sm interactive-layer">
+        <h1 class="text-5xl md:text-7xl font-black mb-2 italic tracking-tighter neon-text text-center">NEON<br><span class="text-pink-500 neon-text-pink">VELOCITY</span></h1>
+        <p class="text-cyan-300 mb-12 tracking-widest text-sm md:text-base">赛博追击 // 赛车对战</p>
+        
+        <div class="flex flex-col gap-4 w-64">
+            <button onclick="startGame('easy')" class="cyber-btn py-3 text-xl font-bold text-cyan-400 uppercase tracking-wider">
+                初级 (Novice)
+            </button>
+            <button onclick="startGame('medium')" class="cyber-btn cyber-btn-pink py-3 text-xl font-bold text-pink-400 uppercase tracking-wider">
+                中级 (Pro)
+            </button>
+            <button onclick="startGame('hard')" class="cyber-btn py-3 text-xl font-bold text-red-500 border-red-500 hover:bg-red-900/30 hover:shadow-red-500/50 uppercase tracking-wider" style="border-color: #f00; color: #f00;">
+                高级 (Demon)
+            </button>
+        </div>
+        
+        <div class="mt-12 text-gray-500 text-xs text-center">
+            <p>使用键盘 ← → 或 A D 控制</p>
+            <p>点击屏幕按钮亦可控制</p>
+        </div>
+    </div>
+
+    <!-- 游戏结束界面 -->
+    <div id="gameOverScreen" class="hidden absolute inset-0 flex flex-col items-center justify-center z-50 bg-black/90 backdrop-blur-md interactive-layer">
+        <h2 class="text-6xl font-black text-red-500 mb-4 neon-text-pink" style="color: #f00;">GAME OVER</h2>
+        <div class="text-2xl mb-8 text-center">
+            <p class="text-gray-400 text-sm uppercase tracking-widest">Final Score</p>
+            <p id="finalScore" class="text-5xl font-bold text-white">0</p>
+        </div>
+        <button onclick="resetGame()" class="cyber-btn py-3 px-8 text-xl font-bold text-cyan-400 uppercase tracking-wider">
+            重新开始 (Restart)
+        </button>
+    </div>
+
+    <!-- HUD (游戏进行时显示) -->
+    <div id="gameUI" class="ui-overlay hidden">
+        <!-- 顶部状态栏 -->
+        <div class="flex justify-between items-start w-full">
+            <!-- 左侧：生命值 -->
+            <div class="flex flex-col gap-1">
+                <span class="text-xs text-cyan-400 font-bold tracking-widest">INTEGRITY (HP)</span>
+                <div class="health-bar-container">
+                    <div id="healthFill" class="health-fill"></div>
+                </div>
+            </div>
+
+            <!-- 中间：得分 -->
+            <div class="flex flex-col items-center">
+                <span class="text-xs text-pink-500 font-bold tracking-widest">SCORE</span>
+                <span id="scoreDisplay" class="text-4xl font-black italic neon-text-pink">0</span>
+            </div>
+
+            <!-- 右侧：设置 -->
+            <button id="muteBtn" onclick="toggleMute()" class="interactive-layer p-2 rounded-full border border-gray-600 hover:border-cyan-400 transition-colors">
+                <svg id="soundOnIcon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                </svg>
+                <svg id="soundOffIcon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-500 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- 底部控制区 -->
+        <div class="flex justify-between items-end w-full pb-4 px-4 interactive-layer">
+            <button id="btnLeft" class="control-btn" onmousedown="setDirection(-1)" onmouseup="setDirection(0)" ontouchstart="setDirection(-1)" ontouchend="setDirection(0)">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+            </button>
+            <button id="btnRight" class="control-btn" onmousedown="setDirection(1)" onmouseup="setDirection(0)" ontouchstart="setDirection(1)" ontouchend="setDirection(0)">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- 游戏配置与状态 ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let gameState = 'MENU'; // MENU, PLAYING, GAMEOVER
+        let difficulty = 'easy';
+        let score = 0;
+        let health = 100;
+        let isMuted = false;
+        let frameId;
+        let lastTime = 0;
+        
+        // 游戏参数配置
+        const CONFIG = {
+            easy: { speed: 300, spawnRate: 1500, obstacleHealth: 1 },
+            medium: { speed: 500, spawnRate: 1000, obstacleHealth: 1 },
+            hard: { speed: 800, spawnRate: 600, obstacleHealth: 2 }
+        };
+
+        // 玩家对象
+        const player = {
+            x: 0,
+            y: 0,
+            width: 50,
+            height: 80,
+            speed: 400, // 横向移动速度
+            dx: 0,
+            color: '#0ff',
+            tilt: 0
+        };
+
+        // 游戏实体数组
+        let obstacles = [];
+        let particles = [];
+        let roadLines = [];
+
+        // 输入状态
+        let inputDirection = 0; // -1 左, 0 无, 1 右
+
+        // --- 初始化与调整大小 ---
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            player.y = canvas.height - 150;
+            // 如果游戏未开始，重置玩家位置到中间
+            if (gameState === 'MENU') {
+                player.x = canvas.width / 2;
+            }
+            initRoadLines();
+        }
+        window.addEventListener('resize', resize);
+
+        function initRoadLines() {
+            roadLines = [];
+            const lineCount = Math.ceil(canvas.height / 100) + 2;
+            for (let i = 0; i < lineCount; i++) {
+                roadLines.push({
+                    y: i * 100,
+                    speed: 1
+                });
+            }
+        }
+
+        // --- 游戏逻辑控制 ---
+
+        function startGame(level) {
+            difficulty = level;
+            gameState = 'PLAYING';
+            score = 0;
+            health = 100;
+            obstacles = [];
+            particles = [];
+            
+            // UI 切换
+            document.getElementById('mainMenu').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            document.getElementById('gameUI').classList.remove('hidden');
+            
+            updateHealthUI();
+            resize(); // 确保位置正确
+            
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function resetGame() {
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            document.getElementById('mainMenu').classList.remove('hidden');
+            document.getElementById('gameUI').classList.add('hidden');
+            gameState = 'MENU';
+            // 重置背景动画
+            initRoadLines();
+            drawBackground(0);
+        }
+
+        function gameOver() {
+            gameState = 'GAMEOVER';
+            document.getElementById('finalScore').innerText = Math.floor(score);
+            document.getElementById('gameUI').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+            
+            // 爆炸特效
+            createExplosion(player.x, player.y, '#0ff', 50);
+        }
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            document.getElementById('soundOnIcon').classList.toggle('hidden');
+            document.getElementById('soundOffIcon').classList.toggle('hidden');
+        }
+
+        function setDirection(dir) {
+            inputDirection = dir;
+        }
+
+        // 键盘控制
+        window.addEventListener('keydown', (e) => {
+            if (gameState !== 'PLAYING') return;
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') inputDirection = -1;
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') inputDirection = 1;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'a' || e.key === 'A' || e.key === 'd' || e.key === 'D') {
+                inputDirection = 0;
+            }
+        });
+
+        // --- 核心游戏循环 ---
+
+        function gameLoop(timestamp) {
+            if (gameState !== 'PLAYING') {
+                if (gameState === 'MENU') drawBackground(16); // 保持背景动画
+                if (gameState === 'GAMEOVER') drawGameOverEffect();
+                if (gameState !== 'PLAYING') {
+                    requestAnimationFrame(gameLoop);
+                    return;
+                }
+            }
+
+            const dt = (timestamp - lastTime) / 1000; // 秒
+            lastTime = timestamp;
+
+            update(dt);
+            draw();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function update(dt) {
+            const conf = CONFIG[difficulty];
+
+            // 1. 玩家移动
+            player.x += inputDirection * player.speed * dt;
+            
+            // 边界限制
+            if (player.x < player.width/2) player.x = player.width/2;
+            if (player.x > canvas.width - player.width/2) player.x = canvas.width - player.width/2;
+
+            // 车身倾斜动画
+            player.tilt = inputDirection * 0.3;
+
+            // 2. 生成障碍物
+            if (Math.random() < (dt * 1000 / conf.spawnRate)) {
+                const obsWidth = 60;
+                const obsX = Math.random() * (canvas.width - obsWidth) + obsWidth/2;
+                obstacles.push({
+                    x: obsX,
+                    y: -100,
+                    width: obsWidth,
+                    height: obsWidth,
+                    type: Math.random() > 0.8 ? 'hard' : 'normal',
+                    active: true
+                });
+            }
+
+            // 3. 更新障碍物 & 碰撞检测
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obs = obstacles[i];
+                obs.y += conf.speed * dt;
+
+                // 碰撞检测 (AABB)
+                if (obs.active &&
+                    player.x - player.width/2 < obs.x + obs.width/2 &&
+                    player.x + player.width/2 > obs.x - obs.width/2 &&
+                    player.y - player.height/2 < obs.y + obs.height/2 &&
+                    player.y + player.height/2 > obs.y - obs.height/2) {
+                    
+                    // 碰撞发生
+                    obs.active = false;
+                    takeDamage(obs.type === 'hard' ? 30 : 20);
+                    createExplosion(obs.x, obs.y, '#f0f', 10);
+                    
+                    // 屏幕震动
+                    document.body.classList.add('shake-screen');
+                    setTimeout(() => document.body.classList.remove('shake-screen'), 500);
+                }
+
+                // 移除屏幕外的障碍物
+                if (obs.y > canvas.height + 100) {
+                    obstacles.splice(i, 1);
+                    score += 10;
+                    document.getElementById('scoreDisplay').innerText = score;
+                }
+            }
+
+            // 4. 更新粒子
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= dt;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            // 5. 更新车道线
+            roadLines.forEach(line => {
+                line.y += conf.speed * dt;
+                if (line.y > canvas.height) line.y = -100;
+            });
+
+            // 6. 玩家尾气粒子
+            if (Math.random() > 0.5) {
+                particles.push({
+                    x: player.x + (Math.random() - 0.5) * 20,
+                    y: player.y + player.height/2,
+                    vx: (Math.random() - 0.5) * 20,
+                    vy: 100 + Math.random() * 50,
+                    life: 0.3,
+                    color: `rgba(0, 255, 255, ${Math.random()})`,
+                    size: Math.random() * 3
+                });
+            }
+        }
+
+        function takeDamage(amount) {
+            health -= amount;
+            updateHealthUI();
+            if (health <= 0) {
+                health = 0;
+                updateHealthUI();
+                gameOver();
+            }
+        }
+
+        function updateHealthUI() {
+            const fill = document.getElementById('healthFill');
+            fill.style.width = health + '%';
+            if (health < 30) fill.style.background = '#f00';
+            else fill.style.background = 'linear-gradient(90deg, #0ff, #00f)';
+        }
+
+        function createExplosion(x, y, color, count) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 300,
+                    vy: (Math.random() - 0.5) * 300,
+                    life: 0.5 + Math.random() * 0.5,
+                    color: color,
+                    size: Math.random() * 4 + 2
+                });
+            }
+        }
+
+        // --- 渲染函数 ---
+
+        function draw() {
+            // 清空画布
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawBackground(0); // 0 表示不额外增加时间偏移，因为update里已经处理了roadLines
+
+            // 绘制障碍物
+            obstacles.forEach(obs => {
+                ctx.save();
+                ctx.translate(obs.x, obs.y);
+                
+                // 阴影
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = obs.type === 'hard' ? '#f00' : '#f0f';
+                
+                // 方块
+                ctx.fillStyle = obs.type === 'hard' ? '#300' : '#202';
+                ctx.strokeStyle = obs.type === 'hard' ? '#f00' : '#f0f';
+                ctx.lineWidth = 3;
+                
+                ctx.beginPath();
+                ctx.rect(-obs.width/2, -obs.height/2, obs.width, obs.height);
+                ctx.fill();
+                ctx.stroke();
+                
+                // 内部装饰
+                ctx.fillStyle = obs.type === 'hard' ? '#f00' : '#f0f';
+                ctx.beginPath();
+                ctx.arc(0, 0, 5, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            });
+
+            // 绘制玩家
+            drawPlayer();
+
+            // 绘制粒子
+            particles.forEach(p => {
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            });
+        }
+
+        function drawBackground(dt) {
+            // 绘制车道线
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 4;
+            ctx.setLineDash([40, 40]);
+            ctx.lineDashOffset = -performance.now() / 10; // 流动效果
+
+            // 左线
+            ctx.beginPath();
+            ctx.moveTo(canvas.width * 0.2, 0);
+            ctx.lineTo(canvas.width * 0.2, canvas.height);
+            ctx.stroke();
+
+            // 右线
+            ctx.beginPath();
+            ctx.moveTo(canvas.width * 0.8, 0);
+            ctx.lineTo(canvas.width * 0.8, canvas.height);
+            ctx.stroke();
+
+            ctx.setLineDash([]);
+
+            // 绘制移动的路面标线 (增强速度感)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            roadLines.forEach(line => {
+                // 中间虚线
+                ctx.fillRect(canvas.width / 2 - 2, line.y, 4, 60);
+            });
+        }
+
+        function drawPlayer() {
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            ctx.rotate(player.tilt);
+
+            // 车身发光
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = player.color;
+
+            // 绘制未来感赛车 (三角形)
+            ctx.fillStyle = '#000';
+            ctx.strokeStyle = player.color;
+            ctx.lineWidth = 3;
+
+            ctx.beginPath();
+            ctx.moveTo(0, -player.height/2); // 顶点
+            ctx.lineTo(player.width/2, player.height/2); // 右下
+            ctx.lineTo(0, player.height/2 - 10); // 尾部凹槽
+            ctx.lineTo(-player.width/2, player.height/2); // 左下
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // 驾驶舱
+            ctx.fillStyle = '#0ff';
+            ctx.beginPath();
+            ctx.moveTo(0, -10);
+            ctx.lineTo(5, 10);
+            ctx.lineTo(-5, 10);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function drawGameOverEffect() {
+            // 游戏结束时保持最后一帧或简单动画
+            // 这里简单重绘，但让背景继续动
+             ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            drawBackground(0);
+            // 粒子继续动
+             for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx * 0.016;
+                p.y += p.vy * 0.016;
+                p.life -= 0.016;
+                
+                ctx.globalAlpha = Math.max(0, p.life);
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+            ctx.globalAlpha = 1.0;
+            requestAnimationFrame(drawGameOverEffect);
+        }
+
+        // 启动初始化
+        resize();
+        initRoadLines();
+        drawBackground(0);
+
+    </script>
+</body>
+</html>
