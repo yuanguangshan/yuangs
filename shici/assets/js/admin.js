@@ -6,8 +6,8 @@
 // ✅ 1. 配置地址
 // 读取地址：使用 Worker 读取（Worker 已配置 CORS）
 // 保存地址：通过 Cloudflare Worker 写入
-const READ_URL = 'https://shici.want.biz';
-const WRITE_URL = 'https://shici.want.biz';
+const READ_URL = '/api/poems';
+const WRITE_URL = '/api/poems';
 
 let currentToken = '';
 let currentData = [];

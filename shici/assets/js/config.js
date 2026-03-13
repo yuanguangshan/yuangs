@@ -1,10 +1,9 @@
 // config.js - 应用配置和常量
 
 export const CONFIG = {
-    // 数据路径
-    // DATA_PATH: 'https://shici.want.biz',
+    // 数据路径 - 优先从 API 获取，本地 JSON 作为离线回退
+    DATA_PATH: '/api/poems',
     LOCAL_DATA_PATH: './assets/data/poetry_data.json',
-    DATA_PATH: './assets/data/poetry_data.json',
     
     // IndexedDB配置
     DB_NAME: 'PoetryDB',
