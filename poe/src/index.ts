@@ -60,6 +60,17 @@ var index_default = {
       return jsonResponse({ status: "ok", timestamp: Date.now() });
     }
 
+    // Debug endpoint to check knasync key
+    if (pathname === "/api/debug/knasync") {
+      const keyExists = !!env.KNASYNC_KEY;
+      const keyLength = env.KNASYNC_KEY?.length || 0;
+      return jsonResponse({
+        knasyncKeyExists: keyExists,
+        knasyncKeyLength: keyLength,
+        knasyncKeyPrefix: env.KNASYNC_KEY?.substring(0, 4) || ""
+      });
+    }
+
     // Knasync API proxy endpoint
     if (pathname === "/api/knasync/submit") {
       if (request.method === "POST") {
@@ -74,13 +85,14 @@ var index_default = {
             return jsonResponse({ error: "Missing content" }, 400);
           }
 
+          // Use plain text format as per API documentation
           const response = await fetch("https://knasync.yuanguangshan.workers.dev/submit", {
             method: "POST",
             headers: {
-              "Content-Type": "application/json",
+              "Content-Type": "text/plain;charset=UTF-8",
               "X-Auth-Key": knasyncKey
             },
-            body: JSON.stringify({ content: data.content })
+            body: data.content
           });
 
           const responseText = await response.text();
