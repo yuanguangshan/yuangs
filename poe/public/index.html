@@ -7066,20 +7066,29 @@
 
         // Save Q&A to knasync API (via backend proxy)
         async function saveQandAToKnasync(question, answer) {
+            console.log('[Knasync] 开始保存 Q&A...');
+            console.log('[Knasync] 问题长度:', question?.length, '回答长度:', answer?.length);
+
             try {
                 // Check if knasync is enabled
                 const knasyncEnabled = localStorage.getItem('KNASYNC_ENABLED');
+                console.log('[Knasync] KNASYNC_ENABLED:', knasyncEnabled);
+
                 if (knasyncEnabled !== 'true') {
+                    console.log('[Knasync] 未启用，跳过保存');
                     return; // Skip saving if not enabled
                 }
 
                 // Get first 50 characters of question as title
                 const titleText = question.substring(0, 50).replace(/\n/g, ' ');
+                console.log('[Knasync] 标题:', titleText);
 
                 // Format the Q&A as markdown
                 let markdownContent = `# ${titleText}\n\n`;
                 markdownContent += `**问题：**\n\n${question}\n\n`;
                 markdownContent += `**回答：**\n\n${answer}\n`;
+
+                console.log('[Knasync] 发送请求到 /api/knasync/submit...');
 
                 // Send to backend proxy (which forwards to knasync)
                 const response = await fetch('/api/knasync/submit', {
@@ -7092,11 +7101,18 @@
                     })
                 });
 
+                console.log('[Knasync] 响应状态:', response.status);
+
                 if (!response.ok) {
-                    console.warn('Failed to save to knasync:', response.status);
+                    const errorText = await response.text();
+                    console.error('[Knasync] 保存失败:', response.status, errorText);
+                    return;
                 }
+
+                const result = await response.json();
+                console.log('[Knasync] 保存成功:', result);
             } catch (error) {
-                console.warn('Error saving to knasync:', error);
+                console.error('[Knasync] 保存出错:', error);
             }
         }
 
