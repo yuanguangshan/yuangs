@@ -83,13 +83,15 @@ var index_default = {
             body: JSON.stringify({ content: data.content })
           });
 
+          const responseText = await response.text();
+
           if (!response.ok) {
-            return jsonResponse({ error: `Knasync API error: ${response.status}` }, response.status);
+            return jsonResponse({ error: `Knasync API error: ${response.status}`, details: responseText }, response.status);
           }
 
-          return jsonResponse({ success: true });
+          return jsonResponse({ success: true, message: responseText });
         } catch (e: any) {
-          return jsonResponse({ error: `Error: ${e}` }, 500);
+          return jsonResponse({ error: `Error: ${e.message}` }, 500);
         }
       }
     }
