@@ -6309,6 +6309,8 @@
             if (!message || sendButton.disabled) return;
 
             const timestamp = Date.now();
+            // Store the question for later Q&A pairing
+            lastUserMessage = message;
             addMessageToDOM('user', message, null, timestamp);
 
             userInput.value = '';
@@ -6842,6 +6844,12 @@
 
             // Add the final message with the model name used during generation
             addMessageToDOM('assistant', cleanedContent, null, timestamp, modelName);
+
+            // Save Q&A to knasync if there was a user question
+            if (lastUserMessage) {
+                saveQandAToKnasync(lastUserMessage, cleanedContent);
+                lastUserMessage = null; // Reset for next Q&A
+            }
         }
 
         async function callPoeAPI(messages, model, onContentUpdate, signal = null, isAgentSession = false) {
@@ -7053,8 +7061,11 @@
             });
         }
 
-        // Save message to knasync API (via backend proxy)
-        async function saveMessageToKnasync(role, rawContent, timestamp) {
+        // Store the last user message for Q&A pairing
+        let lastUserMessage = null;
+
+        // Save Q&A to knasync API (via backend proxy)
+        async function saveQandAToKnasync(question, answer) {
             try {
                 // Check if knasync is enabled
                 const knasyncEnabled = localStorage.getItem('KNASYNC_ENABLED');
@@ -7062,12 +7073,13 @@
                     return; // Skip saving if not enabled
                 }
 
-                // Get first 50 characters as title
-                const titleText = rawContent.substring(0, 50).replace(/\n/g, ' ');
+                // Get first 50 characters of question as title
+                const titleText = question.substring(0, 50).replace(/\n/g, ' ');
 
-                // Format the message as markdown
+                // Format the Q&A as markdown
                 let markdownContent = `# ${titleText}\n\n`;
-                markdownContent += `${rawContent}\n`;
+                markdownContent += `**问题：**\n\n${question}\n\n`;
+                markdownContent += `**回答：**\n\n${answer}\n`;
 
                 // Send to backend proxy (which forwards to knasync)
                 const response = await fetch('/api/knasync/submit', {
