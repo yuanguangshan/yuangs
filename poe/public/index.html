@@ -7053,6 +7053,42 @@
             });
         }
 
+        // Save message to knasync API (via backend proxy)
+        async function saveMessageToKnasync(role, rawContent, timestamp) {
+            try {
+                // Check if knasync is enabled
+                const knasyncEnabled = localStorage.getItem('KNASYNC_ENABLED');
+                if (knasyncEnabled !== 'true') {
+                    return; // Skip saving if not enabled
+                }
+
+                // Format the message as markdown
+                const timeDate = new Date(timestamp);
+                const timeString = timeDate.toLocaleString('zh-CN', { hour12: false });
+                const modelName = role === 'user' ? '用户' : (modelSelector.value || 'AI');
+
+                let markdownContent = `# ${modelName} - ${timeString}\n\n`;
+                markdownContent += `${rawContent}\n`;
+
+                // Send to backend proxy (which forwards to knasync)
+                const response = await fetch('/api/knasync/submit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        content: markdownContent
+                    })
+                });
+
+                if (!response.ok) {
+                    console.warn('Failed to save to knasync:', response.status);
+                }
+            } catch (error) {
+                console.warn('Error saving to knasync:', error);
+            }
+        }
+
         function addMessageToDOM(role, rawContent, htmlContent = null, timestamp = Date.now(), messageModel = null, messageId = null) {
             const welcomeMessage = chatContainer.querySelector('.welcome-message');
             if (welcomeMessage) {
@@ -7262,6 +7298,9 @@
                     }, 300);
                 }, 2000);
             });
+
+            // Save message to knasync API
+            saveMessageToKnasync(role, rawContent, timestamp);
         }
 
         function showTypingIndicator() {

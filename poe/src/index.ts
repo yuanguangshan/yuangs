@@ -60,6 +60,40 @@ var index_default = {
       return jsonResponse({ status: "ok", timestamp: Date.now() });
     }
 
+    // Knasync API proxy endpoint
+    if (pathname === "/api/knasync/submit") {
+      if (request.method === "POST") {
+        try {
+          const knasyncKey = env.KNASYNC_KEY;
+          if (!knasyncKey) {
+            return jsonResponse({ error: "KNASYNC_KEY not configured" }, 500);
+          }
+
+          const data = await request.json() as { content: string };
+          if (!data.content) {
+            return jsonResponse({ error: "Missing content" }, 400);
+          }
+
+          const response = await fetch("https://knasync.yuanguangshan.workers.dev/submit", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Auth-Key": knasyncKey
+            },
+            body: JSON.stringify({ content: data.content })
+          });
+
+          if (!response.ok) {
+            return jsonResponse({ error: `Knasync API error: ${response.status}` }, response.status);
+          }
+
+          return jsonResponse({ success: true });
+        } catch (e: any) {
+          return jsonResponse({ error: `Error: ${e}` }, 500);
+        }
+      }
+    }
+
     // API Routes
     if (pathname.startsWith("/api/") || pathname.startsWith("/v1/")) {
       
