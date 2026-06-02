@@ -11,17 +11,18 @@
   #terminal { width: 100vw; height: 100vh; padding: 8px; }
   #terminal .xterm { height: 100%; }
   #terminal .xterm-viewport { height: 100% !important; }
-  #status {
+  #top-bar {
     position: fixed; top: 0; right: 0;
-    padding: 4px 10px; font: 12px monospace;
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 8px; z-index: 10;
+  }
+  #status {
+    font: 12px monospace;
     background: #e74c3c; color: #fff;
-    border-radius: 0 0 0 4px; z-index: 10;
+    padding: 4px 10px;
+    border-radius: 4px;
   }
   #status.connected { background: #2ecc71; }
-  #backend-bar {
-    position: fixed; top: 0; left: 0;
-    padding: 4px 10px; z-index: 10;
-  }
   #backend-select {
     font: 12px/1.5 Menlo, Monaco, monospace;
     background: #16213e; color: #eee;
@@ -49,11 +50,23 @@
   #connect-form button:hover { background: #1a4a8a; }
   .hidden { display: none !important; }
   #error { color: #e74c3c; font-size: 14px; }
+  #clear-btn {
+    position: fixed; bottom: 10px; right: 10px;
+    background: #333; color: #999; border: none;
+    border-radius: 4px; padding: 4px 10px;
+    font: 12px system-ui, sans-serif;
+    cursor: pointer; z-index: 20;
+    opacity: 0.5; transition: opacity 0.2s;
+  }
+  #clear-btn:hover { opacity: 1; color: #fff; }
 </style>
 </head>
 <body>
 
-<div id="status">Disconnected</div>
+<div id="top-bar">
+  <select id="backend-select" disabled><option>—</option></select>
+  <span id="status">Disconnected</span>
+</div>
 
 <!-- 连接表单 -->
 <div id="connect-form">
@@ -64,13 +77,11 @@
   <div id="error"></div>
 </div>
 
-<!-- 后端选择器 -->
-<div id="backend-bar" class="hidden">
-  <select id="backend-select" disabled><option>—</option></select>
-</div>
-
 <!-- 终端 -->
 <div id="terminal" class="hidden"></div>
+
+<!-- 清除存储按钮 -->
+<button id="clear-btn">清除</button>
 
 <script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
 
@@ -79,17 +90,44 @@ let ws = null;
 let term = null;
 let backends = [];
 
-// 从 URL 参数读取默认值，或从页面地址自动推导
-const params = new URLSearchParams(window.location.search);
-const loc = window.location;
-if (params.get('server')) {
-  document.getElementById('server-url').value = params.get('server');
-} else {
-  // 由 relay 自身提供页面时，默认 WebSocket 地址 = 同源 + /wstunnel
-  const wsProto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
-  document.getElementById('server-url').value = wsProto + '//' + loc.host + '/wstunnel';
+// --- localStorage 持久化 ---
+const STORAGE_SERVER = 'wsstunnel_server';
+const STORAGE_TOKEN = 'wsstunnel_token';
+
+function loadStoredConfig() {
+  const s = localStorage.getItem(STORAGE_SERVER);
+  const t = localStorage.getItem(STORAGE_TOKEN);
+  if (s) document.getElementById('server-url').value = s;
+  if (t) document.getElementById('token-input').value = t;
 }
-if (params.get('token')) document.getElementById('token-input').value = params.get('token');
+
+function saveConfig(server, token) {
+  if (server) localStorage.setItem(STORAGE_SERVER, server);
+  if (token) localStorage.setItem(STORAGE_TOKEN, token);
+}
+
+function clearConfig() {
+  localStorage.removeItem(STORAGE_SERVER);
+  localStorage.removeItem(STORAGE_TOKEN);
+  document.getElementById('server-url').value = '';
+  document.getElementById('token-input').value = '';
+  // 如果已连接则断开，回到表单
+  if (ws) ws.close();
+}
+
+document.getElementById('clear-btn').addEventListener('click', clearConfig);
+
+// --- 读取默认值：URL 参数优先，否则从 localStorage ---
+const params = new URLSearchParams(window.location.search);
+const hasUrlServer = !!params.get('server');
+const hasUrlToken = !!params.get('token');
+
+if (hasUrlServer) document.getElementById('server-url').value = params.get('server');
+if (hasUrlToken) document.getElementById('token-input').value = params.get('token');
+
+if (!hasUrlServer && !hasUrlToken) {
+  loadStoredConfig();
+}
 
 function setStatus(text, connected) {
   const el = document.getElementById('status');
@@ -116,153 +154,4 @@ function connect() {
   document.getElementById('connect-form').classList.add('hidden');
   setStatus('连接中...');
 
-  ws = new WebSocket(url);
-  ws.binaryType = 'arraybuffer';
-
-  ws.onopen = () => {
-    setStatus('已连接', true);
-    initTerminal();
-    // 连接成功后获取后端列表
-    setTimeout(() => ws.send('LIST'), 300);
-  };
-
-  ws.onmessage = (e) => {
-    if (typeof e.data === 'string') {
-      // 文本帧 → relay 回复（后端列表、错误信息等）
-      handleRelayText(e.data);
-    } else {
-      // 二进制帧 → PTY shell 输出
-      if (term) term.write(new Uint8Array(e.data));
-    }
-  };
-
-  ws.onclose = () => {
-    setStatus('已断开');
-    if (term) {
-      term.dispose();
-      term = null;
-    }
-    document.getElementById('connect-form').classList.remove('hidden');
-  };
-
-  ws.onerror = () => {
-    showError('连接失败，请检查地址和网络');
-    setStatus('连接失败');
-    ws.close();
-  };
-}
-
-// 处理 relay 文本回复
-function handleRelayText(text) {
-  // 后端列表更新
-  if (text.startsWith('[Info] Connected backends:')) {
-    const listStr = text.split(':').slice(1).join(':').trim();
-    const sel = document.getElementById('backend-select');
-    if (listStr === 'No backends connected' || !listStr) {
-      sel.innerHTML = '<option>无后端</option>';
-      sel.disabled = true;
-    } else {
-      backends = listStr.split(',').map(s => s.trim()).filter(s => s);
-      sel.innerHTML = backends.map(b => {
-        const current = b.endsWith(' *');
-        const name = current ? b.slice(0, -2).trim() : b;
-        return `<option value="${name}" ${current ? 'selected' : ''}>${b}</option>`;
-      }).join('');
-      sel.disabled = false;
-    }
-    document.getElementById('backend-bar').classList.remove('hidden');
-  }
-  // 切换后端确认
-  else if (text.startsWith('[Info] Switched to backend:')) {
-    const name = text.split(':').slice(1).join(':').trim().split('(')[0].trim();
-    const sel = document.getElementById('backend-select');
-    for (let opt of sel.options) {
-      if (opt.value === name) { opt.selected = true; break; }
-    }
-  }
-  // 将文本回复也写入终端显示
-  if (term) term.write(text + '\r\n');
-}
-
-function initTerminal() {
-  document.getElementById('terminal').classList.remove('hidden');
-
-  term = new Terminal({
-    cursorBlink: true,
-    cursorStyle: 'block',
-    fontSize: 14,
-    fontFamily: 'Menlo, Monaco, "Fira Code", monospace',
-    theme: {
-      background: '#1a1a2e',
-      foreground: '#e0e0e0',
-      cursor: '#ffffff',
-      selectionBackground: '#334466',
-      black: '#282a36',
-      red: '#ff5555',
-      green: '#50fa7b',
-      yellow: '#f1fa8c',
-      blue: '#6272a4',
-      magenta: '#ff79c6',
-      cyan: '#8be9fd',
-      white: '#f8f8f2',
-    },
-  });
-
-  term.open(document.getElementById('terminal'));
-
-  // 自适应容器大小
-  function fitTerminal() {
-    const el = document.getElementById('terminal');
-    const renderer = term._core?._renderService;
-    if (!renderer || !renderer.dimensions) return setTimeout(fitTerminal, 50);
-    const { actualCellWidth, actualCellHeight } = renderer.dimensions;
-    if (!actualCellWidth || !actualCellHeight) return setTimeout(fitTerminal, 50);
-    const cols = Math.max(20, Math.floor((el.clientWidth - 16) / actualCellWidth));
-    const rows = Math.max(5, Math.floor((el.clientHeight - 16) / actualCellHeight));
-    term.resize(cols, rows);
-  }
-  fitTerminal();
-
-  // 窗口大小变化 → __RESIZE
-  const sendResize = () => {
-    fitTerminal();
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(`__RESIZE:${term.rows},${term.cols}`);
-    }
-  };
-
-  term.onResize(sendResize);
-  window.addEventListener('resize', sendResize);
-  setTimeout(sendResize, 500);
-
-  // 按键输入 → WebSocket 二进制帧
-  term.onData((data) => {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(new TextEncoder().encode(data));
-    }
-  });
-}
-
-// 后端选择器切换事件
-document.getElementById('backend-select').addEventListener('change', function() {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send('USE ' + this.value);
-  }
-});
-
-// 自动连接（URL 中有 server 或 token 参数时）
-if (params.get('server') || params.get('token')) {
-  setTimeout(connect, 300);
-}
-
-document.getElementById('connect-btn').addEventListener('click', connect);
-document.getElementById('server-url').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') connect();
-});
-document.getElementById('token-input').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') connect();
-});
-</script>
-</body>
-</html>
-
+  
