@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -18,6 +19,18 @@
     border-radius: 0 0 0 4px; z-index: 10;
   }
   #status.connected { background: #2ecc71; }
+  #backend-bar {
+    position: fixed; top: 0; left: 0;
+    padding: 4px 10px; z-index: 10;
+  }
+  #backend-select {
+    font: 12px/1.5 Menlo, Monaco, monospace;
+    background: #16213e; color: #eee;
+    border: 1px solid #0f3460; border-radius: 4px;
+    padding: 2px 6px; outline: none;
+    cursor: pointer;
+  }
+  #backend-select:disabled { opacity: 0.4; cursor: default; }
   #connect-form {
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
@@ -52,14 +65,20 @@
   <div id="error"></div>
 </div>
 
+<!-- 后端选择器 -->
+<div id="backend-bar" class="hidden">
+  <select id="backend-select" disabled><option>—</option></select>
+</div>
+
 <!-- 终端 -->
 <div id="terminal" class="hidden"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
+
 <script>
 let ws = null;
 let term = null;
+let backends = [];
 
 // 从 URL 参数读取默认值
 const params = new URLSearchParams(window.location.search);
@@ -81,7 +100,10 @@ function connect() {
   const token = document.getElementById('token-input').value.trim();
 
   if (!url) { showError('请输入服务器地址'); return; }
-  if (!url.startsWith('ws://') && !url.startsWith('wss://')) url = 'wss://' + url;
+  // 统一 WebSocket 协议
+  if (url.startsWith('https://')) url = 'wss://' + url.slice(8);
+  else if (url.startsWith('http://')) url = 'ws://' + url.slice(7);
+  else if (!url.includes('://') && !url.startsWith('ws://') && !url.startsWith('wss://')) url = 'wss://' + url;
   if (token && !url.includes('?token=')) url += (url.includes('?') ? '&' : '?') + 'token=' + token;
 
   showError('');
@@ -94,10 +116,18 @@ function connect() {
   ws.onopen = () => {
     setStatus('已连接', true);
     initTerminal();
+    // 连接成功后获取后端列表
+    setTimeout(() => ws.send('LIST'), 300);
   };
 
   ws.onmessage = (e) => {
-    if (term) term.write(new Uint8Array(e.data));
+    if (typeof e.data === 'string') {
+      // 文本帧 → relay 回复（后端列表、错误信息等）
+      handleRelayText(e.data);
+    } else {
+      // 二进制帧 → PTY shell 输出
+      if (term) term.write(new Uint8Array(e.data));
+    }
   };
 
   ws.onclose = () => {
@@ -114,6 +144,38 @@ function connect() {
     setStatus('连接失败');
     ws.close();
   };
+}
+
+// 处理 relay 文本回复
+function handleRelayText(text) {
+  // 后端列表更新
+  if (text.startsWith('[Info] Connected backends:')) {
+    const listStr = text.split(':').slice(1).join(':').trim();
+    const sel = document.getElementById('backend-select');
+    if (listStr === 'No backends connected' || !listStr) {
+      sel.innerHTML = '<option>无后端</option>';
+      sel.disabled = true;
+    } else {
+      backends = listStr.split(',').map(s => s.trim()).filter(s => s);
+      sel.innerHTML = backends.map(b => {
+        const current = b.endsWith(' *');
+        const name = current ? b.slice(0, -2).trim() : b;
+        return `<option value="${name}" ${current ? 'selected' : ''}>${b}</option>`;
+      }).join('');
+      sel.disabled = false;
+    }
+    document.getElementById('backend-bar').classList.remove('hidden');
+  }
+  // 切换后端确认
+  else if (text.startsWith('[Info] Switched to backend:')) {
+    const name = text.split(':').slice(1).join(':').trim().split('(')[0].trim();
+    const sel = document.getElementById('backend-select');
+    for (let opt of sel.options) {
+      if (opt.value === name) { opt.selected = true; break; }
+    }
+  }
+  // 将文本回复也写入终端显示
+  if (term) term.write(text + '\r\n');
 }
 
 function initTerminal() {
@@ -140,15 +202,24 @@ function initTerminal() {
     },
   });
 
-  const fitAddon = new FitAddon();
-  term.loadAddon(fitAddon);
-
   term.open(document.getElementById('terminal'));
-  fitAddon.fit();
+
+  // 自适应容器大小
+  function fitTerminal() {
+    const el = document.getElementById('terminal');
+    const renderer = term._core?._renderService;
+    if (!renderer || !renderer.dimensions) return setTimeout(fitTerminal, 50);
+    const { actualCellWidth, actualCellHeight } = renderer.dimensions;
+    if (!actualCellWidth || !actualCellHeight) return setTimeout(fitTerminal, 50);
+    const cols = Math.max(20, Math.floor((el.clientWidth - 16) / actualCellWidth));
+    const rows = Math.max(5, Math.floor((el.clientHeight - 16) / actualCellHeight));
+    term.resize(cols, rows);
+  }
+  fitTerminal();
 
   // 窗口大小变化 → __RESIZE
   const sendResize = () => {
-    fitAddon.fit();
+    fitTerminal();
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(`__RESIZE:${term.rows},${term.cols}`);
     }
@@ -165,6 +236,13 @@ function initTerminal() {
     }
   });
 }
+
+// 后端选择器切换事件
+document.getElementById('backend-select').addEventListener('change', function() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send('USE ' + this.value);
+  }
+});
 
 // 自动连接（URL 中有参数时）
 if (params.get('server')) {
