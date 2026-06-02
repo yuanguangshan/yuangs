@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -80,9 +79,16 @@ let ws = null;
 let term = null;
 let backends = [];
 
-// 从 URL 参数读取默认值
+// 从 URL 参数读取默认值，或从页面地址自动推导
 const params = new URLSearchParams(window.location.search);
-if (params.get('server')) document.getElementById('server-url').value = params.get('server');
+const loc = window.location;
+if (params.get('server')) {
+  document.getElementById('server-url').value = params.get('server');
+} else {
+  // 由 relay 自身提供页面时，默认 WebSocket 地址 = 同源 + /wstunnel
+  const wsProto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
+  document.getElementById('server-url').value = wsProto + '//' + loc.host + '/wstunnel';
+}
 if (params.get('token')) document.getElementById('token-input').value = params.get('token');
 
 function setStatus(text, connected) {
@@ -244,8 +250,8 @@ document.getElementById('backend-select').addEventListener('change', function() 
   }
 });
 
-// 自动连接（URL 中有参数时）
-if (params.get('server')) {
+// 自动连接（URL 中有 server 或 token 参数时）
+if (params.get('server') || params.get('token')) {
   setTimeout(connect, 300);
 }
 
