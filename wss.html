@@ -64,7 +64,7 @@
 <body>
 
 <div id="top-bar">
-  <select id="backend-select" disabled><option>—</option></select>
+  <select id="backend-select" disabled><option>--</option></select>
   <span id="status">Disconnected</span>
 </div>
 
@@ -154,4 +154,177 @@ function connect() {
   document.getElementById('connect-form').classList.add('hidden');
   setStatus('连接中...');
 
-  
+  ws = new WebSocket(url);
+  ws.binaryType = 'arraybuffer';
+
+  ws.onopen = () => {
+    setStatus('已连接', true);
+    // 连接成功后保存配置到 localStorage
+    saveConfig(document.getElementById('server-url').value.trim(), token);
+    initTerminal();
+    // 连接成功后获取后端列表
+    setTimeout(() => ws.send('LIST'), 300);
+  };
+
+  ws.onmessage = (e) => {
+    if (typeof e.data === 'string') {
+      // 文本帧 → relay 回复（后端列表、错误信息等）
+      handleRelayText(e.data);
+    } else {
+      // 二进制帧 → PTY shell 输出
+      if (term) term.write(new Uint8Array(e.data));
+    }
+  };
+
+  ws.onclose = () => {
+    setStatus('已断开');
+    if (term) {
+      term.dispose();
+      term = null;
+    }
+    document.getElementById('connect-form').classList.remove('hidden');
+  };
+
+  ws.onerror = () => {
+    showError('连接失败，请检查地址和网络');
+    setStatus('连接失败');
+    ws.close();
+  };
+}
+
+// 处理 relay 文本回复
+function handleRelayText(text) {
+  // 后端列表更新
+  if (text.startsWith('[Info] Connected backends:')) {
+    const listStr = text.split(':').slice(1).join(':').trim();
+    const sel = document.getElementById('backend-select');
+    if (listStr === 'No backends connected' || !listStr) {
+      sel.innerHTML = '<option>无后端</option>';
+      sel.disabled = true;
+    } else {
+      backends = listStr.split(',').map(s => s.trim()).filter(s => s);
+      sel.innerHTML = backends.map(b => {
+        const current = b.endsWith(' *');
+        const name = current ? b.slice(0, -2).trim() : b;
+        return `<option value="${name}" ${current ? 'selected' : ''}>${b}</option>`;
+      }).join('');
+      sel.disabled = false;
+    }
+    document.getElementById('backend-select').style.display = '';
+  }
+  // 切换后端确认
+  else if (text.startsWith('[Info] Switched to backend:')) {
+    const name = text.split(':').slice(1).join(':').trim().split('(')[0].trim();
+    const sel = document.getElementById('backend-select');
+    for (let opt of sel.options) {
+      if (opt.value === name) { opt.selected = true; break; }
+    }
+  }
+  // 将文本回复也写入终端显示
+  if (term) term.write(text + '\r\n');
+}
+
+function initTerminal() {
+  document.getElementById('terminal').classList.remove('hidden');
+
+  term = new Terminal({
+    cursorBlink: true,
+    cursorStyle: 'block',
+    fontSize: 14,
+    fontFamily: 'Menlo, Monaco, "Fira Code", monospace',
+    theme: {
+      background: '#1a1a2e',
+      foreground: '#e0e0e0',
+      cursor: '#ffffff',
+      selectionBackground: '#334466',
+      black: '#282a36',
+      red: '#ff5555',
+      green: '#50fa7b',
+      yellow: '#f1fa8c',
+      blue: '#6272a4',
+      magenta: '#ff79c6',
+      cyan: '#8be9fd',
+      white: '#f8f8f2',
+    },
+  });
+
+  term.open(document.getElementById('terminal'));
+
+  // 自适应容器大小
+  function fitTerminal() {
+    const el = document.getElementById('terminal');
+    if (!el.clientHeight || !el.clientWidth) return setTimeout(fitTerminal, 100);
+    // 尝试从 xterm 内部获取真实字符尺寸（最精确）
+    let cw, ch;
+    try {
+      const dims = term._core?._renderService?.dimensions;
+      if (dims?.actualCellWidth > 0 && dims?.actualCellHeight > 0) {
+        cw = dims.actualCellWidth;
+        ch = dims.actualCellHeight;
+      }
+    } catch {}
+    // 回退：从 DOM 测量实际行高
+    if (!ch) {
+      const row = el.querySelector('.xterm-rows > div');
+      if (row) {
+        ch = row.clientHeight;
+        cw = row.clientWidth / Math.max(1, term.cols);
+      }
+    }
+    // 最终回退：根据字号估算
+    if (!ch) { cw = 8.4; ch = 17; }
+    const padding = 16;
+    const cols = Math.max(20, Math.floor((el.clientWidth - padding) / cw));
+    const rows = Math.max(5, Math.floor((el.clientHeight - padding) / ch));
+    term.resize(cols, rows);
+    // 强制 viewport 撑满容器（xterm 内联样式无法用 CSS 覆盖）
+    const vp = el.querySelector('.xterm-viewport');
+    if (vp) vp.style.height = el.clientHeight + 'px';
+  }
+  fitTerminal();
+
+  // 窗口大小变化 → __RESIZE
+  const sendResize = () => {
+    fitTerminal();
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(`__RESIZE:${term.rows},${term.cols}`);
+    }
+  };
+
+  term.onResize(sendResize);
+  window.addEventListener('resize', sendResize);
+  setTimeout(sendResize, 500);
+
+  // 按键输入 → WebSocket 二进制帧
+  term.onData((data) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(new TextEncoder().encode(data));
+    }
+  });
+}
+
+// 后端选择器默认隐藏，收到后端列表后显示
+document.getElementById('backend-select').style.display = 'none';
+document.getElementById('backend-select').addEventListener('change', function() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send('USE ' + this.value);
+  }
+});
+
+// 自动连接：URL 有参数，或 localStorage 有值时
+const serverField = document.getElementById('server-url').value;
+const tokenField = document.getElementById('token-input').value;
+if (hasUrlServer || hasUrlToken || (serverField && tokenField)) {
+  setTimeout(connect, 300);
+}
+
+document.getElementById('connect-btn').addEventListener('click', connect);
+document.getElementById('server-url').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') connect();
+});
+document.getElementById('token-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') connect();
+});
+</script>
+</body>
+</html>
