@@ -1432,7 +1432,8 @@ async function requestJSON(method, path, payload) {
             headers: {
                 'Content-Type': 'application/json',
                 Accept: 'application/json',
-                'X-App-ID': 'shici'
+                'X-App-ID': 'shici',
+                'Authorization': 'Bearer sk-frontend'
             },
             body: payload ? JSON.stringify(payload) : null,
             signal: controller.signal
