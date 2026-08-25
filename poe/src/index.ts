@@ -405,6 +405,8 @@ var index_default = {
       const proxyHeaders = new Headers(request.headers);
       const clientId = proxyHeaders.get("X-Client-ID") || "unknown";
       
+      console.log(`[PROXY] query=${url.searchParams.toString()} X-Conv=${proxyHeaders.get("X-Conversation-Id")}`);
+      
       ["Host", "Referer", "Origin", "cf-connecting-ip"].forEach((h: string) => proxyHeaders.delete(h));
       
       try {

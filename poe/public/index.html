@@ -6326,6 +6326,13 @@
             showTypingIndicator();
 
             try {
+                // 确保 currentSession 在 API 调用前就赋值，这样 conversation_id 能通过 query 传给后端
+                if (!currentSession) {
+                    currentSession = 'session_' + Date.now();
+                    window.location.hash = currentSession;
+                    addToHistory(currentSession, getConversationTitle(), Date.now());
+                }
+
                 const messages = getRecentMessages(5);
 
                 // Check if current session is an agent session
@@ -6363,12 +6370,6 @@
                 } finally {
                     stopButton.style.display = 'none';
                     abortController = null;
-                }
-
-                if (!currentSession) {
-                    currentSession = 'session_' + Date.now();
-                    window.location.hash = currentSession;
-                    addToHistory(currentSession, getConversationTitle(), Date.now());
                 }
 
                 saveCurrentSession();
@@ -6867,7 +6868,8 @@
                 model: model,
                 messages: messages,
                 temperature: 0.7,
-                stream: shouldStream
+                stream: shouldStream,
+                conversation_id: currentSession || undefined
             };
 
             // If it's an agent session, add agent-specific parameters
@@ -6875,13 +6877,18 @@
                 requestBody.agent_mode = true; // Indicate this is an agent request
             }
 
+            // conversation_id 通过 header 传给后端，后端从 X-Conversation-Id 读取用于 system 去重
+            const convHeaders = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${FRONTEND_API_KEY}`,
+                'X-Client-ID': 'poe-app'
+            };
+            if (currentSession) {
+                convHeaders['X-Conversation-Id'] = currentSession;
+            }
             const response = await fetch(`${apiBaseUrl}/v1/chat/completions`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${FRONTEND_API_KEY}`,
-                    'X-Client-ID': 'poe-app'
-                },
+                headers: convHeaders,
                 body: JSON.stringify(requestBody),
                 signal: signal
             });
