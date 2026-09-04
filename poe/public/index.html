@@ -9030,6 +9030,45 @@
             }
         });
     </script>
+    <script>
+        /* Knowly 嵌入桥：被「灵感」页 iframe 嵌入时，把滚动方向上报给父页面，
+           用于 knowly 顶部控件的自动隐藏。独立运行（未被嵌入时直接退出）。 */
+        (function () {
+            if (window.parent === window) return;
+            var lastDir = '';
+            document.addEventListener('scroll', function (e) {
+                var target = e.target;
+                if (!target || target.__knowlyRaf) return;
+                target.__knowlyRaf = true;
+                requestAnimationFrame(function () {
+                    target.__knowlyRaf = false;
+                    var y;
+                    if (target === document || target === document.documentElement) {
+                        y = window.scrollY || document.documentElement.scrollTop || 0;
+                    } else if (target.scrollTop != null) {
+                        y = target.scrollTop;
+                    } else {
+                        return;
+                    }
+                    var prev = target.__knowlyLastY || 0;
+                    target.__knowlyLastY = y;
+                    // 2px 阈值过滤静止抖动；只在方向变化时上报，避免逐帧刷消息
+                    var dir = y > prev + 2 ? 'down' : (y < prev - 2 ? 'up' : '');
+                    if (dir && dir !== lastDir) {
+                        lastDir = dir;
+                        try {
+                            window.parent.postMessage({
+                                source: 'poe-embed',
+                                type: 'scroll',
+                                dir: dir,
+                                y: y
+                            }, '*');
+                        } catch (err) { /* 父页面已销毁等场景忽略 */ }
+                    }
+                });
+            }, { capture: true, passive: true });
+        })();
+    </script>
 </body>
 
 </html>
