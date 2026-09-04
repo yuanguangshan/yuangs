@@ -9010,20 +9010,36 @@
                     }, 150);
                 });
 
+                let navRefreshQueued = false;
                 const observer = new MutationObserver((mutations) => {
-                    let shouldUpdate = false;
-                    mutations.forEach((mutation) => {
-                        if (mutation.addedNodes.length > 0) {
-                            shouldUpdate = true;
+                    // 流式输出期间绝大多数变更只是文本节点增改，元素级增删（新消息/删除消息）
+                    // 才需要刷新消息列表；列表刷新再按 rAF 合并，避免每批 mutation 全量重查
+                    let elementChanged = false;
+                    for (const mutation of mutations) {
+                        const lists = [mutation.addedNodes, mutation.removedNodes];
+                        for (const list of lists) {
+                            for (const node of list) {
+                                if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                                if (node.matches?.('.message') || node.querySelector?.('.message')) {
+                                    elementChanged = true;
+                                    break;
+                                }
+                            }
+                            if (elementChanged) break;
                         }
-                    });
+                        if (elementChanged) break;
+                    }
+                    if (!elementChanged) return;
 
-                    if (shouldUpdate) {
+                    if (navRefreshQueued) return;
+                    navRefreshQueued = true;
+                    requestAnimationFrame(() => {
+                        navRefreshQueued = false;
                         messageElements = Array.from(document.querySelectorAll('.message'));
                         // If we are at the bottom (new message added), update index to last
                         // Otherwise keep current index logic
                         updateNavigationArrows();
-                    }
+                    });
                 });
 
                 observer.observe(chatContainer, { childList: true, subtree: true });
