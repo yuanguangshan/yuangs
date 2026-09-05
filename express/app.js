@@ -10,8 +10,21 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // --- 2. 连接数据库 ---
-// 【重要】请把下面的 <password> 换成你刚才在网站上设置的密码
-const DB_URL = 'mongodb+srv://yuanguangshan:Test%401234@cluster0.rsppwmz.mongodb.net/?appName=Cluster0';
+// 连接串不再硬编码（旧密码已随公开仓库泄露，必须在 Atlas 轮换）。
+// 读取顺序：环境变量 MONGODB_URI → 同目录 .env（已 gitignore，权限 600）。
+function loadDbUrl() {
+  if (process.env.MONGODB_URI) return process.env.MONGODB_URI;
+  try {
+    const line = require('fs').readFileSync(require('path').join(__dirname, '.env'), 'utf8')
+      .split('\n').find((l) => l.startsWith('MONGODB_URI='));
+    return line ? line.slice('MONGODB_URI='.length).trim() : undefined;
+  } catch { return undefined; }
+}
+const DB_URL = loadDbUrl();
+if (!DB_URL) {
+  console.error('缺少数据库连接串：请设置环境变量 MONGODB_URI，或在 express/.env 写入 MONGODB_URI=mongodb+srv://...');
+  process.exit(1);
+}
 
 mongoose.connect(DB_URL)
     .then(() => console.log('✅ 数据库连接成功！'))
