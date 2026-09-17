@@ -34,7 +34,7 @@ interface ProcessedContent {
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, HEAD, POST, OPTIONS, DELETE, PATCH",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-ID",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-ID, X-Client-Token",
   "Access-Control-Max-Age": "86400"
 };
 
@@ -408,6 +408,11 @@ var index_default = {
       console.log(`[PROXY] query=${url.searchParams.toString()} X-Conv=${proxyHeaders.get("X-Conversation-Id")}`);
       
       ["Host", "Referer", "Origin", "cf-connecting-ip"].forEach((h: string) => proxyHeaders.delete(h));
+
+      // 调用方鉴权（2026-09-13 加固）：本 Worker 是服务端转发，不带浏览器 Origin，
+      // 需以 X-Client-Token 向 aiproxy 表明身份。token 由 secret AI_CLIENT_TOKEN 注入。
+      if (env.AI_CLIENT_TOKEN) proxyHeaders.set("X-Client-Token", env.AI_CLIENT_TOKEN);
+      proxyHeaders.set("X-Client-ID", clientId);
       
       try {
         await env.DB.prepare(

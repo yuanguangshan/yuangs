@@ -10,18 +10,18 @@ import (
 type Theme struct {
 	Name string `json:"name"`
 	// Add more theme properties as needed
-	Primary   string `json:"primary,omitempty"`
-	PrimaryDark string `json:"primaryDark,omitempty"`
-	Accent    string `json:"accent,omitempty"`
-	Background string `json:"background,omitempty"`
-	Text      string `json:"text,omitempty"`
+	Primary       string `json:"primary,omitempty"`
+	PrimaryDark   string `json:"primaryDark,omitempty"`
+	Accent        string `json:"accent,omitempty"`
+	Background    string `json:"background,omitempty"`
+	Text          string `json:"text,omitempty"`
 	TextSecondary string `json:"textSecondary,omitempty"`
-	Card      string `json:"card,omitempty"`
-	CardHover string `json:"cardHover,omitempty"`
-	Glass     string `json:"glass,omitempty"`
-	GlassBorder string `json:"glassBorder,omitempty"`
-	PlayerBG  string `json:"playerBg,omitempty"`
-	HeaderBG  string `json:"headerBg,omitempty"`
+	Card          string `json:"card,omitempty"`
+	CardHover     string `json:"cardHover,omitempty"`
+	Glass         string `json:"glass,omitempty"`
+	GlassBorder   string `json:"glassBorder,omitempty"`
+	PlayerBG      string `json:"playerBg,omitempty"`
+	HeaderBG      string `json:"headerBg,omitempty"`
 }
 
 // ThemeService handles theme management
@@ -39,13 +39,13 @@ func NewThemeService() *ThemeService {
 		themes:       make(map[string]Theme),
 		filename:     "themes.json",
 	}
-	
+
 	// Initialize with default themes
 	service.initializeDefaultThemes()
-	
+
 	// Load existing themes from file
 	service.loadFromFile()
-	
+
 	return service
 }
 
@@ -53,7 +53,7 @@ func NewThemeService() *ThemeService {
 func (t *ThemeService) Get() string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	
+
 	return t.currentTheme
 }
 
@@ -61,17 +61,17 @@ func (t *ThemeService) Get() string {
 func (t *ThemeService) Set(themeName string) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	
+
 	// Check if the theme exists
 	if _, exists := t.themes[themeName]; !exists {
 		return false
 	}
-	
+
 	t.currentTheme = themeName
-	
+
 	// Save to file
 	t.saveToFile()
-	
+
 	return true
 }
 
@@ -79,13 +79,13 @@ func (t *ThemeService) Set(themeName string) bool {
 func (t *ThemeService) GetAll() map[string]Theme {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	
+
 	// Create a copy to prevent race conditions
 	result := make(map[string]Theme, len(t.themes))
 	for k, v := range t.themes {
 		result[k] = v
 	}
-	
+
 	return result
 }
 
@@ -93,9 +93,9 @@ func (t *ThemeService) GetAll() map[string]Theme {
 func (t *ThemeService) Add(themeName string, theme Theme) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	
+
 	t.themes[themeName] = theme
-	
+
 	// Save to file
 	t.saveToFile()
 }
@@ -104,22 +104,22 @@ func (t *ThemeService) Add(themeName string, theme Theme) {
 func (t *ThemeService) Remove(themeName string) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	
+
 	// Don't allow removing the current theme if it's the only one
 	if themeName == t.currentTheme && len(t.themes) <= 1 {
 		return false
 	}
-	
+
 	delete(t.themes, themeName)
-	
+
 	// If the current theme was removed, set to default
 	if themeName == t.currentTheme {
 		t.currentTheme = "default"
 	}
-	
+
 	// Save to file
 	t.saveToFile()
-	
+
 	return true
 }
 
@@ -127,11 +127,11 @@ func (t *ThemeService) Remove(themeName string) bool {
 func (t *ThemeService) GetThemeDetails(themeName string) *Theme {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	
+
 	if theme, exists := t.themes[themeName]; exists {
 		return &theme
 	}
-	
+
 	return nil
 }
 
@@ -144,13 +144,13 @@ func (t *ThemeService) saveToFile() {
 		CurrentTheme: t.currentTheme,
 		Themes:       t.themes,
 	}
-	
+
 	file, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		// Log the error or handle it appropriately
 		return
 	}
-	
+
 	if err := os.WriteFile(t.filename, file, 0644); err != nil {
 		// Log the error or handle it appropriately
 		return
@@ -164,21 +164,21 @@ func (t *ThemeService) loadFromFile() {
 		// If file doesn't exist, that's okay - we'll use defaults
 		return
 	}
-	
+
 	var data struct {
 		CurrentTheme string           `json:"currentTheme"`
 		Themes       map[string]Theme `json:"themes"`
 	}
-	
+
 	if err := json.Unmarshal(file, &data); err != nil {
 		// If JSON is invalid, use defaults
 		return
 	}
-	
+
 	if data.CurrentTheme != "" {
 		t.currentTheme = data.CurrentTheme
 	}
-	
+
 	if len(data.Themes) > 0 {
 		t.themes = data.Themes
 	}
@@ -309,7 +309,7 @@ func (t *ThemeService) initializeDefaultThemes() {
 			HeaderBG:      "rgba(44, 36, 27, 0.8)",
 		},
 	}
-	
+
 	for name, theme := range defaultThemes {
 		t.themes[name] = theme
 	}

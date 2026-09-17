@@ -31,7 +31,7 @@ type ITunesResult struct {
 
 // ITunesResponse represents the iTunes API response
 type ITunesResponse struct {
-	ResultCount int64         `json:"resultCount"`
+	ResultCount int64          `json:"resultCount"`
 	Results     []ITunesResult `json:"results"`
 }
 

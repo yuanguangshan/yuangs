@@ -73,7 +73,7 @@ func setupRoutes(
 	r.StaticFile("/sw.js", "./assets/sw.js")
 	r.StaticFile("/manifest.json", "./assets/manifest.json")
 	r.StaticFile("/YouTubePlayerManager.js", "./assets/YouTubePlayerManager.js")
-	
+
 	// Serve the main index.html
 	r.GET("/", func(c *gin.Context) {
 		c.File("./assets/index.html")

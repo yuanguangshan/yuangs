@@ -13,7 +13,7 @@ func GetThemeHandler(themeService *services.ThemeService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		currentTheme := themeService.Get()
 		allThemes := themeService.GetAll()
-		
+
 		c.JSON(http.StatusOK, gin.H{
 			"currentTheme": currentTheme,
 			"themes":       allThemes,

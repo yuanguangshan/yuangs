@@ -98,35 +98,35 @@ func SearchSongHandler(iTunesService *services.ITunesService, youtubeService *se
 		// Convert iTunes results to the expected format
 		for _, result := range iTunesResults {
 			allResults = append(allResults, map[string]interface{}{
-				"artistName":      result.ArtistName,
-				"trackName":       result.TrackName,
-				"trackId":         result.TrackID,
-				"collectionName":  result.CollectionName,
-				"artworkUrl100":   strings.Replace(result.ArtworkURL100, "100x100bb", "300x300bb", -1),
-				"previewUrl":      result.PreviewURL,
-				"kind":            result.Kind,
+				"artistName":       result.ArtistName,
+				"trackName":        result.TrackName,
+				"trackId":          result.TrackID,
+				"collectionName":   result.CollectionName,
+				"artworkUrl100":    strings.Replace(result.ArtworkURL100, "100x100bb", "300x300bb", -1),
+				"previewUrl":       result.PreviewURL,
+				"kind":             result.Kind,
 				"primaryGenreName": result.Genre,
-				"releaseDate":     result.ReleaseDate,
-				"collectionId":    result.CollectionID,
-				"trackTimeMillis": result.TrackTimeMillis,
+				"releaseDate":      result.ReleaseDate,
+				"collectionId":     result.CollectionID,
+				"trackTimeMillis":  result.TrackTimeMillis,
 			})
 		}
 
 		// Convert YouTube results to the expected iTunes format
 		for _, result := range youTubeResults {
 			allResults = append(allResults, map[string]interface{}{
-				"artistName":      strings.Join(result.Artists, ", "),
-				"trackName":       result.Title,
-				"trackId":         result.VideoID,
-				"collectionName":  "YouTube Music",
-				"artworkUrl100":   result.ThumbnailURL,
-				"previewUrl":      result.YouTubeURL,
-				"kind":            "youtube",
+				"artistName":       strings.Join(result.Artists, ", "),
+				"trackName":        result.Title,
+				"trackId":          result.VideoID,
+				"collectionName":   "YouTube Music",
+				"artworkUrl100":    result.ThumbnailURL,
+				"previewUrl":       result.YouTubeURL,
+				"kind":             "youtube",
 				"primaryGenreName": result.Album,
-				"releaseDate":     "",
-				"collectionId":    0,
-				"trackTimeMillis": services.ParseDurationString(result.Duration),
-				"duration":        result.Duration,
+				"releaseDate":      "",
+				"collectionId":     0,
+				"trackTimeMillis":  services.ParseDurationString(result.Duration),
+				"duration":         result.Duration,
 			})
 		}
 

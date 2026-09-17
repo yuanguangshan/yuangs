@@ -54,6 +54,7 @@
             --text-muted: #8e8ea0;
             --border-color: #4a4a4a;
             --border-radius: 12px;
+            --code-bg: #1b1e28;
             --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12);
             --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.15);
             --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.2);
@@ -268,10 +269,9 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: var(--font-family);
             -webkit-font-smoothing: antialiased;
-            max-width: 100%;
-            /* Prevent any element from exceeding container width */
+            /* 不在通配符上设置 max-width:100% 和 font-family：
+               max-width 会截断 fixed 下拉/浮层，font-family 由 body 继承 */
         }
 
         .constrained-content {
@@ -281,9 +281,26 @@
             word-break: break-word;
         }
 
+        /* 防跳动三件套：
+           1) html 也锁 overflow：iframe 嵌入（如 ai-studio-sidepanel）时，
+              聊天区触底后滚轮链式滚动不会再拽动文档本身；
+           2) body 高度锁定不变；
+           3) chatContainer 关闭 Chrome 滚动锚定（overflow-anchor）：
+              流式输出整段替换内容时，锚定补偿会与自动滚动互搏造成狂跳 */
+        html {
+            overflow: hidden;
+            height: 100%;
+        }
+
+        #chatContainer,
+        .chat-container {
+            overflow-anchor: none;
+        }
+
         body {
             background-color: rgb(18, 18, 24);
             color: var(--text-light);
+            font-family: var(--font-family);
             display: flex;
             flex-direction: column;
             min-height: 100dvh;
@@ -293,6 +310,14 @@
             overflow: hidden;
             overflow-x: hidden;
             /* Prevent any horizontal scrolling on the page */
+        }
+
+        /* 表单元素不自动继承字体，显式继承一次 */
+        input,
+        textarea,
+        button,
+        select {
+            font-family: inherit;
         }
 
         .main-content {
@@ -673,31 +698,8 @@
             outline: none;
         }
 
-        .send-btn {
-            width: 36px;
-            height: 36px;
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: var(--transition);
-            flex-shrink: 0;
-        }
-
-        .send-btn:disabled {
-            background: #4a4a4a;
-            cursor: not-allowed;
-            opacity: 0.6;
-        }
-
-        .send-btn:not(:disabled):hover {
-            background: var(--primary-hover);
-            transform: scale(1.05);
-        }
+        /* .send-btn 的唯一定义在下方输入框区域（绝对定位于 textarea 内），
+           此处不再重复定义，避免 hover 双重 transform 破坏垂直居中 */
 
         .voice-btn {
             width: 36px;
@@ -717,11 +719,6 @@
         .voice-btn:hover {
             color: var(--primary-color);
             background: var(--primary-light);
-        }
-
-        .voice-btn.recording {
-            color: #ff6b6b;
-            animation: pulse-red 1.5s infinite;
         }
 
         .file-upload-btn {
@@ -991,7 +988,7 @@
         }
 
         .new-chat-btn {
-            background: linear-gradient(135deg, var(--primary-color) 0%, #0d8a6a 100%);
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
             color: white;
             border: none;
             border-radius: 10px;
@@ -1006,13 +1003,12 @@
             font-size: 15px;
             transition: var(--transition);
             box-shadow: var(--shadow-sm);
-            opacity: 0.2;
-            /* 默认20%透明度，更加透明 */
         }
 
         .new-chat-btn:hover {
             transform: translateY(-1px);
             box-shadow: var(--shadow-md);
+            filter: brightness(1.08);
         }
 
         .new-chat-btn:active {
@@ -1210,7 +1206,7 @@
             border: 1px solid var(--border-color);
             max-height: 400px;
             overflow-y: auto;
-            animation: fadeIn 0.2s ease;
+            animation: fadeSlideDown 0.2s ease;
         }
 
         @media (max-width: 768px) {
@@ -1652,11 +1648,12 @@
         }
 
         .user .avatar {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--input-bg);
+            color: var(--text-muted);
         }
 
         .assistant .avatar {
-            background: linear-gradient(135deg, var(--primary-color) 0%, #0d8a6a 100%);
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
         }
 
         .message:hover .avatar {
@@ -1880,8 +1877,8 @@
             /* 进一步减少右边距 */
             top: 50%;
             transform: translateY(-50%);
-            /* 垂直居中 */
-            background: linear-gradient(135deg, var(--primary-color) 0%, #0d8a6a 100%);
+            /* 垂直居中（hover/active 不改动 transform，避免破坏居中） */
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
             color: white;
             border: none;
             border-radius: 8px;
@@ -1894,10 +1891,26 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: var(--transition);
+            transition: background-color 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
             box-shadow: var(--shadow-sm);
             z-index: 2;
             /* Higher than token counter */
+        }
+
+        .send-btn:disabled {
+            background: #4a4a4a;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .send-btn:not(:disabled):hover {
+            background: var(--primary-hover);
+            filter: brightness(1.08);
+            box-shadow: var(--shadow-md);
+        }
+
+        .send-btn:not(:disabled):active {
+            filter: brightness(0.92);
         }
 
         @media (max-width: 768px) {
@@ -1939,16 +1952,6 @@
             }
         }
 
-        .send-btn:hover {
-            transform: translateY(-1px);
-            /* 减少悬停变换 */
-            box-shadow: var(--shadow-md);
-        }
-
-        .send-btn:active {
-            transform: translateY(0);
-        }
-
         .send-btn.disabled {
             background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
             opacity: 0.6;
@@ -1956,7 +1959,6 @@
         }
 
         .send-btn.disabled:hover {
-            transform: none;
             box-shadow: var(--shadow-sm);
         }
 
@@ -2070,58 +2072,39 @@
             line-height: 1.4;
         }
 
-        /* 各级标题使用不同的炫彩渐变 */
+        /* 标题统一走主题变量，随 14 套主题联动，不再使用固定彩虹渐变 */
         .markdown-body h1 {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-size: 1.75em;
+            color: var(--primary-color);
+            font-size: 1.6em;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--border-color);
         }
 
         .markdown-body h2 {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-size: 1.5em;
+            color: var(--text-light);
+            font-size: 1.4em;
+            padding-bottom: 4px;
+            border-bottom: 1px solid var(--border-color);
         }
 
         .markdown-body h3 {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-size: 1.3em;
+            color: var(--text-light);
+            font-size: 1.25em;
         }
 
         .markdown-body h4 {
-            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-size: 1.15em;
-        }
-
-        .markdown-body h5 {
-            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: var(--text-light);
             font-size: 1.1em;
         }
 
-        .markdown-body h6 {
-            background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+        .markdown-body h5 {
+            color: var(--text-light);
             font-size: 1em;
         }
 
-        .markdown-body h1,
-        .markdown-body h2 {
-            border-bottom: 2px solid rgba(102, 126, 234, 0.3);
+        .markdown-body h6 {
+            color: var(--text-muted);
+            font-size: 0.95em;
         }
 
         .markdown-body p {
@@ -2148,12 +2131,9 @@
             margin-bottom: 0;
         }
 
-        /* 加粗文本使用醒目的橙色渐变 */
+        /* 加粗文本：实色高亮，随主题变量联动 */
         .markdown-body strong {
-            background: linear-gradient(135deg, #ff9a56 0%, #ff6a88 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: var(--text-light);
             font-weight: 700;
         }
 
@@ -2168,15 +2148,15 @@
         }
 
         .markdown-body pre {
-            background: #13a8a8;
+            background: var(--code-bg, #1b1e28);
             border-radius: 8px;
-            padding: 42px 12px 12px 12px !important;
+            padding: 42px 12px 12px 12px;
             /* Increase top padding for label/button */
             overflow-x: auto;
             /* Allow horizontal scroll for code blocks only */
             overflow-y: visible;
             margin: 18px 0;
-            border: 1px solid rgba(82, 82, 110, 0.5);
+            border: 1px solid var(--border-color);
             max-width: 100%;
             word-wrap: normal;
             /* Don't break words in code blocks */
@@ -2187,10 +2167,10 @@
         .markdown-body code {
             font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
             font-size: 0.9em;
-            background: rgba(102, 126, 234, 0.15);
+            background: var(--primary-light);
             padding: 4px 8px;
             border-radius: 4px;
-            color: rgb(255, 180, 100);
+            color: var(--text-light);
             overflow-wrap: break-word;
             word-wrap: break-word;
             max-width: 100%;
@@ -2198,7 +2178,7 @@
 
         .markdown-body pre code {
             background: transparent;
-            padding: 0 !important;
+            padding: 0;
             /* Reset padding since pre handles it */
             border: none;
             color: #dcdcdc;
@@ -2210,11 +2190,11 @@
 
         /* Override Prism.js default padding */
         .markdown-body pre[class*="language-"] {
-            padding-top: 42px !important;
+            padding-top: 42px;
         }
 
         .markdown-body code[class*="language-"] {
-            padding: 0 !important;
+            padding: 0;
         }
 
         /* Enhanced code block styles for different themes */
@@ -2254,15 +2234,13 @@
         }
 
         :root[data-theme="github-light"] .markdown-body pre {
-            background: #645081;
-            color: #0d1117;
+            background: #24292e;
             border: 1px solid #d0d7de;
         }
 
 
         :root[data-theme="nord-light"] .markdown-body pre {
-            background: #1b4178;
-            color: #0d1117;
+            background: #2e3440;
             border: 1px solid #cfd6e0;
         }
 
@@ -2341,22 +2319,23 @@
         }
 
         .markdown-body blockquote {
-            color: rgb(160, 160, 180);
-            border-left: 0.25em solid rgba(102, 126, 234, 0.5);
-            background: rgba(102, 126, 234, 0.05);
+            color: var(--text-muted);
+            border-left: 0.25em solid var(--primary-color);
+            background: var(--primary-light);
             padding: 16px 20px;
             margin: 18px 0;
             border-radius: 0 8px 8px 0;
         }
 
         .markdown-body a {
-            color: rgb(100, 200, 255);
+            color: var(--primary-color);
             text-decoration: none;
             transition: color 0.3s;
         }
 
         .markdown-body a:hover {
-            color: rgb(150, 220, 255);
+            color: var(--primary-hover);
+            text-decoration: underline;
         }
 
         .markdown-body table {
@@ -2370,15 +2349,15 @@
         }
 
         .markdown-body th {
-            background-color: rgba(102, 126, 234, 0.15);
+            background-color: var(--primary-light);
             padding: 12px 16px;
-            border: 1px solid rgb(60, 60, 80);
+            border: 1px solid var(--border-color);
             font-weight: 600;
         }
 
         .markdown-body td {
             padding: 12px 16px;
-            border: 1px solid rgb(60, 60, 80);
+            border: 1px solid var(--border-color);
         }
 
         .markdown-body tr {
@@ -2387,13 +2366,13 @@
         }
 
         .markdown-body tr:nth-child(2n) {
-            background-color: rgba(102, 126, 234, 0.05);
+            background-color: rgba(255, 255, 255, 0.03);
         }
 
         .markdown-body hr {
             height: 1px;
             border: none;
-            background: rgb(60, 60, 80);
+            background: var(--border-color);
             margin: 24px 0;
         }
 
@@ -2419,64 +2398,6 @@
 
             50% {
                 opacity: 0;
-            }
-        }
-
-        /* Glowing text effect for streamed content - disabled transparent text on mobile for better rendering */
-        .stream-highlight {
-            background: linear-gradient(120deg, #e688ff, #a3d5ff, #a3ffa9);
-            background-size: 200% 200%;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            animation: gradient-shift 3s ease infinite;
-        }
-
-        @media (max-width: 768px) {
-            .stream-highlight {
-                -webkit-background-clip: initial;
-                -webkit-text-fill-color: inherit;
-                background-clip: initial;
-                background: none;
-                color: var(--primary-color);
-                text-shadow: 0 0 8px rgba(102, 126, 234, 0.3);
-            }
-        }
-
-        /* 修复：流式输出时，代码块内的文字强制取消渐变特效，改为实心亮色 */
-        .stream-highlight pre,
-        .stream-highlight code,
-        .stream-highlight pre *,
-        .stream-highlight code * {
-            color: #e0e0e0 !important;
-            /* 强制设为亮白色/浅灰色 */
-            background: none !important;
-            /* 移除文字背景的渐变 */
-            -webkit-background-clip: initial !important;
-            background-clip: initial !important;
-            -webkit-text-fill-color: initial !important;
-            /* 取消文字透明 */
-            text-shadow: none !important;
-            animation: none !important;
-        }
-
-        /* 保持代码块容器本身的背景色不变 (确保 Prism 主题生效) */
-        .markdown-body pre {
-            /* 这里的背景色由 Prism 主题决定，不需要改，上面的代码只重置文字颜色 */
-            position: relative;
-        }
-
-        @keyframes gradient-shift {
-            0% {
-                background-position: 0% 50%;
-            }
-
-            50% {
-                background-position: 100% 50%;
-            }
-
-            100% {
-                background-position: 0% 50%;
             }
         }
 
@@ -2800,28 +2721,24 @@
             }
         }
 
-        /* Breathing light effect for thinking text */
+        /* Breathing light effect for thinking text
+           （只动 opacity：旧的 text-shadow + scale 逐帧重绘是全页最贵的动画） */
         .breathing-text {
             display: inline-block;
             animation: breathe 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
             font-weight: 600;
+            color: var(--primary-color);
         }
 
         @keyframes breathe {
 
             0%,
             100% {
-                opacity: 0.8;
-                color: var(--primary-color);
-                text-shadow: 0 0 8px var(--primary-light), 0 0 12px var(--primary-light);
-                transform: scale(1);
+                opacity: 0.55;
             }
 
             50% {
                 opacity: 1;
-                color: var(--primary-hover);
-                text-shadow: 0 0 15px var(--primary-color), 0 0 25px var(--primary-light), 0 0 35px var(--primary-light);
-                transform: scale(1.02);
             }
         }
 
@@ -2891,7 +2808,7 @@
         .mobile-more-btn {
             padding: 12px 16px;
             border-radius: 10px;
-            background: linear-gradient(135deg, var(--primary-color) 0%, #0d8a6a 100%);
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
             color: white;
             border: none;
             cursor: pointer;
@@ -3082,10 +2999,7 @@
                 transform: scale(0.9) !important;
             }
 
-            /* 确保移动端按钮也有透明度效果 */
             .floating-btn .new-chat-btn {
-                opacity: 0.15;
-                /* 非常透明，几乎看不清 */
                 transition: opacity 0.3s ease;
             }
 
@@ -3191,27 +3105,11 @@
         }
 
         .voice-btn.recording {
-            background: rgba(16, 163, 127, 0.3);
-            border-color: var(--primary-color);
-            color: var(--primary-color);
-            animation: pulse-green 1.5s infinite;
-        }
-
-        @keyframes pulse-green {
-            0% {
-                transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(16, 163, 127, 0.4);
-            }
-
-            70% {
-                transform: scale(1.05);
-                box-shadow: 0 0 0 10px rgba(16, 163, 127, 0);
-            }
-
-            100% {
-                transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(16, 163, 127, 0);
-            }
+            /* 录音状态统一用红色（业界惯例），与主题主色解耦 */
+            background: rgba(255, 107, 107, 0.15);
+            border-color: #ff6b6b;
+            color: #ff6b6b;
+            animation: pulse-red 1.5s infinite;
         }
 
         @keyframes pulse-red {
@@ -3461,7 +3359,8 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        @keyframes fadeIn {
+        /* 下拉/顶部浮层专用：从上方滑入（fadeIn 为消息专用，从下方滑入） */
+        @keyframes fadeSlideDown {
             from {
                 opacity: 0;
                 transform: translateY(-10px);
@@ -3554,7 +3453,7 @@
 
             body.focus-mode .mobile-exit-focus-btn {
                 display: flex;
-                animation: fadeIn 0.3s ease;
+                animation: fadeSlideDown 0.3s ease;
             }
 
             .mobile-exit-focus-btn:active {
@@ -3589,13 +3488,11 @@
             cursor: pointer;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             transition: all 0.2s ease;
-            opacity: 0.3;
-            /* 保持半透明 */
+            opacity: 0.6;
         }
 
         .nav-arrow:hover {
-            opacity: 0.3;
-            /* 保持半透明，不改变 */
+            opacity: 1;
             transform: scale(1.1);
             background: var(--primary-hover);
         }
@@ -3992,8 +3889,10 @@
         <i class="fas fa-compress"></i>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <!-- marked 本地化：不依赖第三方 CDN，失败时回退到 CDN，再失败时降级为纯文本渲染 -->
+    <script src="/vendor/marked.min.js"></script>
+    <script>window.marked || document.write('<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"><\/script>');</script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" defer></script>
     <script>
         // API Key helpers
         function saveApiKey() {
@@ -4083,6 +3982,19 @@
         let isRecording = false;
         let recognition = null;
 
+        // 流式生成状态：防止并发发送 / 切换会话后误保存
+        let isGenerating = false;
+        let suppressPendingSave = false;
+
+        // 贴底吸附锁：是否跟随流式内容自动滚到底部。
+        // 只由「用户/自身的滚动事件」更新，不用每批内容增长后的距离重新判定——
+        // 否则小幅度上拉（< 旧 250px 阈值）会在下一批渲染时被立刻拽回底部，表现为狂跳。
+        let streamStick = true;
+        chatContainer.addEventListener('scroll', () => {
+            const dist = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight;
+            streamStick = dist < 60;
+        }, { passive: true });
+
         // Search state
         let searchMatches = [];
         let currentMatchIndex = -1;
@@ -4090,6 +4002,58 @@
         // Image upload state
         let pendingImages = [];
         const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+
+        // ===== 通用工具：HTML 转义 / Markdown 渲染（防 XSS） =====
+        function escapeHtml(str) {
+            return String(str ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function escapeRegExp(s) {
+            return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        // 清洗渲染后的 HTML：去掉脚本载体标签、on* 事件属性和 javascript:/data:text/html 协议
+        function sanitizeHtml(html) {
+            const tpl = document.createElement('template');
+            tpl.innerHTML = String(html ?? '');
+            const dangerous = tpl.content.querySelectorAll('script, iframe, object, embed, link, meta, base, form, input, button');
+            dangerous.forEach(el => el.remove());
+            const urlAttrs = ['href', 'src', 'xlink:href', 'action', 'formaction', 'background', 'poster'];
+            tpl.content.querySelectorAll('*').forEach(el => {
+                for (const attr of Array.from(el.attributes)) {
+                    const name = attr.name.toLowerCase();
+                    const value = attr.value.trim().toLowerCase().replace(/\s+/g, '');
+                    if (name.startsWith('on')) {
+                        el.removeAttribute(attr.name);
+                    } else if (urlAttrs.includes(name) && (value.startsWith('javascript:') || value.startsWith('data:text/html'))) {
+                        el.removeAttribute(attr.name);
+                    }
+                }
+            });
+            return tpl.innerHTML;
+        }
+
+        // 统一入口：marked 解析 + 清洗。任何「Markdown → innerHTML」都必须走这里
+        function renderMarkdown(content) {
+            const text = String(content ?? '');
+            let html;
+            try {
+                if (window.marked && typeof marked.parse === 'function') {
+                    html = marked.parse(text);
+                } else {
+                    html = `<p>${escapeHtml(text).replace(/\n/g, '<br>')}</p>`;
+                }
+            } catch (e) {
+                console.error('Markdown parse error:', e);
+                html = `<p>${escapeHtml(text).replace(/\n/g, '<br>')}</p>`;
+            }
+            return sanitizeHtml(html);
+        }
 
         // Initialize Web Speech API if supported
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -4120,19 +4084,8 @@
             };
         }
 
-        // Add event listeners for navigation arrows
-        document.addEventListener('DOMContentLoaded', function () {
-            const navUp = document.getElementById('navUp');
-            const navDown = document.getElementById('navDown');
-
-            if (navUp) {
-                navUp.addEventListener('click', goToPreviousMessage);
-            }
-
-            if (navDown) {
-                navDown.addEventListener('click', goToNextMessage);
-            }
-        });
+        // 导航箭头在文件末尾绑定（带双击检测：单击跳一条、双击回顶/回底），
+        // 此处不再重复绑定，避免单击一次跳两条消息
 
         // Handle responsive button placement
         function handleResponsiveButton() {
@@ -4216,7 +4169,12 @@
                 startNewConversation();
             }
 
-            window.addEventListener('resize', handleResponsiveButton);
+            // resize 防抖：避免拖动窗口时高频 DOM 搬迁
+            let resizeDebounceTimer = null;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeDebounceTimer);
+                resizeDebounceTimer = setTimeout(handleResponsiveButton, 150);
+            });
         }
 
         // Add event listener to exit focus mode when clicking on input area
@@ -4864,7 +4822,7 @@
                         
                         // 更新DOM
                         contentDiv.dataset.raw = updatedRaw;
-                        contentDiv.innerHTML = marked.parse(updatedRaw);
+                        contentDiv.innerHTML = renderMarkdown(updatedRaw);
                         
                         // 添加语法高亮
                         if (typeof Prism !== 'undefined') {
@@ -5068,7 +5026,7 @@
                 bottom: 32px;
                 left: 50%;
                 transform: translateX(-50%);
-                background: linear-gradient(135deg, var(--primary-color) 0%, #0d8a6a 100%);
+                background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
                 color: white;
                 padding: 12px 20px;
                 border-radius: 8px;
@@ -5103,53 +5061,88 @@
             }
         }
 
+        let searchDebounceTimer = null;
         function performSearch() {
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(runSearch, 180);
+        }
+
+        function runSearch() {
             const query = searchInput.value.toLowerCase().trim();
-            const messages = document.querySelectorAll('.message .content');
             const searchCount = document.getElementById('searchCount');
 
             searchMatches = [];
             currentMatchIndex = -1;
 
-            messages.forEach(msg => {
-                const rawContent = msg.dataset.raw || msg.textContent;
-                if (query === '') {
-                    // Reset highlights
-                    if (msg.dataset.raw) {
-                        msg.innerHTML = marked.parse(msg.dataset.raw);
-                    } else {
-                        msg.innerHTML = msg.textContent;
-                    }
-                    return;
-                }
-
-                if (rawContent.toLowerCase().includes(query)) {
-                    // Simple highlighting by wrapping in a span
-                    const regex = new RegExp(`(${query})`, 'gi');
-                    const highlighted = rawContent.replace(regex, '<span class="search-match">$1</span>');
-                    msg.innerHTML = marked.parse(highlighted);
-                } else {
-                    // Reset if not a match
-                    if (msg.dataset.raw) {
-                        msg.innerHTML = marked.parse(msg.dataset.raw);
-                    } else {
-                        msg.innerHTML = msg.textContent;
+            // 只恢复上一轮被高亮过的消息，其余消息不动（避免全量重渲染）
+            document.querySelectorAll('.content[data-search-active]').forEach(msg => {
+                delete msg.dataset.searchActive;
+                if (msg.dataset.raw !== undefined) {
+                    msg.innerHTML = renderMarkdown(msg.dataset.raw);
+                    if (typeof Prism !== 'undefined' && typeof Prism.highlightAllUnder === 'function') {
+                        Prism.highlightAllUnder(msg);
                     }
                 }
             });
 
             if (query !== '') {
-                // Collect all spans with matching text
+                document.querySelectorAll('.message .content').forEach(msg => {
+                    const rawContent = msg.dataset.raw || msg.textContent;
+                    if (rawContent && rawContent.toLowerCase().includes(query)) {
+                        msg.dataset.searchActive = '1';
+                        if (msg.dataset.raw !== undefined) {
+                            msg.innerHTML = renderMarkdown(msg.dataset.raw);
+                        }
+                        highlightTextNodes(msg, query);
+                    }
+                });
                 searchMatches = Array.from(document.querySelectorAll('.search-match'));
-                if (searchMatches.length > 0) {
-                    currentMatchIndex = 0;
-                    navigateToMatch();
-                } else {
-                    searchCount.textContent = '0/0';
-                }
+            }
+
+            if (searchMatches.length > 0) {
+                currentMatchIndex = 0;
+                navigateToMatch();
             } else {
                 searchCount.textContent = '0/0';
             }
+        }
+
+        // 在已渲染的 DOM 上做文本节点级高亮：不碰代码块，也不破坏 markdown 结构
+        function highlightTextNodes(root, query) {
+            const ql = query.toLowerCase();
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+                acceptNode: (node) => {
+                    if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+                    if (node.parentElement && node.parentElement.closest('pre, code, .code-copy-btn, .code-language')) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    return node.nodeValue.toLowerCase().includes(ql)
+                        ? NodeFilter.FILTER_ACCEPT
+                        : NodeFilter.FILTER_REJECT;
+                }
+            });
+
+            const nodes = [];
+            while (walker.nextNode()) nodes.push(walker.currentNode);
+
+            nodes.forEach(node => {
+                const text = node.nodeValue;
+                const lower = text.toLowerCase();
+                const frag = document.createDocumentFragment();
+                let pos = 0;
+                let idx = lower.indexOf(ql);
+                while (idx !== -1) {
+                    if (idx > pos) frag.appendChild(document.createTextNode(text.slice(pos, idx)));
+                    const span = document.createElement('span');
+                    span.className = 'search-match';
+                    span.textContent = text.slice(idx, idx + query.length);
+                    frag.appendChild(span);
+                    pos = idx + query.length;
+                    idx = lower.indexOf(ql, pos);
+                }
+                if (pos < text.length) frag.appendChild(document.createTextNode(text.slice(pos)));
+                node.parentNode.replaceChild(frag, node);
+            });
         }
 
         function navigateToMatch() {
@@ -5323,7 +5316,7 @@
 
             historyItem.innerHTML = `
                 <div class="history-title-row">
-                    <div class="history-title" title="${title}">${title}</div>
+                    <div class="history-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
                     <div class="history-actions">
                         <button class="action-btn rename-btn" title="Rename">✎</button>
                         <button class="action-btn export-btn" title="Export">⬇️</button>
@@ -5399,7 +5392,7 @@
                 dropdownHistoryItem.innerHTML = `
                     <div style="display: flex; align-items: center; flex: 1; gap: 8px;">
                         <i class="fas fa-comment"></i>
-                        <span class="dropdown-title">${title}</span>
+                        <span class="dropdown-title">${escapeHtml(title)}</span>
                     </div>
                     <div class="dropdown-actions">
                         <button class="dropdown-action-btn edit-btn" title="Rename">
@@ -5480,7 +5473,7 @@
                 logoDropdownHistoryItem.innerHTML = `
                     <div style="display: flex; align-items: center; flex: 1; gap: 8px;">
                         <i class="fas fa-comment"></i>
-                        <span class="dropdown-title">${title}</span>
+                        <span class="dropdown-title">${escapeHtml(title)}</span>
                     </div>
                     <div class="dropdown-actions">
                         <button class="dropdown-action-btn edit-btn" title="Rename">
@@ -5633,7 +5626,11 @@
                 if (actionsDiv) actionsDiv.style.display = '';
             };
 
+            // 防止 Enter/blur 双触发，以及 Escape 后 blur 误保存
+            let renameHandled = false;
             const saveRename = async () => {
+                if (renameHandled) return;
+                renameHandled = true;
                 const newTitle = input.value.trim();
                 cleanup();
 
@@ -5661,6 +5658,7 @@
                 if (e.key === 'Enter') {
                     saveRename();
                 } else if (e.key === 'Escape') {
+                    renameHandled = true;
                     cleanup();
                 }
             });
@@ -5754,7 +5752,15 @@
             }
         }
 
+        let loadConversationSeq = 0;
         async function loadConversation(sessionId, offset = 0, limit = 30) {
+            // 生成中切换会话：中止流式请求，并标记不要把当前 DOM 误存进新会话
+            if (isGenerating) {
+                suppressPendingSave = true;
+                if (abortController) abortController.abort();
+            }
+            // 快速连点多个会话时，只让最后一次响应生效
+            const seq = ++loadConversationSeq;
             try {
                 // 构建带分页参数的API请求URL
                 const url = new URL(`/api/history/${sessionId}`, window.location.origin);
@@ -5764,6 +5770,7 @@
                 const res = await fetch(url.toString());
                 if (!res.ok) throw new Error('Failed to load');
                 const conv = await res.json();
+                if (seq !== loadConversationSeq) return; // 过期响应，丢弃
 
                 // 如果是首次加载（offset为0），清空聊天容器
                 if (offset === 0) {
@@ -5827,7 +5834,7 @@
             loadMoreButton.id = 'load-more-button';
             loadMoreButton.textContent = '加载更多消息';
             loadMoreButton.style.cssText = `
-                background: linear-gradient(135deg, var(--primary-color) 0%, #0d8a6a 100%);
+                background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
                 color: white;
                 border: none;
                 border-radius: 8px;
@@ -6006,7 +6013,7 @@
 
                         historyItem.innerHTML = `
                             <div class="history-title-row">
-                                <div class="history-title" title="${conv.title}">${conv.title}</div>
+                                <div class="history-title" title="${escapeHtml(conv.title)}">${escapeHtml(conv.title)}</div>
                                 <div class="history-actions">
                                     <button class="action-btn rename-btn" title="Rename">✎</button>
                                     <button class="action-btn export-btn" title="Export">⬇️</button>
@@ -6074,7 +6081,7 @@
                             dropdownHistoryItem.innerHTML = `
                                 <div style="display: flex; align-items: center; flex: 1; gap: 8px;">
                                     <i class="fas fa-comment"></i>
-                                    <span class="dropdown-title">${conv.title}</span>
+                                    <span class="dropdown-title">${escapeHtml(conv.title)}</span>
                                 </div>
                                 <div class="dropdown-actions">
                                     <button class="dropdown-action-btn edit-btn" title="Rename">
@@ -6153,7 +6160,7 @@
                             logoDropdownHistoryItem.innerHTML = `
                                 <div style="display: flex; align-items: center; flex: 1; gap: 8px;">
                                     <i class="fas fa-comment"></i>
-                                    <span class="dropdown-title">${conv.title}</span>
+                                    <span class="dropdown-title">${escapeHtml(conv.title)}</span>
                                 </div>
                                 <div class="dropdown-actions">
                                     <button class="dropdown-action-btn edit-btn" title="Rename">
@@ -6307,6 +6314,8 @@
             }
 
             if (!message || sendButton.disabled) return;
+            if (isGenerating) return; // 流式生成期间禁止重复发送，避免双流内容交叉
+            isGenerating = true;
 
             const timestamp = Date.now();
             // Store the question for later Q&A pairing
@@ -6370,6 +6379,13 @@
                 } finally {
                     stopButton.style.display = 'none';
                     abortController = null;
+                    isGenerating = false;
+                }
+
+                // 切换会话时已中止流式请求：当前 DOM 属于新会话，不能误存回旧会话
+                if (suppressPendingSave) {
+                    suppressPendingSave = false;
+                    return;
                 }
 
                 saveCurrentSession();
@@ -6408,6 +6424,8 @@
 
         // Create a temporary assistant message element for streaming
         function createTemporaryAssistantMessage() {
+            // 新一轮生成开始，恢复贴底吸附
+            streamStick = true;
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message assistant';
             messageDiv.id = 'temp-assistant-message';
@@ -6532,11 +6550,7 @@
 
             // Smart scrolling to ensure the temporary message is visible only if user is at bottom
             setTimeout(() => {
-                const threshold = 100;
-                const isUserAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < threshold;
-
-                // Only scroll to bottom if user is already near the bottom
-                if (isUserAtBottom) {
+                if (streamStick) {
                     chatContainer.scrollTo({
                         top: chatContainer.scrollHeight,
                         behavior: 'instant' // Use instant to prevent smooth scroll delay
@@ -6578,7 +6592,7 @@
                     bottom: 32px;
                     left: 50%;
                     transform: translateX(-50%);
-                    background: linear-gradient(135deg, var(--primary-color) 0%, #0d8a6a 100%);
+                    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
                     color: white;
                     padding: 12px 20px;
                     border-radius: 8px;
@@ -6642,165 +6656,24 @@
         }
 
         // Update the temporary assistant message content with fancy animations
+        // 流式期间只做 Markdown 解析（受 callPoeAPI 80ms 节流），代码高亮和复制按钮
+        // 留到 finalize 后由 addMessageToDOM 一次性补齐，避免每帧 O(n²) 重建
         function updateTemporaryAssistantContent(content) {
             const tempContent = document.getElementById('temp-assistant-content');
             if (tempContent) {
-                // 判断用户是否接近底部 (250px 保证在大屏幕或快速滚动时也能捕捉)
-                const threshold = 250;
-                const isUserAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < threshold;
-
                 tempContent.setAttribute('data-raw', content);
                 const preprocessedContent = preprocessContentForStreaming(content);
                 const markdownHtml = marked.parse(preprocessedContent);
-                const finalHtml = postprocessContentForDisplay(markdownHtml, content);
-
-                // 保存当前滚动位置
-                const previousScrollTop = chatContainer.scrollTop;
-                const previousScrollHeight = chatContainer.scrollHeight;
+                const finalHtml = sanitizeHtml(postprocessContentForDisplay(markdownHtml, content));
 
                 tempContent.innerHTML = finalHtml;
                 tempContent.classList.add('fancy-typing');
-                tempContent.classList.add('stream-highlight');
 
-                // 添加代码块复制按钮
-                addCopyButtonsToCodeBlocks(tempContent);
-
-                // 确保在内容更新后立即处理语法高亮
-                if (typeof Prism !== 'undefined' && typeof Prism.highlightAllUnder !== 'undefined') {
-                    Prism.highlightAllUnder(tempContent);
-                } else if (typeof Prism !== 'undefined' && typeof Prism.highlightElement !== 'undefined') {
-                    // 手动对每个代码块应用高亮
-                    tempContent.querySelectorAll('pre code').forEach(function (block) {
-                        if (!block.classList.contains('tokenized')) {
-                            try {
-                                Prism.highlightElement(block);
-                                block.classList.add('tokenized');
-                            } catch (e) {
-                                console.warn('Prism highlighting error:', e);
-                            }
-                        }
-                    });
-                }
-
-                // 只有当用户此前就在底部附近时，才执行自动滚动
-                if (isUserAtBottom) {
-                    // 使用两次 requestAnimationFrame 确保在浏览器完成所有排版计算后滚动
-                    requestAnimationFrame(() => {
-                        requestAnimationFrame(() => {
-                            chatContainer.scrollTop = chatContainer.scrollHeight;
-                        });
-                    });
-                } else {
-                    // 如果用户不在底部，则保持相对滚动位置
-                    const scrollDiff = chatContainer.scrollHeight - previousScrollHeight;
-                    chatContainer.scrollTop = previousScrollTop + scrollDiff;
+                // 是否跟随由贴底吸附锁决定（用户上拉即释放，拉回底部即恢复）
+                if (streamStick) {
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
                 }
             }
-        }
-
-        // Add copy buttons to all pre tags in a container
-        function addCopyButtonsToCodeBlocks(container) {
-            const preBlocks = container.querySelectorAll('pre');
-            preBlocks.forEach(pre => {
-                // If button already exists, skip
-                if (pre.querySelector('.code-copy-btn')) return;
-
-                // Add animation class to newly detected code blocks
-                if (!pre.classList.contains('new-code-block')) {
-                    pre.classList.add('new-code-block');
-
-                    // Remove the class after animation completes to reset for future animations
-                    setTimeout(() => {
-                        pre.classList.remove('new-code-block');
-                    }, 500);
-                }
-
-                const button = document.createElement('button');
-                button.className = 'code-copy-btn';
-                button.innerHTML = '<i class="far fa-copy"></i> Copy';
-                button.title = 'Copy code';
-
-                // For incomplete code blocks, add a special indicator
-                if (pre.classList.contains('incomplete-code-block')) {
-                    // Add a visual indicator that this code block is still being generated
-                    const indicator = document.createElement('div');
-                    indicator.className = 'code-generation-indicator';
-                    indicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
-                    indicator.style.cssText = `
-                        position: absolute;
-                        top: 5px;
-                        right: 30px;
-                        font-size: 12px;
-                        color: var(--primary-color);
-                        z-index: 5;
-                    `;
-
-                    // Make sure the pre element has relative positioning for the indicator
-                    pre.style.position = 'relative';
-
-                    pre.appendChild(indicator);
-                }
-
-                const code = pre.querySelector('code');
-                // Use textContent to preserve formatting and whitespace
-                const textToCopy = code ? code.textContent : pre.textContent;
-
-                button.onclick = (e) => {
-                    e.stopPropagation();
-                    copyCode(textToCopy, button);
-                };
-
-                pre.appendChild(button);
-
-                // For incomplete code blocks, add a special indicator
-                if (pre.classList.contains('incomplete-code-block')) {
-                    // Add a visual indicator that this code block is still being generated
-                    const indicator = document.createElement('div');
-                    indicator.className = 'code-generation-indicator';
-                    indicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
-                    indicator.style.cssText = `
-                        position: absolute;
-                        top: 5px;
-                        right: 30px;
-                        font-size: 12px;
-                        color: var(--primary-color);
-                        z-index: 5;
-                    `;
-
-                    // Make sure the pre element has relative positioning for the indicator
-                    pre.style.position = 'relative';
-
-                    pre.appendChild(indicator);
-                }
-
-                // 立即尝试语法高亮
-                if (code && typeof Prism !== 'undefined' && typeof Prism.highlightElement !== 'undefined') {
-                    try {
-                        Prism.highlightElement(code);
-                        code.classList.add('tokenized');
-                    } catch (e) {
-                        console.warn('Prism highlighting error:', e);
-                    }
-                }
-            });
-
-            // Smart scrolling to ensure the chat container remains at bottom if user is there
-            // This is important because adding buttons might change the height of the content
-            setTimeout(() => {
-                const chatContainer = document.getElementById('chatContainer');
-                if (chatContainer) {
-                    const threshold = 100;
-                    const isUserAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < threshold;
-
-                    // Only scroll to bottom if user is already near the bottom
-                    if (isUserAtBottom) {
-                        chatContainer.scrollTo({
-                            top: chatContainer.scrollHeight,
-                            behavior: 'instant'  // Use instant for immediate scroll
-                        });
-                    }
-                }
-            }, 10);
         }
 
         // Global copy code function with feedback
@@ -6907,105 +6780,60 @@
                 // Buffer to accumulate data chunks
                 let buffer = '';
 
+                // 节流渲染：最多每 80ms 一次且对齐 rAF，避免每个 token 都全量重排
+                // （用局部变量代替旧的 this.updateThrottle，避免全局状态互相干扰）
+                let rafPending = false;
+                let lastRenderAt = 0;
+                const STREAM_MIN_INTERVAL = 80;
+                const scheduleUpdate = () => {
+                    if (rafPending) return;
+                    rafPending = true;
+                    const wait = Math.max(0, lastRenderAt + STREAM_MIN_INTERVAL - performance.now());
+                    setTimeout(() => {
+                        requestAnimationFrame(() => {
+                            rafPending = false;
+                            lastRenderAt = performance.now();
+                            onContentUpdate(accumulatedContent);
+                        });
+                    }, wait);
+                };
+
+                const handleSSELine = (line) => {
+                    if (!line.startsWith('data: ') || line === 'data: [DONE]') return;
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        const content = data.choices && data.choices[0]?.delta?.content;
+                        if (content) {
+                            accumulatedContent += content;
+                            scheduleUpdate();
+                        }
+                    } catch (e) {
+                        console.warn('Stream parsing error:', e.message, 'Raw line:', line);
+                    }
+                };
+
                 try {
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done) break;
 
                         // Decode current chunk and append to buffer
-                        const chunk = decoder.decode(value, { stream: true });
-                        buffer += chunk;
+                        buffer += decoder.decode(value, { stream: true });
 
-                        // Split by newline
+                        // Split by newline; the last element might be incomplete, keep it in buffer
                         const lines = buffer.split('\n');
-
-                        // The last element might be incomplete (no trailing \n)
-                        // Save it back to buffer to wait for next chunk to complete it
                         buffer = lines.pop() || '';
 
                         for (const line of lines) {
                             if (line.trim().length === 0) continue; // Skip empty lines
-                            if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-                                try {
-                                    // Safely parse JSON with validation
-                                    const jsonDataStr = line.slice(6);
-
-                                    // Additional validation - check if it looks like JSON before parsing
-                                    if (jsonDataStr.trim().startsWith('{') && jsonDataStr.trim().endsWith('}')) {
-                                        const data = JSON.parse(jsonDataStr);
-                                        if (data.choices && data.choices[0]?.delta?.content) {
-                                            const content = data.choices[0].delta.content;
-
-                                            // Add the new content to the accumulated content
-                                            accumulatedContent += content;
-
-                                            // Call the update callback if provided - throttle updates for better performance
-                                            if (onContentUpdate) {
-                                                // Throttle updates to prevent excessive DOM updates
-                                                if (!this.updateThrottle) {
-                                                    this.updateThrottle = true;
-                                                    requestAnimationFrame(() => {
-                                                        onContentUpdate(accumulatedContent);
-                                                        this.updateThrottle = false;
-                                                    });
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        const data = JSON.parse(jsonDataStr);
-                                        if (data.choices && data.choices[0]?.delta?.content) {
-                                            const content = data.choices[0].delta.content;
-                                            accumulatedContent += content;
-                                            if (onContentUpdate) {
-                                                // Throttle updates to prevent excessive DOM updates
-                                                if (!this.updateThrottle) {
-                                                    this.updateThrottle = true;
-                                                    requestAnimationFrame(() => {
-                                                        onContentUpdate(accumulatedContent);
-                                                        this.updateThrottle = false;
-                                                    });
-                                                }
-                                            }
-                                        }
-                                    }
-                                } catch (e) {
-                                    // More specific error handling for JSON parsing issues
-                                    console.warn('Stream parsing error:', e.message, 'Raw line:', line);
-                                    // Continue processing other lines, skip this malformed one
-                                    continue;
-                                }
-                            }
+                            handleSSELine(line);
                         }
                     }
 
                     // After loop ends, process any remaining data in buffer
-                    if (buffer.length > 0 && buffer.startsWith('data: ') && buffer !== 'data: [DONE]') {
-                        try {
-                            // Try to parse remaining buffer content
-                            const jsonDataStr = buffer.slice(6);
-                            if (jsonDataStr.trim().startsWith('{') && jsonDataStr.trim().endsWith('}')) {
-                                const data = JSON.parse(jsonDataStr);
-                                if (data.choices && data.choices[0]?.delta?.content) {
-                                    accumulatedContent += data.choices[0].delta.content;
-                                    if (onContentUpdate) {
-                                        onContentUpdate(accumulatedContent);
-                                    }
-                                }
-                            } else {
-                                // Attempt to parse anyway
-                                const data = JSON.parse(jsonDataStr);
-                                if (data.choices && data.choices[0]?.delta?.content) {
-                                    accumulatedContent += data.choices[0].delta.content;
-                                    if (onContentUpdate) {
-                                        onContentUpdate(accumulatedContent);
-                                    }
-                                }
-                            }
-                        } catch (e) {
-                            console.warn('Final stream parsing error:', e.message, 'Remaining buffer:', buffer);
-                        }
+                    if (buffer.length > 0) {
+                        handleSSELine(buffer);
                     }
-
                 } finally {
                     reader.releaseLock();
                 }
@@ -7151,28 +6979,28 @@
             contentDiv.className = 'content markdown-body';
 
             if (htmlContent) {
-                contentDiv.innerHTML = htmlContent;
+                // 历史消息的 HTML 可能来自数据库，先清洗再插入
+                contentDiv.innerHTML = sanitizeHtml(htmlContent);
             } else {
                 // Check if rawContent is valid before passing to marked.parse
                 const safeRawContent = rawContent || '';
                 const lines = safeRawContent.split('\n');
-                
+
                 // ✨ 前端 UI 优化：如果用户发送的内容非常长（> 500行），前端也用采样预览，防止卡顿
                 if (lines.length > 500 && role === 'user') {
                     const first100 = lines.slice(0, 100).join('\n');
                     const last100 = lines.slice(-100).join('\n');
                     const previewText = `${first100}\n\n... [中间 ${lines.length - 200} 行内容已在 UI 中隐藏，AI 已获取全量数据进行分析] ...\n\n${last100}`;
-                    
+
                     contentDiv.innerHTML = `
-<div class='large-file-preview' style='border: 1px solid rgba(16,163,127,0.2); border-radius: 8px; overflow: hidden; margin: 10px 0; background: rgba(255,255,255,0.05);'>
-  <div style='background: rgba(16,163,127,0.1); padding: 8px 12px; font-size: 0.9em; border-bottom: 1px solid rgba(16,163,127,0.1); color: var(--text-color);'>
+<div class='large-file-preview' style='border: 1px solid var(--primary-light); border-radius: 8px; overflow: hidden; margin: 10px 0; background: rgba(255,255,255,0.05);'>
+  <div style='background: var(--primary-light); padding: 8px 12px; font-size: 0.9em; border-bottom: 1px solid var(--border-color); color: var(--text-light);'>
     📄 <b>【大文件发送中】</b>：包含 ${lines.length} 行内容，AI 将进行全量分析
   </div>
-  <pre style='margin: 0; padding: 12px; font-size: 0.85em; max-height: 300px; overflow-y: auto; background: transparent; color: var(--text-color); white-space: pre-wrap; font-family: monospace;'><code>${previewText}</code></pre>
+  <pre style='margin: 0; padding: 12px; font-size: 0.85em; max-height: 300px; overflow-y: auto; background: transparent; color: var(--text-light); white-space: pre-wrap; font-family: monospace;'><code>${escapeHtml(previewText)}</code></pre>
 </div>`;
                 } else {
-                    const markdownHtml = marked.parse(safeRawContent);
-                    contentDiv.innerHTML = markdownHtml;
+                    contentDiv.innerHTML = renderMarkdown(safeRawContent);
                 }
             }
 
@@ -7273,12 +7101,9 @@
                 messageDiv.style.transform = 'translateY(0)';
             }, 10);
 
-            // 智能滚动：仅在用户本就在底部时才自动滚动
+            // 智能滚动：仅当处于贴底吸附状态时才跟随（与流式滚动共用同一把锁）
             setTimeout(() => {
-                const threshold = 250;
-                const isUserAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < threshold;
-
-                if (isUserAtBottom) {
+                if (streamStick) {
                     requestAnimationFrame(() => {
                         chatContainer.scrollTop = chatContainer.scrollHeight;
                     });
@@ -7314,7 +7139,7 @@
                     bottom: 32px;
                     left: 50%;
                     transform: translateX(-50%);
-                    background: linear-gradient(135deg, var(--primary-color) 0%, #0d8a6a 100%);
+                    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
                     color: white;
                     padding: 12px 20px;
                     border-radius: 8px;
@@ -7483,7 +7308,7 @@
                         bottom: 32px;
                         left: 50%;
                         transform: translateX(-50%);
-                        background: linear-gradient(135deg, var(--primary-color) 0%, #0d8a6a 100%);
+                        background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
                         color: white;
                         padding: 12px 20px;
                         border-radius: 8px;
@@ -7824,11 +7649,9 @@
                     // Ensure window stays pinned to top
                     window.scrollTo(0, 0);
                 });
-
-                window.visualViewport.addEventListener('scroll', () => {
-                    // Force scroll reset within visual viewport to prevent address bar / gap issues
-                    if (window.scrollY !== 0) window.scrollTo(0, 0);
-                });
+                // 注意：不再监听 visualViewport scroll 强制 scrollTo(0,0)。
+                // 该逻辑会和用户的滚动互搏（用户一拉到底就上下狂跳），
+                // 且 html/body 均已 overflow:hidden，文档本身不可滚动，无需重置。
             }
         }
 
@@ -8676,9 +8499,13 @@
                     }
                 }
             } else {
-                setTimeout(() => {
-                    waitForPrismAndHighlight(codeElement);
-                }, 100); // Check every 100ms
+                // 最多重试 50 次（约 5 秒），Prism 加载失败时放弃，避免常驻计时器泄漏
+                codeElement.__prismRetries = (codeElement.__prismRetries || 0) + 1;
+                if (codeElement.__prismRetries <= 50) {
+                    setTimeout(() => {
+                        waitForPrismAndHighlight(codeElement);
+                    }, 100); // Check every 100ms
+                }
             }
         }
 
@@ -8784,7 +8611,7 @@
             scrollTimeout = setTimeout(function () {
                 isScrolling = false;
             }, 150); // 150ms after scroll stops
-        });
+        }, { passive: true });
 
         // Also add wheel event for more responsive detection
         document.addEventListener('wheel', function (e) {

@@ -30,16 +30,16 @@ type YouTubeMusicService struct {
 
 // YouTubeSong represents a song from YouTube Music
 type YouTubeSong struct {
-	Title        string      `json:"title"`
-	VideoID      string      `json:"video_id"`
-	Artists      []string    `json:"artists"`
-	Album        string      `json:"album"`
-	Duration     string      `json:"duration"`
-	Thumbnails   []Thumbnail `json:"thumbnails"`
-	ThumbnailURL string      `json:"thumbnail_url"`
-	YouTubeURL   string      `json:"youtube_url"`
-	YouTubeMusicURL string `json:"youtube_music_url"`
-	EmbedURL     string      `json:"embed_url"`
+	Title           string      `json:"title"`
+	VideoID         string      `json:"video_id"`
+	Artists         []string    `json:"artists"`
+	Album           string      `json:"album"`
+	Duration        string      `json:"duration"`
+	Thumbnails      []Thumbnail `json:"thumbnails"`
+	ThumbnailURL    string      `json:"thumbnail_url"`
+	YouTubeURL      string      `json:"youtube_url"`
+	YouTubeMusicURL string      `json:"youtube_music_url"`
+	EmbedURL        string      `json:"embed_url"`
 }
 
 // Thumbnail represents a thumbnail image
@@ -59,11 +59,11 @@ type YouTubeArtist struct {
 
 // YouTubeArtistInfo represents detailed artist information
 type YouTubeArtistInfo struct {
-	Name         string      `json:"name"`
-	Description  string      `json:"description"`
-	Subscribers  string      `json:"subscribers"`
-	Thumbnails   []Thumbnail `json:"thumbnails"`
-	ThumbnailURL string      `json:"thumbnail_url"`
+	Name         string        `json:"name"`
+	Description  string        `json:"description"`
+	Subscribers  string        `json:"subscribers"`
+	Thumbnails   []Thumbnail   `json:"thumbnails"`
+	ThumbnailURL string        `json:"thumbnail_url"`
 	TopSongs     []YouTubeSong `json:"top_songs"`
 }
 
@@ -75,16 +75,16 @@ type YouTubeLyrics struct {
 
 // YouTubeSongDetails represents complete song information
 type YouTubeSongDetails struct {
-	VideoID       string        `json:"video_id"`
-	Title         string        `json:"title"`
-	Artists       []string      `json:"artists"`
-	Album         string        `json:"album"`
-	Thumbnails    []Thumbnail   `json:"thumbnails"`
-	ThumbnailURL  string        `json:"thumbnail_url"`
-	YouTubeURL    string        `json:"youtube_url"`
-	YouTubeMusicURL string      `json:"youtube_music_url"`
-	EmbedURL      string        `json:"embed_url"`
-	Lyrics        *YouTubeLyrics `json:"lyrics,omitempty"`
+	VideoID         string         `json:"video_id"`
+	Title           string         `json:"title"`
+	Artists         []string       `json:"artists"`
+	Album           string         `json:"album"`
+	Thumbnails      []Thumbnail    `json:"thumbnails"`
+	ThumbnailURL    string         `json:"thumbnail_url"`
+	YouTubeURL      string         `json:"youtube_url"`
+	YouTubeMusicURL string         `json:"youtube_music_url"`
+	EmbedURL        string         `json:"embed_url"`
+	Lyrics          *YouTubeLyrics `json:"lyrics,omitempty"`
 }
 
 // SearchResponse represents the search response structure
@@ -100,7 +100,7 @@ func NewYouTubeMusicService() *YouTubeMusicService {
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		cache: make(map[string]*cacheItem),
+		cache:      make(map[string]*cacheItem),
 		apiBaseURL: "https://api.yuangs.cc", // 使用您的API端点
 	}
 }
@@ -119,7 +119,7 @@ func (y *YouTubeMusicService) SearchSong(query string, limit int) (*SearchRespon
 
 	// Proxy to your API endpoint
 	result, err := y.proxyToYourAPI("/youtubeapi/search/song", map[string]string{
-		"q": query,
+		"q":     query,
 		"limit": fmt.Sprintf("%d", limit),
 	})
 	if err != nil {
@@ -146,13 +146,13 @@ func (y *YouTubeMusicService) searchYouTubeMusic(query string, limit int) (*Sear
 	payload := map[string]interface{}{
 		"context": map[string]interface{}{
 			"client": map[string]interface{}{
-				"clientName": "WEB_REMIX",
+				"clientName":    "WEB_REMIX",
 				"clientVersion": "1.20240806.01.00", // Use a recent version
-				"hl": "zh-CN",
-				"gl": "CN",
+				"hl":            "zh-CN",
+				"gl":            "CN",
 			},
 		},
-		"query": query,
+		"query":  query,
 		"params": "Eg-KAQwIARAAGAAgACgAMABqChADEAQQCRAFEAo=",
 	}
 
@@ -414,15 +414,15 @@ func (y *YouTubeMusicService) searchYouTubeMusic(query string, limit int) (*Sear
 						// Add to songs list if we have a video ID
 						if videoID != "" {
 							song := YouTubeSong{
-								Title:          title,
-								VideoID:        videoID,
-								Artists:        artists,
-								Album:          album,
-								Thumbnails:     thumbnails,
-								ThumbnailURL:   thumbnailURL,
-								YouTubeURL:     fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID),
+								Title:           title,
+								VideoID:         videoID,
+								Artists:         artists,
+								Album:           album,
+								Thumbnails:      thumbnails,
+								ThumbnailURL:    thumbnailURL,
+								YouTubeURL:      fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID),
 								YouTubeMusicURL: fmt.Sprintf("https://music.youtube.com/watch?v=%s", videoID),
-								EmbedURL:       fmt.Sprintf("https://www.youtube.com/embed/%s", videoID),
+								EmbedURL:        fmt.Sprintf("https://www.youtube.com/embed/%s", videoID),
 							}
 							songs = append(songs, song)
 
@@ -465,7 +465,7 @@ func (y *YouTubeMusicService) SearchArtist(query string, limit int) (*SearchResp
 
 	// Proxy to your API endpoint
 	result, err := y.proxyToYourAPI("/youtubeapi/search/artist", map[string]string{
-		"q": query,
+		"q":     query,
 		"limit": fmt.Sprintf("%d", limit),
 	})
 	if err != nil {
@@ -492,13 +492,13 @@ func (y *YouTubeMusicService) searchArtistsYouTubeMusic(query string, limit int)
 	payload := map[string]interface{}{
 		"context": map[string]interface{}{
 			"client": map[string]interface{}{
-				"clientName": "WEB_REMIX",
+				"clientName":    "WEB_REMIX",
 				"clientVersion": "1.20240806.01.00", // Use a recent version
-				"hl": "zh-CN",
-				"gl": "CN",
+				"hl":            "zh-CN",
+				"gl":            "CN",
 			},
 		},
-		"query": query,
+		"query":  query,
 		"params": "Eg-KAQwIARABGAEgACgAMABqChADEAQQCRAFEAo=",
 	}
 
@@ -716,10 +716,10 @@ func (y *YouTubeMusicService) searchArtistsYouTubeMusic(query string, limit int)
 						// Add to artists list if we have a channel ID
 						if channelID != "" {
 							artist := YouTubeArtist{
-								Name:          artistName,
-								ChannelID:     channelID,
-								Thumbnails:    thumbnails,
-								ThumbnailURL:  thumbnailURL,
+								Name:         artistName,
+								ChannelID:    channelID,
+								Thumbnails:   thumbnails,
+								ThumbnailURL: thumbnailURL,
 							}
 							artists = append(artists, artist)
 

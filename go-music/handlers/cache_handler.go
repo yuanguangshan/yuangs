@@ -49,8 +49,8 @@ func SetCacheHandler(cacheService *services.CacheService) gin.HandlerFunc {
 		}
 
 		var req struct {
-			Value      interface{} `json:"value"`
-			ExpiryHours float64    `json:"expiryHours"`
+			Value       interface{} `json:"value"`
+			ExpiryHours float64     `json:"expiryHours"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
@@ -108,7 +108,7 @@ func GetCacheInfoHandler(cacheService *services.CacheService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		size := cacheService.Size()
 		keys := cacheService.GetAllKeys()
-		
+
 		c.JSON(http.StatusOK, gin.H{
 			"size": size,
 			"keys": keys,

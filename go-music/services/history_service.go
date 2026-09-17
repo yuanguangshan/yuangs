@@ -9,13 +9,13 @@ import (
 
 // HistoryItem represents a history record
 type HistoryItem struct {
-	TrackID       string    `json:"trackId"`
-	TrackName     string    `json:"trackName"`
-	ArtistName    string    `json:"artistName"`
-	ArtworkURL    string    `json:"artworkUrl"`
-	PreviewURL    string    `json:"previewUrl"`
-	CollectionName string   `json:"collectionName"`
-	PlayedAt      time.Time `json:"playedAt"`
+	TrackID        string    `json:"trackId"`
+	TrackName      string    `json:"trackName"`
+	ArtistName     string    `json:"artistName"`
+	ArtworkURL     string    `json:"artworkUrl"`
+	PreviewURL     string    `json:"previewUrl"`
+	CollectionName string    `json:"collectionName"`
+	PlayedAt       time.Time `json:"playedAt"`
 }
 
 // HistoryService handles play history functionality
@@ -33,10 +33,10 @@ func NewHistoryService() *HistoryService {
 		filename: "history.json",
 		maxItems: 100, // Maximum number of history items to keep
 	}
-	
+
 	// Load existing history from file
 	service.loadFromFile()
-	
+
 	return service
 }
 
@@ -44,11 +44,11 @@ func NewHistoryService() *HistoryService {
 func (h *HistoryService) GetAll() []HistoryItem {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	
+
 	// Create a copy to prevent race conditions
 	result := make([]HistoryItem, len(h.history))
 	copy(result, h.history)
-	
+
 	return result
 }
 
@@ -56,19 +56,19 @@ func (h *HistoryService) GetAll() []HistoryItem {
 func (h *HistoryService) Add(song HistoryItem) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	
+
 	// Remove any existing entries for this track
 	h.history = removeTrackFromHistory(h.history, song.TrackID)
-	
+
 	// Add to the beginning of the history
 	song.PlayedAt = time.Now()
 	h.history = append([]HistoryItem{song}, h.history...)
-	
+
 	// Keep only the most recent maxItems items
 	if len(h.history) > h.maxItems {
 		h.history = h.history[:h.maxItems]
 	}
-	
+
 	// Save to file
 	h.saveToFile()
 }
@@ -77,16 +77,16 @@ func (h *HistoryService) Add(song HistoryItem) {
 func (h *HistoryService) Remove(trackID string) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	
+
 	originalLen := len(h.history)
 	h.history = removeTrackFromHistory(h.history, trackID)
-	
+
 	if len(h.history) < originalLen {
 		// Save to file if something was removed
 		h.saveToFile()
 		return true
 	}
-	
+
 	return false
 }
 
@@ -94,9 +94,9 @@ func (h *HistoryService) Remove(trackID string) bool {
 func (h *HistoryService) Clear() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	
+
 	h.history = make([]HistoryItem, 0)
-	
+
 	// Save to file
 	h.saveToFile()
 }
@@ -105,7 +105,7 @@ func (h *HistoryService) Clear() {
 func (h *HistoryService) Export() ([]byte, error) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	
+
 	return json.MarshalIndent(h.history, "", "  ")
 }
 
@@ -113,17 +113,17 @@ func (h *HistoryService) Export() ([]byte, error) {
 func (h *HistoryService) Import(data []byte) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	
+
 	var imported []HistoryItem
 	if err := json.Unmarshal(data, &imported); err != nil {
 		return err
 	}
-	
+
 	h.history = imported
-	
+
 	// Save to file
 	h.saveToFile()
-	
+
 	return nil
 }
 
@@ -131,7 +131,7 @@ func (h *HistoryService) Import(data []byte) error {
 func (h *HistoryService) Count() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	
+
 	return len(h.history)
 }
 
@@ -142,7 +142,7 @@ func (h *HistoryService) saveToFile() {
 		// Log the error or handle it appropriately
 		return
 	}
-	
+
 	if err := os.WriteFile(h.filename, file, 0644); err != nil {
 		// Log the error or handle it appropriately
 		return
@@ -156,13 +156,13 @@ func (h *HistoryService) loadFromFile() {
 		// If file doesn't exist, that's okay - we'll start with an empty list
 		return
 	}
-	
+
 	var history []HistoryItem
 	if err := json.Unmarshal(file, &history); err != nil {
 		// If JSON is invalid, start with an empty list
 		return
 	}
-	
+
 	h.history = history
 }
 
@@ -181,11 +181,11 @@ func removeTrackFromHistory(history []HistoryItem, trackID string) []HistoryItem
 func (h *HistoryService) GetLast() *HistoryItem {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	
+
 	if len(h.history) == 0 {
 		return nil
 	}
-	
+
 	item := h.history[0]
 	return &item
 }
@@ -194,12 +194,12 @@ func (h *HistoryService) GetLast() *HistoryItem {
 func (h *HistoryService) GetByTrackID(trackID string) *HistoryItem {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	
+
 	for _, item := range h.history {
 		if item.TrackID == trackID {
 			return &item // Return a copy
 		}
 	}
-	
+
 	return nil
 }

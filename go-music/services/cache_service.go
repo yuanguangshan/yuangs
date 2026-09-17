@@ -24,10 +24,10 @@ func NewCacheService() *CacheService {
 	cache := &CacheService{
 		data: make(map[string]CacheItem),
 	}
-	
+
 	// Start a goroutine to clean expired items periodically
 	go cache.startCleanup()
-	
+
 	return cache
 }
 
@@ -57,7 +57,7 @@ func (c *CacheService) Set(key string, value interface{}, expiryHours float64) {
 	defer c.mu.Unlock()
 
 	expiry := time.Now().Add(time.Duration(expiryHours * float64(time.Hour)))
-	
+
 	c.data[key] = CacheItem{
 		Data:      value,
 		Expiry:    expiry,
@@ -88,14 +88,14 @@ func (c *CacheService) startCleanup() {
 
 	for range ticker.C {
 		c.mu.Lock()
-		
+
 		now := time.Now()
 		for key, item := range c.data {
 			if now.After(item.Expiry) {
 				delete(c.data, key)
 			}
 		}
-		
+
 		c.mu.Unlock()
 	}
 }
@@ -127,7 +127,7 @@ func (c *CacheService) GetAllKeys() []string {
 	for key := range c.data {
 		keys = append(keys, key)
 	}
-	
+
 	return keys
 }
 
@@ -135,7 +135,7 @@ func (c *CacheService) GetAllKeys() []string {
 func (c *CacheService) Size() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	return len(c.data)
 }
 
@@ -143,16 +143,16 @@ func (c *CacheService) Size() int {
 func (c *CacheService) ToJSON() ([]byte, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	// Create a copy of the cache data without expired items
 	activeData := make(map[string]interface{})
 	now := time.Now()
-	
+
 	for key, item := range c.data {
 		if !now.After(item.Expiry) {
 			activeData[key] = item.Data
 		}
 	}
-	
+
 	return json.Marshal(activeData)
 }
