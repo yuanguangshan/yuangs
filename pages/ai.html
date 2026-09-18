@@ -694,6 +694,9 @@
                 <button id="authGateBtn" type="button">进入</button>
             </div>
             <div class="auth-gate-msg" id="authGateMsg"></div>
+            <div style="margin-top:10px;">
+                <a href="#" id="gateForgetKey" style="color:var(--text-tertiary);font-size:0.72rem;text-decoration:none;">清除本机已记住的密钥</a>
+            </div>
         </div>
     </div>
 
@@ -712,6 +715,9 @@
                 </div>
                 <div class="meta-item">
                     <a href="https://status.yuangs.cc/" target="_blank" rel="noopener" style="color:var(--accent-blue);text-decoration:none;font-size:0.8rem;">📊 详细统计 →</a>
+                </div>
+                <div class="meta-item">
+                    <a href="#" id="forgetKeyLink" title="清除本机记住的 ADMIN_TOKEN" style="color:var(--text-secondary);text-decoration:none;font-size:0.8rem;">🔑 忘记密钥</a>
                 </div>
             </div>
         </div>
@@ -837,6 +843,31 @@
         // 请求走 Authorization: Bearer 头，避免密钥残留在 URL / Referer / 边缘日志里。
         const STATS_KEY_STORAGE = 'aiproxy_stats_key';
 
+        // 密钥持久化在 localStorage：关标签页、重启浏览器都不用再输。
+        // 代价要说清楚——密钥会以明文留在 wealth.want.biz 这个域的 localStorage 里，
+        // 同域其它页面（或该域上任何 XSS）都能读到，等于"本地记住的密码"。
+        // 头部有「🔑 忘记密钥」可一键清除。
+        function storeStatsKey(value) {
+            try { localStorage.setItem(STATS_KEY_STORAGE, value); } catch (e) { }
+            try { sessionStorage.removeItem(STATS_KEY_STORAGE); } catch (e) { } // 清掉旧版遗留
+        }
+
+        function loadStoredStatsKey() {
+            try {
+                const saved = localStorage.getItem(STATS_KEY_STORAGE);
+                if (saved) return saved;
+            } catch (e) { }
+            // 兼容上一版存在 sessionStorage 的密钥：读到就迁移到 localStorage
+            try {
+                const legacy = sessionStorage.getItem(STATS_KEY_STORAGE);
+                if (legacy) {
+                    storeStatsKey(legacy);
+                    return legacy;
+                }
+            } catch (e) { }
+            return '';
+        }
+
         function readStatsKey() {
             let fromUrl = '';
             try {
@@ -845,14 +876,14 @@
                 fromUrl = '';
             }
             if (fromUrl) {
-                try { sessionStorage.setItem(STATS_KEY_STORAGE, fromUrl); } catch (e) { }
+                storeStatsKey(fromUrl);
                 // 立刻从地址栏抹掉密钥：防截图 / 复制链接 / Referer 泄露
                 try {
                     window.history.replaceState(null, '', window.location.pathname + window.location.hash);
                 } catch (e) { }
                 return fromUrl;
             }
-            try { return sessionStorage.getItem(STATS_KEY_STORAGE) || ''; } catch (e) { return ''; }
+            return loadStoredStatsKey();
         }
 
         let statsKey = readStatsKey();
@@ -874,6 +905,13 @@
             if (gate) gate.hidden = true;
         }
 
+        function forgetStatsKey() {
+            statsKey = '';
+            try { localStorage.removeItem(STATS_KEY_STORAGE); } catch (e) { }
+            try { sessionStorage.removeItem(STATS_KEY_STORAGE); } catch (e) { }
+            showAuthGate('已清除本机保存的密钥，请重新输入。');
+        }
+
         function submitAuthKey() {
             const input = document.getElementById('authGateInput');
             const msg = document.getElementById('authGateMsg');
@@ -883,7 +921,7 @@
                 return;
             }
             statsKey = value;
-            try { sessionStorage.setItem(STATS_KEY_STORAGE, value); } catch (e) { }
+            storeStatsKey(value);
             if (msg) msg.textContent = '';
             fetchStats();
         }
@@ -1238,6 +1276,16 @@
             if (btn) btn.addEventListener('click', submitAuthKey);
             if (input) input.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') submitAuthKey();
+            });
+            const forgetLink = document.getElementById('forgetKeyLink');
+            if (forgetLink) forgetLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                forgetStatsKey();
+            });
+            const gateForget = document.getElementById('gateForgetKey');
+            if (gateForget) gateForget.addEventListener('click', (e) => {
+                e.preventDefault();
+                forgetStatsKey();
             });
         })();
 
