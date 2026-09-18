@@ -589,10 +589,114 @@
                 height: 300px;
             }
         }
+        /* ===== 访问密钥门禁：/api/stats 由 ADMIN_TOKEN 保护 ===== */
+        .auth-gate {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(10, 10, 15, 0.92);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        .auth-gate[hidden] {
+            display: none;
+        }
+
+        .auth-gate-box {
+            width: 100%;
+            max-width: 430px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 18px;
+            padding: 24px 20px;
+            text-align: center;
+        }
+
+        .auth-gate-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .auth-gate-desc {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            line-height: 1.7;
+            margin-bottom: 16px;
+        }
+
+        .auth-gate-desc code {
+            color: var(--accent-blue);
+            background: rgba(82, 173, 255, 0.1);
+            padding: 1px 5px;
+            border-radius: 5px;
+            word-break: break-all;
+        }
+
+        .auth-gate-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .auth-gate input {
+            flex: 1;
+            min-width: 0;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 10px 12px;
+            color: var(--text-primary);
+            font-size: 0.82rem;
+            outline: none;
+        }
+
+        .auth-gate input:focus {
+            border-color: var(--accent-blue);
+        }
+
+        .auth-gate button {
+            border: none;
+            border-radius: 10px;
+            padding: 10px 16px;
+            background: var(--accent-blue);
+            color: #06121f;
+            font-weight: 600;
+            font-size: 0.82rem;
+            cursor: pointer;
+        }
+
+        .auth-gate-msg {
+            margin-top: 12px;
+            min-height: 1em;
+            font-size: 0.75rem;
+            color: var(--accent-pink);
+        }
     </style>
 </head>
 
 <body>
+    <!-- 访问密钥门禁：/api/stats 需要 ADMIN_TOKEN（见 aiproxy docs/AUTH-CHAIN.md） -->
+    <div class="auth-gate" id="authGate" hidden>
+        <div class="auth-gate-box">
+            <div class="auth-gate-title">🔒 需要访问密钥</div>
+            <div class="auth-gate-desc">
+                统计接口 <code>/api/stats</code> 已启用 ADMIN_TOKEN 门禁。<br>
+                在地址后追加 <code>?key=&lt;ADMIN_TOKEN&gt;</code>，或在此处粘贴密钥。
+            </div>
+            <div class="auth-gate-row">
+                <input id="authGateInput" type="password" placeholder="ADMIN_TOKEN" autocomplete="off"
+                    spellcheck="false">
+                <button id="authGateBtn" type="button">进入</button>
+            </div>
+            <div class="auth-gate-msg" id="authGateMsg"></div>
+        </div>
+    </div>
+
     <div class="container">
         <!-- 顶部标题区域 -->
         <div class="dashboard-header">
@@ -728,11 +832,79 @@
             });
         }
 
+        // ===== 访问密钥（ADMIN_TOKEN）：/api/stats 已加门禁 =====
+        // 来源优先级：地址栏 ?key= → sessionStorage（同标签页刷新不丢）
+        // 请求走 Authorization: Bearer 头，避免密钥残留在 URL / Referer / 边缘日志里。
+        const STATS_KEY_STORAGE = 'aiproxy_stats_key';
+
+        function readStatsKey() {
+            let fromUrl = '';
+            try {
+                fromUrl = new URLSearchParams(window.location.search).get('key') || '';
+            } catch (e) {
+                fromUrl = '';
+            }
+            if (fromUrl) {
+                try { sessionStorage.setItem(STATS_KEY_STORAGE, fromUrl); } catch (e) { }
+                // 立刻从地址栏抹掉密钥：防截图 / 复制链接 / Referer 泄露
+                try {
+                    window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+                } catch (e) { }
+                return fromUrl;
+            }
+            try { return sessionStorage.getItem(STATS_KEY_STORAGE) || ''; } catch (e) { return ''; }
+        }
+
+        let statsKey = readStatsKey();
+
+        function showAuthGate(msg) {
+            const gate = document.getElementById('authGate');
+            if (!gate) return;
+            const firstShow = gate.hidden;
+            gate.hidden = false;
+            document.getElementById('authGateMsg').textContent = msg || '';
+            if (firstShow) {
+                const input = document.getElementById('authGateInput');
+                if (input) { input.value = ''; input.focus(); }
+            }
+        }
+
+        function hideAuthGate() {
+            const gate = document.getElementById('authGate');
+            if (gate) gate.hidden = true;
+        }
+
+        function submitAuthKey() {
+            const input = document.getElementById('authGateInput');
+            const msg = document.getElementById('authGateMsg');
+            const value = (input && input.value || '').trim();
+            if (!value) {
+                if (msg) msg.textContent = '请输入密钥';
+                return;
+            }
+            statsKey = value;
+            try { sessionStorage.setItem(STATS_KEY_STORAGE, value); } catch (e) { }
+            if (msg) msg.textContent = '';
+            fetchStats();
+        }
+
         async function fetchStats() {
             const startTime = performance.now();
+            if (!statsKey) {
+                showAuthGate('');
+                return;
+            }
             try {
-                const response = await fetch('/api/stats');
+                const response = await fetch('/api/stats', {
+                    headers: { 'Authorization': 'Bearer ' + statsKey }
+                });
+                if (response.status === 401) {
+                    showAuthGate('密钥无效或已轮换，请重新输入。');
+                    return;
+                }
+                if (!response.ok) throw new Error('HTTP ' + response.status);
                 const data = await response.json();
+                hideAuthGate();
                 updateUI(data);
                 const renderTime = Math.round(performance.now() - startTime);
                 document.getElementById('renderDuration').textContent = renderTime;
@@ -1059,6 +1231,15 @@
             // 每5秒刷新一次
             setInterval(fetchStats, 5000);
         }
+
+        (function initAuthGate() {
+            const btn = document.getElementById('authGateBtn');
+            const input = document.getElementById('authGateInput');
+            if (btn) btn.addEventListener('click', submitAuthKey);
+            if (input) input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') submitAuthKey();
+            });
+        })();
 
         initCharts();
         fetchStats();
