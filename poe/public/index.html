@@ -7477,7 +7477,24 @@
         // 旧实现只 return accumulatedContent，丢弃了 finish_reason，
         // 导致模型撞到 max_tokens 上限（finish_reason='length'）时
         // 前端完全无法察觉，用户只看到「回复到一半就没了」且没有任何继续入口。
+        // 用量补记账：直连源站（apiBaseUrl 已配置）的流量绕过了 aiproxy 的
+        // 代理侧记账，完成后向 aiproxy 补一笔，写进同一批 D1 表，看板无感。
+        // 走 Worker 链路时 aiproxy 已经记过账，这里必须跳过，避免双计。
+        // beacon 本身只有几十字节，不受长流断流问题影响。fire-and-forget。
+        function trackUsageToAiproxy(model, tokens, durationMs) {
+            if (!localStorage.getItem('apiBaseUrl')) return;
+            try {
+                fetch('https://aiproxy.want.biz/api/track', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ app: 'poe-app', model: model, tokens: tokens, duration: durationMs }),
+                    keepalive: true
+                }).catch(() => {});
+            } catch (e) { /* 统计失败不影响主流程 */ }
+        }
+
         async function callPoeAPI(messages, model, onContentUpdate, signal = null, isAgentSession = false) {
+            const reqStartAt = Date.now();
             // API 基址：默认同源（走 poe-chat → aiproxy Worker 链路）。
             // 可设 localStorage.apiBaseUrl = 'https://api.yuangs.cc' 直连源站 nginx——
             // 实测经 CF Worker 链路的长流式连接会在 40~130s 随机被掐（直连源站
@@ -7642,12 +7659,14 @@
                 result.finishReason = finishReason;
                 result.usage = usage;
                 result.truncated = (finishReason === 'length' || finishReason === 'stream_dropped');
+                trackUsageToAiproxy(model, (usage && usage.total_tokens) || 0, Date.now() - reqStartAt);
                 return result;
             } else {
                 // Handle non-streaming response
                 const data = await response.json();
                 if (data.choices && data.choices[0]?.message?.content) {
                     const content = data.choices[0].message.content;
+                    trackUsageToAiproxy(model, (data.usage && data.usage.total_tokens) || 0, Date.now() - reqStartAt);
                     return content;
                 } else {
                     throw new Error('Invalid response format from API');
