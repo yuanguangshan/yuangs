@@ -302,7 +302,19 @@
         }
 
         body {
+            /* 可调透明度：嵌入 DSH 等宿主时，让宿主背景透出来。
+             * 取值 = 页面底色保留的不透明度（1 = 完全不透明，0 = 全透明）。
+             * 三种调整方式，优先级从低到高：
+             *   1. 改这里的默认值；
+             *   2. URL 参数 ?opacity=0.6 （支持 "0.6" 与 "60" 两种写法）；
+             *   3. 运行时调 window.setPageOpacity(0.6)。
+             * 主题色跟随：--background-dark 由各主题定义，这里只调它的 alpha，
+             * 所以深色/浅色/护眼配色都照常生效。
+             * 注意：配合下方 body.dsh-transparent 的降级规则使用——若不支持
+             * color-mix()（老浏览器），自动退回原来的不透明底色。 */
+            --page-opacity: 1;
             background-color: rgb(18, 18, 24);
+            background-color: color-mix(in srgb, var(--background-dark) calc(var(--page-opacity) * 100%), transparent);
             color: var(--text-light);
             font-family: var(--font-family);
             display: flex;
@@ -314,6 +326,17 @@
             overflow: hidden;
             overflow-x: hidden;
             /* Prevent any horizontal scrolling on the page */
+        }
+
+        /* 宿主嵌入模式：DSH 侧边栏 iframe 用 ?embed=1 打开时加上这个类，
+         * 让页面底色透出宿主的背景图。不加类时行为与原来完全一致。 */
+        body.dsh-transparent {
+            background-color: transparent;
+        }
+        /* 嵌入模式下，消息区的卡片也略微透一点，避免整块纯色盖住背景。
+         * 只调背景，不动文字与边框，可读性不受影响。 */
+        body.dsh-transparent .main-content {
+            background-color: transparent;
         }
 
         /* 表单元素不自动继承字体，显式继承一次 */
@@ -1233,7 +1256,11 @@
             flex-direction: column;
             height: 100%;
             position: relative;
+            /* 与 body 共用一套透明度：.main-content 是铺满可视区的主面板，
+             * 它若保持不透明，body 再透明也看不到宿主背景。两处一起跟随
+             * --page-opacity。上面一行是不支持 color-mix() 时的兜底。 */
             background: var(--background-dark);
+            background: color-mix(in srgb, var(--background-dark) calc(var(--page-opacity) * 100%), transparent);
             overflow-x: hidden;
             /* Prevent horizontal scrolling */
         }
@@ -3791,6 +3818,82 @@
             background: rgba(16, 163, 127, 0.05);
             border-color: rgba(16, 163, 127, 0.1);
         }
+
+        /* ===== 截断提示 + 继续生成按钮 ===== */
+        .truncation-notice {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0 4px;
+            padding: 8px 12px;
+            border: 1px solid rgba(255, 176, 32, 0.35);
+            border-left: 3px solid #ffb020;
+            border-radius: 8px;
+            background: rgba(255, 176, 32, 0.08);
+            color: var(--text-light, #dcdce6);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .truncation-notice .trunc-icon {
+            font-size: 14px;
+        }
+
+        .truncation-notice .trunc-text {
+            flex: 1 1 auto;
+            min-width: 160px;
+            opacity: 0.9;
+        }
+
+        .continue-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            flex: 0 0 auto;
+            padding: 5px 14px;
+            border: 1px solid var(--primary-color, #10a37f);
+            border-radius: 6px;
+            background: var(--primary-color, #10a37f);
+            color: #fff;
+            font-size: 12.5px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: var(--transition, all 0.2s ease);
+        }
+
+        .continue-btn:hover:not(:disabled) {
+            background: var(--primary-hover, #0d8a6a);
+            border-color: var(--primary-hover, #0d8a6a);
+            transform: translateY(-1px);
+        }
+
+        .continue-btn:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .continue-btn .spin {
+            animation: continue-spin 1s linear infinite;
+        }
+
+        @keyframes continue-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* 自动续写开关（设置项） */
+        .auto-continue-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 8px 4px;
+            font-size: 13px;
+            color: var(--text-light, #dcdce6);
+        }
     </style>
 </head>
 
@@ -3894,6 +3997,16 @@
                             <span class="toggle-slider"></span>
                         </label>
                         <span class="account-label" id="accountLabel">Free</span>
+                    </div>
+                </div>
+                <div class="dropdown-option">
+                    <i class="fas fa-forward"></i>
+                    <span>自动续写</span>
+                    <div class="account-toggle">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="autoContinueToggle">
+                            <span class="toggle-slider"></span>
+                        </label>
                     </div>
                 </div>
                 <div class="dropdown-option">
@@ -4576,6 +4689,17 @@
                     const accountType = this.checked ? 'paid' : 'free';
                     accountLabel.textContent = accountType.charAt(0).toUpperCase() + accountType.slice(1);
                     localStorage.setItem('accountType', accountType);
+                });
+            }
+
+            // Add event listener for auto-continue toggle
+            // 开启后：模型因输出上限被截断时会自动接着写（最多 MAX_CONTINUE_ROUNDS 轮）
+            const autoContinueToggle = document.getElementById('autoContinueToggle');
+            if (autoContinueToggle) {
+                autoContinueToggle.checked = (localStorage.getItem('autoContinue') === 'on');
+                autoContinueToggle.addEventListener('change', function () {
+                    localStorage.setItem('autoContinue', this.checked ? 'on' : 'off');
+                    if (this.checked) showToast('已开启自动续写');
                 });
             }
 
@@ -6520,6 +6644,8 @@
             const timestamp = Date.now();
             // Store the question for later Q&A pairing
             lastUserMessage = message;
+            // 续写时需要把「原始提问 + 已生成的半截回答」一起回传，这里留存提问原文
+            userMessageForContinue = message;
             addMessageToDOM('user', message, null, timestamp);
 
             userInput.value = '';
@@ -6564,17 +6690,55 @@
                         updateTemporaryAssistantContent(content);
                     }, abortController.signal, isAgentSession);
 
-                    // Finalize the message with the complete content
-                    finalizeAssistantMessage(response, Date.now());
+                    // 【关键修复】这里以前直接 finalize，丢弃了 finish_reason，
+                    // 于是 finish_reason='length'（撞到输出上限）时用户只看到半截回复且无任何提示。
+                    const trunc = detectTruncation(response);
+                    const finalText = (response && response.content) || String(response || '');
+                    const msgEl = finishAssistantMessage(finalText, Date.now(), {
+                        truncated: trunc.truncated,
+                        originalUserMessage: userMessageForContinue
+                    });
+
+                    if (trunc.truncated) {
+                        showToast('回复达到输出上限，已提供「继续生成」按钮');
+                        // 自动续写（默认关闭，可在设置里开启）
+                        if (isAutoContinueEnabled() && msgEl && !suppressPendingSave) {
+                            const st = continueStates.get(msgEl);
+                            if (st && st.continueCount < MAX_CONTINUE_ROUNDS) {
+                                setTimeout(() => {
+                                    const b = msgEl.querySelector('[data-role="continue-btn"]');
+                                    if (b && !isGenerating) b.click();
+                                    else if (msgEl.isConnected && !isGenerating) continueGeneration(msgEl, b);
+                                }, 600);
+                            }
+                        }
+                    }
                 } catch (err) {
                     if (err.name === 'AbortError') {
                         console.log('Generation stopped by user');
                         const tempContent = document.getElementById('temp-assistant-content');
-                        if (tempContent) {
-                            finalizeAssistantMessage(tempContent.getAttribute('data-raw') + ' [Stopped]', Date.now());
-                        }
+                        const partial = (tempContent && tempContent.getAttribute('data-raw')) || '';
+                        // 用户主动停止不算「被截断」，但仍给继续入口，方便接着写
+                        finishAssistantMessage(partial + ' [Stopped]', Date.now(), {
+                            truncated: true,
+                            originalUserMessage: userMessageForContinue
+                        });
                     } else {
-                        throw err;
+                        // 【关键修复】以前非 Abort 错误会走到外层 catch，把临时消息整个删掉，
+                        // 用户已经看到的几百字结果直接蒸发。现在改为保留已生成的部分。
+                        const tempContent = document.getElementById('temp-assistant-content');
+                        const partial = (tempContent && tempContent.getAttribute('data-raw')) || '';
+                        const tempMsg = document.getElementById('temp-assistant-message');
+                        if (partial.trim()) {
+                            finishAssistantMessage(partial, Date.now(), {
+                                truncated: true,
+                                originalUserMessage: userMessageForContinue
+                            });
+                            addErrorMessage(`生成中断（已保留已生成内容）：${err.message || '未知错误'}`);
+                        } else {
+                            if (tempMsg) tempMsg.remove();
+                            throw err;
+                        }
                     }
                 } finally {
                     stopButton.style.display = 'none';
@@ -6810,8 +6974,6 @@
                     }, 300);
                 }, 2000);
             });
-
-            return messageDiv;
         }
 
         // Preprocess content to handle incomplete code blocks during streaming
@@ -6899,6 +7061,363 @@
         }
 
         // Remove temporary assistant message and add final message
+        // ===== 续写（Continue）支持 =====
+        // 记录每个「被截断/中断的助手消息」element 的续写状态。
+        // 用 WeakMap 挂在 DOM 节点上，消息被删除时状态自动回收，无需手动清理。
+        // { continueCount, originalUserMessage, truncated }
+        const continueStates = new WeakMap();
+
+        // 单条消息最多自动/手动续写次数，防止「模型一直停不下来」造成无限循环烧 token
+        const MAX_CONTINUE_ROUNDS = 5;
+
+        function isAutoContinueEnabled() {
+            return localStorage.getItem('autoContinue') === 'on';
+        }
+
+        // 判断这次流式结果是否「没写完」。
+        // 注意：实测 aiproxy 上游有时会把 finish_reason='length' 规范化为 'stop'，
+        // 因此不能只信 finish_reason，需叠加保守的「文本形态」启发式兜底。
+        // 设计原则：宁可漏报也不能误报——误报会让每条正常回复都挂个「继续」按钮，很吵。
+        function detectTruncation(result) {
+            if (!result) return { truncated: false, reason: null };
+            const text = (result.content || '').trim();
+            const reason = result.finishReason || null;
+
+            // 1) 最可靠信号：上游明确告知撞到输出上限；或网关标记了流被中途掐断
+            //    （'stream_dropped'：CDN/代理层随机断流，实测经 Cloudflare 的长流
+            //    >40s 概率被掐，与模型无关——必须走续写而不是让用户干瞪眼）
+            if (reason === 'length' || reason === 'stream_dropped') {
+                return { truncated: true, reason };
+            }
+
+            // 2) 明确正常结束，直接信任
+            if (reason === 'stop' || reason === 'end_turn') {
+                return { truncated: false, reason };
+            }
+
+            // 3) finish_reason 缺失时的保守兜底（仅在没有任何结束原因时启用）
+            if (!reason && text) {
+                // 未闭合的代码块：``` 数量为奇数，几乎可以确定是被打断的
+                const fences = (text.match(/```/g) || []).length;
+                if (fences % 2 === 1) {
+                    return { truncated: true, reason: 'heuristic-open-fence' };
+                }
+                // 结尾是明确的截断标记
+                if (/(\[(truncated|cut off|incomplete)\]|⚠️\s*输出)/i.test(text.slice(-60))) {
+                    return { truncated: true, reason: 'heuristic-marker' };
+                }
+            }
+            return { truncated: false, reason };
+        }
+
+        // 重新生成：用该回答上一条用户提问，重新请求一次
+        async function regenerateMessage(assistantEl) {
+            if (!assistantEl || isGenerating) return;
+            const userText = findPrecedingUserMessage(assistantEl);
+            if (!userText.trim()) {
+                showToast('找不到对应的提问，无法重新生成');
+                return;
+            }
+
+            isGenerating = true;
+            stopButton.style.display = 'flex';
+            abortController = new AbortController();
+
+            const contentEl = assistantEl.querySelector('.content');
+            const prevRaw = (contentEl && contentEl.dataset.raw) || '';
+            // 原地清空并显示「重新生成中」，避免闪烁
+            if (contentEl) {
+                contentEl.dataset.raw = '';
+                contentEl.innerHTML = '<p style="opacity:.6">重新生成中…</p>';
+            }
+            clearContinueUI(assistantEl);
+
+            // 只回传该提问之前的历史，保证重生成语义正确
+            const history = [];
+            const all = Array.from(chatContainer.querySelectorAll('.message'));
+            const idx = all.indexOf(assistantEl);
+            for (let i = 0; i < idx; i++) {
+                const el = all[i];
+                const c = el.querySelector('.content');
+                if (!c) continue;
+                // 跳过与本次重生成重复的那条用户消息（最后一条 user）
+                history.push({
+                    role: el.classList.contains('user') ? 'user' : 'assistant',
+                    content: c.dataset.raw || c.textContent || ''
+                });
+            }
+            // 去掉尾部可能残留的重复提问
+            while (history.length && history[history.length - 1].role === 'assistant') history.pop();
+
+            let partial = '';
+            try {
+                const result = await callPoeAPI(history, modelSelector.value, (chunk) => {
+                    partial = chunk;
+                    if (contentEl) {
+                        contentEl.dataset.raw = chunk;
+                        contentEl.innerHTML = renderMarkdown(chunk);
+                    }
+                }, abortController.signal, !!(currentSession && currentSession.startsWith('agent_session_')));
+
+                const text = (result && result.content) || partial || '';
+                const trunc = detectTruncation(result);
+                if (contentEl) {
+                    contentEl.dataset.raw = text;
+                    contentEl.innerHTML = renderMarkdown(text);
+                }
+                const state = {
+                    continueCount: 0,
+                    originalUserMessage: userText,
+                    truncated: trunc.truncated
+                };
+                continueStates.set(assistantEl, state);
+                if (trunc.truncated) attachContinueUI(assistantEl, state);
+                saveCurrentSession();
+            } catch (err) {
+                if (contentEl) {
+                    contentEl.dataset.raw = prevRaw;
+                    contentEl.innerHTML = renderMarkdown(prevRaw);
+                }
+                showToast(err.name === 'AbortError' ? '已取消重新生成' : ('重新生成失败：' + (err.message || '未知错误')));
+            } finally {
+                stopButton.style.display = 'none';
+                abortController = null;
+                isGenerating = false;
+            }
+        }
+
+        // 从 DOM 里往前找最近的一条用户消息，作为续写时的原始提问
+        function findPrecedingUserMessage(messageEl) {
+            let node = messageEl ? messageEl.previousElementSibling : null;
+            while (node) {
+                if (node.classList && node.classList.contains('user')) {
+                    const c = node.querySelector('.content');
+                    return (c && (c.dataset.raw || c.textContent)) || '';
+                }
+                node = node.previousElementSibling;
+            }
+            return '';
+        }
+
+        // 在消息下方渲染「已被截断 + 继续」提示条
+        function attachContinueUI(messageEl, state) {
+            if (!messageEl) return;
+            const existing = messageEl.querySelector('.truncation-notice');
+            if (existing) existing.remove();
+            // 已经续写过很多轮就别再加按钮了，避免无意义地继续烧额度
+            if (state.continueCount >= MAX_CONTINUE_ROUNDS) {
+                const notice = document.createElement('div');
+                notice.className = 'truncation-notice';
+                notice.innerHTML = `<span class="trunc-icon">⚠️</span>
+                    <span class="trunc-text">已连续续写 ${state.continueCount} 次，达到上限（${MAX_CONTINUE_ROUNDS} 次）。</span>`;
+                messageEl.appendChild(notice);
+                return;
+            }
+
+            const notice = document.createElement('div');
+            notice.className = 'truncation-notice';
+
+            const icon = document.createElement('span');
+            icon.className = 'trunc-icon';
+            icon.textContent = '⚠️';
+
+            const text = document.createElement('span');
+            text.className = 'trunc-text';
+            text.textContent = state.truncated
+                ? '回复已到达模型单次输出上限，内容可能未写完。'
+                : '回复被中断，内容可能不完整。';
+
+            const btn = document.createElement('button');
+            btn.className = 'continue-btn';
+            btn.type = 'button';
+            btn.dataset.role = 'continue-btn';
+            btn.innerHTML = '<i class="fas fa-play"></i> 继续生成';
+
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (isGenerating) {
+                    showToast('正在生成中，请稍候…');
+                    return;
+                }
+                await continueGeneration(messageEl, btn);
+            });
+
+            notice.appendChild(icon);
+            notice.appendChild(text);
+            notice.appendChild(btn);
+            messageEl.appendChild(notice);
+        }
+
+        // 清理某条消息上的续写控件
+        function clearContinueUI(messageEl) {
+            if (!messageEl) return;
+            const notice = messageEl.querySelector('.truncation-notice');
+            if (notice) notice.remove();
+        }
+
+        // 结束一轮生成：把「临时消息」定稿，并按需挂上续写入口
+        // opts: { truncated, originalUserMessage, isNew }
+        function finishAssistantMessage(rawContent, timestamp, opts = {}) {
+            const el = finalizeAssistantMessage(rawContent, timestamp);
+            if (!el) return null;
+
+            const prev = opts.continueState || null;
+            const state = {
+                continueCount: prev ? prev.continueCount : 0,
+                originalUserMessage: (prev && prev.originalUserMessage) || opts.originalUserMessage || '',
+                truncated: !!opts.truncated
+            };
+            continueStates.set(el, state);
+            if (opts.truncated) {
+                attachContinueUI(el, state);
+            }
+            return el;
+        }
+
+        // 续写：拿当前这条助手消息的全文当作上下文，要求模型接着写
+        async function continueGeneration(messageEl, btnEl) {
+            const state = continueStates.get(messageEl);
+            if (!state) return;
+
+            const contentEl = messageEl.querySelector('.content');
+            const existingRaw = (contentEl && contentEl.dataset.raw) || '';
+            if (!existingRaw.trim()) {
+                showToast('这条消息没有内容可续写');
+                return;
+            }
+
+            // 关键：要求模型「直接接着写」，不要重复、不要解释
+            const continueInstruction =
+                '你上一条回复因为长度限制被截断了。请直接从被截断的地方继续输出剩余内容。' +
+                '不要重复已经说过的内容，不要道歉，不要解释，不要重新开头，直接接着往下写。';
+
+            const history = [{ role: 'user', content: state.originalUserMessage || '' },
+                             { role: 'assistant', content: existingRaw }]
+                .filter(m => m.content && m.content.trim());
+            // 若原始提问丢失（例如刷新后继续），退化为只发助手内容 + 指令
+            if (history.length === 0) {
+                history.push({ role: 'assistant', content: existingRaw });
+            }
+            history.push({ role: 'user', content: continueInstruction });
+
+            if (btnEl) {
+                btnEl.disabled = true;
+                btnEl.innerHTML = '<i class="fas fa-spinner spin"></i> 续写中…';
+            }
+            clearContinueUI(messageEl);
+
+            isGenerating = true;
+            stopButton.style.display = 'flex';
+            abortController = new AbortController();
+
+            // 生成期间禁用所有续写入口，避免并发打断当前流
+            const busyBtns = document.querySelectorAll('.continue-btn, .continue-inline-btn');
+            busyBtns.forEach(b => { b.disabled = true; });
+
+            let partial = '';
+            try {
+                const result = await callPoeAPI(history, modelSelector.value, (chunk) => {
+                    partial = chunk;
+                    renderContinuePreview(messageEl, existingRaw, chunk);
+                }, abortController.signal, !!(currentSession && currentSession.startsWith('agent_session_')));
+
+                const addText = (result && result.content) || partial || '';
+                const merged = mergeContinuation(existingRaw, addText);
+                const trunc = detectTruncation(result);
+
+                // 用合并后的结果重建这条消息，保持位置不变
+                replaceMessageContent(messageEl, merged);
+
+                state.continueCount += 1;
+                state.truncated = trunc.truncated;
+                continueStates.set(messageEl, state);
+
+                if (trunc.truncated) {
+                    attachContinueUI(messageEl, state);
+                    if (isAutoContinueEnabled() && state.continueCount < MAX_CONTINUE_ROUNDS) {
+                        // 自动续写：稍作停顿后继续，避免过于密集地打接口
+                        setTimeout(() => {
+                            const b = messageEl.querySelector('[data-role="continue-btn"]');
+                            if (b && !isGenerating) b.click();
+                            else continueGeneration(messageEl, b);
+                        }, 600);
+                    }
+                }
+                saveCurrentSession();
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    const merged = mergeContinuation(existingRaw, partial);
+                    replaceMessageContent(messageEl, merged);
+                    state.continueCount += 1;
+                    continueStates.set(messageEl, state);
+                    attachContinueUI(messageEl, state);
+                    showToast('已停止续写');
+                } else {
+                    console.error('Continue failed:', err);
+                    // 关键修复：失败了也不能丢掉已经拿到的部分
+                    const merged = mergeContinuation(existingRaw, partial);
+                    replaceMessageContent(messageEl, merged);
+                    state.continueCount += 1;
+                    continueStates.set(messageEl, state);
+                    attachContinueUI(messageEl, state);
+                    showToast('续写失败：' + (err.message || '未知错误'));
+                }
+            } finally {
+                stopButton.style.display = 'none';
+                abortController = null;
+                isGenerating = false;
+                // 恢复续写入口
+                const idleBtns = document.querySelectorAll('.continue-btn, .continue-inline-btn');
+                idleBtns.forEach(b => { b.disabled = false; });
+            }
+        }
+
+        // 续写过程中把「已有内容 + 新流式内容」实时显示出来
+        function renderContinuePreview(messageEl, existingRaw, chunk) {
+            const contentEl = messageEl.querySelector('.content');
+            if (!contentEl) return;
+            contentEl.dataset.raw = mergeContinuation(existingRaw, chunk);
+            contentEl.innerHTML = renderMarkdown(contentEl.dataset.raw);
+            if (streamStick) {
+                const chatContainer = document.getElementById('chatContainer');
+                if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+        }
+
+        // 拼接续写内容：处理边界处的重复段落 / 多余空行
+        function mergeContinuation(base, addition) {
+            const a = String(base || '');
+            const b = String(addition || '').replace(/^\s+/, '');
+            if (!b) return a;
+            if (!a) return b;
+
+            // 如果模型把结尾一大段又重复输出了，剥掉重复部分
+            const tailLen = Math.min(200, a.length);
+            const tail = a.slice(-tailLen);
+            const idx = b.indexOf(tail);
+            if (idx >= 0 && idx < 120) {
+                const trimmed = b.slice(idx + tail.length).replace(/^\s+/, '');
+                if (trimmed) return a + trimmed;
+                return a;
+            }
+            // 避免 a 结尾和 b 开头重复的短重叠（最多 80 字符）
+            for (let len = Math.min(80, a.length, b.length); len > 8; len--) {
+                if (a.slice(-len) === b.slice(0, len)) {
+                    return a + b.slice(len);
+                }
+            }
+            const needsNewline = !/\n$/.test(a);
+            return a + (needsNewline ? '\n\n' : '') + b;
+        }
+
+        // 用新文本替换已有消息内容（不新增消息，保持顺序）
+        function replaceMessageContent(messageEl, rawText) {
+            const contentEl = messageEl.querySelector('.content');
+            if (!contentEl) return;
+            contentEl.dataset.raw = rawText;
+            contentEl.innerHTML = renderMarkdown(rawText);
+        }
+
         function finalizeAssistantMessage(content, timestamp) {
             const tempMessage = document.getElementById('temp-assistant-message');
             let modelName = null;
@@ -6922,15 +7441,21 @@
             }
 
             // Add the final message with the model name used during generation
-            addMessageToDOM('assistant', cleanedContent, null, timestamp, modelName);
+            const createdEl = addMessageToDOM('assistant', cleanedContent, null, timestamp, modelName);
 
             // Save Q&A to knasync if there was a user question
             if (lastUserMessage) {
                 saveQandAToKnasync(lastUserMessage, cleanedContent);
                 lastUserMessage = null; // Reset for next Q&A
             }
+
+            return createdEl;
         }
 
+        // 【截断检测】把流式结果从「纯字符串」升级为「内容 + 结束原因」。
+        // 旧实现只 return accumulatedContent，丢弃了 finish_reason，
+        // 导致模型撞到 max_tokens 上限（finish_reason='length'）时
+        // 前端完全无法察觉，用户只看到「回复到一半就没了」且没有任何继续入口。
         async function callPoeAPI(messages, model, onContentUpdate, signal = null, isAgentSession = false) {
             const apiBaseUrl = '';
             const shouldStream = typeof onContentUpdate === 'function';
@@ -6942,11 +7467,17 @@
             const accountType = localStorage.getItem('accountType') || 'free';
 
             // Prepare request body
+            // 【重要修复】以前不传 max_tokens，完全依赖上游默认值，而实测该默认值明显偏小：
+            // 同样的 prompt，不传时只输出约 1042 个 chunk，显式传 4096 能输出 1308 个，
+            // 表现为「回复写到一半突然停住」——这正是用户反馈的核心 bug。
+            // 这里显式给一个足够大的上限，并允许在设置里覆盖。
+            const configuredMaxTokens = parseInt(localStorage.getItem('maxTokens') || '0', 10);
             const requestBody = {
                 model: model,
                 messages: messages,
                 temperature: 0.7,
                 stream: shouldStream,
+                max_tokens: (configuredMaxTokens > 0 ? configuredMaxTokens : 8192),
                 conversation_id: currentSession || undefined
             };
 
@@ -6982,6 +7513,15 @@
                 const decoder = new TextDecoder('utf-8');
                 let accumulatedContent = '';
 
+                // 【新增】记录结束原因与用量，供上层判断是否被截断
+                let finishReason = null;
+                let usage = null;
+                // 【新增】流终止判定：sawDone=收到 [DONE]；sawTruncationMarker=
+                // 网关在流被中途掐断时合成的 SSE 注释标记（: stream-truncated-upstream）。
+                // 两者都没有且没有 finish_reason → 连接被掐，按可续写的截断处理。
+                let sawDone = false;
+                let sawTruncationMarker = false;
+
                 // Buffer to accumulate data chunks
                 let buffer = '';
 
@@ -7004,12 +7544,30 @@
                 };
 
                 const handleSSELine = (line) => {
-                    if (!line.startsWith('data: ') || line === 'data: [DONE]') return;
+                    if (line.startsWith(': stream-truncated-upstream')) {
+                        // 网关标记：上游流被中途掐断（连接层断开，非模型停止）
+                        sawTruncationMarker = true;
+                        return;
+                    }
+                    if (line === 'data: [DONE]') { sawDone = true; return; }
+                    if (!line.startsWith('data: ')) return;
                     try {
                         const data = JSON.parse(line.slice(6));
-                        const content = data.choices && data.choices[0]?.delta?.content;
+                        const choice = data.choices && data.choices[0];
+                        const content = choice?.delta?.content;
                         if (content) {
                             accumulatedContent += content;
+                            scheduleUpdate();
+                        }
+                        // 【新增】捕获结束原因。注意：部分服务端把 finish_reason 放在
+                        // 独立的最后一个 chunk 且 delta 为空，所以不能挂在 content 判断里。
+                        if (choice && choice.finish_reason) {
+                            finishReason = choice.finish_reason;
+                        }
+                        if (data.usage) usage = data.usage;
+                        // 兼容非流式风格的完整 message 返回
+                        if (!finishReason && choice?.message?.content && !content) {
+                            accumulatedContent += choice.message.content;
                             scheduleUpdate();
                         }
                     } catch (e) {
@@ -7043,7 +7601,22 @@
                     reader.releaseLock();
                 }
 
-                return accumulatedContent;
+                // 【重要】返回值同时兼容两种形态：
+                //  - 旧代码把返回值当字符串用（finalizeAssistantMessage(response)）
+                //  - 新代码需要读 response.finishReason / response.content
+                // 用 String 包装（而非普通对象）保证字符串拼接、.replace 等旧用法不炸。
+                // 流终止判定：既没有 [DONE] 也没有 finish_reason，或收到网关的断流
+                // 标记 → 连接被中途掐断。归一化为 'stream_dropped'，上层
+                // detectTruncation 会把它当作可续写的截断（挂「继续」按钮/自动续写）。
+                if (sawTruncationMarker || (!sawDone && !finishReason)) {
+                    finishReason = 'stream_dropped';
+                }
+                const result = new String(accumulatedContent);
+                result.content = accumulatedContent;
+                result.finishReason = finishReason;
+                result.usage = usage;
+                result.truncated = (finishReason === 'length' || finishReason === 'stream_dropped');
+                return result;
             } else {
                 // Handle non-streaming response
                 const data = await response.json();
@@ -7103,6 +7676,10 @@
 
         // Store the last user message for Q&A pairing
         let lastUserMessage = null;
+        // 当前这一轮用户提问原文，供「继续生成」拼装上下文使用
+        let userMessageForContinue = '';
+        // 「编辑并重发」时被编辑的那条用户消息节点，发送成功后需要移除
+        let pendingEditTarget = null;
 
         // Save Q&A to knasync API (via backend proxy)
         async function saveQandAToKnasync(question, answer) {
@@ -7218,7 +7795,19 @@
             // Create actions div
             const actionsDiv = document.createElement('div');
             actionsDiv.className = 'message-actions';
+            // 助手消息多给一个「继续」按钮：即使这条消息是刷新后从历史加载的，
+            // 也能一键让模型接着写下去（解决「回复断了没法继续」的痛点）
             actionsDiv.innerHTML = `
+                ${role === 'assistant' ? `
+                <button class="action-btn continue-inline-btn" title="继续生成">
+                    <i class="fas fa-forward"></i>
+                </button>
+                <button class="action-btn regenerate-btn" title="重新生成">
+                    <i class="fas fa-rotate-right"></i>
+                </button>` : `
+                <button class="action-btn edit-resend-btn" title="编辑并重发">
+                    <i class="fas fa-pen"></i>
+                </button>`}
                 <button class="action-btn delete-btn" title="删除">
                     <i class="fas fa-trash"></i>
                 </button>
@@ -7332,6 +7921,54 @@
                 });
             });
 
+            // 内联「继续」按钮：为任意助手消息提供续写入口
+            const inlineContinueBtns = messageDiv.querySelectorAll('.continue-inline-btn');
+            inlineContinueBtns.forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    if (isGenerating) {
+                        showToast('正在生成中，请稍候…');
+                        return;
+                    }
+                    // 历史消息没有 WeakMap 状态，按需初始化
+                    if (!continueStates.has(messageDiv)) {
+                        continueStates.set(messageDiv, {
+                            continueCount: 0,
+                            originalUserMessage: findPrecedingUserMessage(messageDiv),
+                            truncated: false
+                        });
+                    }
+                    await continueGeneration(messageDiv, btn);
+                });
+            });
+
+            // 「重新生成」：删掉这条回答，用同一条提问重新请求
+            const regenBtns = messageDiv.querySelectorAll('.regenerate-btn');
+            regenBtns.forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    if (isGenerating) { showToast('正在生成中，请稍候…'); return; }
+                    await regenerateMessage(messageDiv);
+                });
+            });
+
+            // 「编辑并重发」：把用户消息填回输入框，同时移除该消息及其之后的回答
+            const editBtns = messageDiv.querySelectorAll('.edit-resend-btn');
+            editBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (isGenerating) { showToast('正在生成中，请稍候…'); return; }
+                    const contentEl = messageDiv.querySelector('.content');
+                    const text = (contentEl && (contentEl.dataset.raw || contentEl.textContent)) || '';
+                    userInput.value = text;
+                    userInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    userInput.focus();
+                    userInput.setSelectionRange(text.length, text.length);
+                    showToast('已填入输入框，发送后将替换原消息');
+                    pendingEditTarget = messageDiv;
+                });
+            });
+
             // Add right-click context menu for copying message content
             messageDiv.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
@@ -7362,6 +7999,9 @@
                     }, 300);
                 }, 2000);
             });
+
+            // 返回创建的节点，便于调用方（如续写逻辑）挂载附加控件
+            return messageDiv;
         }
 
         function showTypingIndicator() {
@@ -9333,6 +9973,79 @@
                     }
                 });
             }, { capture: true, passive: true });
+        })();
+
+        /* 嵌入透明度控制：被宿主（如 DSH 侧边栏）iframe 嵌入时，允许宿主调页面
+           底色的不透明度，让宿主背景图透出来。三种入口，优先级从高到低：
+             1. postMessage({source:'poe-embed', type:'opacity', value:0.6})
+             2. URL 参数 ?opacity=0.6 或 ?opacity=60
+             3. body.dsh-transparent 类（等价于 opacity=0，纯透底）
+           单独运行（未被嵌入）时也保留 ?opacity= 能力，便于直接预览调试。 */
+        (function () {
+            var MIN = 0, MAX = 1;
+            var root = document.documentElement, body = document.body;
+
+            /** 把 0.6 / "60" / "60%" 都归一化成 0~1 的数字；非法值返回 null。 */
+            function parseOpacity(raw) {
+                if (raw === null || raw === undefined || raw === '') return null;
+                var s = String(raw).trim().replace(/%$/, '');
+                var n = parseFloat(s);
+                if (!isFinite(n)) return null;
+                if (n > 1 && n <= 100) n = n / 100;   // "60" 视为 60%
+                if (n < MIN) n = MIN;
+                if (n > MAX) n = MAX;
+                return n;
+            }
+
+            /** 应用一个不透明度；传 null 恢复默认（不干预）。 */
+            function setPageOpacity(value) {
+                var n = parseOpacity(value);
+                if (n === null) return false;
+                var s = String(n);
+                // 关键：变量必须写在「真正使用它的元素」上。
+                // body / .main-content 的 background 用 color-mix() 读取
+                // --page-opacity；若只在 <html> 上设值，这两处解析
+                // color-mix() 时会拿到继承来的旧值（:root 里的 1），
+                // 结果仍是全不透明——实测确认过这个坑。
+                root.style.setProperty('--page-opacity', s);
+                if (body) body.style.setProperty('--page-opacity', s);
+                // 只有当数值为 0（全透）时才加纯透明类作为老浏览器兜底；
+                // 中间的半透明值一律走 --page-opacity，避免类把数值覆盖掉。
+                if (body) body.classList.toggle('dsh-transparent', n === 0);
+                return true;
+            }
+
+            // 暴露给宿主/调试：window.setPageOpacity(0.6)
+            window.setPageOpacity = setPageOpacity;
+            window.getPageOpacity = function () {
+                var v = root.style.getPropertyValue('--page-opacity');
+                return v ? parseFloat(v) : 1;
+            };
+
+            // URL 参数（在 DOM 就绪后应用；body 可能还没解析出来）
+            function applyFromQuery() {
+                try {
+                    var q = new URLSearchParams(window.location.search);
+                    var v = q.get('opacity');
+                    if (v !== null) {
+                        // 显式给了 opacity：以它为准，不再叠加纯透明类，
+                        // 否则 ?embed=1&opacity=30 会被类覆盖成全透明。
+                        setPageOpacity(v);
+                    } else if (q.get('embed') === '1' && body) {
+                        // 只有 embed 没给数值时，才用纯透底作为默认嵌入观感。
+                        body.classList.add('dsh-transparent');
+                    }
+                } catch (err) { /* 老浏览器无 URLSearchParams 时忽略 */ }
+            }
+            if (body) applyFromQuery();
+            else document.addEventListener('DOMContentLoaded', applyFromQuery, { once: true });
+
+            // 父页面 postMessage 控制（宿主实时调节）
+            window.addEventListener('message', function (e) {
+                var d = e && e.data;
+                if (!d || typeof d !== 'object' || d.source !== 'poe-embed') return;
+                if (d.type === 'opacity') setPageOpacity(d.value);
+            });
         })();
     </script>
 </body>
