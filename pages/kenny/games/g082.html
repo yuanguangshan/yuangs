@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>❄️ 雪地保龄球3D · 企鹅游戏库</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; }
+  body {
+    background:radial-gradient(900px 500px at 50% -8%, #1a2c56 0%, #0c1428 50%, #070d1c 100%);
+    color:#dce7fb; font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+    display:flex; flex-direction:column; align-items:center; padding:10px 10px 20px;
+    -webkit-user-select:none; user-select:none; overflow:hidden; touch-action:none;
+  }
+  header { display:flex; align-items:center; gap:12px; width:100%; max-width:660px; margin-bottom:8px; }
+  .back { color:#7fd4ff; text-decoration:none; font-size:14px; white-space:nowrap; }
+  .back:hover { text-decoration:underline; }
+  h1 { flex:1; text-align:center; font-size:17px; color:#eef4ff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hud { font-size:13px; color:#93a9d4; white-space:nowrap; }
+  .hud b { color:#ffd23f; font-size:15px; }
+  .stage { position:relative; line-height:0; }
+  canvas {
+    display:block; background:#000; border-radius:14px;
+    box-shadow:0 0 0 2px rgba(110,150,235,.35), 0 18px 50px rgba(0,0,0,.6);
+    max-width:calc(100vw - 20px); max-height:calc(100vh - 150px);
+    width:auto; height:auto; image-rendering:pixelated;
+    touch-action:none;
+  }
+  .ov { position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+    background:rgba(7,12,26,.86); border-radius:14px; padding:18px; text-align:center; }
+  .ov.on { display:flex; }
+  .ov-icon { font-size:46px; }
+  .ov h2 { font-size:23px; margin:8px 0 6px; color:#fff; }
+  .ov p { font-size:14px; color:#a9bde0; line-height:1.7; max-width:420px; }
+  .ov p b { color:#ffd23f; }
+  .ov button { margin-top:16px; background:linear-gradient(180deg,#2fae64,#1e8348); color:#fff;
+    border:none; font-size:17px; padding:11px 34px; border-radius:999px; cursor:pointer;
+    font-family:inherit; box-shadow:0 6px 18px rgba(30,140,80,.45); }
+  .ov button:hover { filter:brightness(1.12); transform:translateY(-1px); }
+  .hint { margin-top:9px; font-size:13px; color:#7d93b5; text-align:center; max-width:640px; line-height:1.7; }
+  .hint b { color:#bcd4fb; }
+  .pad { display:none; width:100%; max-width:660px; justify-content:space-between;
+    align-items:center; margin-top:auto; padding-top:10px; }
+  .dpad { display:grid; grid-template-columns:repeat(3,54px); grid-template-rows:repeat(3,46px); gap:4px; }
+  .dpad .up { grid-area:1/2; } .dpad .left { grid-area:2/1; } .dpad .right { grid-area:2/3; } .dpad .down { grid-area:3/2; }
+  .pad button { border:1px solid rgba(120,160,240,.5); background:rgba(28,42,80,.85); color:#cfe0ff;
+    font-size:19px; border-radius:12px; font-family:inherit; touch-action:none; -webkit-tap-highlight-color:transparent; }
+  .pad button.on { background:rgba(70,110,200,.9); }
+  .pad-a { width:74px; height:74px; border-radius:50%!important; font-size:24px; font-weight:700; }
+  @media (pointer:coarse) { .pad { display:flex; } }
+</style>
+</head>
+<body>
+  <header>
+    <a class="back" href="../index.html">← 游戏库</a>
+    <h1>❄️ 雪地保龄球3D</h1>
+    <div class="hud">得分 <b id="score">0</b> · 最高 <b id="best">0</b></div>
+  </header>
+  <div class="stage">
+    <canvas id="game" width="640" height="480"></canvas>
+    <div id="overlay" class="ov on">
+      <div>
+        <div class="ov-icon">❄️</div>
+        <h2 id="ovTitle">雪地保龄球3D</h2>
+        <p id="ovText"><b>← →</b> 瞄准，<b>空格</b> 出手！每轮 2 球，击倒越多分越高</p>
+        <button id="ovBtn">开始游戏</button>
+      </div>
+    </div>
+  </div>
+  <p class="hint"><b>← →</b> 瞄准，<b>空格</b> 出手！每轮 2 球，击倒越多分越高　<span style="color:#5f74a1">难度 ★★☆☆☆ · 3D · 保龄球</span></p>
+  <div class="pad" id="pad">
+    <div class="dpad">
+      <button class="up" data-k="ArrowUp">▲</button>
+      <button class="left" data-k="ArrowLeft">◀</button>
+      <button class="right" data-k="ArrowRight">▶</button>
+      <button class="down" data-k="ArrowDown">▼</button>
+    </div>
+    <button class="pad-a" data-k="Space">A</button>
+  </div>
+<script>
+var CFG = {"hint":"<b>← →</b> 瞄准，<b>空格</b> 出手！每轮 2 球，击倒越多分越高","rounds":5,"ballSpeed":30,"pinSpace":1.05,"cw":640,"ch":480,"sky1":"#bfe9ff","sky2":"#ffffff","mtn":"#cde8f7","g1":"#f4fbff","g2":"#dcf0fc","fogC":"#f0faff","fogNear":24,"fogFar":82,"f":340,"rail":"#7f9db8","wall":"#cfe6f5","wall2":"#b9d8ec","wallTop":"#ffffff","tree":"#57a8c9","deep":"#123a5c","id":"g082","name":"雪地保龄球3D","eng":"bowling","kind":"3d"};
+
+'use strict';
+var canvas = document.getElementById('game');
+var ctx = canvas.getContext('2d');
+var W = canvas.width, H = canvas.height;
+var elScore = document.getElementById('score');
+var elBest = document.getElementById('best');
+var overlay = document.getElementById('overlay');
+var elTitle = document.getElementById('ovTitle');
+var elText = document.getElementById('ovText');
+var elBtn = document.getElementById('ovBtn');
+
+var state = 'menu';
+var score = 0, best = 0;
+try { best = +localStorage.getItem('pg-best-' + CFG.id) || 0; } catch (e) {}
+elBest.textContent = best;
+
+function setScore(v) {
+  score = v;
+  elScore.textContent = v;
+  if (v > best) { best = v; elBest.textContent = v; try { localStorage.setItem('pg-best-' + CFG.id, v); } catch (e) {} }
+}
+function showOverlay(title, html, btn) {
+  elTitle.textContent = title;
+  elText.innerHTML = html;
+  elBtn.textContent = btn || '再来一局';
+  overlay.classList.add('on');
+}
+function hideOverlay() { overlay.classList.remove('on'); }
+function gameOver() {
+  if (state !== 'playing') return;
+  state = 'over';
+  beep(180, 0.3, 'sawtooth', 0.07);
+  showOverlay('游戏结束', '本局得分 <b>' + score + '</b>　最高 <b>' + best + '</b>', '再来一局');
+}
+function winGame(msg) {
+  if (state !== 'playing') return;
+  state = 'over';
+  beep(880, 0.1, 'square', 0.05);
+  setTimeout(function () { beep(1175, 0.16, 'square', 0.05); }, 120);
+  showOverlay(msg || '挑战成功！', '本局得分 <b>' + score + '</b>　最高 <b>' + best + '</b>', '再玩一次');
+}
+
+// ---------- input ----------
+var keys = {}, pressed = {}, mx = -1, my = -1, mdown = false, clicked = false;
+window.addEventListener('keydown', function (e) {
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(e.code) >= 0) e.preventDefault();
+  if (!keys[e.code]) pressed[e.code] = true;
+  keys[e.code] = true;
+});
+window.addEventListener('keyup', function (e) { keys[e.code] = false; });
+window.addEventListener('blur', function () { keys = {}; mdown = false; });
+function toCanvas(e) {
+  var r = canvas.getBoundingClientRect();
+  var t = e.touches && e.touches[0] ? e.touches[0] : e;
+  return { x: (t.clientX - r.left) * W / r.width, y: (t.clientY - r.top) * H / r.height };
+}
+canvas.addEventListener('mousemove', function (e) { var p = toCanvas(e); mx = p.x; my = p.y; });
+canvas.addEventListener('mousedown', function (e) { var p = toCanvas(e); mx = p.x; my = p.y; mdown = true; clicked = true; });
+window.addEventListener('mouseup', function () { mdown = false; });
+canvas.addEventListener('touchstart', function (e) { e.preventDefault(); var p = toCanvas(e); mx = p.x; my = p.y; mdown = true; clicked = true; }, { passive: false });
+canvas.addEventListener('touchmove', function (e) { e.preventDefault(); var p = toCanvas(e); mx = p.x; my = p.y; }, { passive: false });
+canvas.addEventListener('touchend', function () { mdown = false; });
+
+// on-screen pad: dispatch synthetic key events so every game works on touch
+(function () {
+  var pad = document.getElementById('pad');
+  if (!pad) return;
+  function down(k) { window.dispatchEvent(new KeyboardEvent('keydown', { code: k })); }
+  function up(k) { window.dispatchEvent(new KeyboardEvent('keyup', { code: k })); }
+  Array.prototype.forEach.call(pad.querySelectorAll('button'), function (b) {
+    var k = b.getAttribute('data-k');
+    b.addEventListener('pointerdown', function (e) { e.preventDefault(); b.classList.add('on'); down(k); });
+    b.addEventListener('pointerup', function (e) { e.preventDefault(); b.classList.remove('on'); up(k); });
+    b.addEventListener('pointerleave', function () { b.classList.remove('on'); up(k); });
+    b.addEventListener('pointercancel', function () { b.classList.remove('on'); up(k); });
+  });
+})();
+
+// ---------- audio ----------
+var AC = null;
+function beep(f, d, type, v) {
+  try {
+    if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume();
+    var o = AC.createOscillator(), g = AC.createGain();
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(f, AC.currentTime);
+    g.gain.setValueAtTime(v || 0.04, AC.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0008, AC.currentTime + (d || 0.08));
+    o.connect(g); g.connect(AC.destination);
+    o.start(); o.stop(AC.currentTime + (d || 0.08));
+  } catch (e) {}
+}
+
+// ---------- utils ----------
+function rnd(a, b) { return a + Math.random() * (b - a); }
+function rndi(a, b) { return Math.floor(rnd(a, b + 1)); }
+function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+function drawHeart(x, y, s, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, s, s);
+  ctx.fillRect(x + s * 2, y, s, s);
+  ctx.fillRect(x - s, y + s, s * 4, s);
+  ctx.fillRect(x, y + s * 2, s * 2, s);
+}
+function hex2rgb(h) {
+  return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+}
+
+// ---------- camera ----------
+var cam = { x: 0, y: 3.4, z: -7, yaw: 0, pitch: -0.3, f: CFG.f || 360 };
+var LIGHT = [0.38, 0.87, 0.31];
+var fogRGB = hex2rgb(CFG.fogC);
+function proj(px, py, pz) {
+  var x = px - cam.x, y = py - cam.y, z = pz - cam.z;
+  var cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
+  var x1 = x * cy - z * sy, z1 = x * sy + z * cy;
+  var cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+  var y1 = y * cp - z1 * sp, z2 = y * sp + z1 * cp;
+  if (z2 < 0.5) return null;
+  var s = cam.f / z2;
+  return [W / 2 + x1 * s, H / 2 - y1 * s, z2];
+}
+
+// ---------- box renderer ----------
+var V8 = [[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1], [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]];
+var FACES = [
+  { n: [0, 0, -1], v: [0, 1, 2, 3] },
+  { n: [0, 0, 1], v: [5, 4, 7, 6] },
+  { n: [0, 1, 0], v: [3, 2, 6, 7] },
+  { n: [0, -1, 0], v: [0, 4, 5, 1] },
+  { n: [1, 0, 0], v: [1, 5, 6, 2] },
+  { n: [-1, 0, 0], v: [4, 0, 3, 7] }
+];
+var quads = [];
+function pushQuad(pts, d, rgb, depth) {
+  var t = depth > 1 ? depth : 0;
+  if (t > 0.8) t = 0.8;
+  var r = rgb[0] + (fogRGB[0] - rgb[0]) * t;
+  var g = rgb[1] + (fogRGB[1] - rgb[1]) * t;
+  var b = rgb[2] + (fogRGB[2] - rgb[2]) * t;
+  quads.push({ p: pts, d: d, c: 'rgb(' + (r | 0) + ',' + (g | 0) + ',' + (b | 0) + ')' });
+}
+function drawBox(cx, cy, cz, w, h, d, color, rotY, rotZ) {
+  rotY = rotY || 0;
+  rotZ = rotZ || 0;
+  var hw = w / 2, hh = h / 2, hd = d / 2;
+  var cyw = Math.cos(rotY), syw = Math.sin(rotY);
+  var crz = Math.cos(rotZ), srz = Math.sin(rotZ);
+  var rgb = typeof color === 'string' ? hex2rgb(color) : color;
+  var V = [], i;
+  for (i = 0; i < 8; i++) {
+    var vx = V8[i][0] * hw, vy = V8[i][1] * hh, vz = V8[i][2] * hd;
+    var rx = vx * crz - vy * srz, ry = vx * srz + vy * crz;
+    var wx = rx * cyw + vz * syw, wz = -rx * syw + vz * cyw;
+    V.push([cx + wx, cy + ry, cz + wz]);
+  }
+  for (i = 0; i < 6; i++) {
+    var f = FACES[i];
+    var nx = f.n[0], ny = f.n[1], nz = f.n[2];
+    var rx2 = nx * crz - ny * srz, ry2 = nx * srz + ny * crz;
+    var wx2 = rx2 * cyw + nz * syw, wz2 = -rx2 * syw + nz * cyw;
+    var pts = [], ds = 0, ok = true, j;
+    for (j = 0; j < 4; j++) {
+      var p = proj(V[f.v[j]][0], V[f.v[j]][1], V[f.v[j]][2]);
+      if (!p) { ok = false; break; }
+      pts.push(p); ds += p[2];
+    }
+    if (!ok) continue;
+    var depth = ds / 4;
+    var lum = 0.5 + 0.5 * Math.max(0, wx2 * LIGHT[0] + ry2 * LIGHT[1] + wz2 * LIGHT[2]);
+    var fogT = (depth - CFG.fogNear) / (CFG.fogFar - CFG.fogNear);
+    pushQuad(pts, depth, [rgb[0] * lum, rgb[1] * lum, rgb[2] * lum], fogT);
+  }
+}
+// flat ground quad (y fixed)
+function drawGroundQuad(x0, z0, x1, z1, y, rgb) {
+  var c = [[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1]];
+  var pts = [], ds = 0, i;
+  for (i = 0; i < 4; i++) {
+    var p = proj(c[i][0], c[i][1], c[i][2]);
+    if (!p) return;
+    pts.push(p); ds += p[2];
+  }
+  var depth = ds / 4;
+  var fogT = (depth - CFG.fogNear) / (CFG.fogFar - CFG.fogNear);
+  pushQuad(pts, depth, rgb, fogT);
+}
+function flush() {
+  var g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, CFG.sky1);
+  g.addColorStop(1, CFG.sky2);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  quads.sort(function (a, b) { return b.d - a.d; });
+  for (var i = 0; i < quads.length; i++) {
+    var q = quads[i];
+    ctx.fillStyle = q.c;
+    ctx.beginPath();
+    ctx.moveTo(q.p[0][0], q.p[0][1]);
+    ctx.lineTo(q.p[1][0], q.p[1][1]);
+    ctx.lineTo(q.p[2][0], q.p[2][1]);
+    ctx.lineTo(q.p[3][0], q.p[3][1]);
+    ctx.closePath();
+    ctx.fill();
+  }
+  quads.length = 0;
+}
+
+// ---------- 3D penguin ----------
+function penguin3(x, y, z, s, t, o) {
+  o = o || {};
+  var dark = o.dark || '#1d2735', white = '#f6f9fc', orange = '#ff9f1c';
+  var wad = Math.sin(t * (o.moving ? 9 : 3)) * (o.moving ? 0.14 : 0.04);
+  var yaw = o.yaw || 0;
+  drawBox(x, y + 0.62 * s, z, 0.62 * s, 0.9 * s, 0.44 * s, dark, yaw, wad);
+  drawBox(x - 0.4 * s, y + 0.6 * s, z, 0.14 * s, 0.44 * s, 0.26 * s, dark, yaw, wad - 0.25);
+  drawBox(x + 0.4 * s, y + 0.6 * s, z, 0.14 * s, 0.44 * s, 0.26 * s, dark, yaw, wad + 0.25);
+  drawBox(x, y + 0.55 * s, z - 0.24 * s, 0.4 * s, 0.52 * s, 0.05 * s, white, yaw, wad);
+  drawBox(x - 0.15 * s, y + 0.9 * s, z - 0.23 * s, 0.13 * s, 0.13 * s, 0.04 * s, '#ffffff', yaw, wad);
+  drawBox(x + 0.15 * s, y + 0.9 * s, z - 0.23 * s, 0.13 * s, 0.13 * s, 0.04 * s, '#ffffff', yaw, wad);
+  drawBox(x - 0.15 * s, y + 0.9 * s, z - 0.26 * s, 0.07 * s, 0.07 * s, 0.03 * s, '#12161d', yaw, wad);
+  drawBox(x + 0.15 * s, y + 0.9 * s, z - 0.26 * s, 0.07 * s, 0.07 * s, 0.03 * s, '#12161d', yaw, wad);
+  drawBox(x, y + 0.76 * s, z - 0.29 * s, 0.17 * s, 0.09 * s, 0.1 * s, orange, yaw, wad);
+  drawBox(x - 0.16 * s, y + 0.05 * s, z - 0.03 * s, 0.2 * s, 0.1 * s, 0.3 * s, orange, yaw, wad);
+  drawBox(x + 0.16 * s, y + 0.05 * s, z - 0.03 * s, 0.2 * s, 0.1 * s, 0.3 * s, orange, yaw, wad);
+}
+function fish3(x, y, z, s, t) {
+  var wig = Math.sin(t * 7) * 0.3;
+  drawBox(x, y, z, 0.7 * s, 0.45 * s, 0.28 * s, '#ff8f5e', 0, wig * 0.3);
+  drawBox(x, y, z + 0.42 * s, 0.16 * s, 0.34 * s, 0.3 * s, '#ff7043', 0, wig);
+  drawBox(x - 0.24 * s, y + 0.1 * s, z - 0.16 * s, 0.08 * s, 0.08 * s, 0.06 * s, '#ffffff');
+}
+// checkerboard floor sliding toward the camera (off = 0..step)
+function floorStrip(step, halfW, count, off, c1, c2, y) {
+  y = y || 0;
+  var rgb1 = hex2rgb(c1), rgb2 = hex2rgb(c2);
+  var cols = Math.ceil(halfW * 2 / step);
+  for (var zi = 0; zi < count; zi++) {
+    var z0 = -12 + zi * step - off;
+    var z1 = z0 + step;
+    for (var xi = 0; xi < cols; xi++) {
+      var x0 = -halfW + xi * step, x1 = x0 + step;
+      var rgb = ((zi + xi) % 2 === 0) ? rgb1 : rgb2;
+      drawGroundQuad(x0, z0, x1, z1, y, rgb);
+    }
+  }
+}
+
+// ---------- loop ----------
+var T = 0, last = 0;
+function loop(ts) {
+  var dt = Math.min(0.034, (ts - last) / 1000 || 0.016);
+  last = ts;
+  T += dt;
+  if (state === 'playing') update(dt);
+  render(T);
+  clicked = false;
+  for (var k in pressed) pressed[k] = false;
+  requestAnimationFrame(loop);
+}
+elBtn.addEventListener('click', function () { hideOverlay(); start(); });
+window.addEventListener('keydown', function (e) {
+  if (state !== 'playing' && (e.code === 'Enter' || e.code === 'Space')) { hideOverlay(); start(); }
+});
+
+
+var aimX = 0, ball = null, pins = [], round = 1, throwN = 1, total = 0, waitT = 0, settleT = 0;
+function setupPins() {
+  pins = [];
+  var zs = [26, 27.1, 28.2, 29.3];
+  for (var row = 0; row < 4; row++) {
+    for (var i = 0; i <= row; i++) {
+      var x = (i - row / 2) * CFG.pinSpace;
+      pins.push({ x: x, z: zs[row], down: false, ft: 0, vx: 0, vz: 0, rx: 0, rz: 0 });
+    }
+  }
+}
+function start() {
+  setScore(0);
+  round = 1; throwN = 1; total = 0; aimX = 0; ball = null; waitT = 0; settleT = 0;
+  setupPins();
+  state = 'playing'; hideOverlay();
+}
+function knockPin(p, vx, vz) {
+  if (p.down) return;
+  p.down = true;
+  p.ft = 0;
+  p.vx = vx; p.vz = vz;
+  beep(500 + Math.random() * 300, 0.09, 'square', 0.04);
+}
+function update(dt) {
+  if (ball) {
+    ball.z += CFG.ballSpeed * dt;
+    ball.spin += CFG.ballSpeed * dt * 1.6;
+    ball.x += ball.vx * dt;
+    if (ball.x < -3.1) { ball.x = -3.1; ball.vx = Math.abs(ball.vx) * 0.6; }
+    if (ball.x > 3.1) { ball.x = 3.1; ball.vx = -Math.abs(ball.vx) * 0.6; }
+    for (var i = 0; i < pins.length; i++) {
+      var p = pins[i];
+      if (!p.down && ball.z > p.z - 0.9 && ball.z < p.z + 0.9 && Math.abs(ball.x - p.x) < 1.0) {
+        knockPin(p, (p.x - ball.x) * 3 + ball.vx, 6 + Math.random() * 3);
+        ball.vx += (ball.x - p.x) * 1.6;
+        ball.vx *= 0.75;
+      }
+    }
+    if (ball.z > 34) {
+      ball = null;
+      settleT = 1.4;
+    }
+  } else if (settleT > 0) {
+    settleT -= dt;
+    if (settleT <= 0) {
+      // chain: sliding fallen pins knock neighbours
+      var knocked = 0;
+      for (var i = 0; i < pins.length; i++) {
+        var p = pins[i];
+        if (p.down) knocked++;
+      }
+      total += knocked;
+      setScore(total);
+      if (knocked >= 10 && throwN === 1) { /* strike keeps all down */ }
+      if (throwN >= 2 || knocked >= 10) {
+        round++;
+        throwN = 1;
+        if (round > CFG.rounds) {
+          winGame('比赛结束！共击倒 ' + total + ' 个');
+          return;
+        }
+        setupPins();
+      } else {
+        throwN = 2;
+        // remove fully fallen pins visually? keep them, next ball dodges them
+      }
+      waitT = 0.6;
+    }
+  } else if (waitT > 0) {
+    waitT -= dt;
+  } else {
+    if (keys['ArrowLeft']) aimX -= 3.4 * dt;
+    if (keys['ArrowRight']) aimX += 3.4 * dt;
+    aimX = clamp(aimX, -2.9, 2.9);
+    if (pressed['Space'] || pressed['ArrowUp'] || clicked) {
+      ball = { x: aimX, z: -3.5, vx: 0, spin: 0 };
+      beep(320, 0.1, 'triangle', 0.05);
+    }
+  }
+  // sliding fallen pins
+  for (var i = 0; i < pins.length; i++) {
+    var p = pins[i];
+    if (!p.down) continue;
+    p.ft += dt;
+    p.x += p.vx * dt;
+    p.z += p.vz * dt;
+    p.vx *= 0.92;
+    p.vz *= 0.92;
+    // pin vs pin chain
+    if (p.ft < 0.6) {
+      for (var j = 0; j < pins.length; j++) {
+        var q = pins[j];
+        if (q.down) continue;
+        if (Math.hypot(p.x - q.x, p.z - q.z) < 1.0) knockPin(q, p.vx * 0.6, p.vz * 0.7);
+      }
+    }
+  }
+}
+function render(t) {
+  cam.x = 0;
+  cam.y = 3.3;
+  cam.z = -7;
+  cam.pitch = -0.26;
+  // lane
+  var rgb1 = hex2rgb(CFG.g1), rgb2 = hex2rgb(CFG.g2);
+  for (var zi = 0; zi < 10; zi++) {
+    var z0 = -8 + zi * 4.4;
+    for (var xi = 0; xi < 4; xi++) {
+      var x0 = -3.4 + xi * 1.7;
+      drawGroundQuad(x0, z0, x0 + 1.7, z0 + 4.4, 0, ((zi + xi) % 2 === 0) ? rgb1 : rgb2);
+    }
+  }
+  // gutters and side
+  drawBox(-3.9, 0.1, 16, 1, 0.3, 48, CFG.rail);
+  drawBox(3.9, 0.1, 16, 1, 0.3, 48, CFG.rail);
+  drawBox(-4.6, 1.6, 36, 0.6, 3.2, 6, CFG.wall);
+  drawBox(4.6, 1.6, 36, 0.6, 3.2, 6, CFG.wall);
+  drawBox(0, 2.6, 34.5, 10, 5.2, 1.2, CFG.wall2);
+  drawBox(0, 5.2, 34.5, 10.4, 0.5, 1.6, CFG.wallTop);
+  // pins
+  for (var i = 0; i < pins.length; i++) {
+    var p = pins[i];
+    if (p.z < -6 || p.z > 40) continue;
+    var ft = Math.min(1, p.ft * 3);
+    var rotZ = ft * 1.5 * (p.x >= 0 ? -1 : 1);
+    var drop = ft * 0.3;
+    if (p.down && p.ft > 0.34) {
+      // lying down: draw a long horizontal box
+      drawBox(p.x, 0.32, p.z, 0.44, 0.44, 1.5, '#f6f9fc');
+      drawBox(p.x, 0.46, p.z - 0.4, 0.46, 0.3, 0.34, '#e8484f');
+      drawBox(p.x, 0.3, p.z + 0.75, 0.4, 0.4, 0.4, '#e8484f');
+    } else {
+      var lean = p.down ? ft * 0.9 : 0;
+      drawBox(p.x, 0.62 - drop, p.z, 0.46, 1.24, 0.46, '#f6f9fc', 0, (p.x >= 0 ? -1 : 1) * lean);
+      drawBox(p.x, 1.05 - drop, p.z, 0.48, 0.3, 0.48, '#e8484f', 0, (p.x >= 0 ? -1 : 1) * lean);
+      drawBox(p.x, 1.42 - drop, p.z, 0.36, 0.44, 0.36, '#f6f9fc', 0, (p.x >= 0 ? -1 : 1) * lean);
+      drawBox(p.x, 1.66 - drop, p.z, 0.3, 0.14, 0.3, '#e8484f', 0, (p.x >= 0 ? -1 : 1) * lean);
+    }
+  }
+  // ball
+  if (ball) {
+    drawBox(ball.x, 0.55, ball.z, 1.1, 1.1, 1.1, '#1f3d63', ball.spin * 0.5);
+    drawBox(ball.x + 0.2, 0.8, ball.z - 0.2, 0.2, 0.2, 0.2, '#4a76b0');
+  } else if (waitT <= 0 && settleT <= 0 && state === 'playing') {
+    drawBox(aimX, 0.5, -3.5, 1.1, 1.1, 1.1, '#1f3d63', t);
+    drawBox(aimX, 0.06, 10, 0.3, 0.1, 8, '#ffd23f');
+  }
+  penguin3(aimX, 0, -6, 1.3, t, { moving: false });
+  flush();
+  ctx.fillStyle = 'rgba(8,14,28,.72)';
+  ctx.fillRect(0, 0, W, 40);
+  ctx.fillStyle = '#ffe066';
+  ctx.font = 'bold 17px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('第 ' + Math.min(round, CFG.rounds) + '/' + CFG.rounds + ' 轮　第 ' + throwN + ' 球　总分 ' + total, 14, 26);
+}
+
+start();
+state = 'menu';
+setScore(0);
+showOverlay(CFG.name, CFG.hint, '开始游戏');
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>🎣 企鹅钓鱼 · 企鹅游戏库</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; }
+  body {
+    background:radial-gradient(900px 500px at 50% -8%, #1a2c56 0%, #0c1428 50%, #070d1c 100%);
+    color:#dce7fb; font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+    display:flex; flex-direction:column; align-items:center; padding:10px 10px 20px;
+    -webkit-user-select:none; user-select:none; overflow:hidden; touch-action:none;
+  }
+  header { display:flex; align-items:center; gap:12px; width:100%; max-width:500px; margin-bottom:8px; }
+  .back { color:#7fd4ff; text-decoration:none; font-size:14px; white-space:nowrap; }
+  .back:hover { text-decoration:underline; }
+  h1 { flex:1; text-align:center; font-size:17px; color:#eef4ff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hud { font-size:13px; color:#93a9d4; white-space:nowrap; }
+  .hud b { color:#ffd23f; font-size:15px; }
+  .stage { position:relative; line-height:0; }
+  canvas {
+    display:block; background:#000; border-radius:14px;
+    box-shadow:0 0 0 2px rgba(110,150,235,.35), 0 18px 50px rgba(0,0,0,.6);
+    max-width:calc(100vw - 20px); max-height:calc(100vh - 150px);
+    width:auto; height:auto; image-rendering:pixelated;
+    touch-action:none;
+  }
+  .ov { position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+    background:rgba(7,12,26,.86); border-radius:14px; padding:18px; text-align:center; }
+  .ov.on { display:flex; }
+  .ov-icon { font-size:46px; }
+  .ov h2 { font-size:23px; margin:8px 0 6px; color:#fff; }
+  .ov p { font-size:14px; color:#a9bde0; line-height:1.7; max-width:420px; }
+  .ov p b { color:#ffd23f; }
+  .ov button { margin-top:16px; background:linear-gradient(180deg,#2fae64,#1e8348); color:#fff;
+    border:none; font-size:17px; padding:11px 34px; border-radius:999px; cursor:pointer;
+    font-family:inherit; box-shadow:0 6px 18px rgba(30,140,80,.45); }
+  .ov button:hover { filter:brightness(1.12); transform:translateY(-1px); }
+  .hint { margin-top:9px; font-size:13px; color:#7d93b5; text-align:center; max-width:480px; line-height:1.7; }
+  .hint b { color:#bcd4fb; }
+  .pad { display:none; width:100%; max-width:500px; justify-content:space-between;
+    align-items:center; margin-top:auto; padding-top:10px; }
+  .dpad { display:grid; grid-template-columns:repeat(3,54px); grid-template-rows:repeat(3,46px); gap:4px; }
+  .dpad .up { grid-area:1/2; } .dpad .left { grid-area:2/1; } .dpad .right { grid-area:2/3; } .dpad .down { grid-area:3/2; }
+  .pad button { border:1px solid rgba(120,160,240,.5); background:rgba(28,42,80,.85); color:#cfe0ff;
+    font-size:19px; border-radius:12px; font-family:inherit; touch-action:none; -webkit-tap-highlight-color:transparent; }
+  .pad button.on { background:rgba(70,110,200,.9); }
+  .pad-a { width:74px; height:74px; border-radius:50%!important; font-size:24px; font-weight:700; }
+  @media (pointer:coarse) { .pad { display:flex; } }
+</style>
+</head>
+<body>
+  <header>
+    <a class="back" href="../index.html">← 游戏库</a>
+    <h1>🎣 企鹅钓鱼</h1>
+    <div class="hud">得分 <b id="score">0</b> · 最高 <b id="best">0</b></div>
+  </header>
+  <div class="stage">
+    <canvas id="game" width="480" height="640"></canvas>
+    <div id="overlay" class="ov on">
+      <div>
+        <div class="ov-icon">🎣</div>
+        <h2 id="ovTitle">企鹅钓鱼</h2>
+        <p id="ovText"><b>空格 / 点击</b> 放钩收钩，钓到鱼 +1，钓到螃蟹扣命，限时挑战</p>
+        <button id="ovBtn">开始游戏</button>
+      </div>
+    </div>
+  </div>
+  <p class="hint"><b>空格 / 点击</b> 放钩收钩，钓到鱼 +1，钓到螃蟹扣命，限时挑战　<span style="color:#5f74a1">难度 ★☆☆☆☆ · 2D · 钓鱼</span></p>
+  <div class="pad" id="pad">
+    <div class="dpad">
+      <button class="up" data-k="ArrowUp">▲</button>
+      <button class="left" data-k="ArrowLeft">◀</button>
+      <button class="right" data-k="ArrowRight">▶</button>
+      <button class="down" data-k="ArrowDown">▼</button>
+    </div>
+    <button class="pad-a" data-k="Space">A</button>
+  </div>
+<script>
+var CFG = {"hint":"<b>空格 / 点击</b> 放钩收钩，钓到鱼 +1，钓到螃蟹扣命，限时挑战","time":60,"drop":420,"pull":520,"junk":0.25,"lives":3,"cw":480,"ch":640,"sky1":"#6fc3f5","sky2":"#e9f8ff","mtn":"#a8d4ee","g1":"#e8f6ff","g2":"#cfe9fb","fogC":"#dcf1fc","fogNear":22,"fogFar":78,"f":340,"rail":"#4a6f8f","wall":"#9ccfe8","wall2":"#7fbedd","wallTop":"#eaf7ff","tree":"#2f8f5b","deep":"#0d2f52","id":"g033","name":"企鹅钓鱼","eng":"fishing","kind":"2d"};
+
+'use strict';
+var canvas = document.getElementById('game');
+var ctx = canvas.getContext('2d');
+var W = canvas.width, H = canvas.height;
+var elScore = document.getElementById('score');
+var elBest = document.getElementById('best');
+var overlay = document.getElementById('overlay');
+var elTitle = document.getElementById('ovTitle');
+var elText = document.getElementById('ovText');
+var elBtn = document.getElementById('ovBtn');
+
+var state = 'menu';
+var score = 0, best = 0;
+try { best = +localStorage.getItem('pg-best-' + CFG.id) || 0; } catch (e) {}
+elBest.textContent = best;
+
+function setScore(v) {
+  score = v;
+  elScore.textContent = v;
+  if (v > best) { best = v; elBest.textContent = v; try { localStorage.setItem('pg-best-' + CFG.id, v); } catch (e) {} }
+}
+function showOverlay(title, html, btn) {
+  elTitle.textContent = title;
+  elText.innerHTML = html;
+  elBtn.textContent = btn || '再来一局';
+  overlay.classList.add('on');
+}
+function hideOverlay() { overlay.classList.remove('on'); }
+function gameOver() {
+  if (state !== 'playing') return;
+  state = 'over';
+  beep(180, 0.3, 'sawtooth', 0.07);
+  showOverlay('游戏结束', '本局得分 <b>' + score + '</b>　最高 <b>' + best + '</b>', '再来一局');
+}
+function winGame(msg) {
+  if (state !== 'playing') return;
+  state = 'over';
+  beep(880, 0.1, 'square', 0.05);
+  setTimeout(function () { beep(1175, 0.16, 'square', 0.05); }, 120);
+  showOverlay(msg || '挑战成功！', '本局得分 <b>' + score + '</b>　最高 <b>' + best + '</b>', '再玩一次');
+}
+
+// ---------- input ----------
+var keys = {}, pressed = {}, mx = -1, my = -1, mdown = false, clicked = false;
+window.addEventListener('keydown', function (e) {
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(e.code) >= 0) e.preventDefault();
+  if (!keys[e.code]) pressed[e.code] = true;
+  keys[e.code] = true;
+});
+window.addEventListener('keyup', function (e) { keys[e.code] = false; });
+window.addEventListener('blur', function () { keys = {}; mdown = false; });
+function toCanvas(e) {
+  var r = canvas.getBoundingClientRect();
+  var t = e.touches && e.touches[0] ? e.touches[0] : e;
+  return { x: (t.clientX - r.left) * W / r.width, y: (t.clientY - r.top) * H / r.height };
+}
+canvas.addEventListener('mousemove', function (e) { var p = toCanvas(e); mx = p.x; my = p.y; });
+canvas.addEventListener('mousedown', function (e) { var p = toCanvas(e); mx = p.x; my = p.y; mdown = true; clicked = true; });
+window.addEventListener('mouseup', function () { mdown = false; });
+canvas.addEventListener('touchstart', function (e) { e.preventDefault(); var p = toCanvas(e); mx = p.x; my = p.y; mdown = true; clicked = true; }, { passive: false });
+canvas.addEventListener('touchmove', function (e) { e.preventDefault(); var p = toCanvas(e); mx = p.x; my = p.y; }, { passive: false });
+canvas.addEventListener('touchend', function () { mdown = false; });
+
+// on-screen pad: dispatch synthetic key events so every game works on touch
+(function () {
+  var pad = document.getElementById('pad');
+  if (!pad) return;
+  function down(k) { window.dispatchEvent(new KeyboardEvent('keydown', { code: k })); }
+  function up(k) { window.dispatchEvent(new KeyboardEvent('keyup', { code: k })); }
+  Array.prototype.forEach.call(pad.querySelectorAll('button'), function (b) {
+    var k = b.getAttribute('data-k');
+    b.addEventListener('pointerdown', function (e) { e.preventDefault(); b.classList.add('on'); down(k); });
+    b.addEventListener('pointerup', function (e) { e.preventDefault(); b.classList.remove('on'); up(k); });
+    b.addEventListener('pointerleave', function () { b.classList.remove('on'); up(k); });
+    b.addEventListener('pointercancel', function () { b.classList.remove('on'); up(k); });
+  });
+})();
+
+// ---------- audio ----------
+var AC = null;
+function beep(f, d, type, v) {
+  try {
+    if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume();
+    var o = AC.createOscillator(), g = AC.createGain();
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(f, AC.currentTime);
+    g.gain.setValueAtTime(v || 0.04, AC.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0008, AC.currentTime + (d || 0.08));
+    o.connect(g); g.connect(AC.destination);
+    o.start(); o.stop(AC.currentTime + (d || 0.08));
+  } catch (e) {}
+}
+
+// ---------- utils ----------
+function rnd(a, b) { return a + Math.random() * (b - a); }
+function rndi(a, b) { return Math.floor(rnd(a, b + 1)); }
+function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+function rr(x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function drawHeart(x, y, s, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, s, s);
+  ctx.fillRect(x + s * 2, y, s, s);
+  ctx.fillRect(x - s, y + s, s * 4, s);
+  ctx.fillRect(x, y + s * 2, s * 2, s);
+}
+function drawStar(x, y, s, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x - s, y - s * 3, s * 2, s * 7);
+  ctx.fillRect(x - s * 3, y - s, s * 7, s * 2);
+}
+
+// ---------- pixel penguin sprite ----------
+var PENG = [
+  '....####....',
+  '..########..',
+  '.##########.',
+  '.##WW##WW##.',
+  '.##WB##WB##.',
+  '..###OO###..',
+  '..########..',
+  '.##########.',
+  '.#WWWWWWWW#.',
+  '.#WWWWWWWW#.',
+  '.##########.',
+  '..OO....OO..'
+];
+var PENC = { '#': '#1d2735', 'W': '#f7fbff', 'B': '#12161d', 'O': '#ff9f1c' };
+function drawPenguin(x, y, s, o) {
+  o = o || {};
+  var t = o.t || 0;
+  var wad = Math.sin(t * (o.moving ? 11 : 3)) * (o.moving ? 0.13 : 0.04);
+  ctx.save();
+  ctx.translate(x + 6 * s, y + 6 * s);
+  ctx.rotate(wad + (o.rot || 0));
+  if (o.flip) ctx.scale(-1, 1);
+  if (o.alpha != null) ctx.globalAlpha = o.alpha;
+  for (var r = 0; r < PENG.length; r++) {
+    var row = PENG[r];
+    for (var c = 0; c < 12; c++) {
+      var ch = row.charAt(c);
+      if (ch === '.') continue;
+      var col = PENC[ch];
+      if (o.tint && col === PENC['#']) col = o.tint;
+      ctx.fillStyle = col;
+      ctx.fillRect(Math.floor((c - 6) * s), Math.floor((r - 6) * s), Math.ceil(s), Math.ceil(s));
+    }
+  }
+  ctx.restore();
+}
+function drawFish(x, y, s, color, t) {
+  var wig = Math.sin((t || 0) * 7) * s * 0.25;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = color;
+  ctx.fillRect(-s * 2, -s, s * 3, s * 2);
+  ctx.beginPath();
+  ctx.moveTo(s, -s);
+  ctx.lineTo(s + s * 1.6, -s * 1.5 + wig);
+  ctx.lineTo(s + s * 1.6, s * 1.5 + wig);
+  ctx.lineTo(s, s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(-s * 1.7, -s * 0.5, s * 0.7, s * 0.7);
+  ctx.fillStyle = '#10151c';
+  ctx.fillRect(-s * 1.5, -s * 0.3, s * 0.4, s * 0.4);
+  ctx.restore();
+}
+function sky() {
+  var g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, CFG.sky1);
+  g.addColorStop(1, CFG.sky2);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+
+// ---------- loop ----------
+var T = 0, last = 0;
+function loop(ts) {
+  var dt = Math.min(0.034, (ts - last) / 1000 || 0.016);
+  last = ts;
+  T += dt;
+  if (state === 'playing') update(dt);
+  render(T);
+  clicked = false;
+  for (var k in pressed) pressed[k] = false;
+  requestAnimationFrame(loop);
+}
+elBtn.addEventListener('click', function () { hideOverlay(); start(); });
+window.addEventListener('keydown', function (e) {
+  if (state !== 'playing' && (e.code === 'Enter' || e.code === 'Space')) { hideOverlay(); start(); }
+});
+
+
+var hookX = 0, dir = 1, mode = 0, lineLen = 0, fishs = [], lives = 3, lives0 = 3, caught = null, time = 0, recast = 0;
+function spawnFish() {
+  var type = Math.random() < CFG.junk ? 'crab' : (Math.random() < 0.15 ? 'gold' : 'fish');
+  fishs.push({ x: rnd(30, W - 30), y: rnd(170, H - 60), vx: rnd(-70, 70) * (Math.random() < 0.5 ? 1 : 1), type: type, ph: rnd(0, 6), alive: true });
+}
+function start() {
+  setScore(0);
+  hookX = W / 2; dir = 1; mode = 0; lineLen = 0; fishs = []; caught = null;
+  lives = CFG.lives; lives0 = CFG.lives; time = CFG.time; recast = 0;
+  for (var i = 0; i < 9; i++) spawnFish();
+  state = 'playing'; hideOverlay();
+}
+function update(dt) {
+  time -= dt;
+  if (time <= 0) { time = 0; gameOver(); return; }
+  if (recast > 0) recast -= dt;
+  if (mode === 0) {
+    hookX += dir * 150 * dt;
+    if (hookX < 40) { dir = 1; }
+    if (hookX > W - 40) { dir = -1; }
+    if ((pressed['Space'] || clicked) && recast <= 0) { mode = 1; beep(400, 0.06); }
+  } else if (mode === 1) {
+    lineLen += CFG.drop * dt;
+    var hy = 108 + lineLen;
+    for (var i = 0; i < fishs.length; i++) {
+      var f = fishs[i];
+      if (f.alive && Math.abs(f.x - hookX) < 26 && Math.abs(f.y - hy) < 24) {
+        caught = f; f.alive = false; mode = 2; beep(700, 0.06);
+        break;
+      }
+    }
+    if (mode === 1 && lineLen > H - 130) { mode = 2; beep(200, 0.06, 'triangle', 0.03); }
+  } else {
+    lineLen -= CFG.pull * dt;
+    if (lineLen <= 0) {
+      lineLen = 0; mode = 0; recast = 0.3;
+      if (caught) {
+        if (caught.type === 'crab') { lives--; beep(150, 0.2, 'sawtooth', 0.07); if (lives <= 0) { gameOver(); return; } }
+        else { setScore(score + (caught.type === 'gold' ? 3 : 1)); beep(900, 0.09); }
+        caught = null;
+        spawnFish();
+      }
+    }
+  }
+  for (var i = 0; i < fishs.length; i++) {
+    var f = fishs[i];
+    if (!f.alive) continue;
+    f.x += f.vx * dt;
+    if (f.x < 24) { f.x = 24; f.vx *= -1; }
+    if (f.x > W - 24) { f.x = W - 24; f.vx *= -1; }
+    f.y += Math.sin(T * 1.4 + f.ph) * 12 * dt;
+  }
+}
+function render(t) {
+  var g = ctx.createLinearGradient(0, 96, 0, H);
+  g.addColorStop(0, '#2f7fc4'); g.addColorStop(1, '#0d2f52');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#eaf6ff';
+  ctx.fillRect(0, 0, W, 96);
+  ctx.fillStyle = '#cfe8f8';
+  ctx.fillRect(0, 88, W, 8);
+  ctx.fillStyle = 'rgba(255,255,255,.35)';
+  for (var i = 0; i < 6; i++) ctx.fillRect((i * 90 + Math.sin(T + i) * 10) % W, 100 + i * 88, 50, 3);
+  drawPenguin(hookX - 40, 34, 5, { t: t, moving: true });
+  ctx.strokeStyle = '#dfefff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(hookX + 6, 84);
+  ctx.lineTo(hookX, 108 + lineLen);
+  ctx.stroke();
+  ctx.fillStyle = '#ff9f1c';
+  ctx.beginPath();
+  ctx.arc(hookX, 112 + lineLen, 7, 0.4, Math.PI * 1.7);
+  ctx.strokeStyle = '#ff9f1c';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  for (var i = 0; i < fishs.length; i++) {
+    var f = fishs[i];
+    if (!f.alive) continue;
+    if (f.type === 'crab') {
+      ctx.save();
+      ctx.translate(f.x, f.y);
+      ctx.fillStyle = '#e8484f';
+      ctx.beginPath(); ctx.ellipse(0, 0, 17, 12, 0, 0, 7); ctx.fill();
+      ctx.fillRect(-22, -4, 8, 6); ctx.fillRect(14, -4, 8, 6);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(-7, -12, 5, 5); ctx.fillRect(2, -12, 5, 5);
+      ctx.fillStyle = '#12161d';
+      ctx.fillRect(-6, -11, 3, 3); ctx.fillRect(3, -11, 3, 3);
+      ctx.restore();
+    } else {
+      var col = f.type === 'gold' ? '#ffd23f' : '#7ef0d0';
+      if (f.vx >= 0) {
+        drawFish(f.x, f.y, 6, col, t + f.ph);
+      } else {
+        ctx.save();
+        ctx.translate(f.x, f.y);
+        ctx.scale(-1, 1);
+        drawFish(0, 0, 6, col, t + f.ph);
+        ctx.restore();
+      }
+    }
+  }
+  if (caught) drawFish(hookX, 118 + lineLen, 6, '#ffd23f', t);
+  ctx.fillStyle = 'rgba(8,14,28,.66)';
+  ctx.fillRect(0, H - 40, W, 40);
+  ctx.fillStyle = time < 10 ? '#ff6b6b' : '#ffe066';
+  ctx.font = 'bold 17px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('剩余 ' + Math.ceil(time) + 's', 14, H - 15);
+  for (var i = 0; i < lives0; i++) drawHeart(W - 34 - i * 32, H - 30, 7, i < lives ? '#ff5d73' : 'rgba(255,255,255,.22)');
+}
+
+start();
+state = 'menu';
+setScore(0);
+showOverlay(CFG.name, CFG.hint, '开始游戏');
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
