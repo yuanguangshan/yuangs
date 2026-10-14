@@ -754,7 +754,7 @@ async function fetchVarietyContracts(variety) {
     // 1. 从API获取合约列表 - 使用try/catch分开处理每个步骤的错误
     let contractCodes = [];
     try {
-      const contractsData = await fetchWithRetry(`https://q.889.ink/redis?msgid=${encodeURIComponent(variety)}`);
+      const contractsData = await fetchWithRetry(`https://q.want.biz/redis?msgid=${encodeURIComponent(variety)}`);
       console.log('获取到合约列表数据:', contractsData);
       
       if (!contractsData || !Array.isArray(contractsData)) {
@@ -796,7 +796,7 @@ async function fetchVarietyContracts(variety) {
     // 2. 获取合约价格数据
     try {
       // 构建URL，确保合约代码正确编码
-      const customUrl = `https://q.889.ink/custom/${contractCodes.join(',')}?orderBy=code&sort=asc&pageSize=100&pageIndex=0&callbackName=`;
+      const customUrl = `https://q.want.biz/custom/${contractCodes.join(',')}?orderBy=code&sort=asc&pageSize=100&pageIndex=0&callbackName=`;
       console.log('请求价格数据URL:', customUrl);
       
       // 获取价格数据

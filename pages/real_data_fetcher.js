@@ -3,7 +3,7 @@
 
 class RealDataFetcher {
     constructor() {
-        this.baseURL = 'https://q.889.ink';
+        this.baseURL = 'https://q.want.biz';
         this.washDataURL = 'https://q.want.biz';
         this.ddcURL = 'https://api-ddc-wscn.awtmt.com';
         this.oneURL = 'https://api-one-wscn.awtmt.com';
