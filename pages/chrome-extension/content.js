@@ -683,7 +683,7 @@ function sendToPushDeer(content) {
     };
     
     // 发送请求到PushDeer服务器
-    fetch('https://www.889.ink/message/push', {
+    fetch('https://push.want.biz/message/push', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json; charset=UTF-8'

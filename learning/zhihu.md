@@ -471,7 +471,7 @@ function sendToPushDeer(content) {
       desp: processedContent,
       type: "text"
     };
-    fetch('https://www.889.ink/message/push', {
+    fetch('https://push.want.biz/message/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json; charset=UTF-8' },
       body: JSON.stringify(pushDeerMessage)
